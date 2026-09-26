@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-09-26
+- Amended: 2026-09-26: the core takes a normalised receipt from adapters instead of fetching it itself.
 
 ## Context
 
@@ -20,7 +21,8 @@ Split the library in two layers:
 
 1. **Core (`@hashspan/core`)** owns the transaction lifecycle. Given a tx hash, chain id, the parent context
    and optional metadata, it emits the `send` span and later the `confirm` span (receipt, status, fees, revert
-   reason) using any read-only client. It never signs or broadcasts.
+   reason). It never signs, broadcasts or performs network calls: adapters fetch receipts with a read-only client
+   and pass a normalised `ReceiptLike`, which keeps the core independent of any chain library.
 2. **Capture adapters** (`@hashspan/viem` first; CDP and x402 later) observe the send path, collect metadata
    (from, to, value, function) and hand the hash to the core.
 
@@ -29,4 +31,5 @@ Split the library in two layers:
 - New send paths are new adapters, not rewrites.
 - Confirmation does not depend on observing the user's client, so it works even when the framework polls receipts
   through its own client (e.g. AgentKit).
-- The core needs its own read client configuration (RPC URL per chain) for adapters that cannot provide one.
+- Adapters for send paths without a user-visible client (REST wallet APIs) need their own read-only client to
+  fetch receipts by hash.

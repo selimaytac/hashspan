@@ -18,6 +18,9 @@ Run lint, typecheck and tests before proposing a change.
 
 ## Architecture
 - `packages/core` → transaction lifecycle tracker (spans, links, fees, privacy modes)
+  - `src/tracker.ts` public `createTxTracker()`; `src/attributes.ts` attribute keys (mirror of docs/semconv.md);
+    `src/privacy.ts` address modes; `src/link-store.ts` send→confirm links; `src/agent.ts` agent identity
+  - `test/helpers.ts` registers an in-memory tracer provider for span assertions
 - `packages/viem` → capture adapter for viem clients
 - `examples/` → runnable agent integrations
 - `docker/`, `scripts/`, `Makefile` → local lab
@@ -35,6 +38,9 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 - Instrumentation must never throw into or alter the result of the user's call; failures are swallowed and logged
   via `diag`.
 - Only `@opentelemetry/api` (and the instrumented library) may be peer dependencies of published packages.
+- `src/` must not use Node.js-only APIs at import time (it is type-checked without Node types via `tsconfig.json`;
+  tests use `tsconfig.test.json`). Exported functions need explicit return types (`isolatedDeclarations`).
+- Package versions live in `package.json`; `src/version.ts` is synced by `pnpm version-packages`; don't edit it.
 - Significant design changes get a short ADR in `docs/adr/NNNN-title.md` (see `0000-template.md`).
 - Prefer OSI-licensed dependencies; flag non-OSS licenses.
 
