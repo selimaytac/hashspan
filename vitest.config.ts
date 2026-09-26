@@ -1,9 +1,14 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  resolve: {
+    // Test workspace packages against their sources, so no build is needed first.
+    alias: { '@hashspan/core': new URL('./packages/core/src/index.ts', import.meta.url).pathname },
+  },
   test: {
     projects: [
       {
+        extends: true,
         test: {
           name: 'unit',
           include: ['packages/*/test/**/*.test.ts'],
@@ -11,6 +16,7 @@ export default defineConfig({
         },
       },
       {
+        extends: true,
         test: {
           name: 'integration',
           include: ['packages/*/test/**/*.int.test.ts'],

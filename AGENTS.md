@@ -11,8 +11,9 @@ OpenTelemetry tracing for on-chain transactions sent by AI agents: every transac
 - Install deps: `pnpm install`
 - Build: `pnpm build`
 - Test (unit / integration): `pnpm test` / `pnpm test:integration` (needs Anvil: `make tools`)
+  - Tests import workspace packages from source (`vitest.config.ts` alias), so no build is needed first
 - Lint & format: `pnpm lint` / `pnpm format`
-- Typecheck: `pnpm typecheck`
+- Typecheck: `pnpm typecheck` (builds the packages first, since adapters type-check against `@hashspan/core` output)
 - Local lab: `make lab-up` (Jaeger), `make anvil` (local chain), `make lab-pause`, `make lab-nuke`
 Run lint, typecheck and tests before proposing a change.
 
@@ -22,6 +23,9 @@ Run lint, typecheck and tests before proposing a change.
     `src/privacy.ts` address modes; `src/link-store.ts` send→confirm links; `src/agent.ts` agent identity
   - `test/helpers.ts` registers an in-memory tracer provider for span assertions
 - `packages/viem` → capture adapter for viem clients
+  - `src/index.ts` `withHashspan()`: a `client.extend()` extension wrapping `sendTransaction`, `writeContract` and
+    `waitForTransactionReceipt`; it calls the base client's actions, so internal viem calls are not traced twice
+  - `test/mock-transport.ts` EIP-1193 mock for unit tests; `test/*.int.test.ts` run against Anvil via prool
 - `examples/` → runnable agent integrations
 - `docker/`, `scripts/`, `Makefile` → local lab
 See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and [docs/adr/](docs/adr/).
