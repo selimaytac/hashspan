@@ -139,6 +139,8 @@ describe('waitForTransactionReceipt', () => {
     }).extend(withHashspan());
     const receipt = await reader.waitForTransactionReceipt({ hash: HASH });
     expect(receipt.status).toBe('reverted');
+    // The confirm span ends after the revert reason was fetched.
+    await vi.waitFor(() => expect(tracing.spans()).toHaveLength(1));
     const confirm = tracing.spanNamed('confirm 8453');
     expect(confirm.status.code).toBe(SpanStatusCode.ERROR);
     expect(confirm.attributes['error.type']).toBe('reverted');

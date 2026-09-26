@@ -27,6 +27,7 @@ Run lint, typecheck and tests before proposing a change.
     `waitForTransactionReceipt`; it calls the base client's actions, so internal viem calls are not traced twice.
     State shared by every client extended with one `withHashspan()` result (tracker, chain ids, confirmations)
     lives in that call's closure; background confirmation must never delay or fail the user's call
+  - `src/revert-reason.ts` replays reverted transactions and decodes the revert data (ADR 0005)
   - `test/mock-transport.ts` EIP-1193 mock for unit tests; `test/*.int.test.ts` run against Anvil via prool
 - `examples/` → runnable agent integrations
 - `docker/`, `scripts/`, `Makefile` → local lab

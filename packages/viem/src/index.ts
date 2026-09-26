@@ -10,6 +10,7 @@ import {
 import { diag } from '@opentelemetry/api';
 import { type Abi, getAbiItem, toFunctionSelector } from 'viem';
 import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
+import { fetchRevertReason } from './revert-reason.js';
 
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
@@ -22,6 +23,11 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    * for its receipt through the sending client. Off by default.
    */
   confirm?: BackgroundConfirmOptions | undefined;
+  /**
+   * Replay reverted transactions to record their revert reason (two extra RPC requests per reverted transaction).
+   * Default: true. See docs/adr/0005-revert-reason-replay.md.
+   */
+  decodeRevertReason?: boolean | undefined;
 }
 
 export interface BackgroundConfirmOptions {
@@ -61,6 +67,26 @@ class Confirmations {
 
   release(key: string): void {
     this.entries.delete(key);
+  }
+}
+
+/** ABIs used by recent `writeContract` calls, to decode custom errors. Bounded and time-limited. */
+class RecentAbis {
+  private readonly entries = new Map<string, { abi: Abi; expiresAt: number }>();
+
+  set(key: string, abi: Abi): void {
+    this.entries.delete(key);
+    this.entries.set(key, { abi, expiresAt: Date.now() + CONFIRMED_TTL_MS });
+    for (const oldest of this.entries.keys()) {
+      if (this.entries.size <= MAX_CONFIRMATIONS) break;
+      this.entries.delete(oldest);
+    }
+  }
+
+  get(key: string): Abi | undefined {
+    const entry = this.entries.get(key);
+    if (!entry || entry.expiresAt <= Date.now()) return undefined;
+    return entry.abi;
   }
 }
 
@@ -107,6 +133,7 @@ interface WaitArgs {
 }
 
 interface ViemReceipt {
+  transactionHash: `0x${string}`;
   status: 'success' | 'reverted';
   blockNumber: bigint;
   gasUsed: bigint;
@@ -145,18 +172,28 @@ function toReceiptLike(receipt: ViemReceipt): ReceiptLike {
  * which would otherwise replace the traced actions.
  */
 export function withHashspan(options: WithHashspanOptions = {}): HashspanExtension {
-  const { tracker: providedTracker, confirm, ...trackerOptions } = options;
+  const {
+    tracker: providedTracker,
+    confirm,
+    decodeRevertReason = true,
+    ...trackerOptions
+  } = options;
   const tracker = providedTracker ?? createTxTracker(trackerOptions);
   const chainIds = new WeakMap<object, Promise<number>>();
   /** Shared by all clients extended with this instance, keyed by `chainId:hash`. */
   const confirmations = new Confirmations();
+  const abis = new RecentAbis();
   const confirmKey = (chainId: number, hash: string): string => `${chainId}:${hash.toLowerCase()}`;
 
-  /** Ends `handle` from the outcome of `wait` and settles or releases `key`; never rejects. */
+  /**
+   * Ends `handle` from the outcome of `wait` and settles or releases `key`; never rejects.
+   * For reverted receipts, the span ends after the revert reason was fetched with `client`.
+   */
   const recordConfirmation = async (
     key: string,
     handle: ConfirmHandle,
     wait: Promise<ViemReceipt>,
+    client: unknown,
   ): Promise<void> => {
     let receipt: ViemReceipt;
     try {
@@ -168,8 +205,21 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       return;
     }
     confirmations.settle(key);
+    let revertReason: string | undefined;
+    if (receipt.status === 'reverted' && decodeRevertReason) {
+      try {
+        revertReason = await fetchRevertReason(
+          client,
+          receipt.transactionHash,
+          receipt.blockNumber,
+          abis.get(key),
+        );
+      } catch (error) {
+        diag.debug('hashspan: could not fetch revert reason', error);
+      }
+    }
     try {
-      handle.end(toReceiptLike(receipt));
+      handle.end({ ...toReceiptLike(receipt), revertReason });
     } catch (error) {
       diag.error('hashspan: failed to record receipt', error);
     }
@@ -198,12 +248,13 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         hash: hash as `0x${string}`,
         timeout: confirm?.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS,
       }) as Promise<ViemReceipt>;
-      void recordConfirmation(key, handle, wait);
+      void recordConfirmation(key, handle, wait, client);
     };
 
     const traceSend = async (
       describe: () => Promise<SendInput>,
       send: () => Promise<string>,
+      abi?: Abi,
     ): Promise<string> => {
       let handle = NOOP_SEND;
       let chainId: number | undefined;
@@ -222,6 +273,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         throw error;
       }
       handle.end(hash);
+      if (abi && chainId !== undefined) abis.set(confirmKey(chainId, hash), abi);
       if (confirm?.mode === 'background' && chainId !== undefined) {
         try {
           confirmInBackground(chainId, hash);
@@ -279,6 +331,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
             };
           },
           () => writeContract(args),
+          args.abi,
         );
     }
 
@@ -295,7 +348,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
           diag.error('hashspan: failed to start confirm span', error);
         }
         const wait = waitForTransactionReceipt(args) as Promise<ViemReceipt>;
-        if (handle && key) void recordConfirmation(key, handle, wait);
+        if (handle && key) void recordConfirmation(key, handle, wait, client);
         return wait;
       };
     }
