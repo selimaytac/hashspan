@@ -38,5 +38,8 @@ export function resolveAddressFormatter(
       }
       return (address) => hashFn(address.toLowerCase());
     }
+    default:
+      diag.warn(`hashspan: unknown address mode "${String(mode)}"; addresses will not be recorded`);
+      return () => undefined;
   }
 }

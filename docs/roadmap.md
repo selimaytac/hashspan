@@ -8,7 +8,8 @@
 - [ ] **M3** Fees (`gasUsed × effectiveGasPrice` + OP-stack L1 fee), revert reason decoding, opt-in calldata decoding
 - [ ] **M4** Example agent (Vercel AI SDK + viem) on Anvil and Base Sepolia, Jaeger quick start, README
 - [ ] **M5** First release to npm with provenance, good first issues
-  (verify that `changeset publish` via pnpm completes an OIDC trusted publish; otherwise publish with npm ≥ 11.5.1)
+  (verify that `changeset publish` via pnpm completes an OIDC trusted publish; otherwise publish with npm ≥ 11.5.1;
+  `@hashspan/*` packages are versioned together, so don't release before the viem adapter is functional)
 
 ## v0.2: More send paths
 

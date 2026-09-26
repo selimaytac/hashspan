@@ -1,9 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { diag } from '@opentelemetry/api';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveAddressFormatter } from '../src/privacy.js';
 
 const ADDRESS = '0xAbCdEf0123456789aBcDeF0123456789AbCdEf01';
 
 describe('resolveAddressFormatter', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('falls back to off when SHA-256 is unavailable', () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    vi.spyOn(process, 'getBuiltinModule').mockReturnValue(undefined as never);
+    expect(resolveAddressFormatter('hashed')(ADDRESS)).toBeUndefined();
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('falls back to off for an unknown mode', () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    expect(resolveAddressFormatter('bogus' as never)(ADDRESS)).toBeUndefined();
+    expect(warn).toHaveBeenCalled();
+  });
+
   it('defaults to raw and preserves the address as given', () => {
     expect(resolveAddressFormatter(undefined)(ADDRESS)).toBe(ADDRESS);
     expect(resolveAddressFormatter('raw')(ADDRESS)).toBe(ADDRESS);

@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-09-26
+- Amended: 2026-09-26: the core takes a normalised receipt from adapters instead of fetching it itself.
 
 ## Context
 

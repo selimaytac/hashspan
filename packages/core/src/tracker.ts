@@ -130,16 +130,41 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     return tracer;
   };
 
+  const nonSensitive = (attributes: Attributes): Attributes =>
+    Object.fromEntries(Object.entries(attributes).filter(([key]) => NON_SENSITIVE_KEYS.has(key)));
+
   const redact = (attributes: Attributes): Attributes => {
     if (!options.redact) return attributes;
+    let redacted: unknown;
     try {
-      return options.redact({ ...attributes });
+      redacted = options.redact({ ...attributes });
     } catch (error) {
       diag.error('hashspan: redaction hook failed; recording non-sensitive attributes only', error);
-      return Object.fromEntries(
-        Object.entries(attributes).filter(([key]) => NON_SENSITIVE_KEYS.has(key)),
-      );
+      return nonSensitive(attributes);
     }
+    if (typeof redacted !== 'object' || redacted === null || Array.isArray(redacted)) {
+      diag.error(
+        'hashspan: redaction hook must return an attributes object; recording non-sensitive attributes only',
+      );
+      return nonSensitive(attributes);
+    }
+    return redacted as Attributes;
+  };
+
+  /** Ends a span exactly once; the span is always ended even if recording attributes fails. */
+  const finisher = (span: Span) => {
+    let ended = false;
+    return (what: string, record: () => void): void => {
+      if (ended) return;
+      ended = true;
+      try {
+        record();
+      } catch (error) {
+        diag.error(`hashspan: failed to ${what}`, error);
+      } finally {
+        span.end();
+      }
+    };
   };
 
   const setAddress = (attributes: Attributes, key: string, address: string | undefined): void => {
@@ -174,32 +199,16 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       { kind: SpanKind.CLIENT, attributes: redact(attributes) },
       parent,
     );
-    let ended = false;
+    const finish = finisher(span);
 
     return {
       end: (hash) =>
-        safely(
-          'end send span',
-          () => {
-            if (ended) return;
-            ended = true;
-            span.setAttributes(redact({ [ATTR_BLOCKCHAIN_TX_HASH]: hash }));
-            links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
-            span.end();
-          },
-          undefined,
-        ),
+        finish('record transaction hash', () => {
+          links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
+          span.setAttributes(redact({ [ATTR_BLOCKCHAIN_TX_HASH]: hash }));
+        }),
       fail: (error) =>
-        safely(
-          'end send span',
-          () => {
-            if (ended) return;
-            ended = true;
-            markError(span, errorType(error), error);
-            span.end();
-          },
-          undefined,
-        ),
+        finish('record send failure', () => markError(span, errorType(error), error)),
     };
   };
 
@@ -242,18 +251,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       { kind: SpanKind.CLIENT, attributes: redact(attributes), links: spanLinks },
       parent,
     );
-    let ended = false;
-    const finish = (what: string, record: () => void): void => {
-      if (ended) return;
-      ended = true;
-      try {
-        record();
-      } catch (error) {
-        diag.error(`hashspan: failed to ${what}`, error);
-      } finally {
-        span.end();
-      }
-    };
+    const finish = finisher(span);
 
     return {
       end: (receipt) =>

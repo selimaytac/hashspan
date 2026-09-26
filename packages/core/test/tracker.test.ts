@@ -252,7 +252,64 @@ describe('privacy', () => {
   });
 });
 
+describe('explicit parent context', () => {
+  it('parents send and confirm spans on the given context', () => {
+    const tracker = createTxTracker();
+    const explicit = trace.getTracer('test').startSpan('explicit');
+    const active = trace.getTracer('test').startSpan('active');
+    const explicitCtx = trace.setSpan(context.active(), explicit);
+    context.with(trace.setSpan(context.active(), active), () => {
+      tracker.startSend({ chainId: CHAIN_ID }, explicitCtx).end(HASH);
+      tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }, explicitCtx).end(receipt);
+    });
+    explicit.end();
+    active.end();
+
+    const explicitId = explicit.spanContext().spanId;
+    expect(tracing.spanNamed(`send ${CHAIN_ID}`).parentSpanContext?.spanId).toBe(explicitId);
+    expect(tracing.spanNamed(`confirm ${CHAIN_ID}`).parentSpanContext?.spanId).toBe(explicitId);
+  });
+});
+
+describe('confirm failures', () => {
+  it('records receipt retrieval errors', () => {
+    const tracker = createTxTracker();
+    class TransactionNotFoundError extends Error {
+      override name = 'TransactionNotFoundError';
+    }
+    tracker
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .fail(new TransactionNotFoundError('gone'));
+    const confirm = tracing.spanNamed(`confirm ${CHAIN_ID}`);
+    expect(confirm.status.code).toBe(SpanStatusCode.ERROR);
+    expect(confirm.attributes['error.type']).toBe('TransactionNotFoundError');
+    expect(confirm.attributes['blockchain.tx.status']).toBeUndefined();
+  });
+});
+
 describe('never breaks the caller', () => {
+  it('still ends the send span and stores the link when the redaction hook returns garbage', () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const tracker = createTxTracker({ redact: () => undefined as never });
+    tracker.startSend({ chainId: CHAIN_ID, from: FROM }).end(HASH);
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
+
+    const send = tracing.spanNamed(`send ${CHAIN_ID}`);
+    expect(send.attributes['blockchain.tx.hash']).toBe(HASH);
+    expect(send.attributes['blockchain.tx.from']).toBeUndefined();
+    expect(tracing.spanNamed(`confirm ${CHAIN_ID}`).links).toHaveLength(1);
+  });
+
+  it('treats an unknown address mode as off instead of dropping spans', () => {
+    vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    createTxTracker({ address: 'bogus' as never })
+      .startSend({ chainId: CHAIN_ID, from: FROM })
+      .end(HASH);
+    const send = tracing.spanNamed(`send ${CHAIN_ID}`);
+    expect(send.attributes['blockchain.tx.from']).toBeUndefined();
+    expect(send.attributes['blockchain.tx.hash']).toBe(HASH);
+  });
+
   it('swallows errors from a broken tracer provider', () => {
     const diagError = vi.spyOn(diag, 'error').mockImplementation(() => {});
     const tracker = createTxTracker({
