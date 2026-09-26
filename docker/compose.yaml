@@ -1,0 +1,15 @@
+# Local lab: Jaeger (trace UI + OTLP receiver). Anvil runs as a project-local binary (make anvil).
+# All ports bind to 127.0.0.1 only. Managed via the Makefile (make lab-up / lab-pause / lab-nuke).
+name: hashspan-lab
+
+services:
+  jaeger:
+    image: jaegertracing/jaeger:2.21.0
+    ports:
+      - "127.0.0.1:16686:16686" # UI
+      - "127.0.0.1:4317:4317" # OTLP gRPC
+      - "127.0.0.1:4318:4318" # OTLP HTTP
+    deploy:
+      resources:
+        limits: { memory: 512m }
+

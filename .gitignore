@@ -1,0 +1,19 @@
+# dependencies & build output
+node_modules/
+dist/
+coverage/
+.tools/
+*.tsbuildinfo
+
+# local / private
+CLAUDE.local.md
+.claude/settings.local.json
+.beads/
+.env*
+!.env.example
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

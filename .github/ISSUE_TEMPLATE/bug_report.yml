@@ -1,0 +1,26 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Code snippet or repository. Never include private keys or API keys.
+    validations: { required: true }
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: "@hashspan/viem 0.1.0, viem 2.56.9, @opentelemetry/sdk-node 0.222.0, Node 24"
+    validations: { required: true }
+  - type: input
+    id: chain
+    attributes:
+      label: Chain / network
+      placeholder: "Base Sepolia (84532)"
