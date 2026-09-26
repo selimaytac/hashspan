@@ -35,7 +35,32 @@ Reuse the same `withHashspan()` result for every client of one agent: the client
 confirmations are linked to their sends even when they happen on a different client.
 
 `withHashspan(options)` accepts all [`@hashspan/core` options](../core#options) (address mode, agent identity,
-redaction hook) plus `tracker` to report to an existing tracker.
+redaction hook) plus:
+
+| Option | Default | Description |
+|---|---|---|
+| `tracker` | new tracker | Report to an existing `@hashspan/core` tracker |
+| `confirm` | none | `{ mode: 'background', timeoutMs? }` confirms every sent transaction without an explicit wait |
+
+## Background confirmation
+
+Some agent frameworks wait for receipts through their own client, or never wait at all. With
+`confirm: { mode: 'background' }`, every transaction sent through the extended client gets a confirm span anyway:
+the adapter polls for the receipt through the sending client and records the result. The send call is not
+delayed.
+
+```ts
+const wallet = createWalletClient({ account, chain, transport: http() }).extend(
+  withHashspan({ confirm: { mode: 'background', timeoutMs: 60_000 } }),
+);
+```
+
+- Each transaction gets exactly one confirm span. If the caller also waits for the receipt on a client extended
+  with the same `withHashspan()` result, no second span is created.
+- Polling adds RPC requests to your provider (one receipt request per polling interval until the receipt arrives).
+- A pending confirmation keeps the Node.js process alive until the receipt arrives or `timeoutMs` (default
+  120 000 ms) passes; the span then ends with status `timeout`.
+- In serverless runtimes that freeze after the response, background confirmations may not complete.
 
 ## Traced actions
 

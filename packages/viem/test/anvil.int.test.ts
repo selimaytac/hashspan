@@ -2,7 +2,7 @@ import { SpanStatusCode } from '@opentelemetry/api';
 import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, http, parseAbi } from 'viem';
 import { anvil } from 'viem/chains';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
@@ -97,6 +97,25 @@ describe('on Anvil', () => {
     expect(confirm.attributes).toMatchObject({
       'blockchain.tx.status': 'reverted',
       'error.type': 'reverted',
+    });
+  });
+
+  it('confirms in the background without an explicit wait', async () => {
+    const wallet = createWalletClient({
+      account,
+      chain: anvil,
+      transport: http(RPC_URL),
+      pollingInterval: 50,
+    }).extend(withHashspan({ confirm: { mode: 'background', timeoutMs: 5_000 } }));
+
+    const hash = await wallet.sendTransaction({ to: RECIPIENT, value: 1n });
+
+    await vi.waitFor(() => expect(tracing.spanNamed('confirm 31337')).toBeDefined(), {
+      timeout: 5_000,
+    });
+    expect(tracing.spanNamed('confirm 31337').attributes).toMatchObject({
+      'blockchain.tx.hash': hash,
+      'blockchain.tx.status': 'success',
     });
   });
 });

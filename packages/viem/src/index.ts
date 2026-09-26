@@ -9,6 +9,7 @@ import {
 } from '@hashspan/core';
 import { diag } from '@opentelemetry/api';
 import { type Abi, getAbiItem, toFunctionSelector } from 'viem';
+import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
 
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
@@ -16,6 +17,51 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    * `withHashspan()` result for a wallet client and a public client to link sends to confirmations.
    */
   tracker?: TxTracker | undefined;
+  /**
+   * `{ mode: 'background' }` confirms every sent transaction without waiting for the caller to do so, by polling
+   * for its receipt through the sending client. Off by default.
+   */
+  confirm?: BackgroundConfirmOptions | undefined;
+}
+
+export interface BackgroundConfirmOptions {
+  mode: 'background';
+  /** How long to poll for a receipt before ending the confirm span as `timeout`. Default: 120 000 ms. */
+  timeoutMs?: number | undefined;
+}
+
+const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
+const CONFIRMED_TTL_MS = 10 * 60 * 1000;
+const MAX_CONFIRMATIONS = 10_000;
+
+/**
+ * Transactions whose confirm span is in progress or already recorded a receipt, so each transaction gets one
+ * confirm span. Bounded and time-limited; failed or timed-out confirmations are released so a retry is traced.
+ */
+class Confirmations {
+  private readonly entries = new Map<string, number>();
+
+  /** Claims `key`; returns false if another confirm span already covers it. */
+  claim(key: string): boolean {
+    const expiresAt = this.entries.get(key);
+    if (expiresAt !== undefined && expiresAt > Date.now()) return false;
+    this.entries.delete(key);
+    this.entries.set(key, Number.POSITIVE_INFINITY);
+    for (const oldest of this.entries.keys()) {
+      if (this.entries.size <= MAX_CONFIRMATIONS) break;
+      this.entries.delete(oldest);
+    }
+    return true;
+  }
+
+  /** Keeps `key` claimed for a while after a receipt was recorded. */
+  settle(key: string): void {
+    if (this.entries.has(key)) this.entries.set(key, Date.now() + CONFIRMED_TTL_MS);
+  }
+
+  release(key: string): void {
+    this.entries.delete(key);
+  }
 }
 
 /** Actions this adapter traces. */
@@ -38,7 +84,6 @@ export type HashspanExtension = <TClient extends ViemClientLike>(
 ) => Pick<TClient, Extract<keyof TClient, TracedAction>>;
 
 const NOOP_SEND: SendHandle = { end: () => {}, fail: () => {} };
-const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
 
 interface SendArgs {
   account?: string | { address: string } | null | undefined;
@@ -69,6 +114,10 @@ interface ViemReceipt {
   l1Fee?: bigint | string | null | undefined;
 }
 
+function isTimeout(error: unknown): boolean {
+  return error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError';
+}
+
 function selectorOf(data: string | undefined): string | undefined {
   return data && data.length >= 10 ? data.slice(0, 10) : undefined;
 }
@@ -96,9 +145,35 @@ function toReceiptLike(receipt: ViemReceipt): ReceiptLike {
  * which would otherwise replace the traced actions.
  */
 export function withHashspan(options: WithHashspanOptions = {}): HashspanExtension {
-  const { tracker: providedTracker, ...trackerOptions } = options;
+  const { tracker: providedTracker, confirm, ...trackerOptions } = options;
   const tracker = providedTracker ?? createTxTracker(trackerOptions);
   const chainIds = new WeakMap<object, Promise<number>>();
+  /** Shared by all clients extended with this instance, keyed by `chainId:hash`. */
+  const confirmations = new Confirmations();
+  const confirmKey = (chainId: number, hash: string): string => `${chainId}:${hash.toLowerCase()}`;
+
+  /** Ends `handle` from the outcome of `wait` and settles or releases `key`; never rejects. */
+  const recordConfirmation = async (
+    key: string,
+    handle: ConfirmHandle,
+    wait: Promise<ViemReceipt>,
+  ): Promise<void> => {
+    let receipt: ViemReceipt;
+    try {
+      receipt = await wait;
+    } catch (error) {
+      confirmations.release(key);
+      if (isTimeout(error)) handle.timeout();
+      else handle.fail(error);
+      return;
+    }
+    confirmations.settle(key);
+    try {
+      handle.end(toReceiptLike(receipt));
+    } catch (error) {
+      diag.error('hashspan: failed to record receipt', error);
+    }
+  };
 
   const extension = (client: ViemClientLike & Partial<Record<TracedAction, AnyAction>>) => {
     const chainIdFor = async (args: {
@@ -115,24 +190,46 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       return pending;
     };
 
+    const confirmInBackground = (chainId: number, hash: string): void => {
+      const key = confirmKey(chainId, hash);
+      if (!confirmations.claim(key)) return;
+      const handle = tracker.startConfirm({ chainId, hash });
+      const wait = viemWaitForTransactionReceipt(client as never, {
+        hash: hash as `0x${string}`,
+        timeout: confirm?.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS,
+      }) as Promise<ViemReceipt>;
+      void recordConfirmation(key, handle, wait);
+    };
+
     const traceSend = async (
       describe: () => Promise<SendInput>,
       send: () => Promise<string>,
     ): Promise<string> => {
       let handle = NOOP_SEND;
+      let chainId: number | undefined;
       try {
-        handle = tracker.startSend(await describe());
+        const input = await describe();
+        chainId = input.chainId;
+        handle = tracker.startSend(input);
       } catch (error) {
         diag.error('hashspan: failed to start send span', error);
       }
+      let hash: string;
       try {
-        const hash = await send();
-        handle.end(hash);
-        return hash;
+        hash = await send();
       } catch (error) {
         handle.fail(error);
         throw error;
       }
+      handle.end(hash);
+      if (confirm?.mode === 'background' && chainId !== undefined) {
+        try {
+          confirmInBackground(chainId, hash);
+        } catch (error) {
+          diag.error('hashspan: failed to start background confirmation', error);
+        }
+      }
+      return hash;
     };
 
     const sendInput = async (
@@ -187,29 +284,19 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
 
     if (typeof waitForTransactionReceipt === 'function') {
       actions.waitForTransactionReceipt = async (args: WaitArgs) => {
-        let handle = NOOP_CONFIRM;
+        let handle: ConfirmHandle | undefined;
+        let key: string | undefined;
         try {
-          handle = tracker.startConfirm({ chainId: await chainIdFor(args), hash: args.hash });
+          const chainId = await chainIdFor(args);
+          key = confirmKey(chainId, args.hash);
+          // A background confirmation already covers this transaction: one confirm span per transaction.
+          if (confirmations.claim(key)) handle = tracker.startConfirm({ chainId, hash: args.hash });
         } catch (error) {
           diag.error('hashspan: failed to start confirm span', error);
         }
-        try {
-          const receipt = await waitForTransactionReceipt(args);
-          try {
-            handle.end(toReceiptLike(receipt));
-          } catch (error) {
-            diag.error('hashspan: failed to read receipt', error);
-            handle.end(receipt);
-          }
-          return receipt;
-        } catch (error) {
-          if (error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError') {
-            handle.timeout();
-          } else {
-            handle.fail(error);
-          }
-          throw error;
-        }
+        const wait = waitForTransactionReceipt(args) as Promise<ViemReceipt>;
+        if (handle && key) void recordConfirmation(key, handle, wait);
+        return wait;
       };
     }
 
