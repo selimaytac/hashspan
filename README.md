@@ -40,19 +40,24 @@ invoke_agent treasury-bot
 | `@hashspan/cdp` | Adapter for Coinbase CDP wallets | planned (v0.2) |
 | `@hashspan/x402` | Adapter for x402 payments | planned (v0.2) |
 
-## Quick start (planned API)
+## Quick start
 
 ```ts
-import { createWalletClient, http } from 'viem';
+import { createPublicClient, createWalletClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { withHashspan } from '@hashspan/viem';
 
-const wallet = createWalletClient({ account, chain: baseSepolia, transport: http() })
-  .extend(withHashspan());
+const hashspan = withHashspan();
+const wallet = createWalletClient({ account, chain: baseSepolia, transport: http() }).extend(hashspan);
+const reader = createPublicClient({ chain: baseSepolia, transport: http() }).extend(hashspan);
 
-// Inside an agent tool: this now produces send + confirm spans under the tool span.
+// Inside an agent tool: send + confirm spans appear under the tool span.
 const hash = await wallet.sendTransaction({ to, value });
+await reader.waitForTransactionReceipt({ hash });
 ```
+
+See [`@hashspan/viem`](packages/viem) for details and [`@hashspan/core`](packages/core) to instrument other send
+paths.
 
 ## Local lab
 
