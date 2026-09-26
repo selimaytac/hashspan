@@ -13,7 +13,7 @@ OpenTelemetry tracing for on-chain transactions sent by AI agents: every transac
 - Test (unit / integration): `pnpm test` / `pnpm test:integration` (needs Anvil: `make tools`)
   - Tests import workspace packages from source (`vitest.config.ts` alias), so no build is needed first
 - Lint & format: `pnpm lint` / `pnpm format`
-- Typecheck: `pnpm typecheck`
+- Typecheck: `pnpm typecheck` (builds the packages first, since adapters type-check against `@hashspan/core` output)
 - Local lab: `make lab-up` (Jaeger), `make anvil` (local chain), `make lab-pause`, `make lab-nuke`
 Run lint, typecheck and tests before proposing a change.
 
