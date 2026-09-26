@@ -51,7 +51,7 @@ RPC calls made by adapters follow the OpenTelemetry [JSON-RPC conventions](https
 | `blockchain.tx.effective_gas_price` | string | confirm | on | wei, decimal string |
 | `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, wei |
 | `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, wei; omitted if the gas price is unknown |
-| `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available |
+| `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available: the `Error(string)` message, `Panic(0x..)`, `ErrorName(arg, ...)` for custom errors with a known ABI, else the 4-byte error selector. See [ADR 0005](adr/0005-revert-reason-replay.md) |
 | `error.type` | string | all | on | see *Span status*; reused from OpenTelemetry general conventions |
 
 Agent identity is recorded with the GenAI conventions `gen_ai.agent.id` and `gen_ai.agent.name`, taken from

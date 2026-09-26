@@ -41,6 +41,21 @@ redaction hook) plus:
 |---|---|---|
 | `tracker` | new tracker | Report to an existing `@hashspan/core` tracker |
 | `confirm` | none | `{ mode: 'background', timeoutMs? }` confirms every sent transaction without an explicit wait |
+| `decodeRevertReason` | `true` | Replay reverted transactions to record their revert reason |
+
+## Revert reasons
+
+A receipt only says that a transaction reverted. For reverted transactions the adapter replays the transaction with
+`eth_call` on the previous block's state and records the decoded reason as `blockchain.tx.revert.reason`:
+`Error(string)` messages, `Panic` codes, and custom errors when the ABI is known (transactions sent with
+`writeContract`), otherwise the error selector.
+
+- Two extra RPC requests per reverted transaction; none for successful ones.
+- Best effort: the replay can differ when earlier transactions in the same block changed the state, and providers
+  without historical state cannot replay. The reason is then missing.
+- `waitForTransactionReceipt` returns as soon as the receipt is available; the confirm span ends once the reason
+  has been fetched.
+- Turn it off with `withHashspan({ decodeRevertReason: false })`.
 
 ## Background confirmation
 

@@ -1,4 +1,4 @@
-import { custom } from 'viem';
+import { custom, RpcRequestError } from 'viem';
 
 export const FROM = '0x1111111111111111111111111111111111111111' as const;
 export const TO = '0x2222222222222222222222222222222222222222' as const;
@@ -9,6 +9,8 @@ export interface MockOptions {
   /** Receipt fields merged into the default successful receipt; `null` means "not mined yet". */
   receipt?: Record<string, unknown> | null;
   sendError?: { code: number; message: string };
+  /** Revert data returned by `eth_call`; the call succeeds when undefined. */
+  callRevertData?: string;
 }
 
 /** EIP-1193 transport answering the handful of methods the adapter's code paths use. */
@@ -26,6 +28,36 @@ export function mockTransport(options: MockOptions = {}) {
           return HASH;
         case 'eth_blockNumber':
           return '0x7b';
+        case 'eth_getTransactionByHash':
+          return {
+            hash: HASH,
+            from: FROM,
+            to: TO,
+            input: '0xa9059cbb',
+            value: '0x0',
+            gas: '0x186a0',
+            nonce: '0x0',
+            blockHash: `0x${'cd'.repeat(32)}`,
+            blockNumber: '0x7b',
+            transactionIndex: '0x0',
+            type: '0x2',
+            chainId: options.chainIdHex ?? '0x2105',
+            maxFeePerGas: '0x3b9aca00',
+            maxPriorityFeePerGas: '0x1',
+            accessList: [],
+            v: '0x0',
+            r: `0x${'11'.repeat(32)}`,
+            s: `0x${'22'.repeat(32)}`,
+            yParity: '0x0',
+          };
+        case 'eth_call':
+          if (options.callRevertData === undefined) return '0x';
+          // Shaped like a node's JSON-RPC error, so viem does not retry it.
+          throw new RpcRequestError({
+            body: {},
+            error: { code: 3, message: 'execution reverted', data: options.callRevertData },
+            url: 'mock',
+          });
         case 'eth_getTransactionReceipt':
           if (options.receipt === null) return null;
           return {
