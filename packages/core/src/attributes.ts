@@ -34,3 +34,8 @@ export const BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM = 'confirm' as const;
 export const BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS = 'success' as const;
 export const BLOCKCHAIN_TX_STATUS_VALUE_REVERTED = 'reverted' as const;
 export const BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT = 'timeout' as const;
+
+/** Reused from OpenTelemetry general conventions. */
+export const ATTR_ERROR_TYPE = 'error.type' as const;
+/** Fallback {@link ATTR_ERROR_TYPE} value when the error has no name. */
+export const ERROR_TYPE_VALUE_OTHER = '_OTHER' as const;

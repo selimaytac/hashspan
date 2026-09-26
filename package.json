@@ -17,7 +17,8 @@
     "test:integration": "vitest run --project integration --passWithNoTests",
     "test:all": "vitest run",
     "changeset": "changeset",
-    "release": "pnpm build && changeset publish"
+    "release": "pnpm build && changeset publish",
+    "version-packages": "changeset version && node scripts/sync-version.mjs && pnpm install --lockfile-only"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

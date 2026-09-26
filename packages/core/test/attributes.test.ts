@@ -3,7 +3,7 @@ import * as core from '../src/index.js';
 
 describe('attribute keys', () => {
   const keys = Object.entries(core)
-    .filter(([name]) => name.startsWith('ATTR_'))
+    .filter(([name]) => name.startsWith('ATTR_BLOCKCHAIN_'))
     .map(([, value]) => value as string);
 
   it('live under the blockchain.* namespace', () => {

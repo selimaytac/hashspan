@@ -3,7 +3,7 @@
 ## v0.1: EVM transactions through viem
 
 - [x] **M0** Repository skeleton, CI, ADRs, draft semantic conventions
-- [ ] **M1** Core: `send` / `confirm` spans, span links, agent identity from Baggage, privacy modes
+- [x] **M1** Core: `send` / `confirm` spans, span links, agent identity from Baggage, privacy modes
 - [ ] **M2** viem adapter: `client.extend()` hooks + transport wrapper, Anvil integration tests
 - [ ] **M3** Fees (`gasUsed × effectiveGasPrice` + OP-stack L1 fee), revert reason decoding, opt-in calldata decoding
 - [ ] **M4** Example agent (Vercel AI SDK + viem) on Anvil and Base Sepolia, Jaeger quick start, README

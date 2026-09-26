@@ -8,7 +8,25 @@ Rationale: [ADR 0003](adr/0003-attribute-namespace.md). Privacy defaults: [ADR 0
 | Span name | Kind | Parent | Ends when |
 |---|---|---|---|
 | `send {blockchain.chain.id}` | CLIENT | active context (e.g. `execute_tool`) | hash returned or send failed |
-| `confirm {blockchain.chain.id}` | CLIENT | context that waits for the receipt | receipt retrieved, timeout or error; links to `send` |
+| `confirm {blockchain.chain.id}` | CLIENT | see below | receipt retrieved, timeout or error; links to `send` |
+
+**Confirm span parent**, in order: an explicitly passed context; otherwise the active span (whatever is waiting
+for the receipt); otherwise the parent of the `send` span (confirmation in the background); otherwise none.
+The link to the `send` span is added whenever the transaction was sent through the same tracker within the link
+TTL (default 10 minutes).
+
+### Span status
+
+| Situation | Span | Status | `error.type` | `blockchain.tx.status` |
+|---|---|---|---|---|
+| Transaction hash returned | send | unset | none | none |
+| Signing, simulation or broadcast failed | send | error | error class name, else `_OTHER` | none |
+| Receipt with status success | confirm | unset | none | `success` |
+| Receipt with status reverted | confirm | error | `reverted` | `reverted` |
+| Gave up waiting for the receipt | confirm | error | `timeout` | `timeout` |
+| Retrieving the receipt failed | confirm | error | error class name, else `_OTHER` | none |
+
+Exceptions are recorded as span events following the OpenTelemetry exception conventions.
 
 RPC calls made by adapters follow the OpenTelemetry [JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/rpc/json-rpc.md)
 (`rpc.system.name = "jsonrpc"`, `rpc.method` from an allowlist of `eth_*` methods).
@@ -32,11 +50,21 @@ RPC calls made by adapters follow the OpenTelemetry [JSON-RPC conventions](https
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
 | `blockchain.tx.effective_gas_price` | string | confirm | on | wei, decimal string |
 | `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, wei |
-| `blockchain.tx.fee` | string | confirm | on | total fee paid (execution + L1), wei |
+| `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, wei; omitted if the gas price is unknown |
 | `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available |
+| `error.type` | string | all | on | see *Span status*; reused from OpenTelemetry general conventions |
 
-Agent identity is copied from the parent context / OpenTelemetry Baggage when present, using the GenAI conventions:
-`gen_ai.agent.id`, `gen_ai.agent.name`. This lets backends search transactions by agent without joining spans.
+Agent identity is recorded with the GenAI conventions `gen_ai.agent.id` and `gen_ai.agent.name`, taken from
+OpenTelemetry Baggage entries with the same keys, or from the tracker's static `agent` option. This lets backends
+search transactions by agent without joining spans.
+
+## Privacy
+
+`blockchain.tx.from` / `blockchain.tx.to` follow the address mode: `raw` (default), `hashed`
+(`sha256:` + first 32 hex characters of SHA-256 of the lower-cased address, or a custom function) or `off`.
+A redaction hook runs last on every attribute set; if it throws, only `blockchain.system`, `blockchain.chain.id`,
+`blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status` and `error.type` are recorded.
+Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md).
 
 ## Change policy
 
