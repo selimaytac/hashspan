@@ -48,14 +48,17 @@ transaction, such as fetching a revert reason, is shared per key within the adap
 key), so concurrent waits do not duplicate RPC requests.
 
 **Bounds.** The registry uses the same limits as the send links (`linkTtlMs`, `maxTrackedTransactions`). An evicted
-in-flight entry keeps its span; its handles still end it, but new calls for that key start a new span.
+in-flight entry keeps its span and its handles still end it, but a new `startConfirm` for that key starts a
+second span. This is the one exception to the single-span guarantee; it only occurs when more than
+`maxTrackedTransactions` transactions are tracked at once.
 
 **Alternative considered.** Keying the adapter's registry by tracker (`WeakMap<TxTracker, ...>`) closes the first
 gap with less change, but leaves the other two and duplicates the rules in every adapter.
 
 ## Consequences
 
-- One confirm span per transaction and tracker, however many clients, extensions or waits observe it.
+- One confirm span per transaction and tracker, however many clients, extensions or waits observe it, as long as
+  the registry has not evicted the in-flight entry (see *Bounds*).
 - A success is never lost because another wait gave up first.
 - `startConfirm` changes from "always a new span" to "join or create". Callers that relied on one span per call must
   use separate trackers. This is a behaviour change of the core API and needs a changeset.

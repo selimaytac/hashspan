@@ -34,8 +34,14 @@ from the confirm hash (compared case-insensitively), the tracker:
 2. records the receipt on the confirm span of the mined hash in the confirmation registry (ADR 0007): it ends an
    in-flight span for that hash, does nothing if that hash already settled, and otherwise creates one.
 
-Adapters only pass the receipt and, when the library reported it, the reason. Every adapter gets the same
-attribution without comparing hashes itself. Receipts without `transactionHash` keep today's behaviour.
+Adapters only pass the receipt and, when the library reported it, the reason. With `createTxTracker()` every
+adapter gets the same attribution without comparing hashes itself. Receipts without `transactionHash` keep
+today's behaviour.
+
+**Invalid hashes.** The tracker validates `transactionHash` (32-byte hex) before comparing it or using it as a
+registry key. A receipt with an invalid `transactionHash` is not attributed to anything: the original confirm span
+ends as a failure (error status, `error.type = _OTHER`, no status, block, gas or fee), no span is created for the
+invalid hash, the key is released as for any failure, and a warning is logged through `diag` without the value.
 
 **Original transaction.** Its confirm span ends with:
 
@@ -52,18 +58,21 @@ original confirm span, so its duration covers the whole wait. It links to the or
 original send span when known, and to its own send span when it was sent through the same tracker. Links are set
 when the span is created. The usual status rules apply (`success`, or `reverted` with error status).
 
-**Validation.** `blockchain.tx.replacement.hash` is recorded only if it is a 32-byte hex string and
-`blockchain.tx.replacement.reason` only if it is one of the three values; anything else is dropped. Both then pass
+**Validation.** `blockchain.tx.replacement.hash` is only ever a hash that passed the check above, and
+`blockchain.tx.replacement.reason` is recorded only if it is one of the three values; any other reason is dropped. Both then pass
 through the redaction hook like every attribute, and are kept when the hook fails, like the transaction hash.
 
 **viem adapter.**
 
-- It wraps `onReplaced`: it stores the replacement first, then calls the caller's callback with the same argument.
-  What the callback throws still rejects the wait, as in plain viem, and the stored replacement is still recorded.
-  Recording never throws into the caller.
+- It wraps `onReplaced`: it stores the replacement (reason and receipt) first, then calls the caller's callback with
+  the same argument. Recording never throws into the caller.
+- If the caller's callback throws, the wait rejects with that error, as in plain viem. The adapter then ends the
+  confirm handle with the stored receipt and reason, exactly as if the wait had resolved, instead of recording the
+  callback's error as a confirmation failure: the transaction was mined, only the caller's callback failed.
 - `checkReplacement` is passed through unchanged. With `checkReplacement: false` viem does not detect
   replacements, and neither does the adapter.
-- The caller still receives viem's result, the mined transaction's receipt.
+- The caller receives viem's result unchanged: the mined transaction's receipt, or the callback's error if its
+  `onReplaced` threw.
 - The revert reason of a reverted replacing transaction is decoded with the ABI recorded for the mined hash, else
   with the original `writeContract` ABI when both transactions call the same contract (addresses compared
   case-insensitively). Errors are matched by selector, so another ABI of the same contract only misdecodes on a
@@ -82,5 +91,6 @@ through the redaction hook like every attribute, and are kept when the hook fail
   queries or span processors on `blockchain.tx.replacement.reason`.
 - The reason is the library's heuristic. A replacement that only looks like a cancellation is reported as
   `cancelled`.
-- No new tracker or handle methods: user-implemented trackers keep working and simply ignore the new optional
-  receipt fields.
+- No new tracker or handle methods: user-implemented trackers keep working. They receive the new optional receipt
+  fields but may ignore them, so correct attribution of replaced transactions is guaranteed for `createTxTracker()`
+  only; a custom tracker that ignores `transactionHash` records the receipt under the original hash as before.
