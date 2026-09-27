@@ -1,4 +1,4 @@
-import { createTxTracker } from '@hashspan/core';
+import { createTxTracker, type TxTracker } from '@hashspan/core';
 import { context, diag, SpanStatusCode, trace } from '@opentelemetry/api';
 import { createPublicClient, createWalletClient, parseAbi, publicActions } from 'viem';
 import { base, mainnet } from 'viem/chains';
@@ -227,6 +227,118 @@ describe('robustness', () => {
       transport: mockTransport().transport,
     }).extend(withHashspan({ tracker: broken }));
     await expect(wallet.sendTransaction({ to: TO })).resolves.toBe(HASH);
+  });
+
+  /** A tracker whose every handle method throws, as a buggy user-provided tracker might. */
+  const throwingHandles = (): TxTracker => {
+    const boom = () => {
+      throw new Error('tracker bug');
+    };
+    return {
+      startSend: () => ({ end: boom, fail: boom }),
+      startConfirm: () => ({ end: boom, timeout: boom, fail: boom }),
+    };
+  };
+
+  /** Fails the test on any unhandled rejection raised while `run` executes (and shortly after). */
+  const withoutUnhandledRejections = async (run: () => Promise<void>): Promise<void> => {
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => rejections.push(reason);
+    process.on('unhandledRejection', onRejection);
+    try {
+      await run();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } finally {
+      process.off('unhandledRejection', onRejection);
+    }
+    expect(rejections).toEqual([]);
+  };
+
+  it('returns the hash when the tracker throws after the transaction was sent', async () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const wallet = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: mockTransport().transport,
+    }).extend(withHashspan({ tracker: throwingHandles() }));
+    await expect(wallet.sendTransaction({ to: TO })).resolves.toBe(HASH);
+  });
+
+  it('rethrows the original send error when the tracker throws while recording it', async () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const { transport } = mockTransport({ sendError: { code: -32000, message: 'nonce too low' } });
+    const plain = createWalletClient({ account: FROM, chain: base, transport });
+    const traced = plain.extend(withHashspan({ tracker: throwingHandles() }));
+
+    const expected = await plain.sendTransaction({ to: TO }).catch((e: unknown) => e);
+    const actual = await traced.sendTransaction({ to: TO }).catch((e: unknown) => e);
+    expect(actual).toBeInstanceOf(Error);
+    expect((actual as Error).name).toBe((expected as Error).name);
+    expect((actual as Error).message).toBe((expected as Error).message);
+  });
+
+  it('returns the receipt when the tracker throws while recording it', async () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const reader = createPublicClient({ chain: base, transport: mockTransport().transport }).extend(
+      withHashspan({ tracker: throwingHandles() }),
+    );
+    await withoutUnhandledRejections(async () => {
+      const receipt = await reader.waitForTransactionReceipt({ hash: HASH });
+      expect(receipt.transactionHash).toBe(HASH);
+    });
+  });
+
+  it('returns the receipt when starting the confirm span throws', async () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const broken = createTxTracker();
+    broken.startConfirm = () => {
+      throw new Error('boom');
+    };
+    const reader = createPublicClient({ chain: base, transport: mockTransport().transport }).extend(
+      withHashspan({ tracker: broken }),
+    );
+    const receipt = await reader.waitForTransactionReceipt({ hash: HASH });
+    expect(receipt.transactionHash).toBe(HASH);
+  });
+
+  it('raises no unhandled rejection when the tracker throws on a failed or timed-out wait', async () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    await withoutUnhandledRejections(async () => {
+      // Timeout of a background confirmation.
+      const wallet = createWalletClient({
+        account: FROM,
+        chain: base,
+        transport: mockTransport({ receipt: null }).transport,
+        pollingInterval: 10,
+      }).extend(
+        withHashspan({
+          tracker: throwingHandles(),
+          confirm: { mode: 'background', timeoutMs: 30 },
+        }),
+      );
+      await wallet.sendTransaction({ to: TO });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Failure of the caller's own wait.
+      const { transport } = mockTransport();
+      const reader = createPublicClient({
+        chain: base,
+        transport: (opts) => {
+          const t = transport(opts);
+          return {
+            ...t,
+            request: (async (args: { method: string }) => {
+              if (args.method === 'eth_getTransactionReceipt') throw new Error('rpc down');
+              return t.request(args as never);
+            }) as never,
+          };
+        },
+        pollingInterval: 10,
+      }).extend(withHashspan({ tracker: throwingHandles() }));
+      await expect(
+        reader.waitForTransactionReceipt({ hash: HASH, retryCount: 0 }),
+      ).rejects.toThrow();
+    });
   });
 
   it('only overrides actions the client has', () => {
