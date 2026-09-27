@@ -37,56 +37,26 @@ export interface BackgroundConfirmOptions {
 }
 
 const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
-const CONFIRMED_TTL_MS = 10 * 60 * 1000;
-const MAX_CONFIRMATIONS = 10_000;
+const RECENT_TTL_MS = 10 * 60 * 1000;
+const MAX_RECENT = 10_000;
 
-/**
- * Transactions whose confirm span is in progress or already recorded a receipt, so each transaction gets one
- * confirm span. Bounded and time-limited; failed or timed-out confirmations are released so a retry is traced.
- */
-class Confirmations {
-  private readonly entries = new Map<string, number>();
+/** Per-transaction values kept for a while, keyed by `chainId:hash`. Bounded and time-limited. */
+class Recent<T> {
+  private readonly entries = new Map<string, { value: T; expiresAt: number }>();
 
-  /** Claims `key`; returns false if another confirm span already covers it. */
-  claim(key: string): boolean {
-    const expiresAt = this.entries.get(key);
-    if (expiresAt !== undefined && expiresAt > Date.now()) return false;
+  set(key: string, value: T): void {
     this.entries.delete(key);
-    this.entries.set(key, Number.POSITIVE_INFINITY);
+    this.entries.set(key, { value, expiresAt: Date.now() + RECENT_TTL_MS });
     for (const oldest of this.entries.keys()) {
-      if (this.entries.size <= MAX_CONFIRMATIONS) break;
-      this.entries.delete(oldest);
-    }
-    return true;
-  }
-
-  /** Keeps `key` claimed for a while after a receipt was recorded. */
-  settle(key: string): void {
-    if (this.entries.has(key)) this.entries.set(key, Date.now() + CONFIRMED_TTL_MS);
-  }
-
-  release(key: string): void {
-    this.entries.delete(key);
-  }
-}
-
-/** ABIs used by recent `writeContract` calls, to decode custom errors. Bounded and time-limited. */
-class RecentAbis {
-  private readonly entries = new Map<string, { abi: Abi; expiresAt: number }>();
-
-  set(key: string, abi: Abi): void {
-    this.entries.delete(key);
-    this.entries.set(key, { abi, expiresAt: Date.now() + CONFIRMED_TTL_MS });
-    for (const oldest of this.entries.keys()) {
-      if (this.entries.size <= MAX_CONFIRMATIONS) break;
+      if (this.entries.size <= MAX_RECENT) break;
       this.entries.delete(oldest);
     }
   }
 
-  get(key: string): Abi | undefined {
+  get(key: string): T | undefined {
     const entry = this.entries.get(key);
     if (!entry || entry.expiresAt <= Date.now()) return undefined;
-    return entry.abi;
+    return entry.value;
   }
 }
 
@@ -180,14 +150,37 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   // Guarded so that no tracker, including a user-provided one, can throw into the instrumented call.
   const tracker = guardTracker(providedTracker ?? createTxTracker(trackerOptions));
   const chainIds = new WeakMap<object, Promise<number>>();
-  /** Shared by all clients extended with this instance, keyed by `chainId:hash`. */
-  const confirmations = new Confirmations();
-  const abis = new RecentAbis();
+  /** ABIs of recent `writeContract` calls, to decode custom errors. */
+  const abis = new Recent<Abi>();
+  /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
+  const revertReasons = new Recent<Promise<string | undefined>>();
   const confirmKey = (chainId: number, hash: string): string => `${chainId}:${hash.toLowerCase()}`;
 
+  const revertReasonOf = (
+    key: string,
+    receipt: ViemReceipt,
+    client: unknown,
+  ): Promise<string | undefined> => {
+    let reason = revertReasons.get(key);
+    if (!reason) {
+      reason = fetchRevertReason(
+        client,
+        receipt.transactionHash,
+        receipt.blockNumber,
+        abis.get(key),
+      ).catch((error: unknown) => {
+        diag.debug(`hashspan: could not fetch revert reason (${errorName(error)})`);
+        return undefined;
+      });
+      revertReasons.set(key, reason);
+    }
+    return reason;
+  };
+
   /**
-   * Ends `handle` from the outcome of `wait` and settles or releases `key`; never rejects.
-   * For reverted receipts, the span ends after the revert reason was fetched with `client`.
+   * Ends `handle` from the outcome of `wait`; never rejects. The tracker joins handles for one transaction into one
+   * confirm span (docs/adr/0007-confirmation-ownership.md). For reverted receipts, the span ends after the revert
+   * reason was fetched with `client`.
    */
   const recordConfirmation = async (
     key: string,
@@ -199,25 +192,14 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     try {
       receipt = await wait;
     } catch (error) {
-      confirmations.release(key);
       if (isTimeout(error)) handle.timeout();
       else handle.fail(error);
       return;
     }
-    confirmations.settle(key);
-    let revertReason: string | undefined;
-    if (receipt.status === 'reverted' && decodeRevertReason) {
-      try {
-        revertReason = await fetchRevertReason(
-          client,
-          receipt.transactionHash,
-          receipt.blockNumber,
-          abis.get(key),
-        );
-      } catch (error) {
-        diag.debug(`hashspan: could not fetch revert reason (${errorName(error)})`);
-      }
-    }
+    const revertReason =
+      receipt.status === 'reverted' && decodeRevertReason
+        ? await revertReasonOf(key, receipt, client)
+        : undefined;
     try {
       handle.end({ ...toReceiptLike(receipt), revertReason });
     } catch (error) {
@@ -251,7 +233,6 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
 
     const confirmInBackground = (chainId: number, hash: string): void => {
       const key = confirmKey(chainId, hash);
-      if (!confirmations.claim(key)) return;
       const handle = tracker.startConfirm({ chainId, hash });
       const wait = viemWaitForTransactionReceipt(backgroundClient as never, {
         hash: hash as `0x${string}`,
@@ -351,8 +332,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         try {
           const chainId = await chainIdFor(args);
           key = confirmKey(chainId, args.hash);
-          // A background confirmation already covers this transaction: one confirm span per transaction.
-          if (confirmations.claim(key)) handle = tracker.startConfirm({ chainId, hash: args.hash });
+          handle = tracker.startConfirm({ chainId, hash: args.hash });
         } catch (error) {
           diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
         }

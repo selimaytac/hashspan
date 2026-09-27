@@ -1,3 +1,4 @@
+import { createTxTracker } from '@hashspan/core';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { createPublicClient, createWalletClient, publicActions } from 'viem';
 import { base } from 'viem/chains';
@@ -155,5 +156,68 @@ describe("background confirmation and the caller's own wait on the same client",
     // The receipt is in block 0x7b; three confirmations need block 0x7d.
     expect(receipt.transactionHash).toBe(hash);
     expect(await wallet.getBlockNumber({ cacheTime: 0 })).toBeGreaterThanOrEqual(0x7dn);
+  });
+});
+
+describe('confirmations shared through one tracker', () => {
+  it('emits one confirm span when two extensions share a tracker', async () => {
+    const tracker = createTxTracker();
+    const wallet = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: mockTransport().transport,
+      pollingInterval: 10,
+    }).extend(withHashspan({ tracker, confirm: { mode: 'background' } }));
+    const reader = createPublicClient({
+      chain: base,
+      transport: mockTransport().transport,
+      pollingInterval: 10,
+    }).extend(withHashspan({ tracker }));
+
+    const hash = await wallet.sendTransaction({ to: TO });
+    await reader.waitForTransactionReceipt({ hash });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(confirmSpans()).toHaveLength(1);
+  });
+
+  it('records the caller receipt when the background confirmation timed out first', async () => {
+    let mined = false;
+    const { transport: delayed } = mockTransport({ mined: () => mined, advanceBlocks: true });
+    const hashspan = withHashspan({ confirm: { mode: 'background', timeoutMs: 30 } });
+    const wallet = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: delayed,
+      pollingInterval: 10,
+    }).extend(hashspan);
+
+    const hash = await wallet.sendTransaction({ to: TO });
+    const wait = wallet.extend(publicActions).extend(hashspan).waitForTransactionReceipt({ hash });
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    mined = true;
+    await wait;
+
+    await vi.waitFor(() => expect(confirmSpans()).toHaveLength(1));
+    expect(confirmSpans()[0]?.attributes['blockchain.tx.status']).toBe('success');
+  });
+
+  it('fetches the revert reason once for concurrent waits', async () => {
+    const { transport, calls } = mockTransport({ receipt: { status: '0x0' } });
+    const hashspan = withHashspan({ confirm: { mode: 'background' } });
+    const wallet = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport,
+      pollingInterval: 10,
+    }).extend(hashspan);
+    const reader = createPublicClient({ chain: base, transport, pollingInterval: 10 }).extend(
+      hashspan,
+    );
+
+    const hash = await wallet.sendTransaction({ to: TO });
+    await reader.waitForTransactionReceipt({ hash });
+    await vi.waitFor(() => expect(confirmSpans()).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(calls.filter((m) => m === 'eth_call')).toHaveLength(1);
   });
 });

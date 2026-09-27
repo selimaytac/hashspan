@@ -38,6 +38,7 @@ import {
   BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT,
   ERROR_TYPE_VALUE_OTHER,
 } from './attributes.js';
+import { ConfirmRegistry, type SharedConfirm } from './confirm-registry.js';
 import { LinkStore } from './link-store.js';
 import {
   type AddressFormatter,
@@ -84,8 +85,10 @@ export interface TxTracker {
    */
   startSend(input: SendInput, parent?: Context): SendHandle;
   /**
-   * Starts a `confirm` span for a transaction, linked to its `send` span when known.
-   * Parent: `parent` if given, else the active span, else the `send` span's parent.
+   * Joins the `confirm` span of a transaction, starting it for the first caller; linked to its `send` span when
+   * known. Calls for the same chain id and hash share one span, whose parent is chosen by the first call:
+   * `parent` if given, else the active span, else the `send` span's parent. Returns a no-op handle for a
+   * transaction that recently got a receipt. Every returned handle must be ended.
    */
   startConfirm(input: ConfirmInput, parent?: Context): ConfirmHandle;
 }
@@ -113,8 +116,19 @@ function errorType(error: unknown): string {
   return error instanceof Error && error.name ? error.name : ERROR_TYPE_VALUE_OTHER;
 }
 
+/** The confirm span of one transaction and how to end it; shared by all its handles. */
+interface ConfirmSpan extends SharedConfirm {
+  receipt(receipt: ReceiptLike): void;
+  timeout(): void;
+  fail(error: unknown): void;
+}
+
 export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
   const links = new LinkStore({
+    ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
+    maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
+  });
+  const confirmations = new ConfirmRegistry<ConfirmSpan>({
     ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
     maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
   });
@@ -276,7 +290,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     return attributes;
   };
 
-  const startConfirm = (input: ConfirmInput, parentCtx?: Context): ConfirmHandle => {
+  const openConfirm = (input: ConfirmInput, parentCtx?: Context): ConfirmSpan => {
     const sent = links.get(input.chainId, input.hash);
     const active = context.active();
     const parent = parentCtx ?? (trace.getSpan(active) ? active : (sent?.parent ?? active));
@@ -296,7 +310,9 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     const finish = finisher(span);
 
     return {
-      end: (receipt) =>
+      active: 0,
+      ended: false,
+      receipt: (receipt) =>
         finish('record receipt', () => {
           span.setAttributes(redact(receiptAttributes(receipt)));
           if (receipt.status === 'reverted') markError(span, BLOCKCHAIN_TX_STATUS_VALUE_REVERTED);
@@ -310,6 +326,47 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
         }),
       fail: (error) =>
         finish('record confirmation failure', () => markError(span, errorType(error), error)),
+    };
+  };
+
+  /**
+   * Joins the confirm span of the transaction, opening it for the first handle. A receipt from any handle ends the
+   * span; a timeout or failure only ends it when it is the last handle still waiting.
+   */
+  const startConfirm = (input: ConfirmInput, parentCtx?: Context): ConfirmHandle => {
+    const { chainId, hash } = input;
+    const current = confirmations.get(chainId, hash);
+    if (current === 'settled') return NOOP_CONFIRM;
+    let confirm = current;
+    if (!confirm) {
+      confirm = openConfirm(input, parentCtx);
+      confirmations.start(chainId, hash, confirm);
+    }
+    const shared = confirm;
+    shared.active += 1;
+    let done = false;
+
+    const withdraw = (end: () => void): void => {
+      if (done || shared.ended) return;
+      done = true;
+      shared.active -= 1;
+      if (shared.active > 0) return;
+      shared.ended = true;
+      confirmations.release(chainId, hash, shared);
+      end();
+    };
+
+    return {
+      end: (receipt) => {
+        if (done || shared.ended) return;
+        done = true;
+        shared.active -= 1;
+        shared.ended = true;
+        confirmations.settle(chainId, hash, shared);
+        shared.receipt(receipt);
+      },
+      timeout: () => withdraw(() => shared.timeout()),
+      fail: (error) => withdraw(() => shared.fail(error)),
     };
   };
 

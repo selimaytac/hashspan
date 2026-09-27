@@ -20,13 +20,15 @@ Run lint, typecheck and tests before proposing a change.
 ## Architecture
 - `packages/core` → transaction lifecycle tracker (spans, links, fees, privacy modes)
   - `src/tracker.ts` public `createTxTracker()`; `src/attributes.ts` attribute keys (mirror of docs/semconv.md);
-    `src/privacy.ts` address modes; `src/link-store.ts` send→confirm links; `src/agent.ts` agent identity
+    `src/privacy.ts` address modes; `src/link-store.ts` send→confirm links;
+    `src/confirm-registry.ts` one confirm span per transaction; `src/agent.ts` agent identity
   - `test/helpers.ts` registers an in-memory tracer provider for span assertions
 - `packages/viem` → capture adapter for viem clients
   - `src/index.ts` `withHashspan()`: a `client.extend()` extension wrapping `sendTransaction`, `writeContract` and
     `waitForTransactionReceipt`; it calls the base client's actions, so internal viem calls are not traced twice.
-    State shared by every client extended with one `withHashspan()` result (tracker, chain ids, confirmations)
-    lives in that call's closure; background confirmation must never delay or fail the user's call
+    State shared by every client extended with one `withHashspan()` result (tracker, chain ids, ABIs) lives in
+    that call's closure; confirm deduplication lives in the tracker (ADR 0007); background confirmation must
+    never delay or fail the user's call
   - `src/revert-reason.ts` replays reverted transactions and decodes the revert data (ADR 0005)
   - `test/mock-transport.ts` EIP-1193 mock for unit tests; `test/*.int.test.ts` run against Anvil via prool
 - `examples/` → runnable agent integrations

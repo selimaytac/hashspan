@@ -1,3 +1,4 @@
+import { createTxTracker } from '@hashspan/core';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { Instance } from 'prool';
 import {
@@ -201,6 +202,29 @@ describe('on Anvil', () => {
     } finally {
       await rpc('evm_setAutomine', [true]);
     }
+  });
+
+  it('records one confirm span when two extensions share a tracker', async () => {
+    const tracker = createTxTracker();
+    const wallet = createWalletClient({
+      account,
+      chain: anvil,
+      transport: http(RPC_URL),
+      pollingInterval: 50,
+    }).extend(withHashspan({ tracker, confirm: { mode: 'background', timeoutMs: 5_000 } }));
+    const reader = createPublicClient({
+      chain: anvil,
+      transport: http(RPC_URL),
+      pollingInterval: 50,
+    }).extend(withHashspan({ tracker }));
+
+    const hash = await wallet.sendTransaction({ to: RECIPIENT, value: 1n });
+    await reader.waitForTransactionReceipt({ hash });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const confirms = tracing.spans().filter((s) => s.name === 'confirm 31337');
+    expect(confirms).toHaveLength(1);
+    expect(confirms[0]?.attributes['blockchain.tx.status']).toBe('success');
   });
 
   it('records the revert reason of a mined revert', async () => {

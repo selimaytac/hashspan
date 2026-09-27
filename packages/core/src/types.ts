@@ -87,10 +87,16 @@ export interface ReceiptLike {
 }
 
 export interface ConfirmHandle {
-  /** Ends the confirm span with the receipt. */
+  /** Ends the shared confirm span with the receipt, for every handle of the transaction. */
   end(receipt: ReceiptLike): void;
-  /** Ends the confirm span because waiting for the receipt timed out. */
+  /**
+   * Withdraws this handle because waiting for the receipt timed out. The confirm span ends as `timeout` only if
+   * no other handle of the transaction is still waiting.
+   */
   timeout(): void;
-  /** Ends the confirm span because retrieving the receipt failed. */
+  /**
+   * Withdraws this handle because retrieving the receipt failed. The confirm span ends as a failure only if no
+   * other handle of the transaction is still waiting.
+   */
   fail(error: unknown): void;
 }
