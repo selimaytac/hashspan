@@ -26,9 +26,10 @@ export interface WithHashspanOptions extends TxTrackerOptions {
   confirm?: BackgroundConfirmOptions | undefined;
   /**
    * Replay reverted transactions to record their revert reason (two extra RPC requests per reverted transaction).
-   * Default: true. See docs/adr/0005-revert-reason-replay.md.
+   * `{ timeoutMs }` bounds the replay; if the provider has not answered by then, the receipt is recorded without a
+   * reason. Default: true, with a 10 000 ms bound. See docs/adr/0005-revert-reason-replay.md.
    */
-  decodeRevertReason?: boolean | undefined;
+  decodeRevertReason?: boolean | { timeoutMs?: number | undefined } | undefined;
 }
 
 export interface BackgroundConfirmOptions {
@@ -38,6 +39,7 @@ export interface BackgroundConfirmOptions {
 }
 
 const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
+const DEFAULT_REVERT_REASON_TIMEOUT_MS = 10_000;
 /** How long after a call settled its telemetry still waits for the client's chain id before it is dropped. */
 const CHAIN_ID_GRACE_MS = 30_000;
 
@@ -46,6 +48,22 @@ const timers = globalThis as unknown as {
   setTimeout(fn: () => void, ms: number): unknown;
   clearTimeout(timer: unknown): void;
 };
+
+/** Resolves with `value`, or with undefined after `ms`. Never rejects; its timer does not keep the process alive. */
+function within<T>(value: Promise<T>, ms: number, what: string): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    const timer = timers.setTimeout(() => {
+      diag.debug(`hashspan: gave up waiting to ${what} after ${ms} ms`);
+      resolve(undefined);
+    }, ms);
+    (timer as { unref?: () => void }).unref?.();
+    const done = (result: T | undefined): void => {
+      timers.clearTimeout(timer);
+      resolve(result);
+    };
+    value.then(done, () => done(undefined));
+  });
+}
 
 /**
  * Resolves with the chain id, or with undefined if the request fails or is still pending `CHAIN_ID_GRACE_MS` after
@@ -220,10 +238,15 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   const {
     tracker: providedTracker,
     confirm,
-    decodeRevertReason = true,
+    decodeRevertReason: decodeRevertReasonOption = true,
     ...trackerOptions
   } = options;
   // Guarded so that no tracker, including a user-provided one, can throw into the instrumented call.
+  const decodeRevertReason = decodeRevertReasonOption !== false;
+  const revertReasonTimeoutMs =
+    (typeof decodeRevertReasonOption === 'object'
+      ? decodeRevertReasonOption.timeoutMs
+      : undefined) ?? DEFAULT_REVERT_REASON_TIMEOUT_MS;
   const tracker = guardTracker(providedTracker ?? createTxTracker(trackerOptions));
   /** ABIs of recent `writeContract` calls, to decode custom errors. */
   const abis = new Recent<Abi>();
@@ -240,12 +263,17 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   ): Promise<string | undefined> => {
     let reason = revertReasons.get(key);
     if (!reason) {
-      reason = fetchRevertReason(client, receipt.transactionHash, receipt.blockNumber, abi).catch(
-        (error: unknown) => {
-          diag.debug(`hashspan: could not fetch revert reason (${errorName(error)})`);
-          return undefined;
-        },
-      );
+      const fetched = fetchRevertReason(
+        client,
+        receipt.transactionHash,
+        receipt.blockNumber,
+        abi,
+      ).catch((error: unknown) => {
+        diag.debug(`hashspan: could not fetch revert reason (${errorName(error)})`);
+        return undefined;
+      });
+      // Bounded, so that an unresponsive provider cannot keep the confirm span open.
+      reason = within(fetched, revertReasonTimeoutMs, 'fetch the revert reason');
       revertReasons.set(key, reason);
     }
     return reason;

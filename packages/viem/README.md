@@ -41,7 +41,7 @@ agent identity, redaction hook) plus:
 |---|---|---|
 | `tracker` | new tracker | Report to an existing `@hashspan/core` tracker; errors thrown by it or its handles are logged through `diag`, never thrown into your call |
 | `confirm` | none | `{ mode: 'background', timeoutMs? }` confirms every sent transaction without an explicit wait |
-| `decodeRevertReason` | `true` | Replay reverted transactions to record their revert reason |
+| `decodeRevertReason` | `true` | Replay reverted transactions to record their revert reason; `{ timeoutMs }` bounds the replay (default 10 000 ms) |
 
 ## Revert reasons
 
@@ -55,6 +55,8 @@ A receipt only says that a transaction reverted. For reverted transactions the a
   without historical state cannot replay. The reason is then missing.
 - `waitForTransactionReceipt` returns as soon as the receipt is available; the confirm span ends once the reason
   has been fetched.
+- The replay is bounded: if the provider has not answered within 10 s (`decodeRevertReason: { timeoutMs }`), the
+  receipt is recorded without a reason and the confirm span ends.
 - Turn it off with `withHashspan({ decodeRevertReason: false })`.
 
 ## Clients without a chain
