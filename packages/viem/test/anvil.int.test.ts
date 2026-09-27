@@ -228,6 +228,25 @@ describe('on Anvil', () => {
     expect(confirms[0]?.attributes['blockchain.tx.status']).toBe('success');
   });
 
+  it('traces clients without a chain once their chain id is known', async () => {
+    const hashspan = withHashspan();
+    const wallet = createWalletClient({ account, transport: http(RPC_URL) }).extend(hashspan);
+    const reader = createPublicClient({ transport: http(RPC_URL), pollingInterval: 50 }).extend(
+      hashspan,
+    );
+
+    const hash = await wallet.sendTransaction({ to: RECIPIENT, value: 1n, chain: null });
+    await reader.waitForTransactionReceipt({ hash });
+
+    await vi.waitFor(() => {
+      expect(tracing.spanNamed('send 31337').attributes['blockchain.tx.hash']).toBe(hash);
+      expect(tracing.spanNamed('confirm 31337').attributes['blockchain.tx.status']).toBe('success');
+    });
+    expect(tracing.spanNamed('confirm 31337').links[0]?.context.spanId).toBe(
+      tracing.spanNamed('send 31337').spanContext().spanId,
+    );
+  });
+
   it('records the revert reason of a mined revert', async () => {
     const { wallet, reader } = clients();
     const hash = await wallet.sendTransaction({ to: REVERT_WITH_MESSAGE, gas: 100_000n });

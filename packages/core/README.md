@@ -55,7 +55,9 @@ confirm.end({
 share one confirm span. A receipt from any of them ends it; a timeout or failure ends it once every caller gave up.
 End every handle you start, since an open handle keeps the shared span open.
 
-Both calls accept an explicit parent `Context` as a second argument. Every method is safe to call: failures inside
+Both calls accept an explicit parent `Context` as a second argument. An integration that learns about a call only
+after it started can record it after the fact: pass `startTime` in the input and the end time as the last argument
+of the handle method, e.g. `send.end(hash, endTime)` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/main/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
 the instrumentation are reported through `diag` and never thrown into your code.
 
 ## Options

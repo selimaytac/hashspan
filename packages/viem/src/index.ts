@@ -7,7 +7,7 @@ import {
   type TxTracker,
   type TxTrackerOptions,
 } from '@hashspan/core';
-import { diag } from '@opentelemetry/api';
+import { type Context, context, diag, type TimeInput } from '@opentelemetry/api';
 import { type Abi, getAbiItem, toFunctionSelector } from 'viem';
 import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
 import { fetchRevertReason } from './revert-reason.js';
@@ -38,6 +38,43 @@ export interface BackgroundConfirmOptions {
 }
 
 const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
+/** How long after a call settled its telemetry still waits for the client's chain id before it is dropped. */
+const CHAIN_ID_GRACE_MS = 30_000;
+
+/** Timers of the JavaScript runtime; `src/` is type-checked without runtime-specific types. */
+const timers = globalThis as unknown as {
+  setTimeout(fn: () => void, ms: number): unknown;
+  clearTimeout(timer: unknown): void;
+};
+
+/**
+ * Resolves with the chain id, or with undefined if the request fails or is still pending `CHAIN_ID_GRACE_MS` after
+ * `settled`. Never rejects, and its timer does not keep the process alive.
+ */
+function chainIdOrGiveUp(
+  chainId: Promise<number>,
+  settled: Promise<unknown>,
+): Promise<number | undefined> {
+  return new Promise((resolve) => {
+    let timer: unknown;
+    const done = (id: number | undefined): void => {
+      if (timer !== undefined) timers.clearTimeout(timer);
+      resolve(id);
+    };
+    chainId.then(done, (error: unknown) => {
+      diag.debug(`hashspan: could not resolve the chain id (${errorName(error)})`);
+      done(undefined);
+    });
+    const startGrace = (): void => {
+      timer = timers.setTimeout(() => {
+        diag.debug('hashspan: chain id still unknown after the call settled; not recording it');
+        done(undefined);
+      }, CHAIN_ID_GRACE_MS);
+      (timer as { unref?: () => void }).unref?.();
+    };
+    settled.then(startGrace, startGrace);
+  });
+}
 const RECENT_TTL_MS = 10 * 60 * 1000;
 const MAX_RECENT = 10_000;
 
@@ -184,7 +221,6 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   } = options;
   // Guarded so that no tracker, including a user-provided one, can throw into the instrumented call.
   const tracker = guardTracker(providedTracker ?? createTxTracker(trackerOptions));
-  const chainIds = new WeakMap<object, Promise<number>>();
   /** ABIs of recent `writeContract` calls, to decode custom errors. */
   const abis = new Recent<Abi>();
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
@@ -224,6 +260,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     wait: Promise<ViemReceipt>,
     capture: ReplacementCapture,
     client: unknown,
+    endTimeOf: () => TimeInput | undefined = () => undefined,
   ): Promise<void> => {
     let receipt: ViemReceipt;
     try {
@@ -232,8 +269,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       // viem rejects after reporting a replacement only if the caller's onReplaced threw: the transaction was mined.
       const reported = capture.replacement?.transactionReceipt;
       if (!reported) {
-        if (isTimeout(error)) handle.timeout();
-        else handle.fail(error);
+        if (isTimeout(error)) handle.timeout(endTimeOf());
+        else handle.fail(error, endTimeOf());
         return;
       }
       receipt = reported;
@@ -260,30 +297,46 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
             : undefined);
         revertReason = await revertReasonOf(minedKey, receipt, abi, client);
       }
-      handle.end({
-        ...toReceiptLike(receipt),
-        revertReason,
-        replacementReason: reported ? replacement.reason : undefined,
-      });
+      handle.end(
+        {
+          ...toReceiptLike(receipt),
+          revertReason,
+          replacementReason: reported ? replacement.reason : undefined,
+        },
+        endTimeOf(),
+      );
     } catch (error) {
       diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
-      handle.fail(error);
+      handle.fail(error, endTimeOf());
     }
   };
 
   const extension = (client: ViemClientLike & Partial<Record<TracedAction, AnyAction>>) => {
-    const chainIdFor = async (args: {
+    const knownChainId = (args: {
       chain?: { id: number } | null | undefined;
-    }): Promise<number> => {
-      const known = args.chain?.id ?? client.chain?.id;
-      if (known !== undefined) return known;
-      let pending = chainIds.get(client);
-      if (!pending) {
-        pending = client.request({ method: 'eth_chainId' }).then((hex: string) => Number(hex));
-        pending.catch(() => chainIds.delete(client));
-        chainIds.set(client, pending);
+    }): number | undefined => args.chain?.id ?? client.chain?.id;
+
+    /**
+     * Asks a client without a chain for its chain id. Concurrent calls share one request; the answer is not cached,
+     * since a wallet can switch networks. Callers never await it before the call they trace (docs/adr/0009).
+     */
+    let pendingChainId: Promise<number> | undefined;
+    const queryChainId = (): Promise<number> => {
+      if (!pendingChainId) {
+        const query = Promise.resolve()
+          .then(() => client.request({ method: 'eth_chainId' }))
+          .then((hex: string) => {
+            const id = Number(hex);
+            if (!Number.isSafeInteger(id)) throw new TypeError('invalid chain id');
+            return id;
+          });
+        pendingChainId = query;
+        const clear = (): void => {
+          if (pendingChainId === query) pendingChainId = undefined;
+        };
+        query.then(clear, clear);
       }
-      return pending;
+      return pendingChainId;
     };
 
     /**
@@ -306,17 +359,70 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       void recordConfirmation(chainId, hash, handle, wait, capture, client);
     };
 
+    /** Work after a successful send: remember the ABI and start background confirmation. */
+    const afterSend = (chainId: number, hash: string, abi: Abi | undefined): void => {
+      try {
+        if (abi) abis.set(confirmKey(chainId, hash), abi);
+        if (confirm?.mode === 'background') confirmInBackground(chainId, hash);
+      } catch (error) {
+        diag.error(`hashspan: failed to start background confirmation (${errorName(error)})`);
+      }
+    };
+
+    /**
+     * Records a send whose chain id was unknown when it started, once the chain id is known: same parent context,
+     * start and end time as the call. Never rejects.
+     */
+    const recordLateSend = async (
+      ctx: Context,
+      startTime: Date,
+      chainId: Promise<number>,
+      result: Promise<string>,
+      describe: (chainId: number) => SendInput,
+      abi: Abi | undefined,
+    ): Promise<void> => {
+      let hash: string | undefined;
+      let error: unknown;
+      try {
+        hash = await result;
+      } catch (thrown) {
+        error = thrown;
+      }
+      const endTime = new Date();
+      const id = await chainIdOrGiveUp(chainId, Promise.resolve());
+      if (id === undefined) return;
+      try {
+        const handle = context.with(ctx, () => tracker.startSend({ ...describe(id), startTime }));
+        if (hash === undefined) {
+          handle.fail(error, endTime);
+          return;
+        }
+        handle.end(hash, endTime);
+        afterSend(id, hash, abi);
+      } catch (thrown) {
+        diag.error(`hashspan: failed to record send span (${errorName(thrown)})`);
+      }
+    };
+
     const traceSend = async (
-      describe: () => Promise<SendInput>,
+      args: SendArgs,
+      describe: (chainId: number) => SendInput,
       send: () => Promise<string>,
       abi?: Abi,
     ): Promise<string> => {
+      const chainId = knownChainId(args);
+      if (chainId === undefined) {
+        // Telemetry must not delay the call: record it once the chain id is known (docs/adr/0009).
+        const ctx = context.active();
+        const startTime = new Date();
+        const pending = queryChainId();
+        const result = send();
+        void recordLateSend(ctx, startTime, pending, result, describe, abi);
+        return result;
+      }
       let handle = NOOP_SEND;
-      let chainId: number | undefined;
       try {
-        const input = await describe();
-        chainId = input.chainId;
-        handle = tracker.startSend(input);
+        handle = tracker.startSend(describe(chainId));
       } catch (error) {
         diag.error(`hashspan: failed to start send span (${errorName(error)})`);
       }
@@ -328,22 +434,16 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         throw error;
       }
       handle.end(hash);
-      if (abi && chainId !== undefined) abis.set(confirmKey(chainId, hash), abi);
-      if (confirm?.mode === 'background' && chainId !== undefined) {
-        try {
-          confirmInBackground(chainId, hash);
-        } catch (error) {
-          diag.error(`hashspan: failed to start background confirmation (${errorName(error)})`);
-        }
-      }
+      afterSend(chainId, hash, abi);
       return hash;
     };
 
-    const sendInput = async (
+    const sendInput = (
       args: SendArgs,
       to: string | null | undefined,
-    ): Promise<SendInput> => ({
-      chainId: await chainIdFor(args),
+      chainId: number,
+    ): SendInput => ({
+      chainId,
       from: addressOf(args.account ?? client.account),
       to: to ?? undefined,
       value: args.value,
@@ -356,8 +456,9 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     if (typeof sendTransaction === 'function') {
       actions.sendTransaction = (args: SendArgs) =>
         traceSend(
-          async () => ({
-            ...(await sendInput(args, args.to)),
+          args,
+          (chainId) => ({
+            ...sendInput(args, args.to, chainId),
             functionSelector: selectorOf(args.data),
           }),
           () => sendTransaction(args),
@@ -367,7 +468,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     if (typeof writeContract === 'function') {
       actions.writeContract = (args: WriteContractArgs) =>
         traceSend(
-          async () => {
+          args,
+          (chainId) => {
             let functionSelector: string | undefined;
             try {
               const item = getAbiItem({
@@ -380,7 +482,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
               // Unknown or ambiguous ABI item: record the function name only.
             }
             return {
-              ...(await sendInput(args, args.address)),
+              ...sendInput(args, args.address, chainId),
               functionName: args.functionName,
               functionSelector,
             };
@@ -391,21 +493,75 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     }
 
     if (typeof waitForTransactionReceipt === 'function') {
-      actions.waitForTransactionReceipt = async (args: WaitArgs) => {
-        let handle: ConfirmHandle | undefined;
-        let chainId: number | undefined;
+      /** Records a wait whose chain id was unknown when it started, once it is known. Never rejects. */
+      const recordLateConfirmation = async (
+        ctx: Context,
+        startTime: Date,
+        chainId: Promise<number>,
+        hash: string,
+        wait: Promise<ViemReceipt>,
+        capture: ReplacementCapture,
+      ): Promise<void> => {
+        let endTime: Date | undefined;
+        const settled = wait.then(
+          () => {
+            endTime = new Date();
+          },
+          () => {
+            endTime = new Date();
+          },
+        );
+        const id = await chainIdOrGiveUp(chainId, settled);
+        if (id === undefined) return;
         try {
-          chainId = await chainIdFor(args);
-          handle = tracker.startConfirm({ chainId, hash: args.hash });
+          const handle = context.with(ctx, () =>
+            tracker.startConfirm({ chainId: id, hash, startTime }),
+          );
+          await recordConfirmation(
+            id,
+            hash,
+            handle,
+            wait,
+            capture,
+            client,
+            () => endTime ?? new Date(),
+          );
         } catch (error) {
-          diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
+          diag.error(`hashspan: failed to record confirm span (${errorName(error)})`);
         }
+      };
+
+      actions.waitForTransactionReceipt = async (args: WaitArgs) => {
+        const chainId = knownChainId(args);
+        let handle: ConfirmHandle | undefined;
+        if (chainId !== undefined) {
+          try {
+            handle = tracker.startConfirm({ chainId, hash: args.hash });
+          } catch (error) {
+            diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
+          }
+        }
+        const late =
+          chainId === undefined
+            ? { ctx: context.active(), startTime: new Date(), chainId: queryChainId() }
+            : undefined;
+        // Always wrapped, so that a replacement is attributed however the span is recorded (docs/adr/0008).
         const capture: ReplacementCapture = {};
-        const wait = waitForTransactionReceipt(
-          handle ? { ...args, onReplaced: capturing(capture, args.onReplaced) } : args,
-        ) as Promise<ViemReceipt>;
+        const wait = waitForTransactionReceipt({
+          ...args,
+          onReplaced: capturing(capture, args.onReplaced),
+        }) as Promise<ViemReceipt>;
         if (handle && chainId !== undefined) {
           void recordConfirmation(chainId, args.hash, handle, wait, capture, client);
+        } else if (late) {
+          void recordLateConfirmation(
+            late.ctx,
+            late.startTime,
+            late.chainId,
+            args.hash,
+            wait,
+            capture,
+          );
         }
         return wait;
       };

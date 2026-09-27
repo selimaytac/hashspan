@@ -22,13 +22,13 @@ function safely<T>(what: string, fn: () => T, fallback: T): T {
   }
 }
 
-/** Calls `handle[method]` if it is a function, never throwing. */
-function call<H>(handle: H, method: keyof H, what: string, arg?: unknown): void {
+/** Calls `handle[method]` with all `args` if it is a function, never throwing. */
+function call<H>(handle: H, method: keyof H, what: string, ...args: unknown[]): void {
   safely(
     what,
     () => {
       const fn = handle[method];
-      if (typeof fn === 'function') fn.call(handle, arg);
+      if (typeof fn === 'function') fn.apply(handle, args);
     },
     undefined,
   );
@@ -44,8 +44,8 @@ export function guardTracker(tracker: TxTracker): TxTracker {
       const handle = safely('start send span', () => tracker.startSend(input, parent), NOOP_SEND);
       if (typeof handle !== 'object' || handle === null) return NOOP_SEND;
       return {
-        end: (hash) => call(handle, 'end', 'end send span', hash),
-        fail: (error) => call(handle, 'fail', 'record send failure', error),
+        end: (hash, endTime) => call(handle, 'end', 'end send span', hash, endTime),
+        fail: (error, endTime) => call(handle, 'fail', 'record send failure', error, endTime),
       };
     },
     startConfirm: (input, parent) => {
@@ -56,9 +56,10 @@ export function guardTracker(tracker: TxTracker): TxTracker {
       );
       if (typeof handle !== 'object' || handle === null) return NOOP_CONFIRM;
       return {
-        end: (receipt) => call(handle, 'end', 'record receipt', receipt),
-        timeout: () => call(handle, 'timeout', 'record confirmation timeout'),
-        fail: (error) => call(handle, 'fail', 'record confirmation failure', error),
+        end: (receipt, endTime) => call(handle, 'end', 'record receipt', receipt, endTime),
+        timeout: (endTime) => call(handle, 'timeout', 'record confirmation timeout', endTime),
+        fail: (error, endTime) =>
+          call(handle, 'fail', 'record confirmation failure', error, endTime),
       };
     },
   };
