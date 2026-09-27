@@ -8,6 +8,7 @@ import {
   type Hex,
   http,
   parseAbi,
+  publicActions,
 } from 'viem';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -176,6 +177,30 @@ describe('on Anvil', () => {
       'blockchain.tx.hash': hash,
       'blockchain.tx.status': 'success',
     });
+  });
+
+  it("still resolves the caller's wait on the sending client after the background confirmation timed out", async () => {
+    const wallet = createWalletClient({
+      account,
+      chain: anvil,
+      transport: http(RPC_URL),
+      pollingInterval: 50,
+    })
+      .extend(publicActions)
+      .extend(withHashspan({ confirm: { mode: 'background', timeoutMs: 200 } }));
+    const rpc = (method: string, params: unknown[] = []) =>
+      wallet.request({ method: method as never, params: params as never });
+
+    await rpc('evm_setAutomine', [false]);
+    try {
+      const hash = await wallet.sendTransaction({ to: RECIPIENT, value: 1n });
+      const wait = wallet.waitForTransactionReceipt({ hash, timeout: 5_000 });
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await rpc('evm_mine');
+      await expect(wait).resolves.toMatchObject({ transactionHash: hash, status: 'success' });
+    } finally {
+      await rpc('evm_setAutomine', [true]);
+    }
   });
 
   it('records the revert reason of a mined revert', async () => {

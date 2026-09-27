@@ -100,6 +100,7 @@ type AnyAction = (args: any) => Promise<any>;
 export interface ViemClientLike {
   chain?: { id: number } | undefined;
   account?: { address: string } | undefined;
+  uid?: string | undefined;
   // biome-ignore lint/suspicious/noExplicitAny: matches viem's overloaded EIP-1193 request function.
   request: (...args: any[]) => Promise<any>;
 }
@@ -239,11 +240,20 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       return pending;
     };
 
+    /**
+     * The sending client under its own `uid`, for background confirmation. viem joins concurrent
+     * `waitForTransactionReceipt` calls with the same client `uid` and hash into one poll that runs with the first
+     * call's options: sharing it would apply the background timeout and confirmations to the caller's own wait.
+     * One `uid` per client, since viem also caches by `uid`.
+     */
+    const backgroundClient =
+      typeof client.uid === 'string' ? { ...client, uid: `${client.uid}:hashspan` } : client;
+
     const confirmInBackground = (chainId: number, hash: string): void => {
       const key = confirmKey(chainId, hash);
       if (!confirmations.claim(key)) return;
       const handle = tracker.startConfirm({ chainId, hash });
-      const wait = viemWaitForTransactionReceipt(client as never, {
+      const wait = viemWaitForTransactionReceipt(backgroundClient as never, {
         hash: hash as `0x${string}`,
         timeout: confirm?.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS,
       }) as Promise<ViemReceipt>;
