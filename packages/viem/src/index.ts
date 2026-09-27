@@ -57,7 +57,9 @@ function chainIdOrGiveUp(
 ): Promise<number | undefined> {
   return new Promise((resolve) => {
     let timer: unknown;
+    let finished = false;
     const done = (id: number | undefined): void => {
+      finished = true;
       if (timer !== undefined) timers.clearTimeout(timer);
       resolve(id);
     };
@@ -66,6 +68,8 @@ function chainIdOrGiveUp(
       done(undefined);
     });
     const startGrace = (): void => {
+      // The chain id may have arrived before the call settled: then there is nothing to wait for.
+      if (finished) return;
       timer = timers.setTimeout(() => {
         diag.debug('hashspan: chain id still unknown after the call settled; not recording it');
         done(undefined);
