@@ -421,18 +421,21 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     receipt: ReceiptLike,
   ): void => {
     const mined: unknown = receipt.transactionHash;
-    if (
-      mined === undefined ||
-      (typeof mined === 'string' && mined.toLowerCase() === hash.toLowerCase())
-    ) {
+    if (mined === undefined) {
       confirmations.settle(chainId, hash, shared);
       shared.receipt(receipt);
       return;
     }
+    // Validated before it is compared or used as a registry key.
     if (typeof mined !== 'string' || !TX_HASH.test(mined)) {
       diag.warn('hashspan: receipt has an invalid transaction hash; not recording it');
       confirmations.release(chainId, hash, shared);
       shared.unattributable();
+      return;
+    }
+    if (mined.toLowerCase() === hash.toLowerCase()) {
+      confirmations.settle(chainId, hash, shared);
+      shared.receipt(receipt);
       return;
     }
     confirmations.settle(chainId, hash, shared);

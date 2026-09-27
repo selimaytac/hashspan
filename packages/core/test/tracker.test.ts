@@ -783,6 +783,17 @@ describe('replaced transactions', () => {
     expect(span._startTimeProvided).toBe(false);
   });
 
+  it('validates the receipt hash before comparing it with the awaited hash', () => {
+    vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    createTxTracker()
+      .startConfirm({ chainId: CHAIN_ID, hash: 'not-a-hash' })
+      .end({ ...receipt, transactionHash: 'NOT-A-HASH' });
+    const [span] = tracing.spans();
+    expect(span?.attributes['error.type']).toBe('_OTHER');
+    expect(span?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(span?.attributes['blockchain.tx.fee']).toBeUndefined();
+  });
+
   it('settles the original, so later waits for it add no span', () => {
     const tracker = createTxTracker();
     tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(replacedReceipt);

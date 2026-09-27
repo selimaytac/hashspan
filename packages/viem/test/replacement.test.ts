@@ -1,4 +1,4 @@
-import { SpanStatusCode } from '@opentelemetry/api';
+import { diag, SpanStatusCode } from '@opentelemetry/api';
 import { createPublicClient } from 'viem';
 import { base } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,6 +50,58 @@ const confirmOf = (hash: string) =>
   tracing
     .spans()
     .find((s) => s.name === 'confirm 8453' && s.attributes['blockchain.tx.hash'] === hash);
+
+/** Fails the test on any unhandled rejection raised while `run` executes (and shortly after). */
+async function withoutUnhandledRejections(run: () => Promise<void>): Promise<void> {
+  const rejections: unknown[] = [];
+  const onRejection = (reason: unknown) => rejections.push(reason);
+  process.on('unhandledRejection', onRejection);
+  try {
+    await run();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  } finally {
+    process.off('unhandledRejection', onRejection);
+  }
+  expect(rejections).toEqual([]);
+}
+
+describe('receipts with a malformed transaction hash', () => {
+  for (const status of ['success', 'reverted'] as const) {
+    it(`end the confirm span without an unhandled rejection (${status})`, async () => {
+      vi.spyOn(diag, 'warn').mockImplementation(() => {});
+      const malformed = { ...minedReceipt, status, transactionHash: 42 };
+      const client = createPublicClient({ chain: base, transport: mockTransport().transport })
+        .extend(() => ({ waitForTransactionReceipt: async () => malformed }))
+        .extend(withHashspan());
+
+      await withoutUnhandledRejections(async () => {
+        await expect(client.waitForTransactionReceipt({ hash: HASH })).resolves.toBe(malformed);
+        await vi.waitFor(() => expect(confirmOf(HASH)).toBeDefined());
+      });
+      expect(confirmOf(HASH)?.attributes['error.type']).toBe('_OTHER');
+      expect(confirmOf(HASH)?.attributes['blockchain.tx.status']).toBeUndefined();
+    });
+  }
+
+  it('end the confirm span without an unhandled rejection when viem reported the replacement', async () => {
+    vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const malformed = { ...minedReceipt, transactionHash: 42 };
+    const client = createPublicClient({ chain: base, transport: mockTransport().transport })
+      .extend(() => ({
+        waitForTransactionReceipt: async (args: { onReplaced?: (r: unknown) => void }) => {
+          args.onReplaced?.({ ...replacement, transactionReceipt: malformed });
+          return malformed;
+        },
+      }))
+      .extend(withHashspan());
+
+    await withoutUnhandledRejections(async () => {
+      await client.waitForTransactionReceipt({ hash: HASH });
+      await vi.waitFor(() => expect(confirmOf(HASH)).toBeDefined());
+    });
+    expect(confirmOf(HASH)?.attributes['error.type']).toBe('_OTHER');
+  });
+});
 
 describe('replaced transactions', () => {
   it("returns viem's result and attributes the receipt to the mined transaction", async () => {

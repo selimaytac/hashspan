@@ -130,7 +130,8 @@ function capturing(
   };
 }
 
-function sameAddress(a: string | null | undefined, b: string | null | undefined): boolean {
+/** Case-insensitive equality of two hex strings (addresses or hashes); false unless both are strings. */
+function sameHex(a: unknown, b: unknown): boolean {
   return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 }
 
@@ -237,24 +238,28 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       }
       receipt = reported;
     }
-    const { replacement } = capture;
-    const reported =
-      replacement !== undefined &&
-      replacement.transactionReceipt.transactionHash.toLowerCase() ===
-        receipt.transactionHash.toLowerCase();
-    let revertReason: string | undefined;
-    if (receipt.status === 'reverted' && decodeRevertReason) {
-      const minedKey = confirmKey(chainId, receipt.transactionHash);
-      // Errors are matched by selector, so the original call's ABI fits a replacing call to the same contract.
-      const abi =
-        abis.get(minedKey) ??
-        (minedKey === confirmKey(chainId, hash) ||
-        (reported && sameAddress(replacement.transaction.to, replacement.replacedTransaction.to))
-          ? abis.get(confirmKey(chainId, hash))
-          : undefined);
-      revertReason = await revertReasonOf(minedKey, receipt, abi, client);
-    }
     try {
+      const { replacement } = capture;
+      const reported =
+        replacement !== undefined &&
+        sameHex(replacement.transactionReceipt.transactionHash, receipt.transactionHash);
+      let revertReason: string | undefined;
+      // A malformed hash is left to the tracker, which does not attribute it.
+      if (
+        receipt.status === 'reverted' &&
+        decodeRevertReason &&
+        typeof receipt.transactionHash === 'string'
+      ) {
+        const minedKey = confirmKey(chainId, receipt.transactionHash);
+        // Errors are matched by selector, so the original call's ABI fits a replacing call to the same contract.
+        const abi =
+          abis.get(minedKey) ??
+          (minedKey === confirmKey(chainId, hash) ||
+          (reported && sameHex(replacement.transaction.to, replacement.replacedTransaction.to))
+            ? abis.get(confirmKey(chainId, hash))
+            : undefined);
+        revertReason = await revertReasonOf(minedKey, receipt, abi, client);
+      }
       handle.end({
         ...toReceiptLike(receipt),
         revertReason,
@@ -262,6 +267,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       });
     } catch (error) {
       diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
+      handle.fail(error);
     }
   };
 
