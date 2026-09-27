@@ -34,8 +34,8 @@ await reader.waitForTransactionReceipt({ hash }); // confirm span, linked to the
 Reuse the same `withHashspan()` result for every client of one agent: the clients then share one tracker, so
 confirmations are linked to their sends even when they happen on a different client.
 
-`withHashspan(options)` accepts all [`@hashspan/core` options](../core#options) (address mode, agent identity,
-redaction hook) plus:
+`withHashspan(options)` accepts all [`@hashspan/core` options](../core#options) (address mode, error messages,
+agent identity, redaction hook) plus:
 
 | Option | Default | Description |
 |---|---|---|
@@ -86,7 +86,8 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
 | `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack), total fee |
 
 Failed sends, reverted receipts and receipt timeouts set error status; the original error is always rethrown
-unchanged. Not traced yet: `deployContract`, `sendRawTransaction`, `sendCalls`.
+unchanged. Spans record only the error type unless `errorMessages` allows more, because viem error messages
+include the request arguments. Not traced yet: `deployContract`, `sendRawTransaction`, `sendCalls`.
 
 ## Apply it last
 

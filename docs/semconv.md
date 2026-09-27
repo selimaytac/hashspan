@@ -26,7 +26,10 @@ TTL (default 10 minutes).
 | Gave up waiting for the receipt | confirm | error | `timeout` | `timeout` |
 | Retrieving the receipt failed | confirm | error | error class name, else `_OTHER` | none |
 
-Exceptions are recorded as span events following the OpenTelemetry exception conventions.
+Failures with an error object add an `exception` event following the OpenTelemetry exception conventions. By
+default it carries only `exception.type`; `exception.message` and `exception.stacktrace` depend on the tracker's
+`errorMessages` mode (`off` | `sanitized` | `raw`), and the span status description is the recorded
+`exception.message`, if any. See [ADR 0006](adr/0006-error-privacy.md).
 
 RPC calls made by adapters follow the OpenTelemetry [JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/rpc/json-rpc.md)
 (`rpc.system.name = "jsonrpc"`, `rpc.method` from an allowlist of `eth_*` methods).
@@ -65,6 +68,9 @@ search transactions by agent without joining spans.
 A redaction hook runs last on every attribute set; if it throws, only `blockchain.system`, `blockchain.chain.id`,
 `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status` and `error.type` are recorded.
 Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md).
+The address mode also applies to addresses inside `blockchain.tx.revert.reason` and sanitized error messages
+(`<address>` in `off` mode). The redaction hook also runs on `exception` event attributes; if it throws, only
+`exception.type` is kept.
 
 ## Change policy
 

@@ -127,6 +127,22 @@ describe('on Anvil', () => {
     });
   });
 
+  it('keeps the sender out of a failed send span in off mode', async () => {
+    const wallet = createWalletClient({ account, chain: anvil, transport: http(RPC_URL) }).extend(
+      withHashspan({ address: 'off', errorMessages: 'sanitized' }),
+    );
+    const error = await wallet
+      .sendTransaction({ to: RECIPIENT, value: 10n ** 30n })
+      .catch((e: unknown) => e);
+
+    expect((error as Error).message.toLowerCase()).toContain(account.slice(2).toLowerCase());
+    const send = tracing.spanNamed('send 31337');
+    expect(send.status.code).toBe(SpanStatusCode.ERROR);
+    const exported = JSON.stringify({ a: send.attributes, e: send.events, s: send.status });
+    expect(exported.toLowerCase()).not.toContain(account.slice(2).toLowerCase());
+    expect(exported.toLowerCase()).not.toContain(RECIPIENT.slice(2).toLowerCase());
+  });
+
   it('marks a mined revert as an error on the confirm span', async () => {
     const { wallet, reader } = clients();
     // Explicit gas skips estimation, so the reverting transaction is mined.

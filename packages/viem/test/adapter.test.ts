@@ -60,6 +60,57 @@ describe('sendTransaction', () => {
     expect(send.attributes['error.type']).toBe((error as Error).name);
   });
 
+  it('keeps addresses and calldata out of failed send spans in off mode', async () => {
+    const { transport } = mockTransport({
+      sendError: { code: -32000, message: `insufficient funds: address ${FROM} have 0 want 1` },
+    });
+    for (const errorMessages of [undefined, 'sanitized'] as const) {
+      tracing.exporter.reset();
+      const wallet = createWalletClient({ account: FROM, chain: base, transport }).extend(
+        withHashspan({ address: 'off', errorMessages }),
+      );
+      const error = await wallet
+        .sendTransaction({ to: TO, data: `0xa9059cbb${'00'.repeat(12)}${TO.slice(2)}` })
+        .catch((e: unknown) => e);
+
+      // The caller still gets viem's full error.
+      expect((error as Error).message).toContain(FROM);
+      const send = tracing.spanNamed('send 8453');
+      const exported = JSON.stringify({ a: send.attributes, e: send.events, s: send.status });
+      expect(exported.toLowerCase()).not.toContain(FROM.slice(2));
+      expect(exported.toLowerCase()).not.toContain(TO.slice(2));
+    }
+  });
+
+  it('logs only error names through diag', async () => {
+    const diagDebug = vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const { transport } = mockTransport({ receipt: { status: '0x0' } });
+    const reader = createPublicClient({
+      chain: base,
+      transport: (opts) => {
+        const t = transport(opts);
+        return {
+          ...t,
+          request: (async (args: { method: string }) => {
+            if (args.method === 'eth_getTransactionByHash') {
+              throw new Error(`lookup failed for ${FROM} at https://rpc.example/secret-key`);
+            }
+            return t.request(args as never);
+          }) as never,
+        };
+      },
+    }).extend(withHashspan());
+
+    await reader.waitForTransactionReceipt({ hash: HASH });
+    await vi.waitFor(() => expect(tracing.spanNamed('confirm 8453')).toBeDefined());
+    const args = diagDebug.mock.calls.flat();
+    expect(args.every((arg) => typeof arg === 'string')).toBe(true);
+    const logged = args.join('\n');
+    expect(logged).toContain('could not fetch revert reason');
+    expect(logged).not.toContain(FROM);
+    expect(logged).not.toContain('secret-key');
+  });
+
   it('resolves the chain id once per client when the client has no chain', async () => {
     const { transport, calls } = mockTransport({ chainIdHex: '0x1' });
     const wallet = createWalletClient({ account: FROM, transport }).extend(withHashspan());

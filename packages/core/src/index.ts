@@ -7,6 +7,7 @@ export type {
   AgentIdentity,
   ConfirmHandle,
   ConfirmInput,
+  ErrorMessageMode,
   ReceiptLike,
   SendHandle,
   SendInput,
