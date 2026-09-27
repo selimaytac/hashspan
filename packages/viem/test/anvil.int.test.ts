@@ -9,6 +9,7 @@ import {
   type Hex,
   http,
   parseAbi,
+  parseGwei,
   publicActions,
 } from 'viem';
 import { anvil } from 'viem/chains';
@@ -253,5 +254,157 @@ describe('on Anvil', () => {
     expect(tracing.spanNamed('confirm 31337').attributes['blockchain.tx.revert.reason']).toBe(
       'InsufficientBalance(1, 2)',
     );
+  });
+});
+
+describe('replaced transactions on Anvil', () => {
+  const LOW_FEE = { maxFeePerGas: parseGwei('2'), maxPriorityFeePerGas: parseGwei('1') };
+  const HIGH_FEE = { maxFeePerGas: parseGwei('20'), maxPriorityFeePerGas: parseGwei('10') };
+  const reader = () =>
+    createPublicClient({ chain: anvil, transport: http(RPC_URL), pollingInterval: 50 });
+  const rpc = (method: string, params: unknown[] = []) =>
+    reader().request({ method: method as never, params: params as never });
+  const pendingNonce = () =>
+    reader().getTransactionCount({ address: account, blockTag: 'pending' });
+  const confirmOf = (hash: string) =>
+    tracing
+      .spans()
+      .filter((s) => s.name === 'confirm 31337' && s.attributes['blockchain.tx.hash'] === hash);
+
+  /** Runs `fn` with automine off, so transactions stay pending until `evm_mine`. */
+  const withoutAutomine = async (fn: () => Promise<void>): Promise<void> => {
+    await rpc('evm_setAutomine', [false]);
+    try {
+      await fn();
+    } finally {
+      await rpc('evm_setAutomine', [true]);
+    }
+  };
+
+  it('attributes the receipt of a sped-up transaction to the replacing hash', async () => {
+    const hashspan = withHashspan();
+    const wallet = createWalletClient({ account, chain: anvil, transport: http(RPC_URL) }).extend(
+      hashspan,
+    );
+    const client = reader().extend(hashspan);
+
+    await withoutAutomine(async () => {
+      const nonce = await pendingNonce();
+      const original = await wallet.sendTransaction({
+        to: RECIPIENT,
+        value: 1n,
+        nonce,
+        ...LOW_FEE,
+      });
+      const wait = client.waitForTransactionReceipt({ hash: original });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const replacing = await wallet.sendTransaction({
+        to: RECIPIENT,
+        value: 1n,
+        nonce,
+        ...HIGH_FEE,
+      });
+      await rpc('evm_mine');
+
+      const receipt = await wait;
+      expect(receipt.transactionHash).toBe(replacing);
+      await vi.waitFor(() => expect(confirmOf(replacing)).toHaveLength(1));
+      const [originalConfirm] = confirmOf(original);
+      const [minedConfirm] = confirmOf(replacing);
+      expect(originalConfirm?.attributes).toMatchObject({
+        'blockchain.tx.status': 'replaced',
+        'blockchain.tx.replacement.hash': replacing,
+        'blockchain.tx.replacement.reason': 'repriced',
+      });
+      expect(originalConfirm?.attributes['blockchain.tx.fee']).toBeUndefined();
+      expect(minedConfirm?.attributes).toMatchObject({
+        'blockchain.tx.status': 'success',
+        'blockchain.tx.fee': (receipt.gasUsed * receipt.effectiveGasPrice).toString(),
+      });
+      expect(minedConfirm?.links.map((l) => l.context.spanId)).toContain(
+        originalConfirm?.spanContext().spanId,
+      );
+
+      // The mined transaction already has its receipt: a later wait adds no span.
+      await client.waitForTransactionReceipt({ hash: replacing });
+      expect(confirmOf(replacing)).toHaveLength(1);
+    });
+  });
+
+  it('records a cancellation found by background confirmation once', async () => {
+    const wallet = createWalletClient({
+      account,
+      chain: anvil,
+      transport: http(RPC_URL),
+      pollingInterval: 50,
+    }).extend(withHashspan({ confirm: { mode: 'background', timeoutMs: 10_000 } }));
+
+    await withoutAutomine(async () => {
+      const nonce = await pendingNonce();
+      const original = await wallet.sendTransaction({
+        to: RECIPIENT,
+        value: 1n,
+        nonce,
+        ...LOW_FEE,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const cancel = await wallet.sendTransaction({ to: account, value: 0n, nonce, ...HIGH_FEE });
+      await rpc('evm_mine');
+
+      await vi.waitFor(
+        () => {
+          expect(confirmOf(original)[0]?.attributes['blockchain.tx.status']).toBe('replaced');
+          expect(confirmOf(cancel)[0]?.attributes['blockchain.tx.status']).toBe('success');
+        },
+        { timeout: 10_000 },
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(confirmOf(original)[0]?.attributes['blockchain.tx.replacement.reason']).toBe(
+        'cancelled',
+      );
+      expect(confirmOf(cancel)).toHaveLength(1);
+    });
+  });
+
+  it('decodes the revert reason of a replacing call to the same contract with the original ABI', async () => {
+    const hashspan = withHashspan();
+    const wallet = createWalletClient({ account, chain: anvil, transport: http(RPC_URL) }).extend(
+      hashspan,
+    );
+    const client = reader().extend(hashspan);
+
+    await withoutAutomine(async () => {
+      const nonce = await pendingNonce();
+      const original = await wallet.writeContract({
+        address: REVERT_WITH_CUSTOM_ERROR,
+        abi: vault,
+        functionName: 'withdraw',
+        args: [2n],
+        gas: 100_000n,
+        nonce,
+        ...LOW_FEE,
+      });
+      const wait = client.waitForTransactionReceipt({ hash: original });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      // Same contract, different call data: viem reports `replaced`.
+      const replacing = await wallet.sendTransaction({
+        to: REVERT_WITH_CUSTOM_ERROR,
+        data: '0x12345678',
+        gas: 100_000n,
+        nonce,
+        ...HIGH_FEE,
+      });
+      await rpc('evm_mine');
+
+      expect((await wait).status).toBe('reverted');
+      await vi.waitFor(() => expect(confirmOf(replacing)).toHaveLength(1));
+      expect(confirmOf(original)[0]?.attributes['blockchain.tx.replacement.reason']).toBe(
+        'replaced',
+      );
+      expect(confirmOf(replacing)[0]?.attributes).toMatchObject({
+        'blockchain.tx.status': 'reverted',
+        'blockchain.tx.revert.reason': 'InsufficientBalance(1, 2)',
+      });
+    });
   });
 });

@@ -18,6 +18,8 @@ export const ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE = 'blockchain.tx.effective_g
 export const ATTR_BLOCKCHAIN_TX_L1_FEE = 'blockchain.tx.l1_fee' as const;
 export const ATTR_BLOCKCHAIN_TX_FEE = 'blockchain.tx.fee' as const;
 export const ATTR_BLOCKCHAIN_TX_REVERT_REASON = 'blockchain.tx.revert.reason' as const;
+export const ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH = 'blockchain.tx.replacement.hash' as const;
+export const ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON = 'blockchain.tx.replacement.reason' as const;
 export const ATTR_BLOCKCHAIN_BLOCK_NUMBER = 'blockchain.block.number' as const;
 export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME = 'blockchain.contract.function.name' as const;
 export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR =
@@ -34,6 +36,12 @@ export const BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM = 'confirm' as const;
 export const BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS = 'success' as const;
 export const BLOCKCHAIN_TX_STATUS_VALUE_REVERTED = 'reverted' as const;
 export const BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT = 'timeout' as const;
+export const BLOCKCHAIN_TX_STATUS_VALUE_REPLACED = 'replaced' as const;
+
+/** Values for {@link ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON}, as reported by the instrumented library. */
+export const BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPRICED = 'repriced' as const;
+export const BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED = 'cancelled' as const;
+export const BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPLACED = 'replaced' as const;
 
 /** Reused from OpenTelemetry general conventions. */
 export const ATTR_ERROR_TYPE = 'error.type' as const;

@@ -15,6 +15,13 @@ for the receipt); otherwise the parent of the `send` span (confirmation in the b
 The link to the `send` span is added whenever the transaction was sent through the same tracker within the link
 TTL (default 10 minutes).
 
+**Replaced transactions.** A receipt is recorded on the confirm span of the transaction that was mined. When a
+wait for one hash ends with the receipt of another (a transaction with the same sender and nonce replaced it), the
+confirm span of the awaited hash ends as `replaced`, without block, gas or fee, and the receipt goes to the confirm
+span of the mined hash. If that span is created for this purpose, it has the same parent and start time as the
+replaced one and links to it and to both `send` spans when known. Dashboards counting confirmations should exclude
+`blockchain.tx.status = replaced`. See [ADR 0008](adr/0008-replaced-transactions.md).
+
 **One confirm span per transaction and tracker.** Concurrent waits for the same transaction share one confirm span;
 its parent is determined by the first wait. A receipt from any wait ends it; a timeout or failure ends it only when
 it is the last wait still running, with that wait's outcome. After a receipt, further waits within the link TTL add
@@ -29,6 +36,8 @@ no span; after a timeout or failure, a retry gets a new span. See [ADR 0007](adr
 | Receipt with status success | confirm | unset | none | `success` |
 | Receipt with status reverted | confirm | error | `reverted` | `reverted` |
 | Gave up waiting for the receipt | confirm | error | `timeout` | `timeout` |
+| Replaced by another transaction (same sender and nonce) | confirm of the replaced hash | unset | none | `replaced` |
+| Receipt with an invalid transaction hash | confirm | error | `_OTHER` | none |
 | Retrieving the receipt failed | confirm | error | error class name, else `_OTHER` | none |
 
 Failures with an error object add an `exception` event following the OpenTelemetry exception conventions. By
@@ -53,13 +62,15 @@ RPC calls made by adapters follow the OpenTelemetry [JSON-RPC conventions](https
 | `blockchain.tx.nonce` | int | send | on | sender nonce |
 | `blockchain.contract.function.name` | string | send | on | decoded function name when an ABI is known |
 | `blockchain.contract.function.selector` | string | send | on | 4-byte selector, e.g. `0xa9059cbb` |
-| `blockchain.tx.status` | string | confirm | on | `success` \| `reverted` \| `timeout` |
+| `blockchain.tx.status` | string | confirm | on | `success` \| `reverted` \| `timeout` \| `replaced` |
 | `blockchain.block.number` | int | confirm | on | inclusion block |
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
 | `blockchain.tx.effective_gas_price` | string | confirm | on | wei, decimal string |
 | `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, wei |
 | `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, wei; omitted if the gas price is unknown |
 | `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available: the `Error(string)` message, `Panic(0x..)`, `ErrorName(arg, ...)` for custom errors with a known ABI, else the 4-byte error selector. See [ADR 0005](adr/0005-revert-reason-replay.md) |
+| `blockchain.tx.replacement.hash` | string | confirm | on | on a `replaced` confirm span: hash of the mined transaction that replaced it |
+| `blockchain.tx.replacement.reason` | string | confirm | on | on a `replaced` confirm span: `repriced` \| `cancelled` \| `replaced`, as reported by the instrumented library; omitted when it reported none |
 | `error.type` | string | all | on | see *Span status*; reused from OpenTelemetry general conventions |
 
 Agent identity is recorded with the GenAI conventions `gen_ai.agent.id` and `gen_ai.agent.name`, taken from
@@ -71,7 +82,8 @@ search transactions by agent without joining spans.
 `blockchain.tx.from` / `blockchain.tx.to` follow the address mode: `raw` (default), `hashed`
 (`sha256:` + first 32 hex characters of SHA-256 of the lower-cased address, or a custom function) or `off`.
 A redaction hook runs last on every attribute set; if it throws, only `blockchain.system`, `blockchain.chain.id`,
-`blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status` and `error.type` are recorded.
+`blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
+`blockchain.tx.replacement.reason` and `error.type` are recorded.
 Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md).
 The address mode also applies to addresses inside `blockchain.tx.revert.reason`, `error.type` and sanitized error
 messages (`<address>` in `off` mode). The redaction hook also runs on `error.type` and on `exception` event

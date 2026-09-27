@@ -74,6 +74,9 @@ export interface ConfirmInput {
   hash: string;
 }
 
+/** Why a transaction was replaced by another one with the same sender and nonce, as its library reported it. */
+export type ReplacementReason = 'repriced' | 'cancelled' | 'replaced';
+
 /** Library-agnostic view of a transaction receipt. Adapters normalise their client's receipt into this. */
 export interface ReceiptLike {
   status: 'success' | 'reverted';
@@ -84,6 +87,13 @@ export interface ReceiptLike {
   /** L1 data fee in wei on OP-stack chains. */
   l1Fee?: bigint | null | undefined;
   revertReason?: string | undefined;
+  /**
+   * Hash of the mined transaction. When it differs from the awaited hash, the awaited transaction was replaced:
+   * its confirm span ends as `replaced` and the receipt is recorded for this hash (docs/adr/0008).
+   */
+  transactionHash?: string | undefined;
+  /** Replacement reason reported by the library, when {@link transactionHash} differs from the awaited hash. */
+  replacementReason?: ReplacementReason | undefined;
 }
 
 export interface ConfirmHandle {

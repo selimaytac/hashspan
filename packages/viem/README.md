@@ -57,6 +57,20 @@ A receipt only says that a transaction reverted. For reverted transactions the a
   has been fetched.
 - Turn it off with `withHashspan({ decodeRevertReason: false })`.
 
+## Replaced transactions
+
+A pending transaction can be sped up or cancelled by sending another one with the same nonce. viem then resolves
+`waitForTransactionReceipt` with the receipt of the replacing transaction. hashspan records that receipt on the
+confirm span of the transaction that was mined, and ends the confirm span of the awaited hash with
+`blockchain.tx.status = replaced`, `blockchain.tx.replacement.hash` and `blockchain.tx.replacement.reason`
+(`repriced`, `cancelled` or `replaced`, as viem classifies it). Fees and status therefore always belong to the hash
+that paid them.
+
+- Your `onReplaced` callback is called unchanged, and your wait still resolves with viem's result. If your callback
+  throws, the wait rejects with its error as in plain viem; the replacement is recorded anyway.
+- `checkReplacement: false` turns off viem's detection, and with it this attribution.
+- A replaced transaction is not an error: whether a cancellation is a failure is up to your application.
+
 ## Background confirmation
 
 Some agent frameworks wait for receipts through their own client, or never wait at all. With

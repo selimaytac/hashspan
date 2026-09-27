@@ -25,6 +25,8 @@ import {
   ATTR_BLOCKCHAIN_TX_HASH,
   ATTR_BLOCKCHAIN_TX_L1_FEE,
   ATTR_BLOCKCHAIN_TX_NONCE,
+  ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH,
+  ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON,
   ATTR_BLOCKCHAIN_TX_REVERT_REASON,
   ATTR_BLOCKCHAIN_TX_STATUS,
   ATTR_BLOCKCHAIN_TX_TO,
@@ -33,6 +35,10 @@ import {
   BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
   BLOCKCHAIN_SYSTEM_VALUE_EVM,
+  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
+  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPLACED,
+  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPRICED,
+  BLOCKCHAIN_TX_STATUS_VALUE_REPLACED,
   BLOCKCHAIN_TX_STATUS_VALUE_REVERTED,
   BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS,
   BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT,
@@ -51,6 +57,7 @@ import type {
   ConfirmHandle,
   ConfirmInput,
   ReceiptLike,
+  ReplacementReason,
   SendHandle,
   SendInput,
   TxTrackerOptions,
@@ -74,8 +81,17 @@ const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
   ATTR_BLOCKCHAIN_OPERATION_NAME,
   ATTR_BLOCKCHAIN_TX_HASH,
   ATTR_BLOCKCHAIN_TX_STATUS,
+  ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH,
+  ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON,
   ATTR_ERROR_TYPE,
   ATTR_EXCEPTION_TYPE,
+]);
+
+const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
+const REPLACEMENT_REASONS: ReadonlySet<string> = new Set([
+  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPRICED,
+  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
+  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPLACED,
 ]);
 
 export interface TxTracker {
@@ -118,9 +134,21 @@ function errorType(error: unknown): string {
 
 /** The confirm span of one transaction and how to end it; shared by all its handles. */
 interface ConfirmSpan extends SharedConfirm {
+  /** What a confirm span of a replacing transaction inherits from this one (docs/adr/0008). */
+  origin: ConfirmOrigin;
   receipt(receipt: ReceiptLike): void;
   timeout(): void;
   fail(error: unknown): void;
+  /** Ends as replaced by the transaction `hash`. */
+  replaced(hash: string, reason: ReplacementReason | undefined): void;
+  /** Ends as a failure without any receipt data, for a receipt that cannot be attributed. */
+  unattributable(): void;
+}
+
+interface ConfirmOrigin {
+  parent: Context;
+  startTime: Date;
+  links: Link[];
 }
 
 export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
@@ -290,28 +318,51 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     return attributes;
   };
 
-  const openConfirm = (input: ConfirmInput, parentCtx?: Context): ConfirmSpan => {
+  /** Opens the confirm span of a transaction; `replacing` is the confirm span of the transaction it replaced. */
+  const openConfirm = (
+    input: ConfirmInput,
+    parentCtx?: Context,
+    replacing?: ConfirmOrigin,
+  ): ConfirmSpan => {
     const sent = links.get(input.chainId, input.hash);
     const active = context.active();
-    const parent = parentCtx ?? (trace.getSpan(active) ? active : (sent?.parent ?? active));
+    const parent =
+      replacing?.parent ?? parentCtx ?? (trace.getSpan(active) ? active : (sent?.parent ?? active));
     const attributes = baseAttributes(
       input.chainId,
       BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
       parent,
     );
     attributes[ATTR_BLOCKCHAIN_TX_HASH] = input.hash;
-    const spanLinks: Link[] = sent ? [{ context: sent.spanContext }] : [];
+    const spanLinks: Link[] = [
+      ...(replacing?.links ?? []),
+      ...(sent ? [{ context: sent.spanContext }] : []),
+    ];
+    // Only a replacing transaction's span gets an explicit start time: with one, the SDK measures the end time with
+    // the wall clock instead of the monotonic clock.
+    const startTime = replacing?.startTime ?? new Date();
 
     const span = getTracer().startSpan(
       `confirm ${input.chainId}`,
-      { kind: SpanKind.CLIENT, attributes: redact(attributes), links: spanLinks },
+      {
+        kind: SpanKind.CLIENT,
+        attributes: redact(attributes),
+        links: spanLinks,
+        ...(replacing ? { startTime } : {}),
+      },
       parent,
     );
     const finish = finisher(span);
+    const origin: ConfirmOrigin = {
+      parent,
+      startTime,
+      links: [{ context: span.spanContext() }, ...(sent ? [{ context: sent.spanContext }] : [])],
+    };
 
     return {
       active: 0,
       ended: false,
+      origin,
       receipt: (receipt) =>
         finish('record receipt', () => {
           span.setAttributes(redact(receiptAttributes(receipt)));
@@ -326,7 +377,74 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
         }),
       fail: (error) =>
         finish('record confirmation failure', () => markError(span, errorType(error), error)),
+      replaced: (hash, reason) =>
+        finish('record replacement', () => {
+          const attributes: Attributes = {
+            [ATTR_BLOCKCHAIN_TX_STATUS]: BLOCKCHAIN_TX_STATUS_VALUE_REPLACED,
+            [ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH]: hash,
+          };
+          if (reason !== undefined && REPLACEMENT_REASONS.has(reason)) {
+            attributes[ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON] = reason;
+          }
+          span.setAttributes(redact(attributes));
+        }),
+      unattributable: () =>
+        finish('record unattributable receipt', () => markError(span, ERROR_TYPE_VALUE_OTHER)),
     };
+  };
+
+  /**
+   * Records `receipt` for the replacing transaction `hash`: ends its in-flight confirm span, does nothing if it
+   * already settled, and otherwise opens one that inherits parent, start time and links from `original`.
+   */
+  const recordReplacing = (
+    chainId: number,
+    hash: string,
+    receipt: ReceiptLike,
+    original: ConfirmOrigin,
+  ): void => {
+    const current = confirmations.get(chainId, hash);
+    if (current === 'settled' || current?.ended) return;
+    const confirm = current ?? openConfirm({ chainId, hash }, undefined, original);
+    if (!current) confirmations.start(chainId, hash, confirm);
+    confirm.ended = true;
+    confirmations.settle(chainId, hash, confirm);
+    const { replacementReason: _reason, ...mined } = receipt;
+    confirm.receipt(mined);
+  };
+
+  /** Ends `shared` with `receipt`, attributing it to the transaction that was mined (docs/adr/0008). */
+  const endWithReceipt = (
+    chainId: number,
+    hash: string,
+    shared: ConfirmSpan,
+    receipt: ReceiptLike,
+  ): void => {
+    const mined: unknown = receipt.transactionHash;
+    if (mined === undefined) {
+      confirmations.settle(chainId, hash, shared);
+      shared.receipt(receipt);
+      return;
+    }
+    // Validated before it is compared or used as a registry key.
+    if (typeof mined !== 'string' || !TX_HASH.test(mined)) {
+      diag.warn('hashspan: receipt has an invalid transaction hash; not recording it');
+      confirmations.release(chainId, hash, shared);
+      shared.unattributable();
+      return;
+    }
+    if (mined.toLowerCase() === hash.toLowerCase()) {
+      confirmations.settle(chainId, hash, shared);
+      shared.receipt(receipt);
+      return;
+    }
+    confirmations.settle(chainId, hash, shared);
+    shared.replaced(mined, receipt.replacementReason);
+    safely(
+      'record replacing transaction',
+      () => recordReplacing(chainId, mined, receipt, shared.origin),
+      undefined,
+    );
   };
 
   /**
@@ -362,8 +480,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
         done = true;
         shared.active -= 1;
         shared.ended = true;
-        confirmations.settle(chainId, hash, shared);
-        shared.receipt(receipt);
+        safely('record receipt', () => endWithReceipt(chainId, hash, shared, receipt), undefined);
       },
       timeout: () => withdraw(() => shared.timeout()),
       fail: (error) => withdraw(() => shared.fail(error)),
