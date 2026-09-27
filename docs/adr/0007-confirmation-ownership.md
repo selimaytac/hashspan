@@ -1,6 +1,6 @@
 # 0007. Confirmation ownership and concurrent waits
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-27
 
 ## Context
