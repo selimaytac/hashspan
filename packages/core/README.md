@@ -49,6 +49,10 @@ confirm.end({
 });
 ```
 
+`startConfirm` can be called by every part of your code that waits for the receipt: calls for the same transaction
+share one confirm span. A receipt from any of them ends it; a timeout or failure ends it once every caller gave up.
+End every handle you start, since an open handle keeps the shared span open.
+
 Both calls accept an explicit parent `Context` as a second argument. Every method is safe to call: failures inside
 the instrumentation are reported through `diag` and never thrown into your code.
 

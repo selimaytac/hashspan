@@ -527,3 +527,118 @@ describe('error privacy', () => {
     );
   });
 });
+
+describe('concurrent confirmations', () => {
+  const confirms = () => tracing.spans().filter((s) => s.name === `confirm ${CHAIN_ID}`);
+
+  it('joins handles for the same transaction into one confirm span', () => {
+    const tracker = createTxTracker();
+    const first = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH });
+    const second = tracker.startConfirm({
+      chainId: CHAIN_ID,
+      hash: HASH.toUpperCase().replace('0X', '0x'),
+    });
+    first.end(receipt);
+    second.end(receipt);
+    expect(confirms()).toHaveLength(1);
+  });
+
+  it('keeps the parent of the first handle', () => {
+    const tracker = createTxTracker();
+    const firstParent = trace.getTracer('test').startSpan('first');
+    const secondParent = trace.getTracer('test').startSpan('second');
+    const first = tracker.startConfirm(
+      { chainId: CHAIN_ID, hash: HASH },
+      trace.setSpan(context.active(), firstParent),
+    );
+    tracker
+      .startConfirm(
+        { chainId: CHAIN_ID, hash: HASH },
+        trace.setSpan(context.active(), secondParent),
+      )
+      .end(receipt);
+    first.timeout();
+    expect(confirms()[0]?.parentSpanContext?.spanId).toBe(firstParent.spanContext().spanId);
+  });
+
+  it('records a later receipt when another handle gave up first', () => {
+    const tracker = createTxTracker();
+    const background = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH });
+    const caller = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH });
+    background.timeout();
+    expect(confirms()).toHaveLength(0);
+    caller.end(receipt);
+    expect(confirms()).toHaveLength(1);
+    expect(confirms()[0]?.attributes['blockchain.tx.status']).toBe('success');
+    expect(confirms()[0]?.status.code).toBe(SpanStatusCode.UNSET);
+  });
+
+  it('ends with the outcome of the last handle to give up', () => {
+    const tracker = createTxTracker();
+    const first = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH });
+    const second = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH });
+    first.fail(new Error('rpc down'));
+    second.timeout();
+    expect(confirms()).toHaveLength(1);
+    expect(confirms()[0]?.attributes['blockchain.tx.status']).toBe('timeout');
+  });
+
+  it('ignores calls after the span ended', () => {
+    const tracker = createTxTracker();
+    const first = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH });
+    const second = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH });
+    first.end(receipt);
+    second.fail(new Error('late'));
+    second.end({ ...receipt, status: 'reverted' });
+    expect(confirms()).toHaveLength(1);
+    expect(confirms()[0]?.attributes['blockchain.tx.status']).toBe('success');
+  });
+
+  it('adds no span for a transaction that already has a receipt', () => {
+    const tracker = createTxTracker();
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
+    expect(confirms()).toHaveLength(1);
+  });
+
+  it('traces a retry after a timeout or failure as a new span', () => {
+    const tracker = createTxTracker();
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).timeout();
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).fail(new Error('rpc down'));
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
+    expect(confirms().map((s) => s.attributes['blockchain.tx.status'])).toEqual([
+      'timeout',
+      undefined,
+      'success',
+    ]);
+  });
+
+  it('keeps chains apart', () => {
+    const tracker = createTxTracker();
+    tracker.startConfirm({ chainId: 1, hash: HASH }).end(receipt);
+    tracker.startConfirm({ chainId: 10, hash: HASH }).end(receipt);
+    expect(tracing.spans().map((s) => s.name)).toEqual(['confirm 1', 'confirm 10']);
+  });
+
+  it('forgets settled transactions after the link TTL', () => {
+    vi.useFakeTimers();
+    try {
+      const tracker = createTxTracker({ linkTtlMs: 1_000 });
+      tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
+      vi.advanceTimersByTime(1_001);
+      tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
+      expect(confirms()).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('starts a second span for a key evicted while in flight', () => {
+    const tracker = createTxTracker({ maxTrackedTransactions: 1 });
+    const evicted = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH });
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: `0x${'01'.repeat(32)}` });
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
+    evicted.end(receipt);
+    expect(confirms().filter((s) => s.attributes['blockchain.tx.hash'] === HASH)).toHaveLength(2);
+  });
+});

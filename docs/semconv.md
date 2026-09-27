@@ -15,6 +15,11 @@ for the receipt); otherwise the parent of the `send` span (confirmation in the b
 The link to the `send` span is added whenever the transaction was sent through the same tracker within the link
 TTL (default 10 minutes).
 
+**One confirm span per transaction and tracker.** Concurrent waits for the same transaction share one confirm span;
+its parent is determined by the first wait. A receipt from any wait ends it; a timeout or failure ends it only when
+it is the last wait still running, with that wait's outcome. After a receipt, further waits within the link TTL add
+no span; after a timeout or failure, a retry gets a new span. See [ADR 0007](adr/0007-confirmation-ownership.md).
+
 ### Span status
 
 | Situation | Span | Status | `error.type` | `blockchain.tx.status` |
