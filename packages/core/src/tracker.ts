@@ -201,7 +201,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       } catch (error) {
         diag.error(`hashspan: failed to ${what}`, error);
       } finally {
-        span.end();
+        safely('end span', () => span.end(), undefined);
       }
     };
   };

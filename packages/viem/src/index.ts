@@ -11,6 +11,7 @@ import { diag } from '@opentelemetry/api';
 import { type Abi, getAbiItem, toFunctionSelector } from 'viem';
 import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
 import { fetchRevertReason } from './revert-reason.js';
+import { guardTracker } from './safe-tracker.js';
 
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
@@ -186,7 +187,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     decodeRevertReason = true,
     ...trackerOptions
   } = options;
-  const tracker = providedTracker ?? createTxTracker(trackerOptions);
+  // Guarded so that no tracker, including a user-provided one, can throw into the instrumented call.
+  const tracker = guardTracker(providedTracker ?? createTxTracker(trackerOptions));
   const chainIds = new WeakMap<object, Promise<number>>();
   /** Shared by all clients extended with this instance, keyed by `chainId:hash`. */
   const confirmations = new Confirmations();

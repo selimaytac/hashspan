@@ -1,4 +1,12 @@
-import { context, diag, propagation, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api';
+import {
+  context,
+  diag,
+  INVALID_SPAN_CONTEXT,
+  propagation,
+  SpanKind,
+  SpanStatusCode,
+  trace,
+} from '@opentelemetry/api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTxTracker } from '../src/index.js';
 import { setupTracing, type TestTracing } from './helpers.js';
@@ -322,6 +330,23 @@ describe('never breaks the caller', () => {
     expect(() => {
       tracker.startSend({ chainId: CHAIN_ID }).end(HASH);
       tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
+    }).not.toThrow();
+    expect(diagError).toHaveBeenCalled();
+  });
+
+  it('swallows errors from ending a span', () => {
+    const diagError = vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const span = trace.wrapSpanContext(INVALID_SPAN_CONTEXT);
+    span.end = () => {
+      throw new Error('broken span');
+    };
+    const tracker = createTxTracker({
+      tracerProvider: { getTracer: () => ({ ...trace.getTracer('test'), startSpan: () => span }) },
+    });
+    expect(() => {
+      tracker.startSend({ chainId: CHAIN_ID }).end(HASH);
+      tracker.startSend({ chainId: CHAIN_ID }).fail(new Error('send failed'));
+      tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).timeout();
     }).not.toThrow();
     expect(diagError).toHaveBeenCalled();
   });
