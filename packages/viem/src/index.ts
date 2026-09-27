@@ -2,7 +2,6 @@ import {
   type ConfirmHandle,
   createTxTracker,
   type ReceiptLike,
-  type SendHandle,
   type SendInput,
   type TxTracker,
   type TxTrackerOptions,
@@ -11,7 +10,7 @@ import { diag } from '@opentelemetry/api';
 import { type Abi, getAbiItem, toFunctionSelector } from 'viem';
 import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
 import { fetchRevertReason } from './revert-reason.js';
-import { guardTracker } from './safe-tracker.js';
+import { errorName, guardTracker, NOOP_SEND } from './safe-tracker.js';
 
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
@@ -110,8 +109,6 @@ export type HashspanExtension = <TClient extends ViemClientLike>(
   client: TClient,
 ) => Pick<TClient, Extract<keyof TClient, TracedAction>>;
 
-const NOOP_SEND: SendHandle = { end: () => {}, fail: () => {} };
-
 interface SendArgs {
   account?: string | { address: string } | null | undefined;
   chain?: { id: number } | null | undefined;
@@ -140,14 +137,6 @@ interface ViemReceipt {
   gasUsed: bigint;
   effectiveGasPrice?: bigint | undefined;
   l1Fee?: bigint | string | null | undefined;
-}
-
-/**
- * What `diag` logs for an error: its name only. viem errors carry request arguments and RPC URLs, which may
- * include addresses, calldata or API keys.
- */
-function errorName(error: unknown): string {
-  return error instanceof Error ? error.name : typeof error;
 }
 
 function isTimeout(error: unknown): boolean {

@@ -1,10 +1,14 @@
 import type { ConfirmHandle, SendHandle, TxTracker } from '@hashspan/core';
 import { diag } from '@opentelemetry/api';
 
-const NOOP_SEND: SendHandle = { end: () => {}, fail: () => {} };
+export const NOOP_SEND: SendHandle = { end: () => {}, fail: () => {} };
 const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
 
-function errorName(error: unknown): string {
+/**
+ * What `diag` logs for an error: its name only. viem errors carry request arguments and RPC URLs, which may
+ * include addresses, calldata or API keys.
+ */
+export function errorName(error: unknown): string {
   return error instanceof Error ? error.name : typeof error;
 }
 
