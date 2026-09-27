@@ -26,7 +26,7 @@ Run lint, typecheck and tests before proposing a change.
 - `packages/viem` → capture adapter for viem clients
   - `src/index.ts` `withHashspan()`: a `client.extend()` extension wrapping `sendTransaction`, `writeContract` and
     `waitForTransactionReceipt`; it calls the base client's actions, so internal viem calls are not traced twice.
-    State shared by every client extended with one `withHashspan()` result (tracker, chain ids, ABIs) lives in
+    State shared by every client extended with one `withHashspan()` result (tracker, ABIs, revert reasons) lives in
     that call's closure; confirm deduplication lives in the tracker (ADR 0007); background confirmation must
     never delay or fail the user's call, and no telemetry work runs before the call it traces (ADR 0009)
   - `src/revert-reason.ts` replays reverted transactions and decodes the revert data (ADR 0005)
