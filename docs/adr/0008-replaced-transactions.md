@@ -1,6 +1,6 @@
 # 0008. Replaced transactions
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-27
 
 ## Context
