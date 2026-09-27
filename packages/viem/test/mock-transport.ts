@@ -11,6 +11,8 @@ export interface MockOptions {
   /** Receipt fields merged into the default successful receipt; `null` means "not mined yet". */
   receipt?: Record<string, unknown> | null;
   sendError?: { code: number; message: string };
+  /** Delays the answer to `eth_sendTransaction`. */
+  sendDelayMs?: number;
   /** Revert data returned by `eth_call`; the call succeeds when undefined. */
   callRevertData?: string;
   /** While this returns false, the transaction is pending (no receipt). */
@@ -30,6 +32,9 @@ export function mockTransport(options: MockOptions = {}) {
         case 'eth_chainId':
           return options.chainId ? options.chainId() : (options.chainIdHex ?? '0x2105');
         case 'eth_sendTransaction':
+          if (options.sendDelayMs) {
+            await new Promise((resolve) => setTimeout(resolve, options.sendDelayMs));
+          }
           if (options.sendError)
             throw Object.assign(new Error(options.sendError.message), options.sendError);
           return HASH;

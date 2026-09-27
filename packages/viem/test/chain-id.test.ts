@@ -1,5 +1,5 @@
 import type { TxTracker } from '@hashspan/core';
-import { context, trace } from '@opentelemetry/api';
+import { context, diag, trace } from '@opentelemetry/api';
 import { createPublicClient, createWalletClient } from 'viem';
 import { base } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -49,6 +49,26 @@ describe('clients without a chain', () => {
       expect(Date.now() - started).toBeLessThan(500);
     });
     expect(tracing.spans()).toHaveLength(0);
+  });
+
+  it('leave no grace timer behind when the chain id arrives before the call settles', async () => {
+    const debug = vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    const { transport } = mockTransport({
+      chainId: () => '0x2105',
+      // The send settles after the chain id is known.
+      sendDelayMs: 30,
+    });
+    const wallet = createWalletClient({ account: FROM, transport }).extend(withHashspan());
+    const reader = createPublicClient({ transport, pollingInterval: 10 }).extend(withHashspan());
+
+    await wallet.sendTransaction({ to: TO, chain: null });
+    await reader.waitForTransactionReceipt({ hash: HASH });
+    await vi.waitFor(() => expect(tracing.spans()).toHaveLength(2));
+
+    const graceTimers = setTimeoutSpy.mock.calls.filter(([, ms]) => ms === 30_000);
+    expect(graceTimers).toHaveLength(0);
+    expect(JSON.stringify(debug.mock.calls)).not.toContain('still unknown');
   });
 
   it('record the send span from call start to call end when the chain id arrives late', async () => {
