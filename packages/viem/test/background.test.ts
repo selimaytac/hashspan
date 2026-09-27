@@ -1,5 +1,5 @@
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
-import { createPublicClient, createWalletClient } from 'viem';
+import { createPublicClient, createWalletClient, publicActions } from 'viem';
 import { base } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
@@ -123,5 +123,37 @@ describe('background confirmation', () => {
     await wallet.sendTransaction({ to: TO });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(confirmSpans()).toHaveLength(0);
+  });
+});
+
+describe("background confirmation and the caller's own wait on the same client", () => {
+  const sameClient = (options: { timeoutMs: number }, mined: () => boolean) =>
+    createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: mockTransport({ mined, advanceBlocks: true }).transport,
+      pollingInterval: 10,
+    })
+      .extend(publicActions)
+      .extend(withHashspan({ confirm: { mode: 'background', ...options } }));
+
+  it('still resolves the caller wait after the background confirmation timed out', async () => {
+    let mined = false;
+    const wallet = sameClient({ timeoutMs: 30 }, () => mined);
+    const hash = await wallet.sendTransaction({ to: TO });
+    const wait = wallet.waitForTransactionReceipt({ hash, timeout: 1_000 });
+    setTimeout(() => {
+      mined = true;
+    }, 80);
+    await expect(wait).resolves.toMatchObject({ transactionHash: hash });
+  });
+
+  it("applies the caller's own confirmations", async () => {
+    const wallet = sameClient({ timeoutMs: 1_000 }, () => true);
+    const hash = await wallet.sendTransaction({ to: TO });
+    const receipt = await wallet.waitForTransactionReceipt({ hash, confirmations: 3 });
+    // The receipt is in block 0x7b; three confirmations need block 0x7d.
+    expect(receipt.transactionHash).toBe(hash);
+    expect(await wallet.getBlockNumber({ cacheTime: 0 })).toBeGreaterThanOrEqual(0x7dn);
   });
 });

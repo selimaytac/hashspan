@@ -73,6 +73,8 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
 - Each transaction gets exactly one confirm span. If the caller also waits for the receipt on a client extended
   with the same `withHashspan()` result, no second span is created.
 - Polling adds RPC requests to your provider (one receipt request per polling interval until the receipt arrives).
+  It polls independently of your own `waitForTransactionReceipt` calls, so your `timeout`, `confirmations` and other
+  options always apply to your wait; while both run, receipt requests are made for each.
 - A pending confirmation keeps the Node.js process alive until the receipt arrives or `timeoutMs` (default
   120 000 ms) passes; the span then ends with status `timeout`.
 - In serverless runtimes that freeze after the response, background confirmations may not complete.

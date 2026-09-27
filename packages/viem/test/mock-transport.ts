@@ -11,11 +11,16 @@ export interface MockOptions {
   sendError?: { code: number; message: string };
   /** Revert data returned by `eth_call`; the call succeeds when undefined. */
   callRevertData?: string;
+  /** While this returns false, the transaction is pending (no receipt). */
+  mined?: () => boolean;
+  /** Returns a new block number on every `eth_blockNumber`, so viem keeps polling. */
+  advanceBlocks?: boolean;
 }
 
 /** EIP-1193 transport answering the handful of methods the adapter's code paths use. */
 export function mockTransport(options: MockOptions = {}) {
   const calls: string[] = [];
+  let block = 0x7b;
   const transport = custom({
     async request({ method }: { method: string; params?: unknown }) {
       calls.push(method);
@@ -27,7 +32,7 @@ export function mockTransport(options: MockOptions = {}) {
             throw Object.assign(new Error(options.sendError.message), options.sendError);
           return HASH;
         case 'eth_blockNumber':
-          return '0x7b';
+          return `0x${(options.advanceBlocks ? block++ : block).toString(16)}`;
         case 'eth_getTransactionByHash':
           return {
             hash: HASH,
@@ -58,8 +63,32 @@ export function mockTransport(options: MockOptions = {}) {
             error: { code: 3, message: 'execution reverted', data: options.callRevertData },
             url: 'mock',
           });
+        case 'eth_getBlockByNumber':
+          // An empty block: viem scans it for replacements while the receipt is missing.
+          return {
+            hash: `0x${'cd'.repeat(32)}`,
+            parentHash: `0x${'00'.repeat(32)}`,
+            number: `0x${block.toString(16)}`,
+            timestamp: '0x0',
+            nonce: '0x0000000000000000',
+            difficulty: '0x0',
+            gasLimit: '0x1c9c380',
+            gasUsed: '0x0',
+            miner: FROM,
+            extraData: '0x',
+            baseFeePerGas: '0x1',
+            logsBloom: `0x${'00'.repeat(256)}`,
+            transactions: [],
+            uncles: [],
+            size: '0x0',
+            stateRoot: `0x${'00'.repeat(32)}`,
+            receiptsRoot: `0x${'00'.repeat(32)}`,
+            transactionsRoot: `0x${'00'.repeat(32)}`,
+            sha3Uncles: `0x${'00'.repeat(32)}`,
+            mixHash: `0x${'00'.repeat(32)}`,
+          };
         case 'eth_getTransactionReceipt':
-          if (options.receipt === null) return null;
+          if (options.receipt === null || options.mined?.() === false) return null;
           return {
             transactionHash: HASH,
             transactionIndex: '0x0',
