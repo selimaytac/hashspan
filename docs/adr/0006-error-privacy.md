@@ -23,6 +23,8 @@ API keys.
     (`<address>` in `off` mode) and hex longer than 32 bytes (calldata, revert data) replaced by `<hex>`, capped at
     256 characters. Best effort: other free text is kept.
   - `raw`: plus the full message and `exception.stacktrace`, as thrown.
+- Error names are free text as well: `error.type` and `exception.type` follow the address mode and pass through
+  the redaction hook.
 - If the redaction hook throws, only `exception.type` is kept on the event.
 - Addresses inside `blockchain.tx.revert.reason` (custom error arguments) follow the address mode.
 - Adapters log only error names through `diag`, never error objects from the instrumented library.

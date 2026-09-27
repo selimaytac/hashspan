@@ -176,7 +176,9 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     return attributes;
   };
 
-  const markError = (span: Span, type: string, error?: unknown): void => {
+  /** Error names are free text too: they follow the address mode and pass through the redaction hook. */
+  const markError = (span: Span, errorName: string, error?: unknown): void => {
+    const type = formatAddressesIn(errorName, formatAddress);
     let message: string | undefined;
     if (error !== undefined) {
       const exception = redact(exceptionAttributes(type, error));
@@ -184,7 +186,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       const recorded = exception[ATTR_EXCEPTION_MESSAGE];
       if (typeof recorded === 'string') message = recorded;
     }
-    span.setAttribute(ATTR_ERROR_TYPE, type);
+    span.setAttributes(redact({ [ATTR_ERROR_TYPE]: type }));
     span.setStatus({ code: SpanStatusCode.ERROR, ...(message !== undefined ? { message } : {}) });
   };
 

@@ -470,6 +470,29 @@ describe('error privacy', () => {
     expect(tracing.spanNamed(`send ${CHAIN_ID}`).status).toEqual({ code: SpanStatusCode.ERROR });
   });
 
+  it('applies the address mode and the redaction hook to dynamic error names', () => {
+    const error = new Error('rejected');
+    error.name = `RejectedBy${FROM}`;
+
+    createTxTracker({ address: 'off' }).startSend({ chainId: CHAIN_ID }).fail(error);
+    const text = exported(`send ${CHAIN_ID}`).toLowerCase();
+    expect(text).not.toContain(FROM.slice(2));
+    expect(tracing.spanNamed(`send ${CHAIN_ID}`).attributes['error.type']).toBe(
+      'RejectedBy<address>',
+    );
+
+    tracing.exporter.reset();
+    createTxTracker({
+      redact: ({ 'error.type': _type, 'exception.type': _exception, ...rest }) => rest,
+    })
+      .startSend({ chainId: CHAIN_ID })
+      .fail(error);
+    const send = tracing.spanNamed(`send ${CHAIN_ID}`);
+    expect(send.attributes['error.type']).toBeUndefined();
+    expect(exceptionOf(`send ${CHAIN_ID}`)).toEqual({});
+    expect(send.status.code).toBe(SpanStatusCode.ERROR);
+  });
+
   it('applies the address mode to addresses in revert reasons', () => {
     createTxTracker({ address: 'off' })
       .startConfirm({ chainId: CHAIN_ID, hash: HASH })

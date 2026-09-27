@@ -68,9 +68,9 @@ search transactions by agent without joining spans.
 A redaction hook runs last on every attribute set; if it throws, only `blockchain.system`, `blockchain.chain.id`,
 `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status` and `error.type` are recorded.
 Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md).
-The address mode also applies to addresses inside `blockchain.tx.revert.reason` and sanitized error messages
-(`<address>` in `off` mode). The redaction hook also runs on `exception` event attributes; if it throws, only
-`exception.type` is kept.
+The address mode also applies to addresses inside `blockchain.tx.revert.reason`, `error.type` and sanitized error
+messages (`<address>` in `off` mode). The redaction hook also runs on `error.type` and on `exception` event
+attributes; if it throws, only `exception.type` is kept on the event.
 
 ## Change policy
 
