@@ -642,3 +642,166 @@ describe('concurrent confirmations', () => {
     expect(confirms().filter((s) => s.attributes['blockchain.tx.hash'] === HASH)).toHaveLength(2);
   });
 });
+
+describe('replaced transactions', () => {
+  const MINED = `0x${'cd'.repeat(32)}`;
+  const confirmOf = (hash: string) =>
+    tracing
+      .spans()
+      .filter(
+        (s) => s.name === `confirm ${CHAIN_ID}` && s.attributes['blockchain.tx.hash'] === hash,
+      );
+  const replacedReceipt = {
+    ...receipt,
+    transactionHash: MINED,
+    replacementReason: 'cancelled' as const,
+  };
+
+  it('ends the original as replaced and records the receipt on the mined transaction', () => {
+    const tracker = createTxTracker();
+    const tool = trace.getTracer('test').startSpan('execute_tool pay');
+    context.with(trace.setSpan(context.active(), tool), () => {
+      tracker.startSend({ chainId: CHAIN_ID }).end(HASH);
+      tracker.startSend({ chainId: CHAIN_ID }).end(MINED);
+      tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(replacedReceipt);
+    });
+    tool.end();
+
+    const [original] = confirmOf(HASH);
+    const [mined] = confirmOf(MINED);
+    expect(original?.attributes).toMatchObject({
+      'blockchain.tx.status': 'replaced',
+      'blockchain.tx.replacement.hash': MINED,
+      'blockchain.tx.replacement.reason': 'cancelled',
+    });
+    for (const key of ['blockchain.block.number', 'blockchain.tx.gas.used', 'blockchain.tx.fee']) {
+      expect(original?.attributes[key]).toBeUndefined();
+    }
+    expect(original?.attributes['error.type']).toBeUndefined();
+    expect(original?.status.code).toBe(SpanStatusCode.UNSET);
+
+    expect(mined?.attributes).toMatchObject({
+      'blockchain.tx.status': 'success',
+      'blockchain.tx.gas.used': 21_000,
+      'blockchain.tx.fee': '21000000000000',
+    });
+    expect(mined?.attributes['blockchain.tx.replacement.reason']).toBeUndefined();
+    expect(mined?.parentSpanContext?.spanId).toBe(tool.spanContext().spanId);
+    expect(mined?.startTime).toEqual(original?.startTime);
+    const sendOf = (hash: string) =>
+      tracing
+        .spans()
+        .find((s) => s.name === `send ${CHAIN_ID}` && s.attributes['blockchain.tx.hash'] === hash)
+        ?.spanContext().spanId;
+    expect(mined?.links.map((l) => l.context.spanId).sort()).toEqual(
+      [original?.spanContext().spanId, sendOf(HASH), sendOf(MINED)].sort(),
+    );
+  });
+
+  it('marks a reverted replacing transaction as an error on its own span only', () => {
+    createTxTracker()
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end({ ...replacedReceipt, status: 'reverted' });
+    expect(confirmOf(HASH)[0]?.status.code).toBe(SpanStatusCode.UNSET);
+    expect(confirmOf(MINED)[0]?.status.code).toBe(SpanStatusCode.ERROR);
+    expect(confirmOf(MINED)[0]?.attributes['blockchain.tx.status']).toBe('reverted');
+  });
+
+  it('records no reason when none was reported, and drops unknown reasons', () => {
+    const tracker = createTxTracker();
+    tracker
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end({ ...receipt, transactionHash: MINED });
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: `0x${'01'.repeat(32)}` }).end({
+      ...receipt,
+      transactionHash: `0x${'02'.repeat(32)}`,
+      replacementReason: 'x' as never,
+    });
+    const replaced = tracing
+      .spans()
+      .filter((s) => s.attributes['blockchain.tx.status'] === 'replaced');
+    expect(replaced).toHaveLength(2);
+    for (const span of replaced) {
+      expect(span.attributes['blockchain.tx.replacement.reason']).toBeUndefined();
+      expect(span.attributes['blockchain.tx.replacement.hash']).toBeDefined();
+    }
+  });
+
+  it('treats a differently cased hash as the same transaction', () => {
+    createTxTracker()
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end({ ...receipt, transactionHash: HASH.toUpperCase().replace('0X', '0x') });
+    expect(confirmOf(HASH)[0]?.attributes['blockchain.tx.status']).toBe('success');
+    expect(tracing.spans()).toHaveLength(1);
+  });
+
+  it('attributes nothing to an invalid receipt hash', () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const tracker = createTxTracker();
+    tracker
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end({ ...receipt, transactionHash: `nope ${FROM}` });
+
+    expect(tracing.spans()).toHaveLength(1);
+    const [original] = confirmOf(HASH);
+    expect(original?.status.code).toBe(SpanStatusCode.ERROR);
+    expect(original?.attributes['error.type']).toBe('_OTHER');
+    for (const key of ['blockchain.tx.status', 'blockchain.tx.gas.used', 'blockchain.tx.fee']) {
+      expect(original?.attributes[key]).toBeUndefined();
+    }
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(FROM);
+
+    // A non-string hash is not attributed either.
+    tracker
+      .startConfirm({ chainId: CHAIN_ID, hash: `0x${'03'.repeat(32)}` })
+      .end({ ...receipt, transactionHash: 42 as never });
+    expect(tracing.spans()).toHaveLength(2);
+    expect(tracing.spans()[1]?.attributes['error.type']).toBe('_OTHER');
+
+    // Released like a failure: a retry starts a new span.
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
+    expect(confirmOf(HASH)).toHaveLength(2);
+  });
+
+  it('settles the original, so later waits for it add no span', () => {
+    const tracker = createTxTracker();
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(replacedReceipt);
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(replacedReceipt);
+    expect(confirmOf(HASH)).toHaveLength(1);
+    expect(confirmOf(MINED)).toHaveLength(1);
+  });
+
+  it('ends an in-flight confirm span of the mined transaction instead of adding one', () => {
+    const tracker = createTxTracker();
+    const waitingForMined = tracker.startConfirm({ chainId: CHAIN_ID, hash: MINED });
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(replacedReceipt);
+    expect(confirmOf(MINED)).toHaveLength(1);
+    expect(confirmOf(MINED)[0]?.attributes['blockchain.tx.status']).toBe('success');
+    waitingForMined.end(receipt);
+    expect(confirmOf(MINED)).toHaveLength(1);
+  });
+
+  it('adds no span for a mined transaction that already has a receipt', () => {
+    const tracker = createTxTracker();
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: MINED }).end(receipt);
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(replacedReceipt);
+    expect(confirmOf(MINED)).toHaveLength(1);
+    expect(confirmOf(HASH)[0]?.attributes['blockchain.tx.status']).toBe('replaced');
+  });
+
+  it('keeps replacement attributes when the redaction hook fails', () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    createTxTracker({
+      redact: () => {
+        throw new Error('boom');
+      },
+    })
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end(replacedReceipt);
+    expect(confirmOf(HASH)[0]?.attributes).toMatchObject({
+      'blockchain.tx.status': 'replaced',
+      'blockchain.tx.replacement.hash': MINED,
+      'blockchain.tx.replacement.reason': 'cancelled',
+    });
+  });
+});

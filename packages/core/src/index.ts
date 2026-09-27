@@ -9,6 +9,7 @@ export type {
   ConfirmInput,
   ErrorMessageMode,
   ReceiptLike,
+  ReplacementReason,
   SendHandle,
   SendInput,
   TxTrackerOptions,

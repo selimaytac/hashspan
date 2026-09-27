@@ -2,6 +2,7 @@ import {
   type ConfirmHandle,
   createTxTracker,
   type ReceiptLike,
+  type ReplacementReason,
   type SendInput,
   type TxTracker,
   type TxTrackerOptions,
@@ -99,6 +100,38 @@ interface WriteContractArgs extends SendArgs {
 interface WaitArgs {
   hash: string;
   chain?: { id: number } | null | undefined;
+  onReplaced?: ((replacement: ViemReplacement) => void) | undefined;
+}
+
+/** What viem passes to `onReplaced`. */
+interface ViemReplacement {
+  reason: ReplacementReason;
+  replacedTransaction: { to?: string | null | undefined };
+  transaction: { to?: string | null | undefined };
+  transactionReceipt: ViemReceipt;
+}
+
+/** The replacement viem reported to one wait, if any. */
+interface ReplacementCapture {
+  replacement?: ViemReplacement | undefined;
+}
+
+/**
+ * `onReplaced` for a wait: stores the replacement first, then calls the caller's callback with the same argument.
+ * What the callback throws still rejects the wait, as in plain viem.
+ */
+function capturing(
+  capture: ReplacementCapture,
+  onReplaced: ((replacement: ViemReplacement) => void) | undefined,
+): (replacement: ViemReplacement) => void {
+  return (replacement) => {
+    capture.replacement = replacement;
+    onReplaced?.(replacement);
+  };
+}
+
+function sameAddress(a: string | null | undefined, b: string | null | undefined): boolean {
+  return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 }
 
 interface ViemReceipt {
@@ -132,6 +165,7 @@ function toReceiptLike(receipt: ViemReceipt): ReceiptLike {
     gasUsed: receipt.gasUsed,
     effectiveGasPrice: receipt.effectiveGasPrice,
     l1Fee: typeof l1Fee === 'string' ? BigInt(l1Fee) : l1Fee,
+    transactionHash: receipt.transactionHash,
   };
 }
 
@@ -156,22 +190,21 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   const revertReasons = new Recent<Promise<string | undefined>>();
   const confirmKey = (chainId: number, hash: string): string => `${chainId}:${hash.toLowerCase()}`;
 
+  /** Revert reason of a mined transaction, fetched once per transaction (keyed by its hash). */
   const revertReasonOf = (
     key: string,
     receipt: ViemReceipt,
+    abi: Abi | undefined,
     client: unknown,
   ): Promise<string | undefined> => {
     let reason = revertReasons.get(key);
     if (!reason) {
-      reason = fetchRevertReason(
-        client,
-        receipt.transactionHash,
-        receipt.blockNumber,
-        abis.get(key),
-      ).catch((error: unknown) => {
-        diag.debug(`hashspan: could not fetch revert reason (${errorName(error)})`);
-        return undefined;
-      });
+      reason = fetchRevertReason(client, receipt.transactionHash, receipt.blockNumber, abi).catch(
+        (error: unknown) => {
+          diag.debug(`hashspan: could not fetch revert reason (${errorName(error)})`);
+          return undefined;
+        },
+      );
       revertReasons.set(key, reason);
     }
     return reason;
@@ -179,29 +212,54 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
 
   /**
    * Ends `handle` from the outcome of `wait`; never rejects. The tracker joins handles for one transaction into one
-   * confirm span (docs/adr/0007-confirmation-ownership.md). For reverted receipts, the span ends after the revert
-   * reason was fetched with `client`.
+   * confirm span (docs/adr/0007-confirmation-ownership.md) and attributes the receipt of a replacing transaction to
+   * that transaction (docs/adr/0008-replaced-transactions.md). For reverted receipts, the span ends after the
+   * revert reason was fetched with `client`.
    */
   const recordConfirmation = async (
-    key: string,
+    chainId: number,
+    hash: string,
     handle: ConfirmHandle,
     wait: Promise<ViemReceipt>,
+    capture: ReplacementCapture,
     client: unknown,
   ): Promise<void> => {
     let receipt: ViemReceipt;
     try {
       receipt = await wait;
     } catch (error) {
-      if (isTimeout(error)) handle.timeout();
-      else handle.fail(error);
-      return;
+      // viem rejects after reporting a replacement only if the caller's onReplaced threw: the transaction was mined.
+      const reported = capture.replacement?.transactionReceipt;
+      if (!reported) {
+        if (isTimeout(error)) handle.timeout();
+        else handle.fail(error);
+        return;
+      }
+      receipt = reported;
     }
-    const revertReason =
-      receipt.status === 'reverted' && decodeRevertReason
-        ? await revertReasonOf(key, receipt, client)
-        : undefined;
+    const { replacement } = capture;
+    const reported =
+      replacement !== undefined &&
+      replacement.transactionReceipt.transactionHash.toLowerCase() ===
+        receipt.transactionHash.toLowerCase();
+    let revertReason: string | undefined;
+    if (receipt.status === 'reverted' && decodeRevertReason) {
+      const minedKey = confirmKey(chainId, receipt.transactionHash);
+      // Errors are matched by selector, so the original call's ABI fits a replacing call to the same contract.
+      const abi =
+        abis.get(minedKey) ??
+        (minedKey === confirmKey(chainId, hash) ||
+        (reported && sameAddress(replacement.transaction.to, replacement.replacedTransaction.to))
+          ? abis.get(confirmKey(chainId, hash))
+          : undefined);
+      revertReason = await revertReasonOf(minedKey, receipt, abi, client);
+    }
     try {
-      handle.end({ ...toReceiptLike(receipt), revertReason });
+      handle.end({
+        ...toReceiptLike(receipt),
+        revertReason,
+        replacementReason: reported ? replacement.reason : undefined,
+      });
     } catch (error) {
       diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
     }
@@ -232,13 +290,14 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       typeof client.uid === 'string' ? { ...client, uid: `${client.uid}:hashspan` } : client;
 
     const confirmInBackground = (chainId: number, hash: string): void => {
-      const key = confirmKey(chainId, hash);
       const handle = tracker.startConfirm({ chainId, hash });
+      const capture: ReplacementCapture = {};
       const wait = viemWaitForTransactionReceipt(backgroundClient as never, {
         hash: hash as `0x${string}`,
         timeout: confirm?.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS,
+        onReplaced: capturing(capture, undefined) as never,
       }) as Promise<ViemReceipt>;
-      void recordConfirmation(key, handle, wait, client);
+      void recordConfirmation(chainId, hash, handle, wait, capture, client);
     };
 
     const traceSend = async (
@@ -328,16 +387,20 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     if (typeof waitForTransactionReceipt === 'function') {
       actions.waitForTransactionReceipt = async (args: WaitArgs) => {
         let handle: ConfirmHandle | undefined;
-        let key: string | undefined;
+        let chainId: number | undefined;
         try {
-          const chainId = await chainIdFor(args);
-          key = confirmKey(chainId, args.hash);
+          chainId = await chainIdFor(args);
           handle = tracker.startConfirm({ chainId, hash: args.hash });
         } catch (error) {
           diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
         }
-        const wait = waitForTransactionReceipt(args) as Promise<ViemReceipt>;
-        if (handle && key) void recordConfirmation(key, handle, wait, client);
+        const capture: ReplacementCapture = {};
+        const wait = waitForTransactionReceipt(
+          handle ? { ...args, onReplaced: capturing(capture, args.onReplaced) } : args,
+        ) as Promise<ViemReceipt>;
+        if (handle && chainId !== undefined) {
+          void recordConfirmation(chainId, args.hash, handle, wait, capture, client);
+        }
         return wait;
       };
     }
