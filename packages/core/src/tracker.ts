@@ -85,8 +85,10 @@ export interface TxTracker {
    */
   startSend(input: SendInput, parent?: Context): SendHandle;
   /**
-   * Starts a `confirm` span for a transaction, linked to its `send` span when known.
-   * Parent: `parent` if given, else the active span, else the `send` span's parent.
+   * Joins the `confirm` span of a transaction, starting it for the first caller; linked to its `send` span when
+   * known. Calls for the same chain id and hash share one span, whose parent is chosen by the first call:
+   * `parent` if given, else the active span, else the `send` span's parent. Returns a no-op handle for a
+   * transaction that recently got a receipt. Every returned handle must be ended.
    */
   startConfirm(input: ConfirmInput, parent?: Context): ConfirmHandle;
 }

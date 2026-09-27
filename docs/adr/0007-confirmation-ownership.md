@@ -64,5 +64,7 @@ gap with less change, but leaves the other two and duplicates the rules in every
   use separate trackers. This is a behaviour change of the core API and needs a changeset.
 - The confirm span parent rule gains one sentence: the first wait determines the parent.
 - A handle that is never ended keeps the shared span open, even after every other handle withdrew. Adapter
-  handles always end; direct users of the core must end every handle they start.
+  handles end when the wait they trace ends, so a wait without a timeout (viem `timeout: 0`) for a transaction
+  that is never mined keeps the span open, even if a background confirmation timed out. Direct users of the core
+  must end every handle they start.
 - Replacement handling (ADR 0008) builds on this registry.

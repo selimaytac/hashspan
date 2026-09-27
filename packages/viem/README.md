@@ -72,7 +72,8 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
 
 - Each transaction gets one confirm span per tracker. If the caller also waits for the receipt on a client
   extended with the same tracker, both waits share that span: a receipt from either ends it, and a background
-  timeout does not end it while the caller is still waiting.
+  timeout does not end it while the caller is still waiting. A wait without a timeout (`timeout: 0`) for a
+  transaction that is never mined therefore keeps the span open.
 - Polling adds RPC requests to your provider (one receipt request per polling interval until the receipt arrives).
   It polls independently of your own `waitForTransactionReceipt` calls, so your `timeout`, `confirmations` and other
   options always apply to your wait; while both run, receipt requests are made for each.
