@@ -46,6 +46,8 @@ confirm.end({
   gasUsed: receipt.gasUsed,
   effectiveGasPrice: receipt.effectiveGasPrice,
   l1Fee: receipt.l1Fee, // OP-stack chains
+  // Hash of the mined transaction: if a replacement was mined, the receipt is attributed to it (ADR 0008).
+  transactionHash: receipt.transactionHash,
 });
 ```
 

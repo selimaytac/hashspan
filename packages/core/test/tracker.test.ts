@@ -687,7 +687,8 @@ describe('replaced transactions', () => {
     });
     expect(mined?.attributes['blockchain.tx.replacement.reason']).toBeUndefined();
     expect(mined?.parentSpanContext?.spanId).toBe(tool.spanContext().spanId);
-    expect(mined?.startTime).toEqual(original?.startTime);
+    const toMs = (t: [number, number] | undefined) => (t ? t[0] * 1e3 + t[1] / 1e6 : Number.NaN);
+    expect(Math.abs(toMs(mined?.startTime) - toMs(original?.startTime))).toBeLessThanOrEqual(1);
     const sendOf = (hash: string) =>
       tracing
         .spans()
@@ -761,6 +762,25 @@ describe('replaced transactions', () => {
     // Released like a failure: a retry starts a new span.
     tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
     expect(confirmOf(HASH)).toHaveLength(2);
+  });
+
+  it('ignores a joined handle of the original after the replacement was recorded', () => {
+    const tracker = createTxTracker();
+    const first = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH });
+    const second = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH });
+    first.end(replacedReceipt);
+    second.end(replacedReceipt);
+    second.end({ ...replacedReceipt, transactionHash: `0x${'09'.repeat(32)}` });
+    expect(confirmOf(HASH)).toHaveLength(1);
+    expect(confirmOf(MINED)).toHaveLength(1);
+    expect(tracing.spans()).toHaveLength(2);
+  });
+
+  it('keeps the monotonic clock for spans that are not replacements', () => {
+    createTxTracker().startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
+    // Reads an SDK internal: with an explicit start time, the SDK ends spans by the wall clock.
+    const span = confirmOf(HASH)[0] as unknown as { _startTimeProvided?: boolean };
+    expect(span._startTimeProvided).toBe(false);
   });
 
   it('settles the original, so later waits for it add no span', () => {

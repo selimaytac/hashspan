@@ -338,12 +338,18 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       ...(replacing?.links ?? []),
       ...(sent ? [{ context: sent.spanContext }] : []),
     ];
-    // Explicit, so that the span of a replacing transaction can start at the same instant.
+    // Only a replacing transaction's span gets an explicit start time: with one, the SDK measures the end time with
+    // the wall clock instead of the monotonic clock.
     const startTime = replacing?.startTime ?? new Date();
 
     const span = getTracer().startSpan(
       `confirm ${input.chainId}`,
-      { kind: SpanKind.CLIENT, attributes: redact(attributes), links: spanLinks, startTime },
+      {
+        kind: SpanKind.CLIENT,
+        attributes: redact(attributes),
+        links: spanLinks,
+        ...(replacing ? { startTime } : {}),
+      },
       parent,
     );
     const finish = finisher(span);
