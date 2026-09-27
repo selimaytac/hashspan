@@ -836,3 +836,46 @@ describe('replaced transactions', () => {
     });
   });
 });
+
+describe('explicit start and end times', () => {
+  const at = (ms: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, 0, ms));
+  const ms = (t: [number, number] | undefined) => (t ? t[0] * 1e3 + t[1] / 1e6 : Number.NaN);
+
+  it('records a send span with the given start and end times', () => {
+    createTxTracker()
+      .startSend({ chainId: CHAIN_ID, startTime: at(100) })
+      .end(HASH, at(350));
+    const send = tracing.spanNamed(`send ${CHAIN_ID}`);
+    expect(ms(send.startTime)).toBe(at(100).getTime());
+    expect(ms(send.endTime)).toBe(at(350).getTime());
+  });
+
+  it('records a failed send with the given end time', () => {
+    createTxTracker()
+      .startSend({ chainId: CHAIN_ID, startTime: at(100) })
+      .fail(new Error('rejected'), at(200));
+    expect(ms(tracing.spanNamed(`send ${CHAIN_ID}`).endTime)).toBe(at(200).getTime());
+  });
+
+  it('records a confirm span with the given times, the last withdrawing handle ending it', () => {
+    const tracker = createTxTracker();
+    const first = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH, startTime: at(100) });
+    const second = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH, startTime: at(900) });
+    first.timeout(at(500));
+    second.timeout(at(700));
+    const confirm = tracing.spanNamed(`confirm ${CHAIN_ID}`);
+    expect(ms(confirm.startTime)).toBe(at(100).getTime());
+    expect(ms(confirm.endTime)).toBe(at(700).getTime());
+  });
+
+  it('starts a replacing transaction span at the explicit start of the replaced one', () => {
+    createTxTracker()
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH, startTime: at(100) })
+      .end({ ...receipt, transactionHash: `0x${'cd'.repeat(32)}` }, at(400));
+    for (const span of tracing.spans()) {
+      expect(ms(span.startTime)).toBe(at(100).getTime());
+      expect(ms(span.endTime)).toBe(at(400).getTime());
+    }
+    expect(tracing.spans()).toHaveLength(2);
+  });
+});

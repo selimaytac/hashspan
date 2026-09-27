@@ -1,4 +1,4 @@
-import type { Attributes, TracerProvider } from '@opentelemetry/api';
+import type { Attributes, TimeInput, TracerProvider } from '@opentelemetry/api';
 
 /** How wallet addresses are recorded. See docs/adr/0004-privacy-defaults.md. */
 export type AddressMode = 'raw' | 'hashed' | 'off';
@@ -60,18 +60,25 @@ export interface SendInput {
   functionName?: string | undefined;
   /** 4-byte function selector, e.g. `0xa9059cbb`. */
   functionSelector?: string | undefined;
+  /**
+   * When the send started, for adapters that record it after the fact (docs/adr/0009). Omit it otherwise: with an
+   * explicit start time, the SDK measures the span by the wall clock, so pass the end time to the handle too.
+   */
+  startTime?: TimeInput | undefined;
 }
 
 export interface SendHandle {
-  /** Ends the send span successfully once the transaction hash is known. */
-  end(hash: string): void;
-  /** Ends the send span with an error (signing, simulation or broadcast failure). */
-  fail(error: unknown): void;
+  /** Ends the send span successfully once the transaction hash is known; `endTime` defaults to now. */
+  end(hash: string, endTime?: TimeInput): void;
+  /** Ends the send span with an error (signing, simulation or broadcast failure); `endTime` defaults to now. */
+  fail(error: unknown, endTime?: TimeInput): void;
 }
 
 export interface ConfirmInput {
   chainId: number;
   hash: string;
+  /** When the wait started, for adapters that record it after the fact; see {@link SendInput.startTime}. */
+  startTime?: TimeInput | undefined;
 }
 
 /** Why a transaction was replaced by another one with the same sender and nonce, as its library reported it. */
@@ -98,15 +105,15 @@ export interface ReceiptLike {
 
 export interface ConfirmHandle {
   /** Ends the shared confirm span with the receipt, for every handle of the transaction. */
-  end(receipt: ReceiptLike): void;
+  end(receipt: ReceiptLike, endTime?: TimeInput): void;
   /**
    * Withdraws this handle because waiting for the receipt timed out. The confirm span ends as `timeout` only if
    * no other handle of the transaction is still waiting.
    */
-  timeout(): void;
+  timeout(endTime?: TimeInput): void;
   /**
    * Withdraws this handle because retrieving the receipt failed. The confirm span ends as a failure only if no
    * other handle of the transaction is still waiting.
    */
-  fail(error: unknown): void;
+  fail(error: unknown, endTime?: TimeInput): void;
 }

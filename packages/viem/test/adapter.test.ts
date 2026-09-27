@@ -111,13 +111,16 @@ describe('sendTransaction', () => {
     expect(logged).not.toContain('secret-key');
   });
 
-  it('resolves the chain id once per client when the client has no chain', async () => {
-    const { transport, calls } = mockTransport({ chainIdHex: '0x1' });
+  it('resolves the chain id for every call when the client has no chain', async () => {
+    const answers = ['0x1', '0xa'];
+    const { transport } = mockTransport({ chainId: () => answers.shift() ?? '0xa' });
     const wallet = createWalletClient({ account: FROM, transport }).extend(withHashspan());
     await wallet.sendTransaction({ to: TO, chain: null });
+    await vi.waitFor(() => expect(tracing.spans()).toHaveLength(1));
+    // The wallet switched networks: the next span uses the new chain id, not a cached one.
     await wallet.sendTransaction({ to: TO, chain: null });
-    expect(tracing.spans().map((s) => s.name)).toEqual(['send 1', 'send 1']);
-    expect(calls.filter((m) => m === 'eth_chainId')).toHaveLength(1);
+    await vi.waitFor(() => expect(tracing.spans()).toHaveLength(2));
+    expect(tracing.spans().map((s) => s.name)).toEqual(['send 1', 'send 10']);
   });
 });
 

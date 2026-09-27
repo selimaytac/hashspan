@@ -57,6 +57,17 @@ A receipt only says that a transaction reverted. For reverted transactions the a
   has been fetched.
 - Turn it off with `withHashspan({ decodeRevertReason: false })`.
 
+## Clients without a chain
+
+Prefer clients with a `chain`. For a client without one, the adapter asks the node for its chain id alongside each
+traced call, never before it, and records the span once the answer arrives, with the call's start and end time:
+
+- The call is never delayed or failed by that request. If it fails, or has not answered 30 s after the call ended,
+  that call is not traced.
+- The chain id is asked for on every call, so spans follow a wallet that switches networks (one extra `eth_chainId`
+  per traced call).
+- These spans have millisecond precision and are exported shortly after the call ends.
+
 ## Replaced transactions
 
 A pending transaction can be sped up or cancelled by sending another one with the same nonce. viem then resolves

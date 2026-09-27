@@ -6,6 +6,8 @@ export const HASH = `0x${'ab'.repeat(32)}` as const;
 
 export interface MockOptions {
   chainIdHex?: string;
+  /** Answers `eth_chainId` instead of `chainIdHex`, e.g. late, never, or differently per call. */
+  chainId?: () => string | Promise<string>;
   /** Receipt fields merged into the default successful receipt; `null` means "not mined yet". */
   receipt?: Record<string, unknown> | null;
   sendError?: { code: number; message: string };
@@ -26,7 +28,7 @@ export function mockTransport(options: MockOptions = {}) {
       calls.push(method);
       switch (method) {
         case 'eth_chainId':
-          return options.chainIdHex ?? '0x2105';
+          return options.chainId ? options.chainId() : (options.chainIdHex ?? '0x2105');
         case 'eth_sendTransaction':
           if (options.sendError)
             throw Object.assign(new Error(options.sendError.message), options.sendError);
