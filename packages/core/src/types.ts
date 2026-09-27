@@ -3,6 +3,14 @@ import type { Attributes, TracerProvider } from '@opentelemetry/api';
 /** How wallet addresses are recorded. See docs/adr/0004-privacy-defaults.md. */
 export type AddressMode = 'raw' | 'hashed' | 'off';
 
+/**
+ * How error messages are recorded on exception events and span status. See docs/adr/0006-error-privacy.md.
+ * - `off`: error type only
+ * - `sanitized`: first line, addresses per address mode, other long hex data removed
+ * - `raw`: full message and stack trace, as thrown
+ */
+export type ErrorMessageMode = 'off' | 'sanitized' | 'raw';
+
 export interface AddressOptions {
   mode: AddressMode;
   /**
@@ -23,6 +31,11 @@ export interface TxTrackerOptions {
   tracerProvider?: TracerProvider | undefined;
   /** Address recording mode. Default: `raw`. */
   address?: AddressMode | AddressOptions | undefined;
+  /**
+   * Error message recording mode. Default: `off` (error type only). The redaction hook also runs on exception
+   * attributes.
+   */
+  errorMessages?: ErrorMessageMode | undefined;
   /** Fallback agent identity. Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` take precedence. */
   agent?: AgentIdentity | undefined;
   /**

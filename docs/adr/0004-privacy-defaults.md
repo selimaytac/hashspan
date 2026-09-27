@@ -17,6 +17,7 @@ while removing the ability to look the address up in a block explorer.
 - Decoded calldata arguments: **off** by default; opt-in per instrumentation.
 - Function name and 4-byte selector: on by default (derived from public contract interfaces).
 - A user-supplied redaction hook runs last and can drop or rewrite any attribute.
+- Error messages and stack traces: off by default; see [ADR 0006](0006-error-privacy.md).
 
 ## Consequences
 

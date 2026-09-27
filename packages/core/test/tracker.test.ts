@@ -336,3 +336,169 @@ describe('never breaks the caller', () => {
     expect(tracing.spanNamed(`confirm ${CHAIN_ID}`)).toBeDefined();
   });
 });
+
+describe('error privacy', () => {
+  const CALLDATA = `0xa9059cbb${'0'.repeat(24)}${TO.slice(2)}${'0'.repeat(63)}1`;
+
+  /** Shaped like a viem error: a short first line, then request arguments with addresses and calldata. */
+  function sendError(): Error {
+    const error = new Error(
+      [
+        `insufficient funds for gas * price + value: address ${FROM} have 0 want 1`,
+        '',
+        'Request Arguments:',
+        `  from:  ${FROM}`,
+        `  to:    ${TO}`,
+        `  data:  ${CALLDATA}`,
+      ].join('\n'),
+    );
+    error.name = 'TransactionExecutionError';
+    return error;
+  }
+
+  /** Everything the exporter would see for a span, as one string. */
+  const exported = (name: string): string => {
+    const span = tracing.spanNamed(name);
+    return JSON.stringify({
+      attributes: span.attributes,
+      events: span.events,
+      status: span.status,
+    });
+  };
+
+  const exceptionOf = (name: string) =>
+    tracing.spanNamed(name).events.find((e) => e.name === 'exception')?.attributes;
+
+  it('records only the error type by default', () => {
+    createTxTracker().startSend({ chainId: CHAIN_ID }).fail(sendError());
+
+    expect(exceptionOf(`send ${CHAIN_ID}`)).toEqual({
+      'exception.type': 'TransactionExecutionError',
+    });
+    const send = tracing.spanNamed(`send ${CHAIN_ID}`);
+    expect(send.status).toEqual({ code: SpanStatusCode.ERROR });
+    expect(exported(`send ${CHAIN_ID}`)).not.toContain('insufficient funds');
+  });
+
+  it('never exports addresses from error messages in off mode', () => {
+    for (const errorMessages of [undefined, 'sanitized', 'off'] as const) {
+      tracing.exporter.reset();
+      const tracker = createTxTracker({ address: 'off', errorMessages });
+      tracker.startSend({ chainId: CHAIN_ID, from: FROM, to: TO }).fail(sendError());
+      tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).fail(sendError());
+      tracker.startSend({ chainId: CHAIN_ID }).fail(`rejected by ${FROM}`);
+
+      for (const span of tracing.spans()) {
+        const text = JSON.stringify({ a: span.attributes, e: span.events, s: span.status });
+        expect(text.toLowerCase()).not.toContain(FROM.slice(2));
+        expect(text.toLowerCase()).not.toContain(TO.slice(2));
+      }
+    }
+  });
+
+  it('records the first line with addresses per address mode and without calldata when sanitized', () => {
+    createTxTracker({ address: 'off', errorMessages: 'sanitized' })
+      .startSend({ chainId: CHAIN_ID })
+      .fail(sendError());
+
+    const message = 'insufficient funds for gas * price + value: address <address> have 0 want 1';
+    expect(exceptionOf(`send ${CHAIN_ID}`)).toEqual({
+      'exception.type': 'TransactionExecutionError',
+      'exception.message': message,
+    });
+    expect(tracing.spanNamed(`send ${CHAIN_ID}`).status.message).toBe(message);
+  });
+
+  it('keeps raw addresses but drops calldata when sanitized in raw address mode', () => {
+    const error = new Error(`call to ${TO} with ${CALLDATA} failed`);
+    createTxTracker({ errorMessages: 'sanitized' }).startSend({ chainId: CHAIN_ID }).fail(error);
+    expect(exceptionOf(`send ${CHAIN_ID}`)?.['exception.message']).toBe(
+      `call to ${TO} with <hex> failed`,
+    );
+  });
+
+  it('hashes addresses in error messages in hashed mode', () => {
+    createTxTracker({ address: 'hashed', errorMessages: 'sanitized' })
+      .startSend({ chainId: CHAIN_ID })
+      .fail(new Error(`rejected by ${FROM}`));
+    expect(exceptionOf(`send ${CHAIN_ID}`)?.['exception.message']).toMatch(
+      /^rejected by sha256:[0-9a-f]{32}$/,
+    );
+  });
+
+  it('records the full message and stack trace only in raw mode', () => {
+    const error = sendError();
+    createTxTracker({ errorMessages: 'raw' }).startSend({ chainId: CHAIN_ID }).fail(error);
+    expect(exceptionOf(`send ${CHAIN_ID}`)).toEqual({
+      'exception.type': 'TransactionExecutionError',
+      'exception.message': error.message,
+      'exception.stacktrace': error.stack,
+    });
+  });
+
+  it('runs the redaction hook on exception attributes', () => {
+    createTxTracker({
+      errorMessages: 'raw',
+      redact: ({ 'exception.stacktrace': _stack, ...rest }) => ({
+        ...rest,
+        'exception.message': 'redacted',
+      }),
+    })
+      .startSend({ chainId: CHAIN_ID })
+      .fail(sendError());
+
+    expect(exceptionOf(`send ${CHAIN_ID}`)).toEqual({
+      'exception.type': 'TransactionExecutionError',
+      'exception.message': 'redacted',
+    });
+    expect(tracing.spanNamed(`send ${CHAIN_ID}`).status.message).toBe('redacted');
+  });
+
+  it('keeps only the error type when the redaction hook throws', () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    createTxTracker({
+      errorMessages: 'raw',
+      redact: () => {
+        throw new Error('boom');
+      },
+    })
+      .startSend({ chainId: CHAIN_ID })
+      .fail(sendError());
+    expect(exceptionOf(`send ${CHAIN_ID}`)).toEqual({
+      'exception.type': 'TransactionExecutionError',
+    });
+    expect(tracing.spanNamed(`send ${CHAIN_ID}`).status).toEqual({ code: SpanStatusCode.ERROR });
+  });
+
+  it('applies the address mode and the redaction hook to dynamic error names', () => {
+    const error = new Error('rejected');
+    error.name = `RejectedBy${FROM}`;
+
+    createTxTracker({ address: 'off' }).startSend({ chainId: CHAIN_ID }).fail(error);
+    const text = exported(`send ${CHAIN_ID}`).toLowerCase();
+    expect(text).not.toContain(FROM.slice(2));
+    expect(tracing.spanNamed(`send ${CHAIN_ID}`).attributes['error.type']).toBe(
+      'RejectedBy<address>',
+    );
+
+    tracing.exporter.reset();
+    createTxTracker({
+      redact: ({ 'error.type': _type, 'exception.type': _exception, ...rest }) => rest,
+    })
+      .startSend({ chainId: CHAIN_ID })
+      .fail(error);
+    const send = tracing.spanNamed(`send ${CHAIN_ID}`);
+    expect(send.attributes['error.type']).toBeUndefined();
+    expect(exceptionOf(`send ${CHAIN_ID}`)).toEqual({});
+    expect(send.status.code).toBe(SpanStatusCode.ERROR);
+  });
+
+  it('applies the address mode to addresses in revert reasons', () => {
+    createTxTracker({ address: 'off' })
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end({ ...receipt, status: 'reverted', revertReason: `Unauthorized(${FROM})` });
+    expect(tracing.spanNamed(`confirm ${CHAIN_ID}`).attributes['blockchain.tx.revert.reason']).toBe(
+      'Unauthorized(<address>)',
+    );
+  });
+});

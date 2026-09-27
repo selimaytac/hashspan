@@ -39,7 +39,13 @@ import {
   ERROR_TYPE_VALUE_OTHER,
 } from './attributes.js';
 import { LinkStore } from './link-store.js';
-import { type AddressFormatter, resolveAddressFormatter } from './privacy.js';
+import {
+  type AddressFormatter,
+  formatAddressesIn,
+  resolveAddressFormatter,
+  resolveErrorMessageMode,
+  sanitizeErrorMessage,
+} from './privacy.js';
 import type {
   ConfirmHandle,
   ConfirmInput,
@@ -54,6 +60,12 @@ const INSTRUMENTATION_NAME = '@hashspan/core';
 const DEFAULT_LINK_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_TRACKED = 10_000;
 
+/** OpenTelemetry exception event and attributes. */
+const EXCEPTION_EVENT = 'exception';
+const ATTR_EXCEPTION_TYPE = 'exception.type';
+const ATTR_EXCEPTION_MESSAGE = 'exception.message';
+const ATTR_EXCEPTION_STACKTRACE = 'exception.stacktrace';
+
 /** Attributes kept when the redaction hook fails (fail closed). */
 const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
   ATTR_BLOCKCHAIN_SYSTEM,
@@ -62,6 +74,7 @@ const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
   ATTR_BLOCKCHAIN_TX_HASH,
   ATTR_BLOCKCHAIN_TX_STATUS,
   ATTR_ERROR_TYPE,
+  ATTR_EXCEPTION_TYPE,
 ]);
 
 export interface TxTracker {
@@ -100,17 +113,6 @@ function errorType(error: unknown): string {
   return error instanceof Error && error.name ? error.name : ERROR_TYPE_VALUE_OTHER;
 }
 
-function markError(span: Span, type: string, error?: unknown): void {
-  if (error !== undefined) {
-    span.recordException(error instanceof Error ? error : String(error));
-  }
-  span.setAttribute(ATTR_ERROR_TYPE, type);
-  span.setStatus({
-    code: SpanStatusCode.ERROR,
-    ...(error instanceof Error ? { message: error.message } : {}),
-  });
-}
-
 export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
   const links = new LinkStore({
     ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
@@ -120,6 +122,11 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     'configure address mode',
     () => resolveAddressFormatter(options.address),
     () => undefined,
+  );
+  const errorMessages = safely(
+    'configure error message mode',
+    () => resolveErrorMessageMode(options.errorMessages),
+    'off',
   );
   let tracer: Tracer | undefined;
   const getTracer = (): Tracer => {
@@ -149,6 +156,38 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       return nonSensitive(attributes);
     }
     return redacted as Attributes;
+  };
+
+  /**
+   * Exception event attributes for `error`, per the error message mode. The error object itself is never handed
+   * to the SDK: its message and stack can carry addresses and calldata (docs/adr/0006-error-privacy.md).
+   */
+  const exceptionAttributes = (type: string, error: unknown): Attributes => {
+    const attributes: Attributes = { [ATTR_EXCEPTION_TYPE]: type };
+    if (errorMessages === 'off') return attributes;
+    const message = error instanceof Error ? error.message : String(error);
+    if (errorMessages === 'sanitized') {
+      const sanitized = sanitizeErrorMessage(message, formatAddress);
+      if (sanitized) attributes[ATTR_EXCEPTION_MESSAGE] = sanitized;
+      return attributes;
+    }
+    attributes[ATTR_EXCEPTION_MESSAGE] = message;
+    if (error instanceof Error && error.stack) attributes[ATTR_EXCEPTION_STACKTRACE] = error.stack;
+    return attributes;
+  };
+
+  /** Error names are free text too: they follow the address mode and pass through the redaction hook. */
+  const markError = (span: Span, errorName: string, error?: unknown): void => {
+    const type = formatAddressesIn(errorName, formatAddress);
+    let message: string | undefined;
+    if (error !== undefined) {
+      const exception = redact(exceptionAttributes(type, error));
+      span.addEvent(EXCEPTION_EVENT, exception);
+      const recorded = exception[ATTR_EXCEPTION_MESSAGE];
+      if (typeof recorded === 'string') message = recorded;
+    }
+    span.setAttributes(redact({ [ATTR_ERROR_TYPE]: type }));
+    span.setStatus({ code: SpanStatusCode.ERROR, ...(message !== undefined ? { message } : {}) });
   };
 
   /** Ends a span exactly once; the span is always ended even if recording attributes fails. */
@@ -229,7 +268,10 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       attributes[ATTR_BLOCKCHAIN_TX_FEE] = (executionFee + (l1Fee ?? 0n)).toString();
     }
     if (receipt.revertReason !== undefined) {
-      attributes[ATTR_BLOCKCHAIN_TX_REVERT_REASON] = receipt.revertReason;
+      attributes[ATTR_BLOCKCHAIN_TX_REVERT_REASON] = formatAddressesIn(
+        receipt.revertReason,
+        formatAddress,
+      );
     }
     return attributes;
   };

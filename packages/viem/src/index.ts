@@ -141,6 +141,14 @@ interface ViemReceipt {
   l1Fee?: bigint | string | null | undefined;
 }
 
+/**
+ * What `diag` logs for an error: its name only. viem errors carry request arguments and RPC URLs, which may
+ * include addresses, calldata or API keys.
+ */
+function errorName(error: unknown): string {
+  return error instanceof Error ? error.name : typeof error;
+}
+
 function isTimeout(error: unknown): boolean {
   return error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError';
 }
@@ -215,13 +223,13 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
           abis.get(key),
         );
       } catch (error) {
-        diag.debug('hashspan: could not fetch revert reason', error);
+        diag.debug(`hashspan: could not fetch revert reason (${errorName(error)})`);
       }
     }
     try {
       handle.end({ ...toReceiptLike(receipt), revertReason });
     } catch (error) {
-      diag.error('hashspan: failed to record receipt', error);
+      diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
     }
   };
 
@@ -263,7 +271,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         chainId = input.chainId;
         handle = tracker.startSend(input);
       } catch (error) {
-        diag.error('hashspan: failed to start send span', error);
+        diag.error(`hashspan: failed to start send span (${errorName(error)})`);
       }
       let hash: string;
       try {
@@ -278,7 +286,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         try {
           confirmInBackground(chainId, hash);
         } catch (error) {
-          diag.error('hashspan: failed to start background confirmation', error);
+          diag.error(`hashspan: failed to start background confirmation (${errorName(error)})`);
         }
       }
       return hash;
@@ -345,7 +353,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
           // A background confirmation already covers this transaction: one confirm span per transaction.
           if (confirmations.claim(key)) handle = tracker.startConfirm({ chainId, hash: args.hash });
         } catch (error) {
-          diag.error('hashspan: failed to start confirm span', error);
+          diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
         }
         const wait = waitForTransactionReceipt(args) as Promise<ViemReceipt>;
         if (handle && key) void recordConfirmation(key, handle, wait, client);
