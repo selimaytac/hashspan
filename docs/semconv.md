@@ -75,7 +75,8 @@ RPC calls made by adapters follow the OpenTelemetry [JSON-RPC conventions](https
 
 Agent identity is recorded with the GenAI conventions `gen_ai.agent.id` and `gen_ai.agent.name`, taken from
 OpenTelemetry Baggage entries with the same keys, or from the tracker's static `agent` option. This lets backends
-search transactions by agent without joining spans.
+search transactions by agent without joining spans. Baggage is propagated to downstream services; identifiers that
+must stay internal belong in the static `agent` option, which is never propagated.
 
 ## Privacy
 
@@ -84,7 +85,8 @@ search transactions by agent without joining spans.
 A redaction hook runs last on every attribute set; if it throws, only `blockchain.system`, `blockchain.chain.id`,
 `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
 `blockchain.tx.replacement.reason` and `error.type` are recorded.
-Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md).
+Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md). Neither `hashed` nor
+`off` hides the parties of a transaction: `blockchain.tx.hash` is always recorded and resolves to them on chain.
 The address mode also applies to addresses inside `blockchain.tx.revert.reason`, `error.type` and sanitized error
 messages (`<address>` in `off` mode). The redaction hook also runs on `error.type` and on `exception` event
 attributes; if it throws, only `exception.type` is kept on the event.

@@ -79,6 +79,20 @@ on confirmation, status, block number, gas used, effective gas price, L1 fee, to
 calldata arguments are never recorded by the core, and error messages only with `errorMessages`. Attribute definitions:
 [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/main/docs/semconv.md).
 
+## Privacy notes
+
+- **Address modes are not anonymity.** `address: 'off'` and `'hashed'` keep addresses out of your telemetry
+  backend. They do not hide who transacted: every span carries the transaction hash, and anyone can look up its
+  sender, recipient, value and calldata in a block explorer. Use them to limit what your backend stores and who can
+  query it, not to make transactions untraceable.
+- **Agent identity in Baggage travels.** Baggage is propagated to every downstream service your instrumented clients
+  call when a Baggage propagator is configured (it is part of the default OpenTelemetry SDK setup), including third
+  party APIs. Put only identifiers there that may leave your system, such as an opaque agent id. For identifiers
+  that must stay internal, use the tracker's static `agent` option instead, which is recorded on spans but never
+  propagated, or strip the entries before outbound calls.
+- The redaction hook (`redact`) runs last on every attribute set and on exception attributes; use it for anything
+  else your policy forbids.
+
 ## License
 
 Apache-2.0

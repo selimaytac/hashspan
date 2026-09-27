@@ -30,7 +30,9 @@ invoke_agent treasury-bot
 - **Real cost.** Fees include the L1 data fee on OP-stack chains such as Base.
 - **Small footprint.** The only peer dependency is `@opentelemetry/api`. It never signs or broadcasts transactions.
 - **Privacy by design.** Calldata arguments and error messages are opt-in, and addresses can be hashed or dropped
-  ([ADR 0004](docs/adr/0004-privacy-defaults.md), [ADR 0006](docs/adr/0006-error-privacy.md)).
+  ([ADR 0004](docs/adr/0004-privacy-defaults.md), [ADR 0006](docs/adr/0006-error-privacy.md)). This limits what
+  your backend stores; it is not anonymity, since the transaction hash resolves to the parties on chain
+  ([privacy notes](packages/core#privacy-notes)).
 
 ## Packages
 
