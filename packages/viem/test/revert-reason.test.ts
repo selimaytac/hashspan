@@ -101,3 +101,30 @@ describe('revert reason', () => {
     expect(calls).not.toContain('eth_getTransactionByHash');
   });
 });
+
+describe('revert reason replay timeout', () => {
+  it('ends the confirm span without a reason when the provider does not answer the replay', async () => {
+    const { transport } = mockTransport({
+      receipt: { status: '0x0' },
+      hangOn: ['eth_getTransactionByHash'],
+    });
+    const reader = createPublicClient({ chain: base, transport }).extend(
+      withHashspan({ decodeRevertReason: { timeoutMs: 50 } }),
+    );
+
+    await reader.waitForTransactionReceipt({ hash: HASH });
+    await vi.waitFor(() => expect(tracing.spans()).toHaveLength(1), { timeout: 1_000 });
+    const [confirm] = tracing.spans();
+    expect(confirm?.attributes['blockchain.tx.status']).toBe('reverted');
+    expect(confirm?.attributes['blockchain.tx.revert.reason']).toBeUndefined();
+  });
+
+  it('still records the reason when the replay answers in time', async () => {
+    const reader = createPublicClient({
+      chain: base,
+      transport: reverted(errorString('boom')).transport,
+    }).extend(withHashspan({ decodeRevertReason: { timeoutMs: 5_000 } }));
+    await reader.waitForTransactionReceipt({ hash: HASH });
+    expect(await confirmReason()).toBe('boom');
+  });
+});

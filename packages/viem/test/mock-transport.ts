@@ -11,6 +11,8 @@ export interface MockOptions {
   /** Receipt fields merged into the default successful receipt; `null` means "not mined yet". */
   receipt?: Record<string, unknown> | null;
   sendError?: { code: number; message: string };
+  /** Methods that never answer, like an unresponsive provider. */
+  hangOn?: string[];
   /** Delays the answer to `eth_sendTransaction`. */
   sendDelayMs?: number;
   /** Revert data returned by `eth_call`; the call succeeds when undefined. */
@@ -28,6 +30,7 @@ export function mockTransport(options: MockOptions = {}) {
   const transport = custom({
     async request({ method }: { method: string; params?: unknown }) {
       calls.push(method);
+      if (options.hangOn?.includes(method)) return new Promise(() => {});
       switch (method) {
         case 'eth_chainId':
           return options.chainId ? options.chainId() : (options.chainIdHex ?? '0x2105');
