@@ -16,6 +16,8 @@ invoke_agent                       gen_ai.agent.name=treasury-agent
                                    blockchain.tx.revert.reason=WithdrawalLimitExceeded(100000000000000000, 1000000000000000000)
 ```
 
+![The example agent's trace in Jaeger](../../docs/images/jaeger-trace.png)
+
 It runs offline and needs no API key: a scripted model makes the tool calls, and the transactions go to a local
 Anvil chain.
 

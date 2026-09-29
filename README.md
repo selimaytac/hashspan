@@ -16,12 +16,10 @@ mined, reverted, or what it cost lives somewhere else. hashspan closes that gap:
 `send` / `confirm` span pair **inside the agent's own trace**, with status, gas, L2 fees and the agent identity
 attached, and it's exported to the backend you already use (Jaeger, Grafana Tempo, Langfuse, Honeycomb, ...).
 
-```
-invoke_agent treasury-bot
-└─ execute_tool transfer_usdc
-   ├─ send 8453        blockchain.tx.hash=0x9f…  blockchain.contract.function.name=transfer
-   └─ confirm 8453     blockchain.tx.status=success  blockchain.tx.fee=41730000000000  ↪ link: send
-```
+![An AI SDK agent run in Jaeger: each tool call contains the send and confirm spans of its transaction, and the reverted withdrawal is marked as an error](docs/images/jaeger-trace.png)
+
+<sub>The [example agent](examples/ai-sdk-agent) in Jaeger: a vendor payment and a withdrawal that reverts with a
+decoded custom error.</sub>
 
 ## Why
 

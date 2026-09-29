@@ -12,7 +12,7 @@
   - [x] Opt-in recording of contract call arguments
 - [ ] **M4** Example agent, Jaeger quick start, README
   - [x] AI SDK agent example on Anvil, runnable without an API key, tested in CI (`make demo`)
-  - [ ] Trace screenshot in the README
+  - [x] Trace screenshot in the README
   - [ ] Base Sepolia run of the example
 - [ ] **M5** First release to npm with provenance, good first issues
   (verify that `changeset publish` via pnpm completes an OIDC trusted publish; otherwise publish with npm ≥ 11.5.1;

@@ -32,11 +32,15 @@ export const wallet = createWalletClient({
   account: TREASURY,
   chain: anvil,
   transport: http(RPC_URL),
+  // Anvil mines instantly; viem would otherwise poll for receipts every 4 s.
+  pollingInterval: 250,
 }).extend(hashspan);
 
-export const reader = createPublicClient({ chain: anvil, transport: http(RPC_URL) }).extend(
-  hashspan,
-);
+export const reader = createPublicClient({
+  chain: anvil,
+  transport: http(RPC_URL),
+  pollingInterval: 250,
+}).extend(hashspan);
 
 /** Runtime bytecode that stores `payload` in memory and reverts with it. */
 function revertingWith(payload: Hex): Hex {
