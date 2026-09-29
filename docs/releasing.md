@@ -1,6 +1,6 @@
 # Releasing
 
-Releases are cut from `main` by the [Release workflow](../.github/workflows/release.yml), using
+Releases are cut from `main`, and only from `main`, by the [Release workflow](../.github/workflows/release.yml), using
 [Changesets](https://github.com/changesets/changesets). Packages are published to npm with
 [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/): GitHub Actions authenticates with a short-lived
 OIDC token, npm adds a provenance attestation, and no npm token exists anywhere. `@hashspan/*` packages are versioned
@@ -42,22 +42,27 @@ JSON
 done
 ```
 
-**2. Trust the Release workflow.** For each package, allow publishing from this repository's `release.yml`:
+**2. Restrict releases to `main`.** Create a GitHub environment named `npm` (Settings, Environments) with
+deployment branches limited to `main`. The release job runs in that environment, so GitHub refuses to run it from any
+other branch, even if the workflow file is changed there.
+
+**3. Trust the Release workflow.** For each package, allow publishing from this repository's `release.yml` in the
+`npm` environment:
 
 ```sh
-npm trust github @hashspan/core --repo selimaytac/hashspan --file release.yml --allow-publish
-npm trust github @hashspan/viem --repo selimaytac/hashspan --file release.yml --allow-publish
+npm trust github @hashspan/core --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
+npm trust github @hashspan/viem --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust list @hashspan/core
 npm logout
 ```
 
 The same can be done on npmjs.com (package, Settings, Trusted publisher). Allow `npm publish`, not only staged
-publishing, and leave the environment empty.
+publishing, and set the environment to `npm`: npm then rejects publishes from any other environment.
 
-**3. Lock down tokens.** On npmjs.com, set each package's publishing access to require two-factor authentication and
+**4. Lock down tokens.** On npmjs.com, set each package's publishing access to require two-factor authentication and
 disallow tokens, so the trusted publisher is the only way to publish.
 
-**4. Let the workflow open the version pull request.** In the repository settings (Actions, General, Workflow
+**5. Let the workflow open the version pull request.** In the repository settings (Actions, General, Workflow
 permissions), enable "Allow GitHub Actions to create and approve pull requests".
 
 After the first real release, deprecate the placeholders:

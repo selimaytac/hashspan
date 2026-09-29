@@ -19,6 +19,10 @@ jobs:
 
   release:
     needs: ci
+    # Releases come from main only. The environment enforces it on GitHub's side (deployment branches: main), where a
+    # change to this file on another branch cannot lift it, and npm only trusts publishes from this environment.
+    if: github.ref == 'refs/heads/main'
+    environment: npm
     runs-on: ubuntu-latest
     permissions:
       contents: write
