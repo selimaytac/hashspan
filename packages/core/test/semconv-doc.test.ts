@@ -6,7 +6,9 @@ const doc = readFileSync(new URL('../../../docs/semconv.md', import.meta.url), '
 
 /** Attribute names from the first column of the attribute table in docs/semconv.md. */
 const documented = new Set(
-  [...doc.matchAll(/^\| `([a-z_]+(?:\.[a-z0-9_]+)+)` \| (?:string|int) \|/gm)].map((m) => m[1]),
+  [...doc.matchAll(/^\| `([a-z_]+(?:\.[a-z0-9_]+)+)` \| (?:string|int) \|/gm)].map(
+    (m) => m[1] as string,
+  ),
 );
 const exported = (prefix: string) =>
   Object.entries(core)
@@ -31,7 +33,7 @@ describe('docs/semconv.md', () => {
   it('lists exactly the exported values of blockchain.tx.status', () => {
     const row = doc.split('\n').find((line) => line.startsWith('| `blockchain.tx.status` |'));
     // Values are the backticked words without a dot; the cells use escaped pipes (\|) as separators.
-    const listed = [...(row ?? '').matchAll(/`([a-z_]+)`/g)].map((m) => m[1]);
+    const listed = [...(row ?? '').matchAll(/`([a-z_]+)`/g)].map((m) => m[1] as string);
     expect(listed.sort()).toEqual(exported('BLOCKCHAIN_TX_STATUS_VALUE_').sort());
   });
 });
