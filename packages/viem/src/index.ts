@@ -517,6 +517,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
               ...sendInput(args, args.address, chainId),
               functionName: args.functionName,
               functionSelector,
+              functionArguments: args.args,
             };
           },
           () => writeContract(args),

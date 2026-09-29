@@ -143,6 +143,26 @@ describe('writeContract', () => {
       'blockchain.contract.function.name': 'transfer',
       'blockchain.contract.function.selector': '0xa9059cbb',
     });
+    expect(
+      tracing.spanNamed('send 8453').attributes['blockchain.contract.function.arguments'],
+    ).toBeUndefined();
+  });
+
+  it('records the call arguments when enabled', async () => {
+    const { transport } = mockTransport();
+    const wallet = createWalletClient({ account: FROM, chain: base, transport }).extend(
+      withHashspan({ recordFunctionArguments: true }),
+    );
+    await wallet.writeContract({
+      address: TO,
+      abi: erc20,
+      functionName: 'transfer',
+      args: [FROM, 1n],
+    });
+
+    expect(
+      tracing.spanNamed('send 8453').attributes['blockchain.contract.function.arguments'],
+    ).toBe(`["${FROM}","1"]`);
   });
 });
 

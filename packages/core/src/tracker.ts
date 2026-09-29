@@ -15,6 +15,7 @@ import { agentAttributes } from './agent.js';
 import {
   ATTR_BLOCKCHAIN_BLOCK_NUMBER,
   ATTR_BLOCKCHAIN_CHAIN_ID,
+  ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR,
   ATTR_BLOCKCHAIN_OPERATION_NAME,
@@ -53,6 +54,7 @@ import {
   resolveAddressFormatter,
   resolveErrorMessageMode,
   sanitizeErrorMessage,
+  serializeFunctionArguments,
 } from './privacy.js';
 import type {
   ConfirmHandle,
@@ -274,6 +276,16 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     }
     if (input.functionSelector !== undefined) {
       attributes[ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR] = input.functionSelector;
+    }
+    if (options.recordFunctionArguments === true && input.functionArguments !== undefined) {
+      try {
+        attributes[ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS] = serializeFunctionArguments(
+          input.functionArguments,
+          formatAddress,
+        );
+      } catch (error) {
+        diag.debug(`hashspan: could not serialize function arguments (${errorType(error)})`);
+      }
     }
 
     const span = getTracer().startSpan(

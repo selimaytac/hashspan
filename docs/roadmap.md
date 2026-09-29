@@ -9,7 +9,7 @@
 - [ ] **M3** Confirmation coverage and richer transaction data
   - [x] Background confirmation in the viem adapter (`confirm: { mode: 'background' }`)
   - [x] Revert reason decoding for mined reverts
-  - [ ] Opt-in recording of contract call arguments
+  - [x] Opt-in recording of contract call arguments
 - [ ] **M4** Example agent (Vercel AI SDK + viem) on Anvil and Base Sepolia, Jaeger quick start, README
 - [ ] **M5** First release to npm with provenance, good first issues
   (verify that `changeset publish` via pnpm completes an OIDC trusted publish; otherwise publish with npm ≥ 11.5.1;

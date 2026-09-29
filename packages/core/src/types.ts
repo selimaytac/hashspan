@@ -36,6 +36,12 @@ export interface TxTrackerOptions {
    * attributes.
    */
   errorMessages?: ErrorMessageMode | undefined;
+  /**
+   * Record decoded contract call arguments ({@link SendInput.functionArguments}) as
+   * `blockchain.contract.function.arguments`. Default: false. Arguments can carry amounts, counterparties and free
+   * text; addresses in them follow the address mode and the redaction hook runs on them.
+   */
+  recordFunctionArguments?: boolean | undefined;
   /** Fallback agent identity. Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` take precedence. */
   agent?: AgentIdentity | undefined;
   /**
@@ -60,6 +66,8 @@ export interface SendInput {
   functionName?: string | undefined;
   /** 4-byte function selector, e.g. `0xa9059cbb`. */
   functionSelector?: string | undefined;
+  /** Decoded call arguments; recorded only with the `recordFunctionArguments` tracker option. */
+  functionArguments?: readonly unknown[] | undefined;
   /**
    * When the send started, for adapters that record it after the fact (docs/adr/0009). Omit it otherwise: with an
    * explicit start time, the SDK measures the span by the wall clock, so pass the end time to the handle too.
