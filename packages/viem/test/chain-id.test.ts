@@ -20,14 +20,15 @@ const toMs = (t: [number, number] | undefined) => (t ? t[0] * 1e3 + t[1] / 1e6 :
 const later = <T>(ms: number, value: T) =>
   new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
 
-/** Fails the test on any unhandled rejection raised while `run` executes (and shortly after). */
+/** Fails the test on any unhandled rejection raised while `run` executes. */
 async function withoutUnhandledRejections(run: () => Promise<void>): Promise<void> {
   const rejections: unknown[] = [];
   const onRejection = (reason: unknown) => rejections.push(reason);
   process.on('unhandledRejection', onRejection);
   try {
     await run();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Unhandled rejections are reported once the microtask queue has drained; callers flush pending work.
+    await new Promise((resolve) => setImmediate(resolve));
   } finally {
     process.off('unhandledRejection', onRejection);
   }
@@ -81,8 +82,11 @@ describe('clients without a chain', () => {
     await vi.waitFor(() => expect(tracing.spans()).toHaveLength(1));
 
     const [send] = tracing.spans();
-    expect(Math.abs(toMs(send?.startTime) - started)).toBeLessThan(20);
-    expect(Math.abs(toMs(send?.endTime) - settled)).toBeLessThan(20);
+    // The chain id arrives 150 ms after the call settled: the span must use the call's times, not that moment.
+    expect(toMs(send?.startTime)).toBeGreaterThanOrEqual(started - 1);
+    expect(toMs(send?.startTime)).toBeLessThan(started + 75);
+    expect(toMs(send?.endTime)).toBeGreaterThanOrEqual(settled - 75);
+    expect(toMs(send?.endTime)).toBeLessThan(settled + 75);
     expect(send?.attributes['blockchain.tx.hash']).toBe(HASH);
   });
 
@@ -175,6 +179,7 @@ describe('clients with a chain', () => {
     }).extend(withHashspan());
     await wallet.sendTransaction({ to: TO });
     // Reads an SDK internal: with an explicit start time, the SDK ends spans by the wall clock.
+    // Reads an SDK internal (sdk-trace-base Span): with a start time passed in, the SDK measures by the wall clock.
     const span = tracing.spanNamed('send 8453') as unknown as { _startTimeProvided?: boolean };
     expect(span._startTimeProvided).toBe(false);
   });

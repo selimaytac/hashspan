@@ -263,14 +263,15 @@ describe('robustness', () => {
     };
   };
 
-  /** Fails the test on any unhandled rejection raised while `run` executes (and shortly after). */
+  /** Fails the test on any unhandled rejection raised while `run` executes. */
   const withoutUnhandledRejections = async (run: () => Promise<void>): Promise<void> => {
     const rejections: unknown[] = [];
     const onRejection = (reason: unknown) => rejections.push(reason);
     process.on('unhandledRejection', onRejection);
     try {
       await run();
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Unhandled rejections are reported once the microtask queue has drained; callers flush pending work.
+      await new Promise((resolve) => setImmediate(resolve));
     } finally {
       process.off('unhandledRejection', onRejection);
     }
@@ -302,12 +303,14 @@ describe('robustness', () => {
 
   it('returns the receipt when the tracker throws while recording it', async () => {
     vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const hashspan = withHashspan({ tracker: throwingHandles() });
     const reader = createPublicClient({ chain: base, transport: mockTransport().transport }).extend(
-      withHashspan({ tracker: throwingHandles() }),
+      hashspan,
     );
     await withoutUnhandledRejections(async () => {
       const receipt = await reader.waitForTransactionReceipt({ hash: HASH });
       expect(receipt.transactionHash).toBe(HASH);
+      await hashspan.flush();
     });
   });
 
@@ -328,21 +331,22 @@ describe('robustness', () => {
     vi.spyOn(diag, 'error').mockImplementation(() => {});
     await withoutUnhandledRejections(async () => {
       // Timeout of a background confirmation.
+      const background = withHashspan({
+        tracker: throwingHandles(),
+        confirm: { mode: 'background', timeoutMs: 30 },
+      });
       const wallet = createWalletClient({
         account: FROM,
         chain: base,
         transport: mockTransport({ receipt: null }).transport,
         pollingInterval: 10,
-      }).extend(
-        withHashspan({
-          tracker: throwingHandles(),
-          confirm: { mode: 'background', timeoutMs: 30 },
-        }),
-      );
+      }).extend(background);
       await wallet.sendTransaction({ to: TO });
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Waits for the background confirmation to time out.
+      await background.flush();
 
       // Failure of the caller's own wait.
+      const failing = withHashspan({ tracker: throwingHandles() });
       const { transport } = mockTransport();
       const reader = createPublicClient({
         chain: base,
@@ -357,10 +361,11 @@ describe('robustness', () => {
           };
         },
         pollingInterval: 10,
-      }).extend(withHashspan({ tracker: throwingHandles() }));
+      }).extend(failing);
       await expect(
         reader.waitForTransactionReceipt({ hash: HASH, retryCount: 0 }),
       ).rejects.toThrow();
+      await failing.flush();
     });
   });
 

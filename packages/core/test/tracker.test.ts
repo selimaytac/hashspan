@@ -779,6 +779,7 @@ describe('replaced transactions', () => {
   it('keeps the monotonic clock for spans that are not replacements', () => {
     createTxTracker().startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
     // Reads an SDK internal: with an explicit start time, the SDK ends spans by the wall clock.
+    // Reads an SDK internal (sdk-trace-base Span): with a start time passed in, the SDK measures by the wall clock.
     const span = confirmOf(HASH)[0] as unknown as { _startTimeProvided?: boolean };
     expect(span._startTimeProvided).toBe(false);
   });
