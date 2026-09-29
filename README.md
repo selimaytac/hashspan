@@ -89,7 +89,7 @@ make lab-nuke    # remove containers, images, tools and build output
 ## Documentation
 
 - [Architecture](docs/architecture.md) · [Semantic conventions](docs/semconv.md) · [ADRs](docs/adr/) · [Roadmap](docs/roadmap.md)
-- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Releasing](docs/releasing.md)
 
 ## License
 
