@@ -6,10 +6,13 @@ hashspan turns every transaction an agent sends into spans, keyed by the transac
 own OpenTelemetry trace.
 
 [![CI](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml/badge.svg)](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml)
+[![npm @hashspan/core](https://img.shields.io/npm/v/@hashspan/core?label=%40hashspan%2Fcore)](https://www.npmjs.com/package/@hashspan/core)
+[![npm @hashspan/viem](https://img.shields.io/npm/v/@hashspan/viem?label=%40hashspan%2Fviem)](https://www.npmjs.com/package/@hashspan/viem)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: pre-release.** The design is settled ([ADRs](docs/adr/)); the implementation is in progress; see the
-> [roadmap](docs/roadmap.md). Feedback on the [attribute schema](docs/semconv.md) is very welcome.
+> **Status: early (0.x).** Published with npm provenance; span and attribute names are still marked `development`
+> ([semantic conventions](docs/semconv.md)) and may change in minor releases. Feedback on the schema is very welcome;
+> see the [roadmap](docs/roadmap.md).
 
 When an AI agent sends a transaction, the agent trace usually stops at the tool call. Whether the transaction was
 mined, reverted, or what it cost lives somewhere else. hashspan closes that gap: each transaction becomes a
@@ -37,12 +40,16 @@ decoded custom error.</sub>
 
 | Package | Purpose | Status |
 |---|---|---|
-| `@hashspan/core` | Transaction lifecycle tracker | in progress |
-| `@hashspan/viem` | Adapter for [viem](https://viem.sh) clients | in progress |
+| [`@hashspan/core`](packages/core) | Transaction lifecycle tracker | released |
+| [`@hashspan/viem`](packages/viem) | Adapter for [viem](https://viem.sh) clients | released |
 | `@hashspan/cdp` | Adapter for Coinbase CDP wallets | planned (v0.2) |
 | `@hashspan/x402` | Adapter for x402 payments | planned (v0.2) |
 
 ## Quick start
+
+```sh
+npm install @hashspan/viem @opentelemetry/api viem
+```
 
 ```ts
 import { createPublicClient, createWalletClient, http } from 'viem';

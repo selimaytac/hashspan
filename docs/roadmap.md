@@ -21,7 +21,7 @@
   - [ ] Base Sepolia run of the example
 - [ ] **M5** First release to npm with provenance, good first issues
   - [x] Packages checked with publint and arethetypeswrong in CI; release process in [docs/releasing.md](releasing.md)
-  - [ ] One-time setup (placeholders, trusted publishers) and the first release
+  - [x] One-time setup (placeholders, trusted publishers) and the first release: 0.1.0, published with provenance
   - [ ] Good first issues
 
 ## v0.2: More send paths
