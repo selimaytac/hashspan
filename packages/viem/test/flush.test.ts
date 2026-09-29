@@ -74,4 +74,20 @@ describe('flush', () => {
     await expect(hashspan.flush({ timeoutMs: 50 })).resolves.toBe(false);
     expect(Date.now() - started).toBeLessThan(500);
   });
+
+  it('exports a pending background confirmation as timeout when the flush times out', async () => {
+    const hashspan = withHashspan({ confirm: { mode: 'background', timeoutMs: 500 } });
+    const wallet = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: mockTransport({ receipt: null }).transport,
+      pollingInterval: 10,
+    }).extend(hashspan);
+
+    await wallet.sendTransaction({ to: TO });
+    await expect(hashspan.flush({ timeoutMs: 50 })).resolves.toBe(false);
+    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.status']).toBe('timeout');
+    // The abandoned work no longer counts as pending.
+    await expect(hashspan.flush({ timeoutMs: 50 })).resolves.toBe(true);
+  });
 });
