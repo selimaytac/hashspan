@@ -258,6 +258,8 @@ describe('on Anvil', () => {
     try {
       const hash = await wallet.sendTransaction({ to: RECIPIENT, value: 1n });
       const wait = wallet.waitForTransactionReceipt({ hash, timeout: 5_000 });
+      // Sequencing, not an assertion: lets the 200 ms background confirmation time out before the block is mined.
+      // flush() cannot be used here, as a timed-out flush would also end the caller's own wait.
       await new Promise((resolve) => setTimeout(resolve, 500));
       await rpc('evm_mine');
       await expect(wait).resolves.toMatchObject({ transactionHash: hash, status: 'success' });
@@ -268,21 +270,23 @@ describe('on Anvil', () => {
 
   it('records one confirm span when two extensions share a tracker', async () => {
     const tracker = createTxTracker();
+    const sending = withHashspan({ tracker, confirm: { mode: 'background', timeoutMs: 5_000 } });
+    const reading = withHashspan({ tracker });
     const wallet = createWalletClient({
       account,
       chain: anvil,
       transport: http(RPC_URL),
       pollingInterval: 50,
-    }).extend(withHashspan({ tracker, confirm: { mode: 'background', timeoutMs: 5_000 } }));
+    }).extend(sending);
     const reader = createPublicClient({
       chain: anvil,
       transport: http(RPC_URL),
       pollingInterval: 50,
-    }).extend(withHashspan({ tracker }));
+    }).extend(reading);
 
     const hash = await wallet.sendTransaction({ to: RECIPIENT, value: 1n });
     await reader.waitForTransactionReceipt({ hash });
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await Promise.all([sending.flush(), reading.flush()]);
 
     const confirms = tracing.spans().filter((s) => s.name === 'confirm 31337');
     expect(confirms).toHaveLength(1);
@@ -360,6 +364,31 @@ describe('replaced transactions on Anvil', () => {
   const HIGH_FEE = { maxFeePerGas: parseGwei('20'), maxPriorityFeePerGas: parseGwei('10') };
   const reader = () =>
     createPublicClient({ chain: anvil, transport: http(RPC_URL), pollingInterval: 50 });
+  /**
+   * An HTTP transport that reports when viem has fetched a transaction. viem can only detect a replacement once it
+   * has seen the original transaction, so tests replace it after that instead of after a fixed delay.
+   */
+  const watched = () => {
+    const seen = new Set<string>();
+    const waiters: { hash: string; resolve: () => void }[] = [];
+    const transport = http(RPC_URL, {
+      onFetchRequest: async (request) => {
+        const body: unknown = JSON.parse(await request.clone().text());
+        for (const call of Array.isArray(body) ? body : [body]) {
+          const { method, params } = call as { method: string; params?: unknown[] };
+          if (method !== 'eth_getTransactionByHash') continue;
+          const hash = String(params?.[0]).toLowerCase();
+          seen.add(hash);
+          for (const waiter of waiters.filter((w) => w.hash === hash)) waiter.resolve();
+        }
+      },
+    });
+    const fetched = (hash: string): Promise<void> =>
+      seen.has(hash.toLowerCase())
+        ? Promise.resolve()
+        : new Promise((resolve) => waiters.push({ hash: hash.toLowerCase(), resolve }));
+    return { transport, fetched };
+  };
   const rpc = (method: string, params: unknown[] = []) =>
     reader().request({ method: method as never, params: params as never });
   const pendingNonce = () =>
@@ -384,7 +413,10 @@ describe('replaced transactions on Anvil', () => {
     const wallet = createWalletClient({ account, chain: anvil, transport: http(RPC_URL) }).extend(
       hashspan,
     );
-    const client = reader().extend(hashspan);
+    const { transport, fetched } = watched();
+    const client = createPublicClient({ chain: anvil, transport, pollingInterval: 50 }).extend(
+      hashspan,
+    );
 
     await withoutAutomine(async () => {
       const nonce = await pendingNonce();
@@ -395,7 +427,7 @@ describe('replaced transactions on Anvil', () => {
         ...LOW_FEE,
       });
       const wait = client.waitForTransactionReceipt({ hash: original });
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await fetched(original);
       const replacing = await wallet.sendTransaction({
         to: RECIPIENT,
         value: 1n,
@@ -430,12 +462,14 @@ describe('replaced transactions on Anvil', () => {
   });
 
   it('records a cancellation found by background confirmation once', async () => {
+    const hashspan = withHashspan({ confirm: { mode: 'background', timeoutMs: 10_000 } });
+    const { transport, fetched } = watched();
     const wallet = createWalletClient({
       account,
       chain: anvil,
-      transport: http(RPC_URL),
+      transport,
       pollingInterval: 50,
-    }).extend(withHashspan({ confirm: { mode: 'background', timeoutMs: 10_000 } }));
+    }).extend(hashspan);
 
     await withoutAutomine(async () => {
       const nonce = await pendingNonce();
@@ -445,7 +479,7 @@ describe('replaced transactions on Anvil', () => {
         nonce,
         ...LOW_FEE,
       });
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await fetched(original);
       const cancel = await wallet.sendTransaction({ to: account, value: 0n, nonce, ...HIGH_FEE });
       await rpc('evm_mine');
 
@@ -456,7 +490,7 @@ describe('replaced transactions on Anvil', () => {
         },
         { timeout: 10_000 },
       );
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await hashspan.flush();
       expect(confirmOf(original)[0]?.attributes['blockchain.tx.replacement.reason']).toBe(
         'cancelled',
       );
@@ -469,7 +503,10 @@ describe('replaced transactions on Anvil', () => {
     const wallet = createWalletClient({ account, chain: anvil, transport: http(RPC_URL) }).extend(
       hashspan,
     );
-    const client = reader().extend(hashspan);
+    const { transport, fetched } = watched();
+    const client = createPublicClient({ chain: anvil, transport, pollingInterval: 50 }).extend(
+      hashspan,
+    );
 
     await withoutAutomine(async () => {
       const nonce = await pendingNonce();
@@ -483,7 +520,7 @@ describe('replaced transactions on Anvil', () => {
         ...LOW_FEE,
       });
       const wait = client.waitForTransactionReceipt({ hash: original });
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await fetched(original);
       // Same contract, different call data: viem reports `replaced`.
       const replacing = await wallet.sendTransaction({
         to: REVERT_WITH_CUSTOM_ERROR,

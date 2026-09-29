@@ -51,14 +51,15 @@ const confirmOf = (hash: string) =>
     .spans()
     .find((s) => s.name === 'confirm 8453' && s.attributes['blockchain.tx.hash'] === hash);
 
-/** Fails the test on any unhandled rejection raised while `run` executes (and shortly after). */
+/** Fails the test on any unhandled rejection raised while `run` executes. */
 async function withoutUnhandledRejections(run: () => Promise<void>): Promise<void> {
   const rejections: unknown[] = [];
   const onRejection = (reason: unknown) => rejections.push(reason);
   process.on('unhandledRejection', onRejection);
   try {
     await run();
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Unhandled rejections are reported once the microtask queue has drained; callers flush pending work.
+    await new Promise((resolve) => setImmediate(resolve));
   } finally {
     process.off('unhandledRejection', onRejection);
   }
