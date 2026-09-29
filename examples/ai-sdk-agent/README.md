@@ -30,6 +30,9 @@ make lab-up   # Jaeger UI on http://localhost:16686
 make demo     # starts a local chain, runs the agent, stops the chain
 ```
 
+`make demo` needs port 8545 to be free: it starts its own chain there and fails if something already listens on it
+(such as a running `make anvil`).
+
 Open Jaeger, pick the service `treasury-agent` and open the trace. To print spans instead, run
 `OTEL_TRACES_EXPORTER=console make demo`.
 
