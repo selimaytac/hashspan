@@ -2,6 +2,13 @@ name: Feature request
 description: Suggest a new capability or integration
 labels: [enhancement]
 body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you open this issue
+      options:
+        - label: I searched the [existing issues, open and closed](https://github.com/selimaytac/hashspan/issues?q=is%3Aissue) and the [roadmap](https://github.com/selimaytac/hashspan/blob/main/docs/roadmap.md), and this is not covered yet.
+          required: true
   - type: textarea
     id: problem
     attributes:
@@ -16,3 +23,9 @@ body:
     id: alternatives
     attributes:
       label: Alternatives considered
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to work on this myself.
