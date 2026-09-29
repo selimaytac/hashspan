@@ -107,7 +107,7 @@ describe('scripts/demo.sh', () => {
 
   it('fails when Anvil exits and something else answers on the port', async () => {
     const port = await freePort();
-    // Hands the port to another process that lives for 3 s, then exits: the port looks ready, Anvil is gone.
+    // Like an Anvil that cannot bind: another process answers on the port, and the stand-in exits.
     const impostor = fakeAnvil(
       `node -e 'const a = process.argv; require("node:net").createServer().listen(Number(a[a.indexOf("--port") + 1]), "127.0.0.1"); setTimeout(() => process.exit(0), 3000)' -- "$@" >/dev/null 2>&1 &\nsleep 0.5\nexit 0`,
     );
@@ -118,9 +118,9 @@ describe('scripts/demo.sh', () => {
 
   it('runs the demo against the new chain, passes its exit status on and stops the chain', async () => {
     const port = await freePort();
-    // Listens on the --port it is given, like Anvil.
+    // Listens on the --port it is given and announces it, like Anvil.
     const listener = fakeAnvil(
-      `exec node -e 'const a = process.argv; require("node:net").createServer().listen(Number(a[a.indexOf("--port") + 1]), "127.0.0.1")' -- "$@"`,
+      `exec node -e 'const a = process.argv; const port = Number(a[a.indexOf("--port") + 1]); require("node:net").createServer().listen(port, "127.0.0.1", () => console.log("Listening on 127.0.0.1:" + port))' -- "$@"`,
     );
     const demo = executable(
       'demo',
