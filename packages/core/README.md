@@ -17,7 +17,9 @@ The core is library-agnostic and read-only: it never signs, sends or fetches any
 npm install @hashspan/core @opentelemetry/api
 ```
 
-`@opentelemetry/api` is the only peer dependency. Bring your own OpenTelemetry SDK and exporter.
+`@opentelemetry/api` is the only peer dependency. Bring your own OpenTelemetry SDK and exporter. Requires Node.js 22.3
+or later; in other runtimes, `hashed` address mode needs a custom `hash` function and otherwise records no addresses,
+with a `diag` warning.
 
 ## Usage
 
