@@ -46,7 +46,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: ./scripts/install-anvil.sh
-      - run: pnpm test:integration
+      - name: Unit and integration tests with coverage thresholds
+        run: pnpm test:coverage
 
   secrets:
     name: Secret scan

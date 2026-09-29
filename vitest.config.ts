@@ -9,6 +9,13 @@ export default defineConfig({
     },
   },
   test: {
+    coverage: {
+      provider: 'v8',
+      include: ['packages/*/src/**/*.ts'],
+      reporter: ['text-summary'],
+      // Just below the current numbers, so coverage cannot drop unnoticed.
+      thresholds: { lines: 98, statements: 97, branches: 92, functions: 94 },
+    },
     projects: [
       {
         extends: true,
