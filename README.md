@@ -47,6 +47,8 @@ decoded custom error.</sub>
 
 ## Quick start
 
+Requires Node.js 22.3 or later.
+
 ```sh
 npm install @hashspan/viem @opentelemetry/api viem
 ```
