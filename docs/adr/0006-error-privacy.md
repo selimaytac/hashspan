@@ -21,7 +21,8 @@ API keys.
   - `off` (default): `exception.type` only. `error.type` keeps identifying the failure class.
   - `sanitized`: plus `exception.message`, the first line of the message, with addresses written per address mode
     (`<address>` in `off` mode) and hex longer than 32 bytes (calldata, revert data) replaced by `<hex>`, capped at
-    256 characters. Best effort: other free text is kept.
+    256 characters. In `off` and `hashed` address mode, any hex longer than an address, including transaction
+    hashes, is replaced by `<hex>` (ADR 0004). Best effort: other free text is kept.
   - `raw`: plus the full message and `exception.stacktrace`, as thrown.
 - Error names are free text as well: `error.type` and `exception.type` follow the address mode and pass through
   the redaction hook.

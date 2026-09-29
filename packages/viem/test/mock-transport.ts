@@ -28,10 +28,12 @@ export interface MockOptions {
 /** EIP-1193 transport answering the handful of methods the adapter's code paths use. */
 export function mockTransport(options: MockOptions = {}) {
   const calls: string[] = [];
+  const requests: { method: string; params?: unknown }[] = [];
   let block = 0x7b;
   const transport = custom({
-    async request({ method }: { method: string; params?: unknown }) {
+    async request({ method, params }: { method: string; params?: unknown }) {
       calls.push(method);
+      requests.push({ method, params });
       if (options.hangOn?.includes(method)) return new Promise(() => {});
       switch (method) {
         case 'eth_chainId':
@@ -125,5 +127,5 @@ export function mockTransport(options: MockOptions = {}) {
       }
     },
   });
-  return { transport, calls };
+  return { transport, calls, requests };
 }

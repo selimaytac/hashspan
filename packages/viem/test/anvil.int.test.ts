@@ -6,6 +6,7 @@ import {
   createPublicClient,
   createWalletClient,
   encodeErrorResult,
+  encodeFunctionData,
   type Hex,
   http,
   parseAbi,
@@ -143,6 +144,51 @@ describe('on Anvil', () => {
     expect(
       tracing.spanNamed('send 31337').attributes['blockchain.contract.function.arguments'],
     ).toBe(`["${RECIPIENT}","1000000000000000000"]`);
+  });
+
+  it('records arguments without changing the calldata that is mined', async () => {
+    const payroll = parseAbi(['function pay((address to, uint256 amount) order)']);
+    const order = { to: RECIPIENT as Address, amount: 5n };
+    // toJSON() and the getter would change the amount if the instrumentation called them.
+    Object.defineProperty(order, 'toJSON', {
+      enumerable: false,
+      value: () => {
+        order.amount = 999n;
+        return 'mutated';
+      },
+    });
+    Object.defineProperty(order, 'audit', {
+      enumerable: true,
+      get: () => {
+        order.amount = 777n;
+        return 'audited';
+      },
+    });
+    const wallet = createWalletClient({ account, chain: anvil, transport: http(RPC_URL) }).extend(
+      withHashspan({ recordFunctionArguments: true }),
+    );
+
+    const hash = await wallet.writeContract({
+      address: TOKEN,
+      abi: payroll,
+      functionName: 'pay',
+      args: [order],
+    });
+
+    const mined = await createPublicClient({
+      chain: anvil,
+      transport: http(RPC_URL),
+    }).getTransaction({
+      hash,
+    });
+    expect(mined.input).toBe(
+      encodeFunctionData({
+        abi: payroll,
+        functionName: 'pay',
+        args: [{ to: RECIPIENT, amount: 5n }],
+      }),
+    );
+    expect(order.amount).toBe(5n);
   });
 
   it('keeps the sender out of a failed send span in off mode', async () => {

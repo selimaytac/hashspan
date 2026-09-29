@@ -11,7 +11,9 @@ Add `createTxTracker()`, the transaction lifecycle tracker:
 - address privacy modes (`raw`, `hashed`, `off`) and a fail-closed redaction hook, which also runs on exception
   attributes
 - decoded call arguments are recorded only with `recordFunctionArguments`, as a JSON array with addresses per
-  address mode
+  address mode, without calling `toJSON()` or getters
+- in `hashed` and `off` mode, hex values longer than an address are recorded as `<hex>`, so a padded or
+  ABI-encoded address cannot leak through arguments, revert reasons or error messages
 - error messages are kept out of spans by default; `errorMessages` records a sanitized first line or the full
   message and stack trace
 - optional `startTime` / `endTime` on every input and handle method, so integrations can record a call after the fact

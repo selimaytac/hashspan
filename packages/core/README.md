@@ -66,8 +66,8 @@ the instrumentation are reported through `diag` and never thrown into your code.
 |---|---|---|
 | `tracerProvider` | global provider | Tracer provider to use |
 | `address` | `'raw'` | `'raw'`, `'hashed'`, `'off'`, or `{ mode: 'hashed', hash: (address) => string }` |
-| `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, addresses per `address` mode, calldata removed) or `'raw'` (full message and stack trace) |
-| `recordFunctionArguments` | `false` | Record `functionArguments` as a JSON array in `blockchain.contract.function.arguments`: bigints as decimal strings, addresses per `address` mode, at most 4096 characters |
+| `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace) |
+| `recordFunctionArguments` | `false` | Record `functionArguments` as a JSON array in `blockchain.contract.function.arguments`: bigints as decimal strings, addresses per `address` mode (longer hex values become `<hex>` in `hashed` and `off` mode), at most 4096 characters. Reads only own enumerable data properties: `toJSON()` and getters are never called, so a `Date` records as `{}` |
 | `agent` | none | Fallback `{ id, name }`; Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` take precedence |
 | `redact` | none | `(attributes) => attributes`, runs last on every attribute set, including exception event attributes; if it throws, only non-sensitive identifiers are kept |
 | `linkTtlMs` | `600000` | How long a sent transaction can be linked from its confirmation |
