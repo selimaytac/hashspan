@@ -45,8 +45,9 @@ default it carries only `exception.type`; `exception.message` and `exception.sta
 `errorMessages` mode (`off` | `sanitized` | `raw`), and the span status description is the recorded
 `exception.message`, if any. See [ADR 0006](adr/0006-error-privacy.md).
 
-RPC calls made by adapters follow the OpenTelemetry [JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/rpc/json-rpc.md)
-(`rpc.system.name = "jsonrpc"`, `rpc.method` from an allowlist of `eth_*` methods).
+Planned (v0.2): RPC spans from a viem transport wrapper, following the OpenTelemetry [JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/rpc/json-rpc.md)
+(`rpc.system.name = "jsonrpc"`, `rpc.method` from an allowlist of `eth_*` methods). No RPC spans are emitted
+today.
 
 ## Attributes
 
