@@ -62,6 +62,19 @@ await reader.waitForTransactionReceipt({ hash });
 See [`@hashspan/viem`](packages/viem) for details and [`@hashspan/core`](packages/core) to instrument other send
 paths.
 
+## Try it
+
+A runnable AI SDK agent that pays a vendor and hits a reverting vault, traced end to end. It needs no API key and
+runs against a local chain:
+
+```sh
+nvm use && corepack enable pnpm && pnpm install
+make lab-up   # Jaeger UI on http://localhost:16686
+make demo
+```
+
+See [examples/ai-sdk-agent](examples/ai-sdk-agent).
+
 ## Local lab
 
 Everything runs locally and can be removed with one command:
@@ -69,6 +82,7 @@ Everything runs locally and can be removed with one command:
 ```sh
 make lab-up      # Jaeger UI on http://localhost:16686, OTLP on :4317/:4318
 make anvil       # local EVM chain on :8545 (project-local binary)
+make demo        # run the example agent against a fresh local chain
 make lab-pause   # stop, keep state
 make lab-nuke    # remove containers, images, tools and build output
 ```

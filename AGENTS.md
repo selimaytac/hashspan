@@ -14,7 +14,8 @@ OpenTelemetry tracing for on-chain transactions sent by AI agents: every transac
   - Tests import workspace packages from source (`vitest.config.ts` alias), so no build is needed first
 - Lint & format: `pnpm lint` / `pnpm format`
 - Typecheck: `pnpm typecheck` (builds the packages first, since adapters type-check against `@hashspan/core` output)
-- Local lab: `make lab-up` (Jaeger), `make anvil` (local chain), `make lab-pause`, `make lab-nuke`
+- Local lab: `make lab-up` (Jaeger), `make anvil` (local chain), `make demo` (example agent), `make lab-pause`,
+  `make lab-nuke`
 Run lint, typecheck and tests before proposing a change.
 
 ## Architecture
@@ -33,6 +34,8 @@ Run lint, typecheck and tests before proposing a change.
   - `src/revert-reason.ts` replays reverted transactions and decodes the revert data (ADR 0005)
   - `test/mock-transport.ts` EIP-1193 mock for unit tests; `test/*.int.test.ts` run against Anvil via prool
 - `examples/` → runnable agent integrations
+  - `ai-sdk-agent`: AI SDK agent with a scripted model (no API key), run by `make demo`; its
+    `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break
 - `docker/`, `scripts/`, `Makefile` → local lab
 See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and [docs/adr/](docs/adr/).
 

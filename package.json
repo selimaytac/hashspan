@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "pnpm -r --filter \"./packages/*\" build",
-    "typecheck": "pnpm build && pnpm -r --filter \"./packages/*\" typecheck",
+    "typecheck": "pnpm build && pnpm -r --filter \"./packages/*\" --filter \"./examples/*\" typecheck",
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "vitest run --project unit",
@@ -18,7 +18,8 @@
     "test:all": "vitest run",
     "changeset": "changeset",
     "release": "pnpm build && changeset publish",
-    "version-packages": "changeset version && node scripts/sync-version.mjs && pnpm install --lockfile-only"
+    "version-packages": "changeset version && node scripts/sync-version.mjs && pnpm install --lockfile-only",
+    "demo": "pnpm build && pnpm --filter @hashspan/example-ai-sdk-agent start"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

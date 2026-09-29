@@ -1,0 +1,30 @@
+{
+  "name": "@hashspan/example-ai-sdk-agent",
+  "private": true,
+  "description": "An AI SDK agent whose on-chain transactions are traced with hashspan.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ai-sdk/otel": "^1.0.122",
+    "@hashspan/core": "workspace:*",
+    "@hashspan/viem": "workspace:*",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
+    "@opentelemetry/resources": "^2.11.0",
+    "@opentelemetry/sdk-trace-base": "^2.11.0",
+    "@opentelemetry/sdk-trace-node": "^2.11.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "ai": "^7.0.122",
+    "viem": "^2.56.9",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "prool": "^0.2.16",
+    "tsx": "^4.23.15"
+  }
+}
