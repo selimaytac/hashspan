@@ -14,7 +14,7 @@ while removing the ability to look the address up in a block explorer.
 ## Decision
 
 - Addresses (`blockchain.tx.from`, `blockchain.tx.to`): mode `raw` (default) | `hashed` | `off`.
-- Decoded calldata arguments: **off** by default; opt-in per instrumentation. Recording them has no side effects:
+- Decoded calldata arguments: **off** by default; opt-in per instrumentation. Recording them has no side effects for ordinary values (the traps of a Proxy still run):
   only own enumerable data properties are read, never `toJSON()` or getters, so the value and the calldata a
   library encodes from it stay unchanged.
 - In `hashed` and `off` mode, hex values longer than an address (a padded `bytes32`, ABI-encoded `bytes`) are

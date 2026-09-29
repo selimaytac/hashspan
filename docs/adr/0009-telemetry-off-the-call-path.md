@@ -2,6 +2,8 @@
 
 - Status: accepted
 - Date: 2026-09-28
+- Clarified: 2026-09-29: "telemetry work" means work that is awaited. When everything a span needs is known up
+  front, the adapter starts the span synchronously as the call starts, as before; it never awaits anything first.
 
 ## Context
 

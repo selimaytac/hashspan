@@ -57,7 +57,9 @@ await provider.shutdown();
 `flush()` resolves `true` when all pending work finished and `false` on timeout; it never rejects, and it keeps the
 process alive while it waits. On timeout, confirm spans still waiting are ended and exported: with the receipt if
 only the revert reason was still pending, otherwise with status `timeout`. Background confirmations keep polling
-until their own `timeoutMs`, so short-lived processes should keep that short. Long-running services do not need
+until their own `timeoutMs`, so short-lived processes should keep that short. The timeout also ends the spans of
+your own `waitForTransactionReceipt` calls that are still waiting, and a receipt they return later is not recorded:
+call `flush()` only when the process is shutting down. Long-running services do not need
 `flush()`.
 
 ## Revert reasons

@@ -104,8 +104,9 @@ class ArgumentsLimitReached extends Error {}
  * Call arguments as a JSON array: bigints as decimal strings, addresses per address mode (see
  * {@link formatAddressesIn}), at most `MAX_ARGUMENTS_LENGTH` characters followed by `...`.
  *
- * Side-effect free: it reads only own enumerable data properties and never calls `toJSON()` or getters (so a `Date`
- * records as `{}`). It stops after the value that crosses the length limit instead of walking the rest. Functions, symbols and `undefined` are skipped in objects and written as `null` in arrays, as in
+ * Side-effect free for ordinary values: it reads only own enumerable data properties and never calls `toJSON()` or
+ * getters (so a `Date` records as `{}`). A Proxy's traps still run, as for any property read; use the redaction
+ * hook, or leave arguments off, for values that are Proxies. It stops after the value that crosses the length limit instead of walking the rest. Functions, symbols and `undefined` are skipped in objects and written as `null` in arrays, as in
  * JSON. Throws for cycles and for nesting deeper than `MAX_ARGUMENTS_DEPTH`.
  */
 export function serializeFunctionArguments(
