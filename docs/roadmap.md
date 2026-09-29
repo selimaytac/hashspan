@@ -20,8 +20,9 @@
   - [x] Trace screenshot in the README
   - [ ] Base Sepolia run of the example
 - [ ] **M5** First release to npm with provenance, good first issues
-  (verify that `changeset publish` via pnpm completes an OIDC trusted publish; otherwise publish with npm ≥ 11.5.1;
-  `@hashspan/*` packages are versioned together, so don't release before the viem adapter is functional)
+  - [x] Packages checked with publint and arethetypeswrong in CI; release process in [docs/releasing.md](releasing.md)
+  - [ ] One-time setup (placeholders, trusted publishers) and the first release
+  - [ ] Good first issues
 
 ## v0.2: More send paths
 

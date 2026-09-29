@@ -1,7 +1,8 @@
 name: Release
 
-# Manual trigger until the first release (milestone M5). npm packages are published
-# with Trusted Publishing (OIDC): no npm token is stored anywhere.
+# Manual trigger. The first run with pending changesets opens a "Version packages" pull request; running it again
+# after that pull request is merged publishes to npm. Packages are published with Trusted Publishing (OIDC): no npm
+# token is stored anywhere. See docs/releasing.md.
 on:
   workflow_dispatch:
 
@@ -30,7 +31,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-          registry-url: https://registry.npmjs.org
+          # No registry-url: setup-node would write an .npmrc with an empty token, which gets in the way of OIDC.
       - run: pnpm install --frozen-lockfile
       - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
