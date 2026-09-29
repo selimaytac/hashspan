@@ -13,8 +13,9 @@ together.
    **Version packages** pull request that bumps the versions and writes `CHANGELOG.md` from the changesets.
 3. Review and merge that pull request. It is opened by GitHub Actions, so CI does not run on it; the next step runs
    the checks again before publishing.
-4. Run the **Release** workflow again. With no changesets left, it runs the checks, publishes the new versions to npm,
-   pushes the git tags and creates the GitHub releases.
+4. Run the **Release** workflow again. With no changesets left, it runs the checks, then waits for a maintainer to
+   approve the `npm` environment deployment (Actions run page, Review deployments). Once approved, it publishes the new
+   versions to npm, pushes the git tags and creates the GitHub releases.
 5. Check the result: `npm view @hashspan/core` shows the version, and the npm page shows the provenance badge.
 
 ## One-time setup
@@ -42,8 +43,10 @@ JSON
 done
 ```
 
-**2. Restrict releases to `main`.** Create a GitHub environment named `npm` (Settings, Environments) with
-deployment branches limited to `main`. The release job runs in that environment, so GitHub refuses to run it from any
+**2. Restrict releases to `main`.** Protect `main` with a ruleset: pull requests required (squash merge, no
+required approvals and no required status checks, since the version pull request opened by GitHub Actions runs no CI),
+force pushes and deletion blocked, no bypass. Then create a GitHub environment named `npm` (Settings, Environments)
+with deployment branches limited to `main` and a maintainer as required reviewer. The release job runs in that environment, so GitHub refuses to run it from any
 other branch, even if the workflow file is changed there.
 
 **3. Trust the Release workflow.** For each package, allow publishing from this repository's `release.yml` in the
@@ -62,8 +65,9 @@ publishing, and set the environment to `npm`: npm then rejects publishes from an
 **4. Lock down tokens.** On npmjs.com, set each package's publishing access to require two-factor authentication and
 disallow tokens, so the trusted publisher is the only way to publish.
 
-**5. Let the workflow open the version pull request.** In the repository settings (Actions, General, Workflow
-permissions), enable "Allow GitHub Actions to create and approve pull requests".
+**5. Let the workflow open the version pull request, and watch dependencies.** In the repository settings (Actions, General, Workflow
+permissions), enable "Allow GitHub Actions to create and approve pull requests". Under Code security, enable
+Dependabot alerts and security updates.
 
 After the first real release, deprecate the placeholders:
 `npm deprecate @hashspan/core@0.0.0 "Placeholder; use a later version"` (and the same for `@hashspan/viem`).
