@@ -33,9 +33,12 @@ Design decisions: [docs/adr](adr/). Attribute schema: [docs/semconv.md](semconv.
 
 ## Principles
 
-- **Library, not a service.** Only `@opentelemetry/api` is a peer dependency; users bring their own SDK and exporter.
+- **Library, not a service.** Peer dependencies are `@opentelemetry/api` and, for an adapter, the library it
+  instruments (`viem`); users bring their own SDK and exporter.
 - **Never on the critical path.** Instrumentation failures are swallowed and never change the result of a transaction call.
-- **Off the call path.** No telemetry work runs before the call it traces; spans may be recorded after the fact
+- **Off the call path.** Nothing the telemetry needs is awaited before the call it traces: no network request, no
+  promise. What is known up front (a client with a chain) is recorded synchronously when the call starts; what is
+  not is resolved alongside the call and the span is recorded after the fact
   ([ADR 0009](adr/0009-telemetry-off-the-call-path.md)).
 - **Read-only.** The library never signs or broadcasts transactions. The core makes no network calls; adapters read
   receipts and replay reverted transactions with read-only requests.

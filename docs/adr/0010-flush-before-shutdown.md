@@ -37,4 +37,6 @@ its reason, are the ones that go missing.
 - The underlying work is not cancelled: a background confirmation keeps polling until its own `timeoutMs`, which
   can keep a process alive after `flush()` resolved `false`. Short-lived processes should use a short background
   timeout.
+- A timed-out flush also ends the spans of the application's own receipt waits that are still running; a receipt
+  they return later is not recorded. `flush()` is therefore meant for shutdown only.
 - Long-running services do not need to call it.
