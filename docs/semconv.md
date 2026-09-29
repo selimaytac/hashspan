@@ -62,7 +62,7 @@ RPC calls made by adapters follow the OpenTelemetry [JSON-RPC conventions](https
 | `blockchain.tx.nonce` | int | send | on | sender nonce |
 | `blockchain.contract.function.name` | string | send | on | decoded function name when an ABI is known |
 | `blockchain.contract.function.selector` | string | send | on | 4-byte selector, e.g. `0xa9059cbb` |
-| `blockchain.contract.function.arguments` | string | send | off (opt-in) | decoded call arguments as a JSON array, e.g. `["0x2222...2222","1000000"]`: bigints as decimal strings, addresses per address mode, truncated after 4096 characters |
+| `blockchain.contract.function.arguments` | string | send | off (opt-in) | decoded call arguments as a JSON array, e.g. `["0x2222...2222","1000000"]`: bigints as decimal strings, addresses per address mode, truncated after 4096 characters. Only own enumerable data properties are serialized; `toJSON()` and getters are never called |
 | `blockchain.tx.status` | string | confirm | on | `success` \| `reverted` \| `timeout` \| `replaced` |
 | `blockchain.block.number` | int | confirm | on | inclusion block |
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
@@ -89,7 +89,9 @@ A redaction hook runs last on every attribute set; if it throws, only `blockchai
 Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md). Neither `hashed` nor
 `off` hides the parties of a transaction: `blockchain.tx.hash` is always recorded and resolves to them on chain.
 The address mode also applies to addresses inside `blockchain.tx.revert.reason`,
-`blockchain.contract.function.arguments`, `error.type` and sanitized error messages (`<address>` in `off` mode). The redaction hook also runs on `error.type` and on `exception` event
+`blockchain.contract.function.arguments`, `error.type` and sanitized error messages (`<address>` in `off` mode).
+In `hashed` and `off` mode, hex values longer than an address are recorded as `<hex>` in those attributes, because a
+padded `bytes32` or ABI-encoded `bytes` value can embed an address. The redaction hook also runs on `error.type` and on `exception` event
 attributes; if it throws, only `exception.type` is kept on the event.
 
 ## Change policy

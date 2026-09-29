@@ -1,7 +1,23 @@
 import { diag } from '@opentelemetry/api';
 import type { AddressMode, AddressOptions, ErrorMessageMode } from './types.js';
 
-export type AddressFormatter = (address: string) => string | undefined;
+/** Formats one address per the address mode; undefined means "do not record it". */
+export interface AddressFormatter {
+  (address: string): string | undefined;
+  /**
+   * True when addresses must not be recorded as they are (`off`, `hashed`). Hex values longer than an address can
+   * embed one (a padded bytes32, ABI-encoded bytes), so they are then replaced by `<hex>` too.
+   */
+  readonly protectsAddresses: boolean;
+}
+
+const formatter = (
+  format: (address: string) => string | undefined,
+  protectsAddresses: boolean,
+): AddressFormatter => Object.assign(format, { protectsAddresses });
+
+/** Records no addresses; the fallback whenever the address mode cannot be applied. */
+export const OFF_ADDRESS_FORMATTER: AddressFormatter = formatter(() => undefined, true);
 
 type HashFn = (address: string) => string;
 
@@ -27,34 +43,42 @@ export function resolveAddressFormatter(
     typeof option === 'object' ? option : { mode: option ?? 'raw', hash: undefined };
   switch (mode) {
     case 'raw':
-      return (address) => address;
+      return formatter((address) => address, false);
     case 'off':
-      return () => undefined;
+      return OFF_ADDRESS_FORMATTER;
     case 'hashed': {
       const hashFn = hash ?? defaultHash();
       if (!hashFn) {
         diag.warn('hashspan: no SHA-256 available in this runtime; addresses will not be recorded');
-        return () => undefined;
+        return OFF_ADDRESS_FORMATTER;
       }
-      return (address) => hashFn(address.toLowerCase());
+      return formatter((address) => hashFn(address.toLowerCase()), true);
     }
     default:
       diag.warn(`hashspan: unknown address mode "${String(mode)}"; addresses will not be recorded`);
-      return () => undefined;
+      return OFF_ADDRESS_FORMATTER;
   }
 }
 
-const HEX = /0x[0-9a-fA-F]+/g;
+/** 0x-prefixed hex. Unprefixed hex and addresses written as numbers are not detected. */
+const HEX = /0[xX][0-9a-fA-F]+/g;
 const ADDRESS_LENGTH = 42;
-/** Longest hex kept in sanitized error messages: a 32-byte word such as a transaction hash. */
+/**
+ * Longest hex kept in sanitized error messages in raw address mode: a 32-byte word such as a transaction hash. In
+ * `off` and `hashed` mode, {@link formatAddressesIn} already replaces any hex longer than an address.
+ */
 const MAX_HEX_LENGTH = 66;
 const MAX_MESSAGE_LENGTH = 256;
 
-/** Rewrites every address in `text` with the address mode; `off` replaces it with `<address>`. */
+/**
+ * Rewrites every address in `text` with the address mode (`<address>` when it records none). In `off` and `hashed`
+ * mode, hex values longer than an address become `<hex>`, because they can embed one.
+ */
 export function formatAddressesIn(text: string, formatAddress: AddressFormatter): string {
-  return text.replace(HEX, (hex) =>
-    hex.length === ADDRESS_LENGTH ? (formatAddress(hex) ?? '<address>') : hex,
-  );
+  return text.replace(HEX, (hex) => {
+    if (hex.length === ADDRESS_LENGTH) return formatAddress(hex) ?? '<address>';
+    return hex.length > ADDRESS_LENGTH && formatAddress.protectsAddresses ? '<hex>' : hex;
+  });
 }
 
 /**
@@ -72,22 +96,94 @@ export function sanitizeErrorMessage(message: string, formatAddress: AddressForm
 }
 
 const MAX_ARGUMENTS_LENGTH = 4096;
+const MAX_ARGUMENTS_DEPTH = 32;
+
+class ArgumentsLimitReached extends Error {}
 
 /**
- * Call arguments as a JSON array: bigints as decimal strings, addresses per address mode, at most
- * `MAX_ARGUMENTS_LENGTH` characters. Throws for values JSON cannot represent (e.g. cycles).
+ * Call arguments as a JSON array: bigints as decimal strings, addresses per address mode (see
+ * {@link formatAddressesIn}), at most `MAX_ARGUMENTS_LENGTH` characters followed by `...`.
+ *
+ * Side-effect free: it reads only own enumerable data properties and never calls `toJSON()` or getters (so a `Date`
+ * records as `{}`). It stops after the value that crosses the length limit instead of walking the rest. Functions, symbols and `undefined` are skipped in objects and written as `null` in arrays, as in
+ * JSON. Throws for cycles and for nesting deeper than `MAX_ARGUMENTS_DEPTH`.
  */
 export function serializeFunctionArguments(
   args: readonly unknown[],
   formatAddress: AddressFormatter,
 ): string {
-  const json = JSON.stringify(args, (_key, value: unknown) =>
-    typeof value === 'bigint' ? value.toString() : value,
-  );
-  const formatted = formatAddressesIn(json, formatAddress);
-  return formatted.length > MAX_ARGUMENTS_LENGTH
-    ? `${formatted.slice(0, MAX_ARGUMENTS_LENGTH)}...`
-    : formatted;
+  let out = '';
+  const write = (chunk: string): void => {
+    out += chunk;
+    if (out.length > MAX_ARGUMENTS_LENGTH) throw new ArgumentsLimitReached();
+  };
+  const text = (value: string): string => JSON.stringify(formatAddressesIn(value, formatAddress));
+  const ancestors = new Set<object>();
+
+  /** Writes `value`; returns false, writing nothing, when it has no JSON representation. */
+  const walk = (value: unknown, depth: number): boolean => {
+    switch (typeof value) {
+      case 'string':
+        write(text(value));
+        return true;
+      case 'bigint':
+        write(`"${value.toString()}"`);
+        return true;
+      case 'number':
+        write(Number.isFinite(value) ? String(value) : 'null');
+        return true;
+      case 'boolean':
+        write(value ? 'true' : 'false');
+        return true;
+      case 'object':
+        break;
+      default:
+        return false; // undefined, function, symbol
+    }
+    if (value === null) {
+      write('null');
+      return true;
+    }
+    if (ancestors.has(value)) throw new TypeError('cyclic function arguments');
+    if (depth >= MAX_ARGUMENTS_DEPTH) throw new TypeError('function arguments nested too deeply');
+    ancestors.add(value);
+    // Descriptors are read one at a time, so the walk stops reading at the length limit.
+    const own = (key: string): PropertyDescriptor | undefined =>
+      Object.getOwnPropertyDescriptor(value, key);
+    if (Array.isArray(value)) {
+      write('[');
+      const length = own('length')?.value;
+      for (let i = 0; i < (typeof length === 'number' ? length : 0); i++) {
+        if (i > 0) write(',');
+        const element = own(String(i));
+        if (!element || !('value' in element) || !walk(element.value, depth + 1)) write('null');
+      }
+      write(']');
+    } else {
+      write('{');
+      let first = true;
+      for (const key of Object.keys(value)) {
+        const descriptor = own(key);
+        if (!descriptor || !('value' in descriptor)) continue; // skips accessors
+        const kind = typeof descriptor.value;
+        if (kind === 'undefined' || kind === 'function' || kind === 'symbol') continue;
+        write(`${first ? '' : ','}${text(key)}:`);
+        first = false;
+        walk(descriptor.value, depth + 1);
+      }
+      write('}');
+    }
+    ancestors.delete(value);
+    return true;
+  };
+
+  try {
+    walk(args, 0);
+    return out;
+  } catch (error) {
+    if (error instanceof ArgumentsLimitReached) return `${out.slice(0, MAX_ARGUMENTS_LENGTH)}...`;
+    throw error;
+  }
 }
 
 export function resolveErrorMessageMode(mode: ErrorMessageMode | undefined): ErrorMessageMode {

@@ -51,6 +51,7 @@ import { LinkStore } from './link-store.js';
 import {
   type AddressFormatter,
   formatAddressesIn,
+  OFF_ADDRESS_FORMATTER,
   resolveAddressFormatter,
   resolveErrorMessageMode,
   sanitizeErrorMessage,
@@ -166,7 +167,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
   const formatAddress: AddressFormatter = safely(
     'configure address mode',
     () => resolveAddressFormatter(options.address),
-    () => undefined,
+    OFF_ADDRESS_FORMATTER,
   );
   const errorMessages = safely(
     'configure error message mode',
