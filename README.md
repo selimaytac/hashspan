@@ -16,12 +16,10 @@ mined, reverted, or what it cost lives somewhere else. hashspan closes that gap:
 `send` / `confirm` span pair **inside the agent's own trace**, with status, gas, L2 fees and the agent identity
 attached, and it's exported to the backend you already use (Jaeger, Grafana Tempo, Langfuse, Honeycomb, ...).
 
-```
-invoke_agent treasury-bot
-└─ execute_tool transfer_usdc
-   ├─ send 8453        blockchain.tx.hash=0x9f…  blockchain.contract.function.name=transfer
-   └─ confirm 8453     blockchain.tx.status=success  blockchain.tx.fee=41730000000000  ↪ link: send
-```
+![An AI SDK agent run in Jaeger: each tool call contains the send and confirm spans of its transaction, and the reverted withdrawal is marked as an error](docs/images/jaeger-trace.png)
+
+<sub>The [example agent](examples/ai-sdk-agent) in Jaeger: a vendor payment and a withdrawal that reverts with a
+decoded custom error.</sub>
 
 ## Why
 
@@ -62,6 +60,19 @@ await reader.waitForTransactionReceipt({ hash });
 See [`@hashspan/viem`](packages/viem) for details and [`@hashspan/core`](packages/core) to instrument other send
 paths.
 
+## Try it
+
+A runnable AI SDK agent that pays a vendor and hits a reverting vault, traced end to end. It needs no API key and
+runs against a local chain:
+
+```sh
+nvm use && corepack enable pnpm && pnpm install
+make lab-up   # Jaeger UI on http://localhost:16686
+make demo
+```
+
+See [examples/ai-sdk-agent](examples/ai-sdk-agent).
+
 ## Local lab
 
 Everything runs locally and can be removed with one command:
@@ -69,6 +80,7 @@ Everything runs locally and can be removed with one command:
 ```sh
 make lab-up      # Jaeger UI on http://localhost:16686, OTLP on :4317/:4318
 make anvil       # local EVM chain on :8545 (project-local binary)
+make demo        # run the example agent against a fresh local chain
 make lab-pause   # stop, keep state
 make lab-nuke    # remove containers, images, tools and build output
 ```

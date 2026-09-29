@@ -10,7 +10,10 @@
   - [x] Background confirmation in the viem adapter (`confirm: { mode: 'background' }`)
   - [x] Revert reason decoding for mined reverts
   - [x] Opt-in recording of contract call arguments
-- [ ] **M4** Example agent (Vercel AI SDK + viem) on Anvil and Base Sepolia, Jaeger quick start, README
+- [ ] **M4** Example agent, Jaeger quick start, README
+  - [x] AI SDK agent example on Anvil, runnable without an API key, tested in CI (`make demo`)
+  - [x] Trace screenshot in the README
+  - [ ] Base Sepolia run of the example
 - [ ] **M5** First release to npm with provenance, good first issues
   (verify that `changeset publish` via pnpm completes an OIDC trusted publish; otherwise publish with npm ≥ 11.5.1;
   `@hashspan/*` packages are versioned together, so don't release before the viem adapter is functional)

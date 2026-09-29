@@ -1,6 +1,6 @@
 COMPOSE := docker compose -f docker/compose.yaml
 
-.PHONY: help tools anvil lab-up lab-pause lab-status lab-logs lab-nuke clean
+.PHONY: help tools anvil demo lab-up lab-pause lab-status lab-logs lab-nuke clean
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -10,6 +10,13 @@ tools: ## Install pinned Anvil into ./.tools/bin (project-local)
 
 anvil: tools ## Run a local chain on 127.0.0.1:8545 (foreground)
 	./.tools/bin/anvil --host 127.0.0.1 --chain-id 31337
+
+demo: tools ## Run the example agent against a fresh local chain; traces go to Jaeger (make lab-up)
+	@./.tools/bin/anvil --host 127.0.0.1 --port 8545 --silent & pid=$$!; \
+	trap 'kill $$pid 2>/dev/null' EXIT; \
+	until curl -s -o /dev/null -X POST -H 'content-type: application/json' \
+	  --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' http://127.0.0.1:8545; do sleep 0.2; done; \
+	pnpm demo
 
 lab-up: ## Start Jaeger (UI: http://localhost:16686, OTLP: localhost:4317/4318)
 	$(COMPOSE) up -d
