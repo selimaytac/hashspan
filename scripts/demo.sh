@@ -20,7 +20,8 @@ fi
 log="$(mktemp)"
 "$ANVIL" --host 127.0.0.1 --port "$PORT" >"$log" 2>&1 &
 pid=$!
-trap 'kill "$pid" 2>/dev/null || true; rm -f "$log"' EXIT
+# Waits for Anvil to exit, so the port is free again when this script returns.
+trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; rm -f "$log"' EXIT
 
 deadline=$((SECONDS + READY_TIMEOUT))
 until grep -q "Listening on 127.0.0.1:$PORT" "$log"; do
