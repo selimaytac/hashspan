@@ -33,5 +33,10 @@ until listening; do
   fi
   sleep 0.2
 done
+# Something else may have taken the port while Anvil was starting: only a live Anvil counts as ready.
+if ! kill -0 "$pid" 2>/dev/null; then
+  echo "demo: Anvil exited before it was ready" >&2
+  exit 1
+fi
 
 RPC_URL="http://127.0.0.1:$PORT" $DEMO_CMD

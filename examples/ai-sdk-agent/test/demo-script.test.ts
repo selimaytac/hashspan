@@ -105,6 +105,17 @@ describe('scripts/demo.sh', () => {
     expect(result.ms).toBeLessThan(8_000);
   });
 
+  it('fails when Anvil exits and something else answers on the port', async () => {
+    const port = await freePort();
+    // Hands the port to another process that lives for 3 s, then exits: the port looks ready, Anvil is gone.
+    const impostor = fakeAnvil(
+      `node -e 'const a = process.argv; require("node:net").createServer().listen(Number(a[a.indexOf("--port") + 1]), "127.0.0.1"); setTimeout(() => process.exit(0), 3000)' -- "$@" >/dev/null 2>&1 &\nsleep 0.5\nexit 0`,
+    );
+    const result = await run({ DEMO_PORT: port, DEMO_ANVIL: impostor, DEMO_CMD: 'true' });
+    expect(result.code).not.toBe(0);
+    expect(result.stderr).toContain('Anvil exited before it was ready');
+  });
+
   it('runs the demo against the new chain, passes its exit status on and stops the chain', async () => {
     const port = await freePort();
     // Listens on the --port it is given, like Anvil.
