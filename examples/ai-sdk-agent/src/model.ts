@@ -15,7 +15,7 @@ const callTool = (toolCallId: string, toolName: string, input: object) => ({
 
 /**
  * A scripted model, so the demo runs without an API key: it pays the vendor, then tries a withdrawal, then answers.
- * Set `DEMO_MODEL` to use a real model instead (see README).
+ * To use a real model instead, see the README.
  */
 export function scriptedModel(): LanguageModel {
   return new MockLanguageModelV4({
