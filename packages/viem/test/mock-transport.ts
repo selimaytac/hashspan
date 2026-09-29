@@ -13,6 +13,8 @@ export interface MockOptions {
   sendError?: { code: number; message: string };
   /** Methods that never answer, like an unresponsive provider. */
   hangOn?: string[];
+  /** Methods that fail with a non-retryable JSON-RPC error (invalid params). */
+  failOn?: string[];
   /** Delays the answer to `eth_sendTransaction`. */
   sendDelayMs?: number;
   /** Revert data returned by `eth_call`; the call succeeds when undefined. */
@@ -37,6 +39,13 @@ export function mockTransport(options: MockOptions = {}) {
       calls.push(method);
       requests.push({ method, params });
       if (options.hangOn?.includes(method)) return new Promise(() => {});
+      if (options.failOn?.includes(method)) {
+        throw new RpcRequestError({
+          body: {},
+          error: { code: -32602, message: `mock: ${method} failed` },
+          url: 'mock',
+        });
+      }
       switch (method) {
         case 'eth_chainId':
           return options.chainId ? options.chainId() : (options.chainIdHex ?? '0x2105');
