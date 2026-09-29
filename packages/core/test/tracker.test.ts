@@ -192,6 +192,34 @@ describe('confirm span', () => {
   });
 });
 
+describe('agent identity from untrusted baggage', () => {
+  it('cannot override the configured agent, and is ignored with agentFromBaggage: false', () => {
+    const inbound = propagation.setBaggage(
+      context.active(),
+      propagation.createBaggage({
+        'gen_ai.agent.id': { value: 'forged' },
+        'gen_ai.agent.name': { value: 'someone-else' },
+      }),
+    );
+    context.with(inbound, () => {
+      createTxTracker({ agent: { name: 'treasury-bot' } })
+        .startSend({ chainId: CHAIN_ID })
+        .end(HASH);
+      createTxTracker({ agent: { name: 'treasury-bot' }, agentFromBaggage: false })
+        .startSend({ chainId: CHAIN_ID })
+        .end(HASH);
+    });
+
+    const [trusting, ignoring] = tracing.spans();
+    expect(trusting?.attributes).toMatchObject({
+      'gen_ai.agent.id': 'forged',
+      'gen_ai.agent.name': 'treasury-bot',
+    });
+    expect(ignoring?.attributes['gen_ai.agent.name']).toBe('treasury-bot');
+    expect(ignoring?.attributes['gen_ai.agent.id']).toBeUndefined();
+  });
+});
+
 describe('agent identity', () => {
   it('copies agent identity from baggage onto both spans', () => {
     const tracker = createTxTracker({ agent: { name: 'treasury-bot' } });

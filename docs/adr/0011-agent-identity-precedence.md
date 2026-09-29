@@ -1,7 +1,8 @@
 # 0011. Agent identity precedence
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-29
+- Accepted: 2026-09-29, after comparing the implementation (`packages/core/src/agent.ts`) with this decision.
 
 ## Context
 

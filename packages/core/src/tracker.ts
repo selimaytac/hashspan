@@ -262,7 +262,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     [ATTR_BLOCKCHAIN_SYSTEM]: BLOCKCHAIN_SYSTEM_VALUE_EVM,
     [ATTR_BLOCKCHAIN_CHAIN_ID]: chainId,
     [ATTR_BLOCKCHAIN_OPERATION_NAME]: operation,
-    ...agentAttributes(ctx, options.agent),
+    ...agentAttributes(ctx, options.agent, options.agentFromBaggage !== false),
   });
 
   const startSend = (input: SendInput, parentCtx?: Context): SendHandle => {

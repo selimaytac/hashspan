@@ -75,9 +75,10 @@ today.
 | `blockchain.tx.replacement.reason` | string | confirm | on | on a `replaced` confirm span: `repriced` \| `cancelled` \| `replaced`, as reported by the instrumented library; omitted when it reported none |
 | `error.type` | string | all | on | see *Span status*; reused from OpenTelemetry general conventions |
 
-Agent identity is recorded with the GenAI conventions `gen_ai.agent.id` and `gen_ai.agent.name`, taken from
-OpenTelemetry Baggage entries with the same keys, or from the tracker's static `agent` option. This lets backends
-search transactions by agent without joining spans. Baggage is propagated to downstream services; identifiers that
+Agent identity is recorded with the GenAI conventions `gen_ai.agent.id` and `gen_ai.agent.name`. A field set in the
+tracker's static `agent` option always wins; fields it leaves unset are taken from OpenTelemetry Baggage entries with
+the same keys, unless `agentFromBaggage` is false ([ADR 0011](adr/0011-agent-identity-precedence.md)). This lets
+backends search transactions by agent without joining spans. Baggage is propagated to downstream services; identifiers that
 must stay internal belong in the static `agent` option, which is never propagated.
 
 ## Privacy

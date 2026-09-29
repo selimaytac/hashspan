@@ -22,11 +22,27 @@ describe('agentAttributes', () => {
     });
   });
 
-  it('prefers baggage over the static identity', () => {
-    const ctx = withBaggage({ 'gen_ai.agent.id': 'from-baggage' });
+  it('prefers the static identity over baggage (ADR 0011)', () => {
+    const ctx = withBaggage({ 'gen_ai.agent.id': 'from-baggage', 'gen_ai.agent.name': 'impostor' });
     expect(agentAttributes(ctx, { id: 'static', name: 'treasury' })).toEqual({
-      'gen_ai.agent.id': 'from-baggage',
+      'gen_ai.agent.id': 'static',
       'gen_ai.agent.name': 'treasury',
     });
+  });
+
+  it('fills fields the static identity leaves unset from baggage', () => {
+    const ctx = withBaggage({ 'gen_ai.agent.id': 'run-42', 'gen_ai.agent.name': 'impostor' });
+    expect(agentAttributes(ctx, { name: 'treasury' })).toEqual({
+      'gen_ai.agent.id': 'run-42',
+      'gen_ai.agent.name': 'treasury',
+    });
+  });
+
+  it('ignores baggage when reading identity from it is turned off', () => {
+    const ctx = withBaggage({ 'gen_ai.agent.id': 'run-42', 'gen_ai.agent.name': 'impostor' });
+    expect(agentAttributes(ctx, { name: 'treasury' }, false)).toEqual({
+      'gen_ai.agent.name': 'treasury',
+    });
+    expect(agentAttributes(ctx, undefined, false)).toEqual({});
   });
 });
