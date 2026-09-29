@@ -26,7 +26,12 @@ export async function runDemo(): Promise<DemoResult> {
   });
 
   // The reverted withdrawal's confirm span ends once its revert reason is fetched: flush before shutting down.
-  await hashspan.flush();
+  const flushed = await hashspan.flush();
+  console.log(
+    flushed
+      ? 'hashspan: all spans ended'
+      : 'hashspan: flush timed out; confirm spans still waiting were ended as timeout',
+  );
 
   return {
     text: result.text,

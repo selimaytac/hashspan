@@ -50,6 +50,20 @@ const timers = globalThis as unknown as {
   clearTimeout(timer: unknown): void;
 };
 
+/**
+ * Resolves true once all of `work` has settled, or false after `ms`. Unlike the other internal timers, this one is
+ * referenced: `flush()` is awaited before shutting down, so the process must stay alive until it resolves.
+ */
+function settledWithin(work: Promise<unknown>[], ms: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = timers.setTimeout(() => resolve(false), ms);
+    void Promise.all(work).then(() => {
+      timers.clearTimeout(timer);
+      resolve(true);
+    });
+  });
+}
+
 /** Resolves with `value`, or with undefined after `ms`. Never rejects; its timer does not keep the process alive. */
 function within<T>(value: Promise<T>, ms: number, what: string): Promise<T | undefined> {
   return new Promise((resolve) => {
@@ -275,6 +289,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     pending.add(settled);
     void settled.finally(() => pending.delete(settled));
   };
+  /** Ends a confirm handle that is still waiting as `timeout`, for `flush()` to call when it cannot wait longer. */
+  const waiting = new Set<() => void>();
   const flush = async ({
     timeoutMs = DEFAULT_FLUSH_TIMEOUT_MS,
   }: FlushOptions = {}): Promise<boolean> => {
@@ -282,15 +298,62 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     // Loop, because finishing work can start more (e.g. a late send starting a background confirmation).
     while (pending.size > 0) {
       const remaining = deadline - Date.now();
-      if (remaining <= 0) return false;
-      const done = await within(
-        Promise.all([...pending]).then(() => true),
-        remaining,
-        'flush pending tracing work',
-      );
-      if (done === undefined) return false;
+      if (remaining <= 0 || !(await settledWithin([...pending], remaining))) {
+        // End what is left, so its spans are exported with the rest (docs/adr/0010).
+        for (const abandon of [...waiting]) {
+          try {
+            abandon();
+          } catch (error) {
+            diag.error(`hashspan: failed to end a pending confirm span (${errorName(error)})`);
+          }
+        }
+        diag.debug(`hashspan: flush gave up after ${timeoutMs} ms`);
+        return false;
+      }
     }
     return true;
+  };
+
+  interface PendingConfirmation {
+    /** Ends the wrapped handle at most once; later calls are ignored. */
+    handle: ConfirmHandle;
+    /** Resolves once the handle has ended, by any path. */
+    ended: Promise<void>;
+    /** How `flush()` ends the underlying handle if it cannot wait any longer; `timeout` until replaced. */
+    onAbandon(abandon: (handle: ConfirmHandle) => void): void;
+  }
+
+  /** Wraps `handle` so it ends at most once, and registers it with `flush()` until it has ended. */
+  const settleOnce = (handle: ConfirmHandle): PendingConfirmation => {
+    let settled = false;
+    let resolveEnded: () => void = () => {};
+    const ended = new Promise<void>((resolve) => {
+      resolveEnded = resolve;
+    });
+    const settle = (end: () => void): void => {
+      if (settled) return;
+      settled = true;
+      waiting.delete(abandon);
+      try {
+        end();
+      } finally {
+        resolveEnded();
+      }
+    };
+    let onAbandon = (underlying: ConfirmHandle): void => underlying.timeout();
+    const abandon = (): void => settle(() => onAbandon(handle));
+    waiting.add(abandon);
+    return {
+      handle: {
+        end: (receipt, endTime) => settle(() => handle.end(receipt, endTime)),
+        timeout: (endTime) => settle(() => handle.timeout(endTime)),
+        fail: (error, endTime) => settle(() => handle.fail(error, endTime)),
+      },
+      ended,
+      onAbandon: (abandonWith) => {
+        onAbandon = abandonWith;
+      },
+    };
   };
 
   /** Revert reason of a mined transaction, fetched once per transaction (keyed by its hash). */
@@ -324,15 +387,16 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
    * that transaction (docs/adr/0008-replaced-transactions.md). For reverted receipts, the span ends after the
    * revert reason was fetched with `client`.
    */
-  const recordConfirmation = async (
+  const recordReceipt = async (
     chainId: number,
     hash: string,
-    handle: ConfirmHandle,
+    confirmation: PendingConfirmation,
     wait: Promise<ViemReceipt>,
     capture: ReplacementCapture,
     client: unknown,
     endTimeOf: () => TimeInput | undefined = () => undefined,
   ): Promise<void> => {
+    const { handle } = confirmation;
     let receipt: ViemReceipt;
     try {
       receipt = await wait;
@@ -366,6 +430,17 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
           (reported && sameHex(replacement.transaction.to, replacement.replacedTransaction.to))
             ? abis.get(confirmKey(chainId, hash))
             : undefined);
+        // The receipt is known: a flush that cannot wait for the reason records the receipt without it.
+        const mined = receipt;
+        confirmation.onAbandon((underlying) =>
+          underlying.end(
+            {
+              ...toReceiptLike(mined),
+              replacementReason: reported ? replacement.reason : undefined,
+            },
+            endTimeOf(),
+          ),
+        );
         revertReason = await revertReasonOf(minedKey, receipt, abi, client);
       }
       handle.end(
@@ -380,6 +455,25 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
       handle.fail(error, endTimeOf());
     }
+  };
+  /**
+   * Records the outcome of `wait` on `waitingHandle`; never rejects. Resolves as soon as the handle has ended,
+   * including when a flush that gave up ended it (docs/adr/0010), so the tracked work drains.
+   */
+  const recordConfirmation = (
+    chainId: number,
+    hash: string,
+    waitingHandle: ConfirmHandle,
+    wait: Promise<ViemReceipt>,
+    capture: ReplacementCapture,
+    client: unknown,
+    endTimeOf: () => TimeInput | undefined = () => undefined,
+  ): Promise<void> => {
+    const confirmation = settleOnce(waitingHandle);
+    return Promise.race([
+      recordReceipt(chainId, hash, confirmation, wait, capture, client, endTimeOf),
+      confirmation.ended,
+    ]);
   };
 
   const extension = (client: ViemClientLike & Partial<Record<TracedAction, AnyAction>>) => {
