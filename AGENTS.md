@@ -44,6 +44,8 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
   integration test. Tests never depend on a public network.
 - Public API, span names and attribute names (docs/semconv.md) are stable contracts: deprecate before removing;
   add a changeset (`pnpm changeset`) and note it in CHANGELOG.md.
+- Changesets describe released behaviour: a follow-up change to a feature that has not been published yet updates
+  that feature's changeset instead of adding a new one.
 - Instrumentation must never throw into or alter the result of the user's call; failures are swallowed and logged
   via `diag`.
 - Only `@opentelemetry/api` (and the instrumented library) may be peer dependencies of published packages.
