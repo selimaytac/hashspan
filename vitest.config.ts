@@ -31,6 +31,8 @@ export default defineConfig({
           name: 'integration',
           include: ['packages/*/test/**/*.int.test.ts', 'examples/*/test/**/*.int.test.ts'],
           testTimeout: 30_000,
+          // Starting Anvil in beforeAll can take longer than the default 10 s while the whole suite runs in parallel.
+          hookTimeout: 60_000,
         },
       },
     ],
