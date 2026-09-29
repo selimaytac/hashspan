@@ -17,6 +17,8 @@ export interface MockOptions {
   sendDelayMs?: number;
   /** Revert data returned by `eth_call`; the call succeeds when undefined. */
   callRevertData?: string;
+  /** Delays every `eth_call` answer by this many milliseconds. */
+  callDelayMs?: number;
   /** While this returns false, the transaction is pending (no receipt). */
   mined?: () => boolean;
   /** Returns a new block number on every `eth_blockNumber`, so viem keeps polling. */
@@ -66,6 +68,8 @@ export function mockTransport(options: MockOptions = {}) {
             yParity: '0x0',
           };
         case 'eth_call':
+          if (options.callDelayMs)
+            await new Promise((resolve) => setTimeout(resolve, options.callDelayMs));
           if (options.callRevertData === undefined) return '0x';
           // Shaped like a node's JSON-RPC error, so viem does not retry it.
           throw new RpcRequestError({

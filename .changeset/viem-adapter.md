@@ -10,4 +10,6 @@ Add `withHashspan()`, a viem client extension that traces `sendTransaction` and 
   30 s after it ended is not traced
 - every call into the tracker is guarded, so tracing never changes the result or the error of a traced call
 - `writeContract` arguments are passed to the tracker, which records them with `recordFunctionArguments: true`
+- `flush({ timeoutMs })` on the `withHashspan()` result waits for spans that end after the traced call returned,
+  for use before shutting the OpenTelemetry SDK down
 - `diag` logs only error names
