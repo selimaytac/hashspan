@@ -37,5 +37,11 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2"
+  },
+  "pnpm": {
+    "//": "tar: prool pins tar@7.2.0 but never imports it (https://github.com/wevm/prool/issues/112). Remove once prool drops or bumps it.",
+    "overrides": {
+      "tar": ">=7.5.21"
+    }
   }
 }
