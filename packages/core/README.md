@@ -70,7 +70,8 @@ the instrumentation are reported through `diag` and never thrown into your code.
 | `address` | `'raw'` | `'raw'`, `'hashed'`, `'off'`, or `{ mode: 'hashed', hash: (address) => string }` |
 | `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace). `'raw'` can record RPC URLs that include API keys, as some libraries put the request URL in the message; `'sanitized'` keeps only the first line (viem puts the URL on a later line), which is best effort. See [ADR 0006](https://github.com/selimaytac/hashspan/blob/main/docs/adr/0006-error-privacy.md) |
 | `recordFunctionArguments` | `false` | Record `functionArguments` as a JSON array in `blockchain.contract.function.arguments`: bigints as decimal strings, addresses per `address` mode (longer hex values become `<hex>` in `hashed` and `off` mode), at most 4096 characters. Reads only own enumerable data properties: `toJSON()` and getters are never called, so a `Date` records as `{}`; a Proxy's traps still run |
-| `agent` | none | Fallback `{ id, name }`; Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` take precedence |
+| `agent` | none | Agent `{ id, name }`; a field set here always wins, unset fields come from the Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` |
+| `agentFromBaggage` | `true` | Read agent identity fields that `agent` leaves unset from Baggage; set to `false` in services that accept requests from outside their trust boundary |
 | `redact` | none | `(attributes) => attributes`, runs last on every attribute set, including exception event attributes; if it throws, only non-sensitive identifiers are kept |
 | `linkTtlMs` | `600000` | How long a sent transaction can be linked from its confirmation |
 | `maxTrackedTransactions` | `10000` | Upper bound on transactions kept for linking |
@@ -94,6 +95,9 @@ Attribute definitions:
   party APIs. Put only identifiers there that may leave your system, such as an opaque agent id. For identifiers
   that must stay internal, use the tracker's static `agent` option instead, which is recorded on spans but never
   propagated, or strip the entries before outbound calls.
+- **Inbound Baggage can claim an identity.** A caller can send Baggage entries with any agent id. A field set in the
+  `agent` option cannot be overridden that way; to ignore identity from Baggage entirely, set `agentFromBaggage: false`
+  ([ADR 0011](https://github.com/selimaytac/hashspan/blob/main/docs/adr/0011-agent-identity-precedence.md)).
 - The redaction hook (`redact`) runs last on every attribute set and on exception attributes; use it for anything
   else your policy forbids.
 

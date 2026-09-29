@@ -42,8 +42,17 @@ export interface TxTrackerOptions {
    * text; addresses in them follow the address mode and the redaction hook runs on them.
    */
   recordFunctionArguments?: boolean | undefined;
-  /** Fallback agent identity. Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` take precedence. */
+  /**
+   * Agent identity. A field set here always wins; fields left unset are taken from the Baggage entries
+   * `gen_ai.agent.id` / `gen_ai.agent.name` unless `agentFromBaggage` is false (docs/adr/0011).
+   */
   agent?: AgentIdentity | undefined;
+  /**
+   * Read agent identity fields that `agent` leaves unset from Baggage. Default: true. Baggage travels with requests
+   * between services, so a remote caller can set it; services that accept requests from outside their trust boundary
+   * should set this to false.
+   */
+  agentFromBaggage?: boolean | undefined;
   /**
    * Runs last on every attribute set and returns the attributes to record.
    * If it throws, only non-sensitive identifiers (system, chain id, operation, hash) are recorded.
