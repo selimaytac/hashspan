@@ -118,9 +118,9 @@ describe('scripts/demo.sh', () => {
 
   it('runs the demo against the new chain, passes its exit status on and stops the chain', async () => {
     const port = await freePort();
-    // Listens on the --port it is given and announces it, like Anvil.
+    // Listens on the --port it is given and announces it, like Anvil; takes a moment to stop, like a real process.
     const listener = fakeAnvil(
-      `exec node -e 'const a = process.argv; const port = Number(a[a.indexOf("--port") + 1]); require("node:net").createServer().listen(port, "127.0.0.1", () => console.log("Listening on 127.0.0.1:" + port))' -- "$@"`,
+      `exec node -e 'const a = process.argv; const port = Number(a[a.indexOf("--port") + 1]); const s = require("node:net").createServer().listen(port, "127.0.0.1", () => console.log("Listening on 127.0.0.1:" + port)); process.on("SIGTERM", () => setTimeout(() => s.close(() => process.exit(0)), 300))' -- "$@"`,
     );
     const demo = executable(
       'demo',
