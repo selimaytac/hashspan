@@ -19,10 +19,10 @@
   - [x] AI SDK agent example on Anvil, runnable without an API key, tested in CI (`make demo`)
   - [x] Trace screenshot in the README
   - [ ] Base Sepolia run of the example
-- [ ] **M5** First release to npm with provenance, good first issues
+- [x] **M5** First release to npm with provenance, good first issues
   - [x] Packages checked with publint and arethetypeswrong in CI; release process in [docs/releasing.md](releasing.md)
   - [x] One-time setup (placeholders, trusted publishers) and the first release: 0.1.0, published with provenance
-  - [ ] Good first issues
+  - [x] Good first issues ([open issues](https://github.com/selimaytac/hashspan/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22))
 
 ## v0.2: More send paths
 
