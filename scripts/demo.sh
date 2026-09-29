@@ -10,19 +10,20 @@ READY_TIMEOUT="${DEMO_READY_TIMEOUT:-20}"
 # Split on spaces, without shell quoting or globbing rules; meant for tests.
 DEMO_CMD="${DEMO_CMD:-pnpm demo}"
 
-listening() { (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; }
-
-if listening; then
+if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
   echo "demo: port $PORT is already in use; stop the process listening on it (for example a running 'make anvil')" >&2
   exit 1
 fi
 
-"$ANVIL" --host 127.0.0.1 --port "$PORT" --silent &
+# Readiness comes from Anvil's own output, not from probing the port: another process that takes the port cannot
+# pass for the chain this script started.
+log="$(mktemp)"
+"$ANVIL" --host 127.0.0.1 --port "$PORT" >"$log" 2>&1 &
 pid=$!
-trap 'kill "$pid" 2>/dev/null || true' EXIT
+trap 'kill "$pid" 2>/dev/null || true; rm -f "$log"' EXIT
 
 deadline=$((SECONDS + READY_TIMEOUT))
-until listening; do
+until grep -q "Listening on 127.0.0.1:$PORT" "$log"; do
   if ! kill -0 "$pid" 2>/dev/null; then
     echo "demo: Anvil exited before it was ready" >&2
     exit 1
@@ -31,7 +32,7 @@ until listening; do
     echo "demo: Anvil was not ready after $READY_TIMEOUT s" >&2
     exit 1
   fi
-  sleep 0.2
+  sleep 0.1
 done
 
 RPC_URL="http://127.0.0.1:$PORT" $DEMO_CMD

@@ -37,7 +37,7 @@ Run lint, typecheck and tests before proposing a change.
   - `ai-sdk-agent`: AI SDK agent with a scripted model (no API key), run by `make demo`; its
     `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break
 - `docker/`, `scripts/`, `Makefile` → local lab; `scripts/demo.sh` (behind `make demo`) starts a fresh Anvil or
-  fails, and is tested from `examples/ai-sdk-agent/test/demo-script.test.ts`
+  fails, waiting for Anvil's own "Listening on" line rather than probing the port, and is tested from `examples/ai-sdk-agent/test/demo-script.test.ts`
 See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and [docs/adr/](docs/adr/).
 
 ## Conventions
