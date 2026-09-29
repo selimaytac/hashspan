@@ -2,6 +2,14 @@ name: Bug report
 description: Something does not work as documented
 labels: [bug]
 body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you open this issue
+      options:
+        - label: I searched the [existing issues, open and closed](https://github.com/selimaytac/hashspan/issues?q=is%3Aissue) and this bug is not reported yet.
+          required: true
+        - label: I can reproduce it with the latest release of the hashspan packages.
   - type: textarea
     id: what
     attributes:

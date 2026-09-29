@@ -6,14 +6,15 @@ telling us how the spans look in your backend, or where the docs lost you, is ju
 
 ## Ways to contribute
 
-- **Ask a question or share feedback**: open a [question issue](https://github.com/selimaytac/hashspan/issues/new?template=question.yml).
+- **Ask a question or share feedback**: start a [discussion](https://github.com/selimaytac/hashspan/discussions).
   Feedback on span and attribute names is especially valuable while they are marked `development`.
-- **Report a bug**: use the [bug report](https://github.com/selimaytac/hashspan/issues/new?template=bug_report.yml)
+- **Report a bug**: first [search the issues](https://github.com/selimaytac/hashspan/issues?q=is%3Aissue), open and
+  closed, then use the [bug report](https://github.com/selimaytac/hashspan/issues/new?template=bug_report.yml)
   template with a minimal reproduction.
 - **Pick up an issue**: [`good first issue`](https://github.com/selimaytac/hashspan/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
   issues are scoped and list what "done" means. Larger items from the [roadmap](docs/roadmap.md) are welcome too;
   open an issue first to agree on the design.
-- **Propose a feature**: open a [feature request](https://github.com/selimaytac/hashspan/issues/new?template=feature_request.yml)
+- **Propose a feature**: search the issues too, then open a [feature request](https://github.com/selimaytac/hashspan/issues/new?template=feature_request.yml)
   describing the problem you want to solve.
 - **Report a vulnerability**: privately, as described in [SECURITY.md](SECURITY.md), never in a public issue.
 
@@ -86,6 +87,12 @@ The full conventions (architecture, stability rules, what instrumentation may an
 hashspan is maintained by a single maintainer, so a review can take a few days. If a pull request has had no response
 for a week, feel free to leave a friendly ping on it. Review comments are suggestions for making the change fit the
 project, not a judgement of your work.
+
+## AI-assisted contributions
+
+You may use AI coding tools, but you are responsible for what you submit: you understand every change, have run the
+checks above, and can explain and adjust it in review. Pull requests that look generated without that care may be
+closed.
 
 ## License
 
