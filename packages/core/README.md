@@ -9,7 +9,7 @@ Transaction lifecycle tracing for the on-chain actions of AI agents, built on Op
   revert reason. It carries a span link to its `send` span.
 
 The core is library-agnostic and read-only: it never signs, sends or fetches anything. Adapters such as
-[`@hashspan/viem`](../viem) call it for you. Use the core directly to instrument any other send path.
+[`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/main/packages/viem) call it for you. Use the core directly to instrument any other send path.
 
 ## Install
 

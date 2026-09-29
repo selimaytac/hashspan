@@ -3,6 +3,11 @@
   "version": "0.0.0",
   "description": "viem adapter for @hashspan/core: traces transactions sent through a viem client.",
   "license": "Apache-2.0",
+  "author": "Selim Aytac",
+  "homepage": "https://github.com/selimaytac/hashspan/tree/main/packages/viem#readme",
+  "bugs": {
+    "url": "https://github.com/selimaytac/hashspan/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/selimaytac/hashspan.git",
@@ -35,7 +40,9 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "scripts": {
     "build": "tsdown",
@@ -58,5 +65,8 @@
   "publishConfig": {
     "access": "public",
     "provenance": true
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
