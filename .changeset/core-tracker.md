@@ -10,6 +10,8 @@ Add `createTxTracker()`, the transaction lifecycle tracker:
 - agent identity from Baggage or a static fallback
 - address privacy modes (`raw`, `hashed`, `off`) and a fail-closed redaction hook, which also runs on exception
   attributes
+- decoded call arguments are recorded only with `recordFunctionArguments`, as a JSON array with addresses per
+  address mode
 - error messages are kept out of spans by default; `errorMessages` records a sanitized first line or the full
   message and stack trace
 - optional `startTime` / `endTime` on every input and handle method, so integrations can record a call after the fact

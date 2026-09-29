@@ -130,6 +130,21 @@ describe('on Anvil', () => {
     });
   });
 
+  it('records writeContract arguments when enabled', async () => {
+    const wallet = createWalletClient({ account, chain: anvil, transport: http(RPC_URL) }).extend(
+      withHashspan({ recordFunctionArguments: true }),
+    );
+    await wallet.writeContract({
+      address: TOKEN,
+      abi: parseAbi(['function transfer(address to, uint256 amount) returns (bool)']),
+      functionName: 'transfer',
+      args: [RECIPIENT, 10n ** 18n],
+    });
+    expect(
+      tracing.spanNamed('send 31337').attributes['blockchain.contract.function.arguments'],
+    ).toBe(`["${RECIPIENT}","1000000000000000000"]`);
+  });
+
   it('keeps the sender out of a failed send span in off mode', async () => {
     const wallet = createWalletClient({ account, chain: anvil, transport: http(RPC_URL) }).extend(
       withHashspan({ address: 'off', errorMessages: 'sanitized' }),

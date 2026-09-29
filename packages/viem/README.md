@@ -113,7 +113,7 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
 | Action | Span | Recorded |
 |---|---|---|
 | `sendTransaction` | `send` | chain id, from, to, value, nonce, function selector, hash |
-| `writeContract` | `send` | as above, plus the function name |
+| `writeContract` | `send` | as above, plus the function name, and the call arguments with `recordFunctionArguments: true` |
 | `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack), total fee |
 
 Failed sends, reverted receipts and receipt timeouts set error status; the original error is always rethrown

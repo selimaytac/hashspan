@@ -67,6 +67,7 @@ the instrumentation are reported through `diag` and never thrown into your code.
 | `tracerProvider` | global provider | Tracer provider to use |
 | `address` | `'raw'` | `'raw'`, `'hashed'`, `'off'`, or `{ mode: 'hashed', hash: (address) => string }` |
 | `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, addresses per `address` mode, calldata removed) or `'raw'` (full message and stack trace) |
+| `recordFunctionArguments` | `false` | Record `functionArguments` as a JSON array in `blockchain.contract.function.arguments`: bigints as decimal strings, addresses per `address` mode, at most 4096 characters |
 | `agent` | none | Fallback `{ id, name }`; Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` take precedence |
 | `redact` | none | `(attributes) => attributes`, runs last on every attribute set, including exception event attributes; if it throws, only non-sensitive identifiers are kept |
 | `linkTtlMs` | `600000` | How long a sent transaction can be linked from its confirmation |
@@ -76,7 +77,8 @@ the instrumentation are reported through `diag` and never thrown into your code.
 
 Chain id, transaction hash, sender/recipient (per `address` mode), value, nonce, function name and selector, and,
 on confirmation, status, block number, gas used, effective gas price, L1 fee, total fee and revert reason. Decoded
-calldata arguments are never recorded by the core, and error messages only with `errorMessages`. Attribute definitions:
+call arguments are recorded only with `recordFunctionArguments`, and error messages only with `errorMessages`.
+Attribute definitions:
 [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/main/docs/semconv.md).
 
 ## Privacy notes

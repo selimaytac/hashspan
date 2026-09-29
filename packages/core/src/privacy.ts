@@ -71,6 +71,25 @@ export function sanitizeErrorMessage(message: string, formatAddress: AddressForm
     : sanitized;
 }
 
+const MAX_ARGUMENTS_LENGTH = 4096;
+
+/**
+ * Call arguments as a JSON array: bigints as decimal strings, addresses per address mode, at most
+ * `MAX_ARGUMENTS_LENGTH` characters. Throws for values JSON cannot represent (e.g. cycles).
+ */
+export function serializeFunctionArguments(
+  args: readonly unknown[],
+  formatAddress: AddressFormatter,
+): string {
+  const json = JSON.stringify(args, (_key, value: unknown) =>
+    typeof value === 'bigint' ? value.toString() : value,
+  );
+  const formatted = formatAddressesIn(json, formatAddress);
+  return formatted.length > MAX_ARGUMENTS_LENGTH
+    ? `${formatted.slice(0, MAX_ARGUMENTS_LENGTH)}...`
+    : formatted;
+}
+
 export function resolveErrorMessageMode(mode: ErrorMessageMode | undefined): ErrorMessageMode {
   if (mode === undefined || mode === 'off' || mode === 'sanitized' || mode === 'raw') {
     return mode ?? 'off';

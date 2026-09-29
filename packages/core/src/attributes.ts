@@ -24,6 +24,9 @@ export const ATTR_BLOCKCHAIN_BLOCK_NUMBER = 'blockchain.block.number' as const;
 export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME = 'blockchain.contract.function.name' as const;
 export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR =
   'blockchain.contract.function.selector' as const;
+/** Opt-in: decoded call arguments as a JSON array. See docs/adr/0004-privacy-defaults.md. */
+export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS =
+  'blockchain.contract.function.arguments' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_SYSTEM}. */
 export const BLOCKCHAIN_SYSTEM_VALUE_EVM = 'evm' as const;
