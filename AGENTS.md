@@ -58,6 +58,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
   tests use `tsconfig.test.json`). Exported functions need explicit return types (`isolatedDeclarations`).
 - Package versions live in `package.json`; `src/version.ts` is synced by `pnpm version-packages`; don't edit it.
 - Significant design changes get a short ADR in `docs/adr/NNNN-title.md` (see `0000-template.md`).
+  New ADRs start as `proposed` and move to `accepted` only after the implementation was compared with them.
 - Prefer OSI-licensed dependencies; flag non-OSS licenses.
 
 ## Security
