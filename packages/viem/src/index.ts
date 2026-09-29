@@ -42,6 +42,7 @@ const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
 const DEFAULT_REVERT_REASON_TIMEOUT_MS = 10_000;
 /** How long after a call settled its telemetry still waits for the client's chain id before it is dropped. */
 const CHAIN_ID_GRACE_MS = 30_000;
+const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
 
 /** Timers of the JavaScript runtime; `src/` is type-checked without runtime-specific types. */
 const timers = globalThis as unknown as {
@@ -135,10 +136,24 @@ export interface ViemClientLike {
   request: (...args: any[]) => Promise<any>;
 }
 
+export interface FlushOptions {
+  /** Longest time to wait. Default: 10 000 ms. */
+  timeoutMs?: number | undefined;
+}
+
 /** Client extension returned by {@link withHashspan}: the traced actions present on the client. */
-export type HashspanExtension = <TClient extends ViemClientLike>(
-  client: TClient,
-) => Pick<TClient, Extract<keyof TClient, TracedAction>>;
+export interface HashspanExtension {
+  <TClient extends ViemClientLike>(
+    client: TClient,
+  ): Pick<TClient, Extract<keyof TClient, TracedAction>>;
+  /**
+   * Waits for tracing work still running after traced calls returned (background confirmations, revert reason
+   * replays, calls recorded once their chain id is known), so their spans are ended before the OpenTelemetry SDK
+   * shuts down. Resolves true when all of it finished, false on timeout; never rejects. See
+   * docs/adr/0010-flush-before-shutdown.md.
+   */
+  flush(options?: FlushOptions): Promise<boolean>;
+}
 
 interface SendArgs {
   account?: string | { address: string } | null | undefined;
@@ -253,6 +268,30 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
   const revertReasons = new Recent<Promise<string | undefined>>();
   const confirmKey = (chainId: number, hash: string): string => `${chainId}:${hash.toLowerCase()}`;
+  /** Tracing work that outlives the traced call, awaited by `flush()`. */
+  const pending = new Set<Promise<void>>();
+  const track = (work: Promise<void>): void => {
+    const settled = work.catch(() => {});
+    pending.add(settled);
+    void settled.finally(() => pending.delete(settled));
+  };
+  const flush = async ({
+    timeoutMs = DEFAULT_FLUSH_TIMEOUT_MS,
+  }: FlushOptions = {}): Promise<boolean> => {
+    const deadline = Date.now() + timeoutMs;
+    // Loop, because finishing work can start more (e.g. a late send starting a background confirmation).
+    while (pending.size > 0) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return false;
+      const done = await within(
+        Promise.all([...pending]).then(() => true),
+        remaining,
+        'flush pending tracing work',
+      );
+      if (done === undefined) return false;
+    }
+    return true;
+  };
 
   /** Revert reason of a mined transaction, fetched once per transaction (keyed by its hash). */
   const revertReasonOf = (
@@ -388,7 +427,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         timeout: confirm?.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS,
         onReplaced: capturing(capture, undefined) as never,
       }) as Promise<ViemReceipt>;
-      void recordConfirmation(chainId, hash, handle, wait, capture, client);
+      track(recordConfirmation(chainId, hash, handle, wait, capture, client));
     };
 
     /** Work after a successful send: remember the ABI and start background confirmation. */
@@ -447,9 +486,9 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         // Telemetry must not delay the call: record it once the chain id is known (docs/adr/0009).
         const ctx = context.active();
         const startTime = new Date();
-        const pending = queryChainId();
+        const chainIdQuery = queryChainId();
         const result = send();
-        void recordLateSend(ctx, startTime, pending, result, describe, abi);
+        track(recordLateSend(ctx, startTime, chainIdQuery, result, describe, abi));
         return result;
       }
       let handle = NOOP_SEND;
@@ -585,15 +624,17 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
           onReplaced: capturing(capture, args.onReplaced),
         }) as Promise<ViemReceipt>;
         if (handle && chainId !== undefined) {
-          void recordConfirmation(chainId, args.hash, handle, wait, capture, client);
+          track(recordConfirmation(chainId, args.hash, handle, wait, capture, client));
         } else if (late) {
-          void recordLateConfirmation(
-            late.ctx,
-            late.startTime,
-            late.chainId,
-            args.hash,
-            wait,
-            capture,
+          track(
+            recordLateConfirmation(
+              late.ctx,
+              late.startTime,
+              late.chainId,
+              args.hash,
+              wait,
+              capture,
+            ),
           );
         }
         return wait;
@@ -603,5 +644,5 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     return actions;
   };
 
-  return extension as HashspanExtension;
+  return Object.assign(extension, { flush }) as HashspanExtension;
 }

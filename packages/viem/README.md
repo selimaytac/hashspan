@@ -43,6 +43,20 @@ agent identity, redaction hook) plus:
 | `confirm` | none | `{ mode: 'background', timeoutMs? }` confirms every sent transaction without an explicit wait |
 | `decodeRevertReason` | `true` | Replay reverted transactions to record their revert reason; `{ timeoutMs }` bounds the replay (default 10 000 ms) |
 
+## Shutting down
+
+Some spans end after the traced call returned: background confirmations, and confirmations of reverted
+transactions, which wait for the revert reason. In scripts, CLI agents and serverless functions, flush them before
+shutting the OpenTelemetry SDK down, or they are lost:
+
+```ts
+await hashspan.flush(); // at most 10 s by default: hashspan.flush({ timeoutMs })
+await provider.shutdown();
+```
+
+`flush()` resolves `true` when all pending work finished and `false` on timeout; it never rejects. Long-running
+services do not need it.
+
 ## Revert reasons
 
 A receipt only says that a transaction reverted. For reverted transactions the adapter replays the transaction with

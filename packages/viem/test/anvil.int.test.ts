@@ -273,6 +273,24 @@ describe('on Anvil', () => {
     );
   });
 
+  it('ends every pending span on flush, before a short-lived process shuts down', async () => {
+    const hashspan = withHashspan({ confirm: { mode: 'background', timeoutMs: 5_000 } });
+    const wallet = createWalletClient({
+      account,
+      chain: anvil,
+      transport: http(RPC_URL),
+      pollingInterval: 50,
+    }).extend(hashspan);
+
+    await wallet.sendTransaction({ to: REVERT_WITH_MESSAGE, gas: 100_000n });
+    await expect(hashspan.flush()).resolves.toBe(true);
+
+    expect(tracing.spanNamed('confirm 31337').attributes).toMatchObject({
+      'blockchain.tx.status': 'reverted',
+      'blockchain.tx.revert.reason': 'boom',
+    });
+  });
+
   it('decodes custom errors with the ABI passed to writeContract', async () => {
     const { wallet, reader } = clients();
     const hash = await wallet.writeContract({
