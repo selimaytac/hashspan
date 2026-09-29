@@ -1,0 +1,17 @@
+name: Question or feedback
+description: Ask how to use hashspan, or share feedback on the spans and attributes
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question or feedback
+      description: >-
+        What are you trying to do, and what did you try? Feedback on span and attribute names
+        (docs/semconv.md) is very welcome.
+    validations: { required: true }
+  - type: textarea
+    id: context
+    attributes:
+      label: Setup (optional)
+      description: Agent framework, OpenTelemetry backend, chain, package versions. Never include private keys or API keys.

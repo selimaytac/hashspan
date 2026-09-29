@@ -100,6 +100,12 @@ make lab-nuke    # remove containers, images, tools and build output
 - [Architecture](docs/architecture.md) · [Semantic conventions](docs/semconv.md) · [ADRs](docs/adr/) · [Roadmap](docs/roadmap.md)
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Releasing](docs/releasing.md)
 
+## Contributing
+
+Questions, feedback on the span schema, bug reports and pull requests are all welcome. Start with the
+[contributing guide](CONTRIBUTING.md), or pick a
+[good first issue](https://github.com/selimaytac/hashspan/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
+
 ## License
 
 [Apache-2.0](LICENSE)

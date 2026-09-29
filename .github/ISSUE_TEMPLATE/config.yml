@@ -3,3 +3,6 @@ contact_links:
   - name: Security vulnerability
     url: https://github.com/selimaytac/hashspan/security/advisories/new
     about: Please report security issues privately.
+  - name: Contributing guide
+    url: https://github.com/selimaytac/hashspan/blob/main/CONTRIBUTING.md
+    about: How to set up the project, pick up an issue and open a pull request.
