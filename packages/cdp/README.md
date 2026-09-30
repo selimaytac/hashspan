@@ -64,7 +64,8 @@ const hashspanCdp = withHashspan(cdp, { tracker, reader });
 await Promise.all([hashspanCdp.flush(), hashspanViem.flush()]);
 ```
 
-A `reader` whose chain differs from the transaction's is not used; a `diag` warning says so.
+A reader client whose chain differs from the transaction's, given directly or returned by a reader function, is not
+used; a `diag` warning says so.
 
 ## Traced
 
@@ -79,7 +80,8 @@ A `reader` whose chain differs from the transaction's is not used; a `diag` warn
 
 Accounts are traced when they come from `createAccount`, `getAccount`, `getOrCreateAccount`, `importAccount`,
 `updateAccount` or `listAccounts`. Networks are mapped to chain ids with `CDP_NETWORK_CHAIN_IDS`; a call on another network, or a
-network-scoped account created from an RPC URL, is passed through untraced.
+network-scoped account created from an RPC URL, is passed through untraced, with a `diag` warning once per network
+(an RPC URL is never logged, as it can contain an API key).
 
 Each call gets its own send span: retrying a call with the same `idempotencyKey` records a second send span, even
 when CDP returns the transaction of the first attempt; the confirm span is shared.
