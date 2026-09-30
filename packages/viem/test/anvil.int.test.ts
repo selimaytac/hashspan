@@ -5,6 +5,7 @@ import {
   type Address,
   createPublicClient,
   createWalletClient,
+  custom,
   encodeErrorResult,
   encodeFunctionData,
   type Hex,
@@ -313,6 +314,38 @@ describe('on Anvil', () => {
       'blockchain.tx.gas.used': 21_000,
     });
     expect(tracing.spans().filter((s) => s.name === 'send 31337')).toHaveLength(0);
+  });
+
+  it('watches a transaction whose receipt the node returns late', async () => {
+    const hashspan = withHashspan();
+    const plain = createWalletClient({ account, chain: anvil, transport: http(RPC_URL) });
+    const hash = await plain.sendTransaction({ to: RECIPIENT, value: 1n });
+    // Anvil mines at once; this transport hides the receipt for the first calls, like a node still indexing it.
+    const upstream = http(RPC_URL)({ chain: anvil });
+    let hidden = 6;
+    const lagging = custom({
+      async request({ method, params }: { method: string; params?: unknown }) {
+        if (method === 'eth_getTransactionReceipt' && hidden > 0) {
+          hidden--;
+          return null;
+        }
+        return upstream.request({ method, params } as never);
+      },
+    });
+    const reader = createPublicClient({ chain: anvil, transport: lagging, pollingInterval: 50 });
+    // viem alone gives up here: it finds the transaction itself in the block as a replacement.
+    await expect(reader.waitForTransactionReceipt({ hash, retryDelay: 1 })).rejects.toThrow(
+      expect.objectContaining({ name: 'TransactionReceiptNotFoundError' }),
+    );
+
+    hidden = 6;
+    hashspan.watch(reader, { hash });
+    await expect(hashspan.flush()).resolves.toBe(true);
+    expect(tracing.spanNamed('confirm 31337').attributes).toMatchObject({
+      'blockchain.tx.hash': hash,
+      'blockchain.tx.status': 'success',
+    });
+    expect(hidden).toBe(0);
   });
 
   it('traces clients without a chain once their chain id is known', async () => {
