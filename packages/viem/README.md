@@ -143,6 +143,9 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
   options always apply to your wait; while both run, receipt requests are made for each.
 - A pending confirmation keeps the Node.js process alive until the receipt arrives or `timeoutMs` (default
   120 000 ms) passes; the span then ends with status `timeout`.
+- Some nodes return a mined transaction before its receipt. viem's `waitForTransactionReceipt` can then fail with
+  `TransactionReceiptNotFoundError`; background confirmation and `watch()` wait again until `timeoutMs`. Your own
+  waits are passed on unchanged, including that error.
 - In serverless runtimes that freeze after the response, background confirmations may not complete.
 
 ## Traced actions

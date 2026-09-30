@@ -27,6 +27,8 @@ export interface MockOptions {
   mined?: () => boolean;
   /** Returns a new block number on every `eth_blockNumber`, so viem keeps polling. */
   advanceBlocks?: boolean;
+  /** Blocks contain the mined transaction, as they do on a node that returns a receipt late. */
+  blockIncludesTransaction?: boolean;
 }
 
 /** EIP-1193 transport answering the handful of methods the adapter's code paths use. */
@@ -34,6 +36,27 @@ export function mockTransport(options: MockOptions = {}) {
   const calls: string[] = [];
   const requests: { method: string; params?: unknown }[] = [];
   let block = 0x7b;
+  const transaction = () => ({
+    hash: HASH,
+    from: FROM,
+    to: TO,
+    input: '0xa9059cbb',
+    value: '0x0',
+    gas: '0x186a0',
+    nonce: '0x0',
+    blockHash: `0x${'cd'.repeat(32)}`,
+    blockNumber: '0x7b',
+    transactionIndex: '0x0',
+    type: '0x2',
+    chainId: options.chainIdHex ?? '0x2105',
+    maxFeePerGas: '0x3b9aca00',
+    maxPriorityFeePerGas: '0x1',
+    accessList: [],
+    v: '0x0',
+    r: `0x${'11'.repeat(32)}`,
+    s: `0x${'22'.repeat(32)}`,
+    yParity: '0x0',
+  });
   const transport = custom({
     async request({ method, params }: { method: string; params?: unknown }) {
       calls.push(method);
@@ -59,27 +82,7 @@ export function mockTransport(options: MockOptions = {}) {
         case 'eth_blockNumber':
           return `0x${(options.advanceBlocks ? block++ : block).toString(16)}`;
         case 'eth_getTransactionByHash':
-          return {
-            hash: HASH,
-            from: FROM,
-            to: TO,
-            input: '0xa9059cbb',
-            value: '0x0',
-            gas: '0x186a0',
-            nonce: '0x0',
-            blockHash: `0x${'cd'.repeat(32)}`,
-            blockNumber: '0x7b',
-            transactionIndex: '0x0',
-            type: '0x2',
-            chainId: options.chainIdHex ?? '0x2105',
-            maxFeePerGas: '0x3b9aca00',
-            maxPriorityFeePerGas: '0x1',
-            accessList: [],
-            v: '0x0',
-            r: `0x${'11'.repeat(32)}`,
-            s: `0x${'22'.repeat(32)}`,
-            yParity: '0x0',
-          };
+          return transaction();
         case 'eth_call':
           if (options.callHangs) return new Promise(() => {});
           if (options.callDelayMs)
@@ -106,7 +109,7 @@ export function mockTransport(options: MockOptions = {}) {
             extraData: '0x',
             baseFeePerGas: '0x1',
             logsBloom: `0x${'00'.repeat(256)}`,
-            transactions: [],
+            transactions: options.blockIncludesTransaction ? [transaction()] : [],
             uncles: [],
             size: '0x0',
             stateRoot: `0x${'00'.repeat(32)}`,

@@ -60,6 +60,7 @@ import {
 import type {
   ConfirmHandle,
   ConfirmInput,
+  FailOptions,
   ReceiptLike,
   ReplacementReason,
   SendHandle,
@@ -134,6 +135,17 @@ function toInt(value: bigint | number): number {
 
 function errorType(error: unknown): string {
   return error instanceof Error && error.name ? error.name : ERROR_TYPE_VALUE_OTHER;
+}
+
+const ERROR_TYPE_OVERRIDE = /^[A-Za-z0-9_.-]{1,64}$/;
+
+/** The `error.type` for a failure: an adapter's override when it is a short identifier, else the class name. */
+function reportedErrorType(error: unknown, options: FailOptions | undefined): string {
+  const override = options?.errorType;
+  if (override === undefined) return errorType(error);
+  if (typeof override === 'string' && ERROR_TYPE_OVERRIDE.test(override)) return override;
+  diag.debug('hashspan: ignoring an error type that is not a short identifier');
+  return errorType(error);
 }
 
 /** The confirm span of one transaction and how to end it; shared by all its handles. */
@@ -222,12 +234,22 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     return attributes;
   };
 
-  /** Error names are free text too: they follow the address mode and pass through the redaction hook. */
-  const markError = (span: Span, errorName: string, error?: unknown): void => {
+  /**
+   * Error names are free text too: they follow the address mode and pass through the redaction hook.
+   * `exceptionName` is the class name for `exception.type` when `errorName` is an adapter's error type.
+   */
+  const markError = (
+    span: Span,
+    errorName: string,
+    error?: unknown,
+    exceptionName: string = errorName,
+  ): void => {
     const type = formatAddressesIn(errorName, formatAddress);
     let message: string | undefined;
     if (error !== undefined) {
-      const exception = redact(exceptionAttributes(type, error));
+      const exception = redact(
+        exceptionAttributes(formatAddressesIn(exceptionName, formatAddress), error),
+      );
       span.addEvent(EXCEPTION_EVENT, exception);
       const recorded = exception[ATTR_EXCEPTION_MESSAGE];
       if (typeof recorded === 'string') message = recorded;
@@ -310,8 +332,12 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
           },
           endTime,
         ),
-      fail: (error, endTime) =>
-        finish('record send failure', () => markError(span, errorType(error), error), endTime),
+      fail: (error, endTime, options) =>
+        finish(
+          'record send failure',
+          () => markError(span, reportedErrorType(error, options), error, errorType(error)),
+          endTime,
+        ),
     };
   };
 
