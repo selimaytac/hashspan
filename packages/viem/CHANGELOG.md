@@ -1,5 +1,21 @@
 # @hashspan/viem
 
+## 0.3.0
+
+### Minor Changes
+
+- [#57](https://github.com/selimaytac/hashspan/pull/57) [`7b99e7b`](https://github.com/selimaytac/hashspan/commit/7b99e7becae4a4f8d6b1416fc9c0df5ff85f64ce) Thanks [@selimaytac](https://github.com/selimaytac)! - Add `watch(client, { hash, chainId?, timeoutMs?, abi? })` to the `withHashspan()` result: it confirms a transaction
+  sent outside the extended clients, such as by a wallet API, in the background, with the receipt, revert reason and
+  fees, linked to a send span recorded by the same tracker.
+
+### Patch Changes
+
+- [#66](https://github.com/selimaytac/hashspan/pull/66) [`081cab2`](https://github.com/selimaytac/hashspan/commit/081cab2158d8a1e12e76f7abd386e28a79f5b0ff) Thanks [@selimaytac](https://github.com/selimaytac)! - Background confirmation and `watch()` no longer end the confirm span with `TransactionReceiptNotFoundError` when a
+  node returns the mined transaction before its receipt: they wait again until their timeout. The result of your own
+  `waitForTransactionReceipt` calls is unchanged.
+- Updated dependencies [[`28a83c2`](https://github.com/selimaytac/hashspan/commit/28a83c265f11836a5eca26a99971daa402abc4d3)]:
+  - @hashspan/core@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes

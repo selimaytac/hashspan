@@ -9,7 +9,7 @@ Transaction lifecycle tracing for the on-chain actions of AI agents, built on Op
   revert reason. It carries a span link to its `send` span.
 
 The core is library-agnostic and read-only: it never signs, sends or fetches anything. Adapters such as
-[`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/core@0.2.0/packages/viem) call it for you. Use the core directly to instrument any other send path.
+[`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/core@0.3.0/packages/viem) call it for you. Use the core directly to instrument any other send path.
 
 ## Install
 
@@ -63,7 +63,7 @@ stays the class name.
 
 Both calls accept an explicit parent `Context` as a second argument. An integration that learns about a call only
 after it started can record it after the fact: pass `startTime` in the input and the end time as the last argument
-of the handle method, e.g. `send.end(hash, endTime)` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.2.0/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
+of the handle method, e.g. `send.end(hash, endTime)` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
 the instrumentation are reported through `diag` and never thrown into your code.
 
 ## Options
@@ -72,7 +72,7 @@ the instrumentation are reported through `diag` and never thrown into your code.
 |---|---|---|
 | `tracerProvider` | global provider | Tracer provider to use |
 | `address` | `'raw'` | `'raw'`, `'hashed'`, `'off'`, or `{ mode: 'hashed', hash: (address) => string }` |
-| `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace). `'raw'` can record RPC URLs that include API keys, as some libraries put the request URL in the message; `'sanitized'` keeps only the first line (viem puts the URL on a later line), which is best effort. See [ADR 0006](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.2.0/docs/adr/0006-error-privacy.md) |
+| `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace). `'raw'` can record RPC URLs that include API keys, as some libraries put the request URL in the message; `'sanitized'` keeps only the first line (viem puts the URL on a later line), which is best effort. See [ADR 0006](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0006-error-privacy.md) |
 | `recordFunctionArguments` | `false` | Record `functionArguments` as a JSON array in `blockchain.contract.function.arguments`: bigints as decimal strings, addresses per `address` mode (longer hex values become `<hex>` in `hashed` and `off` mode), at most 4096 characters. Reads only own enumerable data properties: `toJSON()` and getters are never called, so a `Date` records as `{}`; a Proxy's traps still run |
 | `agent` | none | Agent `{ id, name }`; a field set here always wins, unset fields come from the Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` |
 | `agentFromBaggage` | `true` | Read agent identity fields that `agent` leaves unset from Baggage; set to `false` in services that accept requests from outside their trust boundary |
@@ -86,7 +86,7 @@ Chain id, transaction hash, sender/recipient (per `address` mode), value, nonce,
 on confirmation, status, block number, gas used, effective gas price, L1 fee, total fee and revert reason. Decoded
 call arguments are recorded only with `recordFunctionArguments`, and error messages only with `errorMessages`.
 Attribute definitions:
-[docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.2.0/docs/semconv.md).
+[docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/semconv.md).
 
 ## Privacy notes
 
@@ -101,7 +101,7 @@ Attribute definitions:
   propagated, or strip the entries before outbound calls.
 - **Inbound Baggage can claim an identity.** A caller can send Baggage entries with any agent id. A field set in the
   `agent` option cannot be overridden that way; to ignore identity from Baggage entirely, set `agentFromBaggage: false`
-  ([ADR 0011](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.2.0/docs/adr/0011-agent-identity-precedence.md)).
+  ([ADR 0011](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0011-agent-identity-precedence.md)).
 - The redaction hook (`redact`) runs last on every attribute set and on exception attributes; use it for anything
   else your policy forbids.
 
