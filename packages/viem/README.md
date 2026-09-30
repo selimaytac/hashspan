@@ -43,6 +43,24 @@ agent identity, redaction hook) plus:
 | `confirm` | none | `{ mode: 'background', timeoutMs? }` confirms every sent transaction without an explicit wait |
 | `decodeRevertReason` | `true` | Replay reverted transactions to record their revert reason; `{ timeoutMs }` bounds the replay (default 10 000 ms) |
 
+## Transactions sent elsewhere
+
+When a transaction is sent by something other than an extended client, such as a wallet API or another library,
+`watch()` confirms it through a viem client in the background. The confirm span carries the receipt, revert reason
+and fees like any other, and links to a send span recorded by the same tracker:
+
+```ts
+const hashspan = withHashspan();
+const reader = createPublicClient({ chain: baseSepolia, transport: http() });
+
+const { transactionHash } = await walletApi.send(tx); // not traced by hashspan
+hashspan.watch(reader, { hash: transactionHash });
+```
+
+Options: `chainId` (defaults to the client's chain; without either, nothing is recorded), `timeoutMs` (default
+120 000 ms) and `abi`, to decode custom errors in the revert reason. `watch()` never throws or waits; `flush()` awaits
+it.
+
 ## Shutting down
 
 Some spans end after the traced call returned: background confirmations, and confirmations of reverted

@@ -167,6 +167,23 @@ export interface HashspanExtension {
    * docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
+  /**
+   * Confirms a transaction sent outside the extended clients (for example by a wallet API) through `client`, in the
+   * background: a confirm span with the receipt, revert reason and fees, linked to the send span when the same tracker
+   * recorded one. Never throws and never waits; `flush()` awaits it. See docs/adr/0012-cdp-adapter.md.
+   */
+  watch(client: ViemClientLike, options: WatchOptions): void;
+}
+
+export interface WatchOptions {
+  /** Transaction hash. */
+  hash: string;
+  /** EIP-155 chain id; defaults to the client's chain. Without either, nothing is recorded. */
+  chainId?: number | undefined;
+  /** How long to poll for the receipt before the confirm span ends as `timeout`. Default: 120 000 ms. */
+  timeoutMs?: number | undefined;
+  /** ABI of the called contract, to decode custom errors in the revert reason. */
+  abi?: Abi | undefined;
 }
 
 interface SendArgs {
@@ -476,6 +493,55 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     ]);
   };
 
+  /**
+   * Each client under its own `uid`, for background confirmation. viem joins concurrent `waitForTransactionReceipt`
+   * calls with the same client `uid` and hash into one poll that runs with the first call's options: sharing it would
+   * apply the background timeout and confirmations to the caller's own wait. One `uid` per client, since viem also
+   * caches by `uid`.
+   */
+  const backgroundClients = new WeakMap<object, ViemClientLike>();
+  const backgroundClientOf = (client: ViemClientLike): ViemClientLike => {
+    let background = backgroundClients.get(client);
+    if (!background) {
+      background =
+        typeof client.uid === 'string' ? { ...client, uid: `${client.uid}:hashspan` } : client;
+      backgroundClients.set(client, background);
+    }
+    return background;
+  };
+
+  /** Starts a confirm span for `hash` and polls for its receipt through `client`, off the caller's path. */
+  const confirmThrough = (
+    client: ViemClientLike,
+    chainId: number,
+    hash: string,
+    timeoutMs: number,
+  ): void => {
+    const handle = tracker.startConfirm({ chainId, hash });
+    const capture: ReplacementCapture = {};
+    const wait = viemWaitForTransactionReceipt(backgroundClientOf(client) as never, {
+      hash: hash as `0x${string}`,
+      timeout: timeoutMs,
+      onReplaced: capturing(capture, undefined) as never,
+    }) as Promise<ViemReceipt>;
+    track(recordConfirmation(chainId, hash, handle, wait, capture, client));
+  };
+
+  const watch = (client: ViemClientLike, options: WatchOptions): void => {
+    try {
+      const chainId = options.chainId ?? client.chain?.id;
+      if (chainId === undefined) {
+        diag.debug('hashspan: watch() needs a chain id or a client with a chain; not recording it');
+        return;
+      }
+      if (options.abi) abis.set(confirmKey(chainId, options.hash), options.abi);
+      const timeoutMs = options.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS;
+      confirmThrough(client, chainId, options.hash, timeoutMs);
+    } catch (error) {
+      diag.error(`hashspan: failed to watch a transaction (${errorName(error)})`);
+    }
+  };
+
   const extension = (client: ViemClientLike & Partial<Record<TracedAction, AnyAction>>) => {
     const knownChainId = (args: {
       chain?: { id: number } | null | undefined;
@@ -504,31 +570,13 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       return pendingChainId;
     };
 
-    /**
-     * The sending client under its own `uid`, for background confirmation. viem joins concurrent
-     * `waitForTransactionReceipt` calls with the same client `uid` and hash into one poll that runs with the first
-     * call's options: sharing it would apply the background timeout and confirmations to the caller's own wait.
-     * One `uid` per client, since viem also caches by `uid`.
-     */
-    const backgroundClient =
-      typeof client.uid === 'string' ? { ...client, uid: `${client.uid}:hashspan` } : client;
-
-    const confirmInBackground = (chainId: number, hash: string): void => {
-      const handle = tracker.startConfirm({ chainId, hash });
-      const capture: ReplacementCapture = {};
-      const wait = viemWaitForTransactionReceipt(backgroundClient as never, {
-        hash: hash as `0x${string}`,
-        timeout: confirm?.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS,
-        onReplaced: capturing(capture, undefined) as never,
-      }) as Promise<ViemReceipt>;
-      track(recordConfirmation(chainId, hash, handle, wait, capture, client));
-    };
-
     /** Work after a successful send: remember the ABI and start background confirmation. */
     const afterSend = (chainId: number, hash: string, abi: Abi | undefined): void => {
       try {
         if (abi) abis.set(confirmKey(chainId, hash), abi);
-        if (confirm?.mode === 'background') confirmInBackground(chainId, hash);
+        if (confirm?.mode === 'background') {
+          confirmThrough(client, chainId, hash, confirm.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS);
+        }
       } catch (error) {
         diag.error(`hashspan: failed to start background confirmation (${errorName(error)})`);
       }
@@ -738,5 +786,5 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     return actions;
   };
 
-  return Object.assign(extension, { flush }) as HashspanExtension;
+  return Object.assign(extension, { flush, watch }) as HashspanExtension;
 }

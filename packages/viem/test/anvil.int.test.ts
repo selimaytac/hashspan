@@ -293,6 +293,28 @@ describe('on Anvil', () => {
     expect(confirms[0]?.attributes['blockchain.tx.status']).toBe('success');
   });
 
+  it('watches a transaction sent without the extension', async () => {
+    const hashspan = withHashspan();
+    // Sent by a client that is not extended, as a wallet API would.
+    const plain = createWalletClient({ account, chain: anvil, transport: http(RPC_URL) });
+    const hash = await plain.sendTransaction({ to: RECIPIENT, value: 1n });
+
+    hashspan.watch(
+      createPublicClient({ chain: anvil, transport: http(RPC_URL), pollingInterval: 50 }),
+      {
+        hash,
+      },
+    );
+    await expect(hashspan.flush()).resolves.toBe(true);
+
+    expect(tracing.spanNamed('confirm 31337').attributes).toMatchObject({
+      'blockchain.tx.hash': hash,
+      'blockchain.tx.status': 'success',
+      'blockchain.tx.gas.used': 21_000,
+    });
+    expect(tracing.spans().filter((s) => s.name === 'send 31337')).toHaveLength(0);
+  });
+
   it('traces clients without a chain once their chain id is known', async () => {
     const hashspan = withHashspan();
     const wallet = createWalletClient({ account, transport: http(RPC_URL) }).extend(hashspan);
