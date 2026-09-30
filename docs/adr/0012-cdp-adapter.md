@@ -1,7 +1,9 @@
 # 0012. Coinbase CDP adapter for server accounts
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-30
+- Accepted: 2026-09-30, after comparing the implementation (`packages/cdp`); the decision below records where it
+  differs from the proposal.
 
 ## Context
 
@@ -19,32 +21,40 @@ agent toolkits. Relevant facts, from the SDK source (1.57):
   every factory call.
 - Smart accounts send ERC-4337 user operations, identified by a `userOpHash`; the transaction hash only exists once the
   bundle is mined, and one bundle can carry many operations.
-- Accounts turned into viem accounts (`toAccount`) broadcast through viem, and `useNetwork` on chains other than Base
-  and Ethereum broadcasts through viem too: those paths are already covered by `@hashspan/viem`.
+- Accounts turned into viem accounts (`toAccount`) broadcast through the user's viem client, which `@hashspan/viem`
+  covers. Network-scoped accounts on chains other than Base and Ethereum broadcast through a viem client the SDK
+  creates internally, which the user cannot extend.
 
 ## Decision
 
 - A new package, `@hashspan/cdp`, with `withHashspan(cdp, options)`. Peer dependencies: `@coinbase/cdp-sdk`,
   `@opentelemetry/api`, `viem`.
 - **Wrapping per instance.** It installs wrappers as own properties on `cdp.evm` for `sendTransaction` and the server
-  account factories (`createAccount`, `getAccount`, `getOrCreateAccount`, `listAccounts`), and wraps each account they
-  return (`sendTransaction`, `transfer`, `swap`, `useSpendPermission`, `useNetwork` and the network-scoped account's
-  `sendTransaction` and `waitForTransactionReceipt`). It never patches prototypes or the SDK's HTTP client. Wrapping is
-  idempotent and returns the same client.
+  account factories (`createAccount`, `getAccount`, `getOrCreateAccount`, `importAccount`, `listAccounts`), and
+  wraps each account they return (`sendTransaction`, `transfer`, `swap`, `useSpendPermission`, `useNetwork`). A
+  network-scoped account's `sendTransaction` and `transfer` are traced by the adapter only on chains where the SDK
+  sends through its internal viem client; on Base and Ethereum they call the wrapped account, which traces them, so
+  each transaction gets one send span. The scoped `waitForTransactionReceipt` is not wrapped: confirmations come from
+  the reader. It never patches prototypes or the SDK's HTTP client. Wrapping is idempotent, happens in place, and
+  `withHashspan()` returns a handle with `flush()`.
 - **Send span.** Started when the call starts (ADR 0009), ended with `transactionHash`, or failed with the error.
-  Recorded: chain id from our own network name map (a call on an unknown network is not traced), `from` (the account
-  address), and for `sendTransaction` `to`, `value`, `nonce` and the function selector from the request, parsing a
-  serialized transaction with viem when one is given.
+  Recorded: chain id from our own network name map, exported as `CDP_NETWORK_CHAIN_IDS` (a call on an unknown
+  network, or on a network-scoped account created from an RPC URL, is not traced), `from` (the account address), and
+  for `sendTransaction` `to`, `value`, `nonce` and the function selector from the request, parsing a serialized
+  transaction with viem when one is given. A token `transfer` is recorded as a call to the token contract.
 - **Confirm span, from a reader.** Confirmation needs a viem `PublicClient` for the chain, passed as `reader`.
   `@hashspan/viem` gains `watch(client, { hash })` on the `withHashspan()` result: it confirms a transaction sent
   elsewhere through `client` in the background, like background confirmation (ADR 0002), with revert reasons
   (ADR 0005), replacements (ADR 0008) and `flush()` (ADR 0010). `@hashspan/cdp` uses it. Without a reader, only send
   spans are recorded; the adapter never picks an RPC endpoint itself.
 - **Not traced in this step.** Smart account user operations, which need a new identifier in the core and the schema
-  and get their own ADR; `signTransaction`, which does not broadcast; and paths that broadcast through viem.
+  and get their own ADR; `signTransaction`, which does not broadcast; and `toAccount()` accounts, which broadcast
+  through the user's viem client.
 - The SDK's own usage tracking and error reporting are left as they are; the README names the environment variables
   that turn them off.
-- Tests run offline: the client's `basePath` points at a local mock of the CDP API, with throwaway keys.
+- Tests run offline: the client's `basePath` points at a local mock of the CDP API, with throwaway keys, and the
+  mock broadcasts on Anvil so that confirmations use real receipts. A guard fails the tests if any request leaves
+  localhost.
 
 ## Consequences
 
