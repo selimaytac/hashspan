@@ -71,6 +71,31 @@ describe('a node that returns the receipt late', () => {
     expect(confirms()[0]?.attributes['blockchain.tx.status']).toBe('success');
   });
 
+  it('records a plain success when viem reports the transaction as its own replacement', async () => {
+    // The receipt appears on the request viem makes for the "replacement" it found: the transaction itself.
+    const node = laggingNode(2);
+    const onReplaced = vi.fn();
+    const hashspan = withHashspan();
+    const reader = createPublicClient({
+      chain: base,
+      transport: node.transport,
+      pollingInterval: 10,
+    }).extend(hashspan);
+    await reader.waitForTransactionReceipt({ hash: HASH, retryDelay: 1, onReplaced });
+    expect(onReplaced).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: 'repriced',
+        transaction: expect.objectContaining({ hash: HASH }),
+      }),
+    );
+
+    const [confirm] = confirms();
+    expect(confirms()).toHaveLength(1);
+    expect(confirm?.attributes['blockchain.tx.status']).toBe('success');
+    expect(confirm?.attributes['blockchain.tx.replacement.hash']).toBeUndefined();
+    expect(confirm?.attributes['blockchain.tx.replacement.reason']).toBeUndefined();
+  });
+
   it('ends as a timeout when the receipt does not arrive in time', async () => {
     const node = laggingNode(Number.POSITIVE_INFINITY);
     const hashspan = withHashspan();
