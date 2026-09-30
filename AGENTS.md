@@ -44,7 +44,8 @@ Run lint, typecheck and tests before proposing a change.
     `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break
 - `docker/`, `scripts/`, `Makefile` → local lab; `scripts/demo.sh` (behind `make demo`) starts a fresh Anvil or
   fails, waiting for Anvil's own "Listening on" line rather than probing the port, and is tested from `examples/ai-sdk-agent/test/demo-script.test.ts`
-See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and [docs/adr/](docs/adr/).
+See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and the ADR index,
+[docs/adr/README.md](docs/adr/README.md), with each decision in one line.
 
 ## Conventions
 - Language: all code, comments, docs, commits and PRs in English.
@@ -64,8 +65,9 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 - `src/` must not use Node.js-only APIs at import time (it is type-checked without Node types via `tsconfig.json`;
   tests use `tsconfig.test.json`). Exported functions need explicit return types (`isolatedDeclarations`).
 - Package versions live in `package.json`; `src/version.ts` is synced by `pnpm version-packages`; don't edit it.
-- Significant design changes get a short ADR in `docs/adr/NNNN-title.md` (see `0000-template.md`).
-  New ADRs start as `proposed` and move to `accepted` only after the implementation was compared with them.
+- Significant design changes get a short ADR in `docs/adr/NNNN-title.md` (see `0000-template.md`) and a row in
+  `docs/adr/README.md`. New ADRs start as `proposed` and move to `accepted` only after the implementation was
+  compared with them.
 - Prefer OSI-licensed dependencies; flag non-OSS licenses.
 
 ## Security

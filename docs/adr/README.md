@@ -1,0 +1,21 @@
+# Architecture decision records
+
+Each record explains one design decision: the context, what was decided and what follows from it. Read the one-line
+decision here first and open a record only when you need its reasoning. New records start from
+[0000-template.md](0000-template.md) as `proposed` and become `accepted` once the implementation was compared with
+them.
+
+| ADR | Status | Decision |
+|---|---|---|
+| [0001. Hash-centric core with thin capture adapters](0001-hash-centric-core.md) | accepted | The core turns a transaction hash plus metadata into spans and makes no network calls; adapters observe the send path and pass it receipts |
+| [0002. Separate `send` and `confirm` spans connected by a span link](0002-send-confirm-spans.md) | accepted | `send` ends when the hash is returned, `confirm` covers receipt retrieval under whoever waits, and a span link joins them |
+| [0003. `blockchain.*` attribute namespace, development stability, versioned schema](0003-attribute-namespace.md) | accepted | Attributes live under `blockchain.*`, reuse `rpc.*`, `gen_ai.agent.*` and `error.type` where they apply, and are all `development` |
+| [0004. Privacy defaults](0004-privacy-defaults.md) | accepted | Addresses are `raw` by default and can be `hashed` or `off`; call arguments are opt-in; a redaction hook runs last |
+| [0005. Decode revert reasons of mined transactions by replay](0005-revert-reason-replay.md) | accepted | A reverted receipt is replayed with `eth_call` against the previous block and the revert data is decoded, on by default |
+| [0006. Error message privacy](0006-error-privacy.md) | accepted | Exception events carry only `exception.type` by default; `errorMessages` adds sanitized or raw messages |
+| [0007. Confirmation ownership and concurrent waits](0007-confirmation-ownership.md) | accepted | The tracker keeps one confirm span per transaction; concurrent waits join it and the first wait decides its parent |
+| [0008. Replaced transactions](0008-replaced-transactions.md) | accepted | A receipt is recorded only on the confirm span of the mined hash; the awaited, replaced hash ends as `replaced` |
+| [0009. Telemetry off the call path](0009-telemetry-off-the-call-path.md) | accepted | Adapters await nothing before the traced call; unknown data is resolved alongside it and spans get explicit times |
+| [0010. Flush pending tracing work before shutdown](0010-flush-before-shutdown.md) | accepted | `flush({ timeoutMs })` awaits the work a `withHashspan()` result started after its calls returned, and never rejects |
+| [0011. Agent identity precedence](0011-agent-identity-precedence.md) | accepted | The static `agent` option wins field by field over Baggage, and `agentFromBaggage: false` ignores Baggage |
+| [0012. Coinbase CDP adapter for server accounts](0012-cdp-adapter.md) | accepted | `@hashspan/cdp` wraps a CDP client in place, records sends of server accounts and confirms them through a viem `reader` |
