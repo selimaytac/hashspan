@@ -1,5 +1,17 @@
 # @hashspan/core
 
+## 0.2.0
+
+### Minor Changes
+
+- [#50](https://github.com/selimaytac/hashspan/pull/50) [`6da02c7`](https://github.com/selimaytac/hashspan/commit/6da02c74d872a05e04f496cc10fcc9a04fb43c6c) Thanks [@selimaytac](https://github.com/selimaytac)! - A field set in the static `agent` option now always wins over the Baggage entries `gen_ai.agent.id` /
+  `gen_ai.agent.name`; Baggage only fills fields the option leaves unset. The new `agentFromBaggage: false` option stops
+  reading agent identity from Baggage, for services that accept requests from outside their trust boundary, where a
+  caller could otherwise attribute transactions to another agent.
+
+- [#45](https://github.com/selimaytac/hashspan/pull/45) [`7dc19d1`](https://github.com/selimaytac/hashspan/commit/7dc19d16f72e0c1ed8308ecfa006afacc3989c48) Thanks [@selimaytac](https://github.com/selimaytac)! - Require Node.js 22.3 or later (`engines`). Node.js 18 and 20 have reached end of life, and `hashed` address mode relies
+  on `process.getBuiltinModule`, available from Node.js 22.3; the packages are built for that target.
+
 ## 0.1.0
 
 ### Minor Changes
