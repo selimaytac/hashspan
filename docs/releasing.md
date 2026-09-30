@@ -10,7 +10,8 @@ together.
 
 1. Merge pull requests with their changesets (`pnpm changeset`) into `main`.
 2. Run the **Release** workflow (Actions, Release, Run workflow). It runs the CI checks, then opens or updates a
-   **Version packages** pull request that bumps the versions and writes `CHANGELOG.md` from the changesets.
+   **Version packages** pull request that bumps the versions and writes `CHANGELOG.md` from the changesets. This step needs no
+   approval: only the job that publishes to npm runs in the `npm` environment.
 3. Review and merge that pull request. It is opened by GitHub Actions, so CI does not run on it; the next step runs
    the checks again before publishing.
 4. Run the **Release** workflow again. With no changesets left, it runs the checks, then waits for a maintainer to
