@@ -304,13 +304,16 @@ describe('unexpected inputs and results', () => {
     >;
   };
 
-  it('records a send without transaction fields when the transaction is missing or unparseable', async () => {
+  it('records a send without transaction fields when the transaction is missing, unparseable or malformed', async () => {
     vi.spyOn(diag, 'debug').mockImplementation(() => {});
     const cdp = fakeCdp();
     withHashspan(cdp);
     await cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'base' } as never);
     await cdp.evm.sendTransaction!({ network: 'base', transaction: '0x1234' } as never);
-    const [first, second] = sends();
+    await cdp.evm.sendTransaction!({ network: 'base', transaction: { to: 42, value: 1 } } as never);
+    const [first, second, third] = sends();
+    expect(third?.attributes['blockchain.tx.to']).toBeUndefined();
+    expect(third?.attributes['blockchain.tx.value']).toBeUndefined();
     expect(first?.attributes['blockchain.tx.from']).toBe(ACCOUNT);
     expect(first?.attributes['blockchain.tx.to']).toBeUndefined();
     expect(second?.attributes['blockchain.tx.from']).toBeUndefined();
