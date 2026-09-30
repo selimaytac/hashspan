@@ -1,4 +1,4 @@
-import { createTxTracker, type SendInput, type TxTracker } from '@hashspan/core';
+import { createTxTracker, type ReceiptLike, type SendInput, type TxTracker } from '@hashspan/core';
 import {
   type FlushOptions,
   type ViemClientLike,
@@ -62,6 +62,25 @@ function errorName(error: unknown): string {
 function cdpErrorType(error: unknown): string | undefined {
   const type = error instanceof Error ? (error as { errorType?: unknown }).errorType : undefined;
   return typeof type === 'string' ? type : undefined;
+}
+
+/** The fields of a viem receipt that the confirm span records, or undefined if `value` is not one. */
+function receiptOf(value: unknown): ReceiptLike | undefined {
+  if (value === null || typeof value !== 'object') return undefined;
+  const receipt = value as Record<string, unknown>;
+  const { status, blockNumber, gasUsed } = receipt;
+  if (status !== 'success' && status !== 'reverted') return undefined;
+  if (typeof blockNumber !== 'bigint' || typeof gasUsed !== 'bigint') return undefined;
+  const optional = (v: unknown) => (typeof v === 'bigint' ? v : undefined);
+  return {
+    status,
+    blockNumber,
+    gasUsed,
+    effectiveGasPrice: optional(receipt.effectiveGasPrice),
+    l1Fee: optional(receipt.l1Fee),
+    transactionHash:
+      typeof receipt.transactionHash === 'string' ? receipt.transactionHash : undefined,
+  };
 }
 
 function isHexString(value: unknown): value is `0x${string}` {
@@ -189,6 +208,50 @@ export function withHashspan(
     return result;
   };
 
+  /**
+   * Runs a network-scoped account's `waitForTransactionReceipt` inside a confirm span, for users without a reader.
+   * With a reader, the background confirmation records the receipt with its revert reason, so the wait is passed on
+   * untraced. The result and errors are passed on unchanged.
+   */
+  const confirmed = async (
+    chainId: number,
+    options: unknown,
+    wait: () => Promise<unknown>,
+  ): Promise<unknown> => {
+    const opts = (options ?? {}) as { hash?: unknown; transactionHash?: unknown };
+    const hash = typeof opts.hash === 'string' ? opts.hash : opts.transactionHash;
+    if (typeof hash !== 'string' || readerFor(chainId)) return wait();
+    let handle: ReturnType<TxTracker['startConfirm']> | undefined;
+    try {
+      handle = tracker.startConfirm({ chainId, hash });
+    } catch (error) {
+      diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
+    }
+    let result: unknown;
+    try {
+      result = await wait();
+    } catch (error) {
+      try {
+        if (error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError') {
+          handle?.timeout();
+        } else {
+          handle?.fail(error);
+        }
+      } catch (thrown) {
+        diag.error(`hashspan: failed to record confirmation failure (${errorName(thrown)})`);
+      }
+      throw error;
+    }
+    try {
+      const receipt = receiptOf(result);
+      if (receipt) handle?.end(receipt);
+      else handle?.fail(new TypeError('not a transaction receipt'));
+    } catch (error) {
+      diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
+    }
+    return result;
+  };
+
   /** Replaces `target[name]` with `wrap(original)`, calling the original with `target` as `this`. */
   const replace = (
     target: Record<string, unknown>,
@@ -204,8 +267,16 @@ export function withHashspan(
     if (scoped === null || typeof scoped !== 'object') return scoped;
     const account = scoped as AccountLike;
     const chainId = chainIdFor(account.network);
+    if (chainId === undefined) return scoped;
+    replace(
+      account,
+      'waitForTransactionReceipt',
+      (original) =>
+        async (...args: never[]) =>
+          confirmed(chainId, args[0], () => original(...args)),
+    );
     // Through the CDP API, the scoped methods call the wrapped account's own methods, which trace the call.
-    if (chainId === undefined || CDP_API_SEND_CHAIN_IDS.has(chainId)) return scoped;
+    if (CDP_API_SEND_CHAIN_IDS.has(chainId)) return scoped;
     replace(account, 'sendTransaction', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [{ transaction?: unknown } | undefined];
       return traced(
