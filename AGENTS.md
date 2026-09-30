@@ -67,6 +67,9 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 - `src/` must not use Node.js-only APIs at import time (it is type-checked without Node types via `tsconfig.json`;
   tests use `tsconfig.test.json`). Exported functions need explicit return types (`isolatedDeclarations`).
 - Package versions live in `package.json`; `src/version.ts` is synced by `pnpm version-packages`; don't edit it.
+- Docs are checked by `packages/core/test/docs.test.ts` (links and anchors, ADR index, package table, scopes, Node
+  versions) and `semconv-doc.test.ts`. State each fact in one place and link to it. Package READMEs ship to npm
+  alone: link to the repository by absolute URL on the package's release tag (see docs/releasing.md).
 - Significant design changes get a short ADR in `docs/adr/NNNN-title.md` (see `0000-template.md`) and a row in
   `docs/adr/README.md`. New ADRs start as `proposed` and move to `accepted` only after the implementation was
   compared with them.
