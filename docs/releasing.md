@@ -19,6 +19,11 @@ together.
    versions to npm, pushes the git tags and creates the GitHub releases.
 5. Check the result: `npm view @hashspan/core` shows the version, and the npm page shows the provenance badge.
 
+`pnpm version-packages` also pins the repository links in each package README to that package's new release tag
+(`scripts/sync-version.mjs`), so the README on npm links to the docs of its own release. Between releases, those
+links on `main` still point to the previous release; a package that was never released links to `main`. The same
+script sets each package's status in the package table of the root README: a version badge once it is released.
+
 ## One-time setup
 
 Done once, by a maintainer, before the first release of each package (steps 1 and 3 again for a new package).

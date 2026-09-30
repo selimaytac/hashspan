@@ -40,8 +40,8 @@ decoded custom error.</sub>
 
 | Package | Purpose | Status |
 |---|---|---|
-| [`@hashspan/core`](packages/core) | Transaction lifecycle tracker | released |
-| [`@hashspan/viem`](packages/viem) | Adapter for [viem](https://viem.sh) clients | released |
+| [`@hashspan/core`](packages/core) | Transaction lifecycle tracker | [![npm](https://img.shields.io/npm/v/@hashspan/core?label=)](https://www.npmjs.com/package/@hashspan/core) |
+| [`@hashspan/viem`](packages/viem) | Adapter for [viem](https://viem.sh) clients | [![npm](https://img.shields.io/npm/v/@hashspan/viem?label=)](https://www.npmjs.com/package/@hashspan/viem) |
 | [`@hashspan/cdp`](packages/cdp) | Adapter for Coinbase CDP server accounts | in the next release |
 | `@hashspan/x402` | Adapter for x402 payments | planned |
 
