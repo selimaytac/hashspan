@@ -32,11 +32,14 @@ const readJson = async (request: IncomingMessage): Promise<Record<string, unknow
 export async function startMockCdpApi(options: { rpcUrl: string; account: Address }): Promise<{
   basePath: string;
   requests: string[];
+  /** Makes the next send fail with this CDP API error body, as the real API reports a failed send. */
+  failNextSend: (error: { status: number; errorType: string; errorMessage: string }) => void;
   close: () => Promise<void>;
 }> {
   const anvil = createWalletClient({ account: options.account, transport: http(options.rpcUrl) });
   const chain = createPublicClient({ transport: http(options.rpcUrl), pollingInterval: 20 });
   const requests: string[] = [];
+  let nextSendError: { status: number; errorType: string; errorMessage: string } | undefined;
   const server: Server = createServer(async (request, response) => {
     const path = new URL(request.url ?? '/', 'http://localhost').pathname;
     requests.push(`${request.method} ${path}`);
@@ -46,6 +49,18 @@ export async function startMockCdpApi(options: { rpcUrl: string; account: Addres
     };
     try {
       const body = await readJson(request);
+      // Network-scoped accounts on Base read through CDP's node: the SDK asks for a token, then calls its RPC URL.
+      if (request.method === 'GET' && path === '/apikeys/v1/tokens/active') {
+        return reply(200, { id: 'mock-token' });
+      }
+      if (request.method === 'POST' && /^\/rpc\/v1\/[a-z-]+\/mock-token$/.test(path)) {
+        const upstream = await fetch(options.rpcUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        return reply(upstream.status, await upstream.json());
+      }
       if (request.method === 'POST' && path === '/platform/v2/evm/accounts') {
         return reply(201, { address: options.account, name: body.name ?? 'agent' });
       }
@@ -53,6 +68,11 @@ export async function startMockCdpApi(options: { rpcUrl: string; account: Addres
         /^\/platform\/v2\/evm\/accounts\/(0x[0-9a-fA-F]{40})\/send\/transaction$/,
       );
       if (request.method === 'POST' && send) {
+        if (nextSendError) {
+          const { status, ...error } = nextSendError;
+          nextSendError = undefined;
+          return reply(status, error);
+        }
         const tx = parseTransaction(body.transaction as `0x${string}`);
         const transactionHash = await anvil.sendTransaction({
           chain: null,
@@ -74,6 +94,9 @@ export async function startMockCdpApi(options: { rpcUrl: string; account: Addres
   return {
     basePath: `http://127.0.0.1:${port}/platform`,
     requests,
+    failNextSend: (error) => {
+      nextSendError = error;
+    },
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };
 }

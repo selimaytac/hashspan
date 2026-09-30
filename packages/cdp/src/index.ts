@@ -1,4 +1,4 @@
-import { createTxTracker, type SendInput, type TxTracker } from '@hashspan/core';
+import { createTxTracker, type ReceiptLike, type SendInput, type TxTracker } from '@hashspan/core';
 import {
   type FlushOptions,
   type ViemClientLike,
@@ -43,6 +43,9 @@ interface TransactionResultLike {
 
 const WRAPPED = Symbol.for('hashspan.cdp.wrapped');
 const TRANSFER_SELECTOR = '0xa9059cbb';
+// Unknown network values are named in warnings only when they look like a network name, never an RPC URL.
+const NETWORK_NAME = /^[a-z0-9-]{1,32}$/;
+const MAX_WARNED_NETWORKS = 32;
 const ACCOUNT_FACTORIES = [
   'createAccount',
   'getAccount',
@@ -53,6 +56,31 @@ const ACCOUNT_FACTORIES = [
 
 function errorName(error: unknown): string {
   return error instanceof Error && error.name ? error.name : 'unknown error';
+}
+
+/** The CDP API's error type (`APIError.errorType`, e.g. `insufficient_balance`), recorded as `error.type`. */
+function cdpErrorType(error: unknown): string | undefined {
+  const type = error instanceof Error ? (error as { errorType?: unknown }).errorType : undefined;
+  return typeof type === 'string' ? type : undefined;
+}
+
+/** The fields of a viem receipt that the confirm span records, or undefined if `value` is not one. */
+function receiptOf(value: unknown): ReceiptLike | undefined {
+  if (value === null || typeof value !== 'object') return undefined;
+  const receipt = value as Record<string, unknown>;
+  const { status, blockNumber, gasUsed } = receipt;
+  if (status !== 'success' && status !== 'reverted') return undefined;
+  if (typeof blockNumber !== 'bigint' || typeof gasUsed !== 'bigint') return undefined;
+  const optional = (v: unknown) => (typeof v === 'bigint' ? v : undefined);
+  return {
+    status,
+    blockNumber,
+    gasUsed,
+    effectiveGasPrice: optional(receipt.effectiveGasPrice),
+    l1Fee: optional(receipt.l1Fee),
+    transactionHash:
+      typeof receipt.transactionHash === 'string' ? receipt.transactionHash : undefined,
+  };
 }
 
 function isHexString(value: unknown): value is `0x${string}` {
@@ -107,13 +135,29 @@ export function withHashspan(
   // Confirmations reuse the viem adapter's receipt handling, on the same tracker.
   const viem = withViemHashspan({ ...rest, tracker });
 
+  const warnedNetworks = new Set<string>();
+  /** The chain id of a CDP network name; warns once per unknown name, without recording RPC URLs or other values. */
+  const chainIdFor = (network: unknown): number | undefined => {
+    const chainId = chainIdOf(network);
+    if (chainId !== undefined || network === undefined) return chainId;
+    const name = typeof network === 'string' && NETWORK_NAME.test(network) ? network : undefined;
+    const key = name ?? '';
+    if (!warnedNetworks.has(key) && warnedNetworks.size < MAX_WARNED_NETWORKS) {
+      warnedNetworks.add(key);
+      diag.warn(
+        `hashspan: not tracing calls on ${name === undefined ? 'an RPC URL or unknown network' : `the unknown CDP network "${name}"`}`,
+      );
+    }
+    return undefined;
+  };
+
   const readerFor = (chainId: number): ViemClientLike | undefined => {
     try {
-      if (typeof reader === 'function') return reader(chainId);
-      if (reader && (reader.chain?.id === undefined || reader.chain.id === chainId)) return reader;
-      if (reader) {
+      const client = typeof reader === 'function' ? reader(chainId) : reader;
+      if (client && (client.chain?.id === undefined || client.chain.id === chainId)) return client;
+      if (client) {
         diag.warn(
-          `hashspan: the reader is on chain ${reader.chain?.id}, not ${chainId}; not confirming the transaction`,
+          `hashspan: the reader is on chain ${client.chain?.id}, not ${chainId}; not confirming the transaction`,
         );
       }
     } catch (error) {
@@ -129,7 +173,7 @@ export function withHashspan(
     send: () => Promise<unknown>,
   ): Promise<unknown> => {
     if (chainId === undefined) {
-      diag.debug('hashspan: unknown CDP network; not tracing the call');
+      diag.debug('hashspan: no known CDP network in the call; not tracing it');
       return send();
     }
     let handle: ReturnType<TxTracker['startSend']> | undefined;
@@ -143,7 +187,7 @@ export function withHashspan(
       result = await send();
     } catch (error) {
       try {
-        handle?.fail(error);
+        handle?.fail(error, undefined, { errorType: cdpErrorType(error) });
       } catch (thrown) {
         diag.error(`hashspan: failed to record send failure (${errorName(thrown)})`);
       }
@@ -164,6 +208,50 @@ export function withHashspan(
     return result;
   };
 
+  /**
+   * Runs a network-scoped account's `waitForTransactionReceipt` inside a confirm span, for users without a reader.
+   * With a reader, the background confirmation records the receipt with its revert reason, so the wait is passed on
+   * untraced. The result and errors are passed on unchanged.
+   */
+  const confirmed = async (
+    chainId: number,
+    options: unknown,
+    wait: () => Promise<unknown>,
+  ): Promise<unknown> => {
+    const opts = (options ?? {}) as { hash?: unknown; transactionHash?: unknown };
+    const hash = typeof opts.hash === 'string' ? opts.hash : opts.transactionHash;
+    if (typeof hash !== 'string' || readerFor(chainId)) return wait();
+    let handle: ReturnType<TxTracker['startConfirm']> | undefined;
+    try {
+      handle = tracker.startConfirm({ chainId, hash });
+    } catch (error) {
+      diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
+    }
+    let result: unknown;
+    try {
+      result = await wait();
+    } catch (error) {
+      try {
+        if (error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError') {
+          handle?.timeout();
+        } else {
+          handle?.fail(error);
+        }
+      } catch (thrown) {
+        diag.error(`hashspan: failed to record confirmation failure (${errorName(thrown)})`);
+      }
+      throw error;
+    }
+    try {
+      const receipt = receiptOf(result);
+      if (receipt) handle?.end(receipt);
+      else handle?.fail(new TypeError('not a transaction receipt'));
+    } catch (error) {
+      diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
+    }
+    return result;
+  };
+
   /** Replaces `target[name]` with `wrap(original)`, calling the original with `target` as `this`. */
   const replace = (
     target: Record<string, unknown>,
@@ -178,14 +266,16 @@ export function withHashspan(
   const wrapScopedAccount = (scoped: unknown): unknown => {
     if (scoped === null || typeof scoped !== 'object') return scoped;
     const account = scoped as AccountLike;
-    const chainId = chainIdOf(account.network);
+    const chainId = chainIdFor(account.network);
+    if (chainId === undefined) return scoped;
+    replace(
+      account,
+      'waitForTransactionReceipt',
+      (original) =>
+        async (...args: never[]) =>
+          confirmed(chainId, args[0], () => original(...args)),
+    );
     // Through the CDP API, the scoped methods call the wrapped account's own methods, which trace the call.
-    if (chainId === undefined) {
-      diag.debug(
-        'hashspan: network-scoped account on an unknown network or RPC URL; not tracing its sends',
-      );
-      return scoped;
-    }
     if (CDP_API_SEND_CHAIN_IDS.has(chainId)) return scoped;
     replace(account, 'sendTransaction', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [{ transaction?: unknown } | undefined];
@@ -234,7 +324,7 @@ export function withHashspan(
       (original) =>
         async (...args: never[]) =>
           traced(
-            chainIdOf(quote.network),
+            chainIdFor(quote.network),
             () => ({ from: addressOf(from) }),
             () => original(...args),
           ),
@@ -251,7 +341,7 @@ export function withHashspan(
     replace(account, 'sendTransaction', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [{ network?: unknown; transaction?: unknown } | undefined];
       return traced(
-        chainIdOf(opts?.network),
+        chainIdFor(opts?.network),
         () => ({ from: addressOf(account), ...describeTransaction(opts?.transaction) }),
         () => original(...args),
       );
@@ -259,7 +349,7 @@ export function withHashspan(
     replace(account, 'transfer', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [Record<string, unknown> | undefined];
       return traced(
-        chainIdOf(opts?.network),
+        chainIdFor(opts?.network),
         () => describeTransfer(account, opts),
         () => original(...args),
       );
@@ -269,7 +359,7 @@ export function withHashspan(
         { network?: unknown; swapQuote?: { network?: unknown } } | undefined,
       ];
       return traced(
-        chainIdOf(opts?.network ?? opts?.swapQuote?.network),
+        chainIdFor(opts?.network ?? opts?.swapQuote?.network),
         () => ({ from: addressOf(account) }),
         () => original(...args),
       );
@@ -284,7 +374,7 @@ export function withHashspan(
     replace(account, 'useSpendPermission', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [{ network?: unknown; value?: unknown } | undefined];
       return traced(
-        chainIdOf(opts?.network),
+        chainIdFor(opts?.network),
         () => ({ from: addressOf(account) }),
         () => original(...args),
       );
@@ -314,7 +404,7 @@ export function withHashspan(
       { address?: unknown; network?: unknown; transaction?: unknown } | undefined,
     ];
     return traced(
-      chainIdOf(opts?.network),
+      chainIdFor(opts?.network),
       () => ({ from: addressOf(opts?.address), ...describeTransaction(opts?.transaction) }),
       () => original(...args),
     );

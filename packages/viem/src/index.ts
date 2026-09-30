@@ -8,7 +8,12 @@ import {
   type TxTrackerOptions,
 } from '@hashspan/core';
 import { type Context, context, diag, type TimeInput } from '@opentelemetry/api';
-import { type Abi, getAbiItem, toFunctionSelector } from 'viem';
+import {
+  type Abi,
+  getAbiItem,
+  toFunctionSelector,
+  WaitForTransactionReceiptTimeoutError,
+} from 'viem';
 import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
 import { fetchRevertReason } from './revert-reason.js';
 import { errorName, guardTracker, NOOP_SEND } from './safe-tracker.js';
@@ -251,6 +256,27 @@ interface ViemReceipt {
 
 function isTimeout(error: unknown): boolean {
   return error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError';
+}
+
+/**
+ * viem gives up waiting when a node returns a mined transaction before its receipt: it looks for a replacement,
+ * finds the transaction itself in the block and fails to fetch its receipt again. Background confirmation waits
+ * again after these errors, until its timeout.
+ */
+function isReceiptLag(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === 'TransactionReceiptNotFoundError' || error.name === 'TransactionNotFoundError')
+  );
+}
+const RECEIPT_LAG_RETRY_MS = 1_000;
+
+/** Resolves after `ms`; its timer does not keep the process alive. */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = timers.setTimeout(resolve, ms);
+    (timer as { unref?: () => void }).unref?.();
+  });
 }
 
 function selectorOf(data: string | undefined): string | undefined {
@@ -519,12 +545,31 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   ): void => {
     const handle = tracker.startConfirm({ chainId, hash });
     const capture: ReplacementCapture = {};
-    const wait = viemWaitForTransactionReceipt(backgroundClientOf(client) as never, {
-      hash: hash as `0x${string}`,
-      timeout: timeoutMs,
-      onReplaced: capturing(capture, undefined) as never,
-    }) as Promise<ViemReceipt>;
-    track(recordConfirmation(chainId, hash, handle, wait, capture, client));
+    const background = backgroundClientOf(client);
+    const polling = (client as { pollingInterval?: unknown }).pollingInterval;
+    const retryMs = typeof polling === 'number' && polling > 0 ? polling : RECEIPT_LAG_RETRY_MS;
+    const deadline = Date.now() + timeoutMs;
+    const wait = async (): Promise<ViemReceipt> => {
+      for (;;) {
+        try {
+          return (await viemWaitForTransactionReceipt(background as never, {
+            hash: hash as `0x${string}`,
+            timeout: Math.max(deadline - Date.now(), 1),
+            onReplaced: capturing(capture, undefined) as never,
+          })) as ViemReceipt;
+        } catch (error) {
+          if (!isReceiptLag(error) || capture.replacement) throw error;
+          const remaining = deadline - Date.now();
+          if (remaining <= 0)
+            throw new WaitForTransactionReceiptTimeoutError({ hash: hash as `0x${string}` });
+          diag.debug(
+            'hashspan: the node returned the transaction before its receipt; waiting again',
+          );
+          await delay(Math.min(retryMs, remaining));
+        }
+      }
+    };
+    track(recordConfirmation(chainId, hash, handle, wait(), capture, client));
   };
 
   const watch = (client: ViemClientLike, options: WatchOptions): void => {

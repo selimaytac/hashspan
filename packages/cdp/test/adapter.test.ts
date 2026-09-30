@@ -13,6 +13,14 @@ const ACCOUNT = '0x1111111111111111111111111111111111111111';
 const TO = '0x2222222222222222222222222222222222222222';
 const USDC = '0x3333333333333333333333333333333333333333';
 
+const viemReceipt = {
+  transactionHash: HASH,
+  status: 'success',
+  blockNumber: 123n,
+  gasUsed: 21_000n,
+  effectiveGasPrice: 2n,
+};
+
 let tracing: TestTracing;
 beforeEach(() => {
   tracing = setupTracing();
@@ -47,6 +55,8 @@ function fakeAccount(calls: string[] = []) {
             ? (account.sendTransaction as (o: object) => Promise<unknown>)({ ...opts, network })
             : { transactionHash: HASH },
         transfer: async () => ({ transactionHash: HASH }),
+        // The SDK waits through its own viem client and returns viem's receipt.
+        waitForTransactionReceipt: async () => viemReceipt,
       };
     },
   };
@@ -57,6 +67,25 @@ function fakeAccount(calls: string[] = []) {
 function fakeQuote(network: string, result: object = { transactionHash: HASH }) {
   return { liquidityAvailable: true, network, execute: async () => result };
 }
+
+type Method = (options?: unknown) => Promise<unknown>;
+type FakeEvm = Record<
+  | 'sendTransaction'
+  | 'createAccount'
+  | 'getAccount'
+  | 'getOrCreateAccount'
+  | 'importAccount'
+  | 'updateAccount'
+  | 'createSwapQuote'
+  | 'listAccounts',
+  Method
+>;
+/** A server account as the tests use it, after the factories returned it. */
+type TracedAccount = Record<
+  'sendTransaction' | 'transfer' | 'swap' | 'quoteSwap' | 'useSpendPermission' | 'useNetwork',
+  Method
+>;
+type ScopedAccount = Record<'sendTransaction' | 'transfer' | 'waitForTransactionReceipt', Method>;
 
 function fakeCdp(calls: string[] = []) {
   class EvmClient {
@@ -88,7 +117,7 @@ function fakeCdp(calls: string[] = []) {
     }
   }
   return {
-    evm: new EvmClient() as unknown as Record<string, (options?: unknown) => Promise<unknown>>,
+    evm: new EvmClient() as unknown as FakeEvm,
   };
 }
 
@@ -105,7 +134,7 @@ describe('cdp.evm.sendTransaction', () => {
     const cdp = fakeCdp();
     const hashspan = withHashspan(cdp, { reader: reader() });
 
-    const result = await cdp.evm.sendTransaction!({
+    const result = await cdp.evm.sendTransaction({
       address: ACCOUNT,
       network: 'base',
       transaction: { to: TO, value: 5n, data: '0xa9059cbb0000' },
@@ -136,7 +165,7 @@ describe('cdp.evm.sendTransaction', () => {
       nonce: 3,
       type: 'eip1559',
     });
-    await cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'base', transaction } as never);
+    await cdp.evm.sendTransaction({ address: ACCOUNT, network: 'base', transaction } as never);
     expect(tracing.spanNamed('send 8453').attributes).toMatchObject({
       'blockchain.tx.to': TO,
       'blockchain.tx.value': '7',
@@ -153,19 +182,72 @@ describe('cdp.evm.sendTransaction', () => {
       };
     withHashspan(cdp);
     await expect(
-      cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'base', transaction: {} } as never),
+      cdp.evm.sendTransaction({ address: ACCOUNT, network: 'base', transaction: {} } as never),
     ).rejects.toBe(failure);
     expect(tracing.spanNamed('send 8453').status.code).toBe(SpanStatusCode.ERROR);
   });
 
-  it('passes calls on unknown networks through without a span', async () => {
-    vi.spyOn(diag, 'debug').mockImplementation(() => {});
+  it("records the CDP API's error type as error.type", async () => {
+    const cdp = fakeCdp();
+    const failure = Object.assign(new Error('not enough funds'), {
+      name: 'APIError',
+      errorType: 'insufficient_balance',
+    });
+    cdp.evm.sendTransaction = async () => {
+      throw failure;
+    };
+    withHashspan(cdp);
+    await expect(cdp.evm.sendTransaction({ network: 'base', transaction: {} })).rejects.toBe(
+      failure,
+    );
+    const send = tracing.spanNamed('send 8453');
+    expect(send.attributes['error.type']).toBe('insufficient_balance');
+    expect(send.events[0]?.attributes?.['exception.type']).toBe('APIError');
+  });
+
+  it('passes calls on unknown networks through without a span, warning once per network', async () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
     const cdp = fakeCdp();
     withHashspan(cdp);
-    await expect(
-      cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'moonbase', transaction: {} } as never),
-    ).resolves.toEqual({ transactionHash: HASH });
+    for (const network of [
+      'moonbase',
+      'moonbase',
+      'https://rpc.example.invalid/key',
+      'https://other.invalid',
+    ]) {
+      await expect(
+        cdp.evm.sendTransaction({ address: ACCOUNT, network, transaction: {} } as never),
+      ).resolves.toEqual({ transactionHash: HASH });
+    }
     expect(tracing.spans()).toHaveLength(0);
+    // An RPC URL can carry an API key: it is never part of the message.
+    expect(warn.mock.calls).toEqual([
+      ['hashspan: not tracing calls on the unknown CDP network "moonbase"'],
+      ['hashspan: not tracing calls on an RPC URL or unknown network'],
+    ]);
+  });
+
+  it('stops warning about unknown networks after a bounded number of them', async () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    for (let i = 0; i < 40; i++) {
+      await cdp.evm.sendTransaction({ network: `net-${i}`, transaction: {} } as never);
+    }
+    expect(warn).toHaveBeenCalledTimes(32);
+  });
+
+  it('skips a client from a reader function that is on another chain', async () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const cdp = fakeCdp();
+    const other = createPublicClient({ chain: polygon, transport: mockTransport().transport });
+    const hashspan = withHashspan(cdp, { reader: () => other });
+    await cdp.evm.sendTransaction({ network: 'base', transaction: {} } as never);
+    await hashspan.flush();
+    expect(tracing.spans().map((s) => s.name)).toEqual(['send 8453']);
+    expect(warn).toHaveBeenCalledWith(
+      'hashspan: the reader is on chain 137, not 8453; not confirming the transaction',
+    );
   });
 
   it('records only send spans without a reader, and skips a reader on another chain', async () => {
@@ -173,7 +255,7 @@ describe('cdp.evm.sendTransaction', () => {
     const cdp = fakeCdp();
     const other = createPublicClient({ chain: polygon, transport: mockTransport().transport });
     const hashspan = withHashspan(cdp, { reader: other });
-    await cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'base', transaction: {} } as never);
+    await cdp.evm.sendTransaction({ address: ACCOUNT, network: 'base', transaction: {} } as never);
     await hashspan.flush();
     expect(tracing.spans().map((s) => s.name)).toEqual(['send 8453']);
     expect(warn).toHaveBeenCalledWith(
@@ -185,7 +267,7 @@ describe('cdp.evm.sendTransaction', () => {
     const cdp = fakeCdp();
     const pick = vi.fn((chainId: number) => (chainId === 8453 ? reader() : undefined));
     const hashspan = withHashspan(cdp, { reader: pick });
-    await cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'base', transaction: {} } as never);
+    await cdp.evm.sendTransaction({ address: ACCOUNT, network: 'base', transaction: {} } as never);
     await hashspan.flush();
     expect(pick).toHaveBeenCalledWith(8453);
     expect(tracing.spanNamed('confirm 8453')).toBeDefined();
@@ -200,7 +282,7 @@ describe('cdp.evm.sendTransaction', () => {
     const cdp = fakeCdp();
     withHashspan(cdp, { tracker });
     await expect(
-      cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'base', transaction: {} } as never),
+      cdp.evm.sendTransaction({ address: ACCOUNT, network: 'base', transaction: {} } as never),
     ).resolves.toEqual({ transactionHash: HASH });
   });
 
@@ -212,18 +294,15 @@ describe('cdp.evm.sendTransaction', () => {
     expect(warn).toHaveBeenCalledWith(
       'hashspan: this CDP client is already traced; ignoring the options of the second withHashspan()',
     );
-    await cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'base', transaction: {} } as never);
+    await cdp.evm.sendTransaction({ address: ACCOUNT, network: 'base', transaction: {} } as never);
     expect(sends()).toHaveLength(1);
   });
 });
 
 describe('server accounts', () => {
-  const accountOf = async (factory: string, cdp = fakeCdp()) => {
+  const accountOf = async (factory: keyof FakeEvm, cdp = fakeCdp()) => {
     withHashspan(cdp);
-    return (await cdp.evm[factory]!()) as unknown as Record<
-      string,
-      (o?: unknown) => Promise<unknown>
-    >;
+    return (await cdp.evm[factory]()) as unknown as TracedAccount;
   };
 
   for (const factory of [
@@ -232,11 +311,11 @@ describe('server accounts', () => {
     'getOrCreateAccount',
     'importAccount',
     'updateAccount',
-  ]) {
+  ] as const) {
     it(`traces sends of accounts from ${factory}, with the account as this`, async () => {
       const calls: string[] = [];
       const account = await accountOf(factory, fakeCdp(calls));
-      await account.sendTransaction!({ network: 'base-sepolia', transaction: { to: TO } });
+      await account.sendTransaction({ network: 'base-sepolia', transaction: { to: TO } });
       expect(calls).toEqual([`send from ${ACCOUNT}`]);
       expect(tracing.spanNamed('send 84532').attributes['blockchain.tx.from']).toBe(ACCOUNT);
     });
@@ -247,29 +326,26 @@ describe('server accounts', () => {
     const same = fakeAccount();
     cdp.evm.getAccount = async () => same;
     withHashspan(cdp);
-    await cdp.evm.getAccount!();
-    const account = (await cdp.evm.getAccount!()) as unknown as Record<
-      string,
-      (o: unknown) => Promise<unknown>
-    >;
-    await account.sendTransaction!({ network: 'base', transaction: {} });
+    await cdp.evm.getAccount();
+    const account = (await cdp.evm.getAccount()) as unknown as TracedAccount;
+    await account.sendTransaction({ network: 'base', transaction: {} });
     expect(sends()).toHaveLength(1);
   });
 
   it('traces accounts returned by listAccounts', async () => {
     const cdp = fakeCdp();
     withHashspan(cdp);
-    const { accounts } = (await cdp.evm.listAccounts!()) as unknown as {
-      accounts: Record<string, (o: unknown) => Promise<unknown>>[];
+    const { accounts } = (await cdp.evm.listAccounts()) as unknown as {
+      accounts: TracedAccount[];
     };
     for (const account of accounts)
-      await account.sendTransaction!({ network: 'base', transaction: {} });
+      await account.sendTransaction({ network: 'base', transaction: {} });
     expect(sends()).toHaveLength(2);
   });
 
   it('records an ETH transfer as a value transfer', async () => {
     const account = await accountOf('createAccount');
-    await account.transfer!({ to: TO, amount: 9n, token: 'eth', network: 'base' });
+    await account.transfer({ to: TO, amount: 9n, token: 'eth', network: 'base' });
     expect(tracing.spanNamed('send 8453').attributes).toMatchObject({
       'blockchain.tx.to': TO,
       'blockchain.tx.value': '9',
@@ -278,7 +354,7 @@ describe('server accounts', () => {
 
   it('records a token transfer as a call to the token contract', async () => {
     const account = await accountOf('createAccount');
-    await account.transfer!({ to: { address: TO }, amount: 9n, token: USDC, network: 'base' });
+    await account.transfer({ to: { address: TO }, amount: 9n, token: USDC, network: 'base' });
     const attributes = tracing.spanNamed('send 8453').attributes;
     expect(attributes).toMatchObject({
       'blockchain.tx.to': USDC,
@@ -290,13 +366,13 @@ describe('server accounts', () => {
 
   it('takes the network of a quote-based swap from the quote', async () => {
     const account = await accountOf('createAccount');
-    await account.swap!({ swapQuote: { network: 'ethereum' } });
+    await account.swap({ swapQuote: { network: 'ethereum' } });
     expect(tracing.spanNamed('send 1')).toBeDefined();
   });
 
   it('traces useSpendPermission', async () => {
     const account = await accountOf('createAccount');
-    await account.useSpendPermission!({ network: 'base', value: 1n });
+    await account.useSpendPermission({ network: 'base', value: 1n });
     expect(tracing.spanNamed('send 8453')).toBeDefined();
   });
 });
@@ -305,40 +381,40 @@ describe('network-scoped accounts', () => {
   it('trace a send once on a CDP API chain, where the scoped account calls the account', async () => {
     const cdp = fakeCdp();
     withHashspan(cdp);
-    const account = (await cdp.evm.createAccount!()) as unknown as {
-      useNetwork: (n: string) => Promise<Record<string, (o: unknown) => Promise<unknown>>>;
+    const account = (await cdp.evm.createAccount()) as unknown as {
+      useNetwork: (n: string) => Promise<ScopedAccount>;
     };
     const scoped = await account.useNetwork('base');
-    await scoped.sendTransaction!({ transaction: { to: TO } });
+    await scoped.sendTransaction({ transaction: { to: TO } });
     expect(sends().map((s) => s.name)).toEqual(['send 8453']);
   });
 
   it('trace sends on other chains, where the SDK sends through viem itself', async () => {
     const cdp = fakeCdp();
     withHashspan(cdp);
-    const account = (await cdp.evm.createAccount!()) as unknown as {
-      useNetwork: (n: string) => Promise<Record<string, (o: unknown) => Promise<unknown>>>;
+    const account = (await cdp.evm.createAccount()) as unknown as {
+      useNetwork: (n: string) => Promise<ScopedAccount>;
     };
     const scoped = await account.useNetwork('polygon');
-    await scoped.sendTransaction!({ transaction: { to: TO } });
-    await scoped.transfer!({ to: TO, amount: 1n, token: 'eth' });
+    await scoped.sendTransaction({ transaction: { to: TO } });
+    await scoped.transfer({ to: TO, amount: 1n, token: 'eth' });
     expect(sends().map((s) => s.name)).toEqual(['send 137', 'send 137']);
   });
 });
 
 describe('network-scoped accounts on unknown networks', () => {
   it('pass sends through untraced, with a diag message', async () => {
-    const debug = vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
     const cdp = fakeCdp();
     withHashspan(cdp);
-    const account = (await cdp.evm.createAccount!()) as unknown as {
-      useNetwork: (n: string) => Promise<Record<string, (o: unknown) => Promise<unknown>>>;
+    const account = (await cdp.evm.createAccount()) as unknown as {
+      useNetwork: (n: string) => Promise<ScopedAccount>;
     };
     const scoped = await account.useNetwork('https://rpc.example.invalid');
-    await scoped.sendTransaction!({ transaction: { to: TO } });
+    await scoped.sendTransaction({ transaction: { to: TO } });
     expect(sends()).toHaveLength(0);
-    expect(debug).toHaveBeenCalledWith(
-      'hashspan: network-scoped account on an unknown network or RPC URL; not tracing its sends',
+    expect(warn).toHaveBeenCalledWith(
+      'hashspan: not tracing calls on an RPC URL or unknown network',
     );
   });
 });
@@ -346,19 +422,16 @@ describe('network-scoped accounts on unknown networks', () => {
 describe('unexpected inputs and results', () => {
   const accountOf = async (cdp = fakeCdp()) => {
     withHashspan(cdp);
-    return (await cdp.evm.createAccount!()) as unknown as Record<
-      string,
-      (o?: unknown) => Promise<unknown>
-    >;
+    return (await cdp.evm.createAccount()) as unknown as TracedAccount;
   };
 
   it('records a send without transaction fields when the transaction is missing, unparseable or malformed', async () => {
     vi.spyOn(diag, 'debug').mockImplementation(() => {});
     const cdp = fakeCdp();
     withHashspan(cdp);
-    await cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'base' } as never);
-    await cdp.evm.sendTransaction!({ network: 'base', transaction: '0x1234' } as never);
-    await cdp.evm.sendTransaction!({ network: 'base', transaction: { to: 42, value: 1 } } as never);
+    await cdp.evm.sendTransaction({ address: ACCOUNT, network: 'base' } as never);
+    await cdp.evm.sendTransaction({ network: 'base', transaction: '0x1234' } as never);
+    await cdp.evm.sendTransaction({ network: 'base', transaction: { to: 42, value: 1 } } as never);
     const [first, second, third] = sends();
     expect(third?.attributes['blockchain.tx.to']).toBeUndefined();
     expect(third?.attributes['blockchain.tx.value']).toBeUndefined();
@@ -373,7 +446,7 @@ describe('unexpected inputs and results', () => {
     cdp.evm.sendTransaction = async () => ({ status: 'pending' });
     withHashspan(cdp);
     await expect(
-      cdp.evm.sendTransaction!({ network: 'base', transaction: {} } as never),
+      cdp.evm.sendTransaction({ network: 'base', transaction: {} } as never),
     ).resolves.toEqual({ status: 'pending' });
     const send = tracing.spanNamed('send 8453');
     expect(send.status.code).toBe(SpanStatusCode.ERROR);
@@ -388,7 +461,7 @@ describe('unexpected inputs and results', () => {
         throw 'no client';
       },
     });
-    await cdp.evm.sendTransaction!({ network: 'base', transaction: {} } as never);
+    await cdp.evm.sendTransaction({ network: 'base', transaction: {} } as never);
     expect(error).toHaveBeenCalledWith('hashspan: the reader function failed (unknown error)');
     expect(tracing.spans().map((s) => s.name)).toEqual(['send 8453']);
   });
@@ -406,13 +479,13 @@ describe('unexpected inputs and results', () => {
     cdp.evm.createAccount = async () => ({ address: ACCOUNT, useNetwork: async () => null });
     const account = await accountOf(cdp);
     expect(account.sendTransaction).toBeUndefined();
-    await expect(account.useNetwork!('polygon')).resolves.toBeNull();
+    await expect(account.useNetwork('polygon')).resolves.toBeNull();
   });
 
   it('records a transfer with a token symbol or missing fields without guessing', async () => {
     const account = await accountOf();
-    await account.transfer!({ to: TO, amount: '1', token: 'usdc', network: 'base' });
-    await account.transfer!({ token: USDC, network: 'base' });
+    await account.transfer({ to: TO, amount: '1', token: 'usdc', network: 'base' });
+    await account.transfer({ token: USDC, network: 'base' });
     const [symbol, bare] = sends();
     expect(symbol?.attributes['blockchain.tx.to']).toBeUndefined();
     expect(symbol?.attributes['blockchain.contract.function.name']).toBe('transfer');
@@ -422,11 +495,13 @@ describe('unexpected inputs and results', () => {
     }
   });
 
-  it('passes a call without options through without a span', async () => {
+  it('passes a call without options through without a span or a warning', async () => {
     vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
     const account = await accountOf();
-    await expect(account.transfer!()).resolves.toEqual({ transactionHash: HASH });
+    await expect(account.transfer()).resolves.toEqual({ transactionHash: HASH });
     expect(sends()).toHaveLength(0);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
@@ -434,7 +509,7 @@ describe('swap quotes', () => {
   it('trace execute() of a quote from cdp.evm.createSwapQuote, from the taker', async () => {
     const cdp = fakeCdp();
     withHashspan(cdp);
-    const quote = (await cdp.evm.createSwapQuote!({ network: 'base', taker: ACCOUNT })) as {
+    const quote = (await cdp.evm.createSwapQuote({ network: 'base', taker: ACCOUNT })) as {
       execute: () => Promise<unknown>;
     };
     await expect(quote.execute()).resolves.toEqual({ transactionHash: HASH });
@@ -444,7 +519,7 @@ describe('swap quotes', () => {
   it('trace execute() of a quote from account.quoteSwap, from the account', async () => {
     const cdp = fakeCdp();
     withHashspan(cdp);
-    const account = (await cdp.evm.createAccount!()) as {
+    const account = (await cdp.evm.createAccount()) as {
       quoteSwap: (o: object) => Promise<{ execute: () => Promise<unknown> }>;
     };
     const quote = await account.quoteSwap({ network: 'ethereum' });
@@ -455,7 +530,7 @@ describe('swap quotes', () => {
   it('leave quotes for smart accounts alone, which send user operations', async () => {
     const cdp = fakeCdp();
     withHashspan(cdp);
-    const quote = (await cdp.evm.createSwapQuote!({
+    const quote = (await cdp.evm.createSwapQuote({
       network: 'base',
       taker: ACCOUNT,
       smartAccount: {},
@@ -473,7 +548,7 @@ describe('sharing a tracker with @hashspan/viem', () => {
     const hashspanViem = withViemHashspan({ tracker });
     const userReader = reader().extend(hashspanViem);
 
-    await cdp.evm.sendTransaction!({ network: 'base', transaction: {} } as never);
+    await cdp.evm.sendTransaction({ network: 'base', transaction: {} } as never);
     await userReader.waitForTransactionReceipt({ hash: HASH });
     await Promise.all([hashspanCdp.flush(), hashspanViem.flush()]);
 
@@ -489,8 +564,109 @@ describe('sharing a tracker with @hashspan/viem', () => {
     const cdp = fakeCdp();
     const hashspanViem = withViemHashspan({ tracker });
     const hashspanCdp = withHashspan(cdp, { tracker, reader: reader().extend(hashspanViem) });
-    await cdp.evm.sendTransaction!({ network: 'base', transaction: {} } as never);
+    await cdp.evm.sendTransaction({ network: 'base', transaction: {} } as never);
     await Promise.all([hashspanCdp.flush(), hashspanViem.flush()]);
     expect(tracing.spans().filter((s) => s.name === 'confirm 8453')).toHaveLength(1);
   });
 });
+
+describe("a network-scoped account's waitForTransactionReceipt", () => {
+  const scopedOn = async (network: string, cdp = fakeCdp(), options = {}) => {
+    const hashspan = withHashspan(cdp, options);
+    const account = (await cdp.evm.createAccount()) as unknown as {
+      useNetwork: (n: string) => Promise<ScopedAccount>;
+    };
+    return { hashspan, scoped: await account.useNetwork(network) };
+  };
+
+  for (const network of ['base', 'polygon']) {
+    it(`records a confirm span from the receipt without a reader, on ${network}`, async () => {
+      const { scoped } = await scopedOn(network);
+      await scoped.sendTransaction({ transaction: { to: TO } });
+      await expect(scoped.waitForTransactionReceipt({ hash: HASH })).resolves.toBe(viemReceipt);
+      const chainId = network === 'base' ? 8453 : 137;
+      const confirm = tracing.spanNamed(`confirm ${chainId}`);
+      expect(confirm.attributes).toMatchObject({
+        'blockchain.tx.status': 'success',
+        'blockchain.block.number': 123,
+        'blockchain.tx.gas.used': 21_000,
+        'blockchain.tx.fee': '42000',
+      });
+      expect(confirm.links[0]?.context.spanId).toBe(
+        tracing.spanNamed(`send ${chainId}`).spanContext().spanId,
+      );
+    });
+  }
+
+  it('accepts the transactionHash form of the options', async () => {
+    const { scoped } = await scopedOn('base');
+    await scoped.waitForTransactionReceipt({ transactionHash: HASH });
+    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.hash']).toBe(HASH);
+  });
+
+  it('leaves the wait to the background confirmation when there is a reader', async () => {
+    const tracker = createTxTracker();
+    const startConfirm = vi.spyOn(tracker, 'startConfirm');
+    const { hashspan, scoped } = await scopedOn('base', fakeCdp(), { tracker, reader: reader() });
+    await scoped.sendTransaction({ transaction: { to: TO } });
+    await scoped.waitForTransactionReceipt({ hash: HASH });
+    await hashspan.flush();
+    // Only the background confirmation, which also fetches revert reasons, waits for the receipt.
+    expect(startConfirm).toHaveBeenCalledTimes(1);
+    expect(tracing.spans().filter((s) => s.name === 'confirm 8453')).toHaveLength(1);
+  });
+
+  it('ends as a timeout, or as a failure, and rethrows the error', async () => {
+    const timeout = Object.assign(new Error('timed out'), {
+      name: 'WaitForTransactionReceiptTimeoutError',
+    });
+    const failure = new Error('rpc down');
+    const waits = [timeout, failure];
+    for (const error of waits) {
+      const failing = await scopedWithWait(async () => {
+        throw error;
+      });
+      await expect(failing.waitForTransactionReceipt({ hash: HASH })).rejects.toBe(error);
+    }
+    const statuses = tracing
+      .spans()
+      .filter((s) => s.name === 'confirm 8453')
+      .map((s) => [s.attributes['blockchain.tx.status'], s.attributes['error.type']]);
+    expect(statuses).toEqual([
+      ['timeout', 'timeout'],
+      [undefined, 'Error'],
+    ]);
+  });
+
+  it('fails the confirm span when the result is not a receipt, and returns it', async () => {
+    const odd = await scopedWithWait(async () => ({ status: 'pending' }));
+    await expect(odd.waitForTransactionReceipt({ hash: HASH })).resolves.toEqual({
+      status: 'pending',
+    });
+    expect(tracing.spanNamed('confirm 8453').attributes['error.type']).toBe('TypeError');
+  });
+
+  it('passes a wait without a hash through untraced', async () => {
+    const { scoped } = await scopedOn('base');
+    await scoped.waitForTransactionReceipt({});
+    expect(tracing.spans()).toHaveLength(0);
+  });
+});
+
+/** A network-scoped account on Base whose SDK wait is `wait`, traced by the adapter. */
+async function scopedWithWait(wait: Method): Promise<ScopedAccount> {
+  const cdp = fakeCdp();
+  cdp.evm.createAccount = async () => ({
+    address: ACCOUNT,
+    useNetwork: async (network: string) => ({
+      address: ACCOUNT,
+      network,
+      waitForTransactionReceipt: wait,
+    }),
+  });
+  withHashspan(cdp);
+  const account = (await cdp.evm.createAccount()) as unknown as {
+    useNetwork: (n: string) => Promise<ScopedAccount>;
+  };
+  return account.useNetwork('base');
+}

@@ -1,3 +1,4 @@
+import { SpanStatusCode } from '@opentelemetry/api';
 import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
@@ -56,7 +57,7 @@ afterEach(async () => {
   await tracing.teardown();
 });
 
-const client = async () => {
+const client = async (options: { reader?: boolean } = {}) => {
   const { CdpClient } = await import('@coinbase/cdp-sdk');
   const cdp = new CdpClient({ ...throwawayCredentials(), basePath: api.basePath });
   const reader = createPublicClient({
@@ -64,7 +65,10 @@ const client = async () => {
     transport: http(RPC_URL),
     pollingInterval: 50,
   });
-  return { cdp, hashspan: withHashspan(cdp as never, { reader }) };
+  return {
+    cdp,
+    hashspan: withHashspan(cdp as never, options.reader === false ? {} : { reader }),
+  };
 };
 
 describe('the CDP SDK against a local CDP API and Anvil', () => {
@@ -113,5 +117,44 @@ describe('the CDP SDK against a local CDP API and Anvil', () => {
     expect(api.requests.filter((r) => r.endsWith('/send/transaction')).length - sendsBefore).toBe(
       2,
     );
+  });
+
+  it('confirms through a network-scoped account without a reader', async () => {
+    const { cdp, hashspan } = await client({ reader: false });
+    const account = await cdp.evm.createAccount();
+    const scoped = await account.useNetwork('base-sepolia');
+    const { transactionHash } = await scoped.sendTransaction({
+      transaction: { to: RECIPIENT, value: 4n },
+    });
+    const receipt = await scoped.waitForTransactionReceipt({ hash: transactionHash });
+    expect(receipt.status).toBe('success');
+    await hashspan.flush();
+
+    const send = tracing.spanNamed('send 84532');
+    const confirm = tracing.spanNamed('confirm 84532');
+    expect(confirm.links[0]?.context.spanId).toBe(send.spanContext().spanId);
+    expect(confirm.attributes).toMatchObject({
+      'blockchain.tx.hash': transactionHash,
+      'blockchain.tx.status': 'success',
+      'blockchain.tx.gas.used': 21_000,
+    });
+    expect(api.requests).toContain('POST /rpc/v1/base-sepolia/mock-token');
+  });
+
+  it("records the CDP API's error type on a failed send and rethrows the SDK's error", async () => {
+    const { cdp } = await client();
+    const account = await cdp.evm.createAccount();
+    api.failNextSend({ status: 400, errorType: 'invalid_request', errorMessage: 'mock: rejected' });
+    await expect(
+      account.sendTransaction({
+        network: 'base-sepolia',
+        transaction: { to: RECIPIENT, value: 1n },
+      }),
+    ).rejects.toMatchObject({ name: 'APIError', errorType: 'invalid_request' });
+
+    const send = tracing.spanNamed('send 84532');
+    expect(send.status.code).toBe(SpanStatusCode.ERROR);
+    expect(send.attributes['error.type']).toBe('invalid_request');
+    expect(send.events[0]?.attributes?.['exception.type']).toBe('APIError');
   });
 });

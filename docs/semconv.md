@@ -32,7 +32,7 @@ no span; after a timeout or failure, a retry gets a new span. See [ADR 0007](adr
 | Situation | Span | Status | `error.type` | `blockchain.tx.status` |
 |---|---|---|---|---|
 | Transaction hash returned | send | unset | none | none |
-| Signing, simulation or broadcast failed | send | error | error class name, else `_OTHER` | none |
+| Signing, simulation or broadcast failed | send | error | the library's error code when the adapter reports one (see below), else error class name, else `_OTHER` | none |
 | Receipt with status success | confirm | unset | none | `success` |
 | Receipt with status reverted | confirm | error | `reverted` | `reverted` |
 | Gave up waiting for the receipt | confirm | error | `timeout` | `timeout` |
@@ -40,12 +40,16 @@ no span; after a timeout or failure, a retry gets a new span. See [ADR 0007](adr
 | Receipt with an invalid transaction hash | confirm | error | `_OTHER` | none |
 | Retrieving the receipt failed | confirm | error | error class name, else `_OTHER` | none |
 
+An adapter whose library reports a stable, machine-readable error code records it as `error.type` of a failed send,
+if it is a short identifier (`[A-Za-z0-9_.-]`, at most 64 characters); `exception.type` stays the class name. The CDP
+adapter records the CDP API's error type, e.g. `insufficient_balance`.
+
 Failures with an error object add an `exception` event following the OpenTelemetry exception conventions. By
 default it carries only `exception.type`; `exception.message` and `exception.stacktrace` depend on the tracker's
 `errorMessages` mode (`off` | `sanitized` | `raw`), and the span status description is the recorded
 `exception.message`, if any. See [ADR 0006](adr/0006-error-privacy.md).
 
-Planned (v0.2): RPC spans from a viem transport wrapper, following the OpenTelemetry [JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/rpc/json-rpc.md)
+Planned: RPC spans from a viem transport wrapper, following the OpenTelemetry [JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/rpc/json-rpc.md)
 (`rpc.system.name = "jsonrpc"`, `rpc.method` from an allowlist of `eth_*` methods). No RPC spans are emitted
 today.
 
