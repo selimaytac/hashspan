@@ -76,6 +76,6 @@ agent toolkits. Relevant facts, from the SDK source (1.57):
 - CDP server account transactions appear in the agent's trace like viem ones, with the same attributes and rules.
 - Adding `watch()` makes the receipt handling of `@hashspan/viem` reusable by any adapter whose send path yields a
   hash but no receipt (x402 next).
-- Wrapping depends on the SDK's object shapes, which are not a public contract; tests pin the supported SDK range,
-  the lowest version of the peer range. A scheduled job against the latest SDK release is a follow-up.
+- Wrapping depends on the SDK's object shapes, which are not a public contract; CI tests the lowest version of the
+  peer range, and a weekly workflow (`cdp-sdk-latest.yml`) tests the newest release within it.
 - AgentKit keeps its `CdpClient` private, so it needs a separate wallet provider wrapper; not part of this step.
