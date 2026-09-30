@@ -3,5 +3,6 @@
 ---
 
 Add `@hashspan/cdp`: `withHashspan(cdp, { reader })` traces transactions sent by Coinbase CDP server accounts
-(`cdp.evm.sendTransaction`, and each account's `sendTransaction`, `transfer`, `swap`, `useSpendPermission` and
-network-scoped sends) as `send` spans, and confirms them in the background through a viem `reader`.
+(`cdp.evm.sendTransaction`, each account's `sendTransaction`, `transfer`, `swap`, `useSpendPermission` and
+network-scoped sends, and `execute()` of swap quotes) as `send` spans, and confirms them in the background through a
+viem `reader`. Pass the same `tracker` as to `@hashspan/viem` to share confirm spans with your own receipt waits.

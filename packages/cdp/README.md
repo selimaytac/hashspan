@@ -42,8 +42,29 @@ run in the background through it and never delay your call. Without a reader, on
 adapter never picks an RPC endpoint itself.
 
 `withHashspan(cdp, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/main/packages/core#options)
-(address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem`, `reader`, and
-`confirmTimeoutMs` (default 120 000 ms).
+(address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem`, `tracker`, `reader`,
+and `confirmTimeoutMs` (default 120 000 ms). Call it once per client: a second call returns the first handle, ignores
+its options and logs a `diag` warning.
+
+### With `@hashspan/viem`
+
+If your agent also waits for receipts with a viem client extended by `@hashspan/viem`, give both the same tracker, so
+that a transaction gets one confirm span, linked to its send span, however many parts of your code wait for it:
+
+```ts
+import { createTxTracker } from '@hashspan/core';
+import { withHashspan as withViemHashspan } from '@hashspan/viem';
+
+const tracker = createTxTracker({ agent: { name: 'treasury-bot' } });
+const hashspanViem = withViemHashspan({ tracker });
+const reader = createPublicClient({ chain: baseSepolia, transport: http() }).extend(hashspanViem);
+const hashspanCdp = withHashspan(cdp, { tracker, reader });
+
+// At shutdown, flush both:
+await Promise.all([hashspanCdp.flush(), hashspanViem.flush()]);
+```
+
+A `reader` whose chain differs from the transaction's is not used; a `diag` warning says so.
 
 ## Traced
 
@@ -53,13 +74,18 @@ adapter never picks an RPC endpoint itself.
 | account `sendTransaction` | the same |
 | account `transfer` | ETH: to and value; tokens: the token contract, `transfer` and its selector (arguments with `recordFunctionArguments`) |
 | account `swap`, `useSpendPermission` | chain id and from |
+| `execute()` of a quote from `cdp.evm.createSwapQuote` or account `quoteSwap` | chain id and from (the taker) |
 | network-scoped accounts (`useNetwork`) | as above; on Base and Ethereum they send through the account itself, elsewhere through the SDK's own viem client, and both are traced once |
 
-Accounts are traced when they come from `createAccount`, `getAccount`, `getOrCreateAccount`, `importAccount` or
-`listAccounts`. Networks are mapped to chain ids with `CDP_NETWORK_CHAIN_IDS`; a call on another network, or a
+Accounts are traced when they come from `createAccount`, `getAccount`, `getOrCreateAccount`, `importAccount`,
+`updateAccount` or `listAccounts`. Networks are mapped to chain ids with `CDP_NETWORK_CHAIN_IDS`; a call on another network, or a
 network-scoped account created from an RPC URL, is passed through untraced.
 
-Not traced yet: smart account user operations (`sendUserOperation`), which get their own design; `signTransaction`,
+Each call gets its own send span: retrying a call with the same `idempotencyKey` records a second send span, even
+when CDP returns the transaction of the first attempt; the confirm span is shared.
+
+Not traced yet: smart account user operations (`sendUserOperation`, and quotes created for a smart account), which
+get their own design; EIP-7702 delegated accounts; Solana (`cdp.solana`); `requestFaucet`, which Coinbase sends; `signTransaction`,
 which does not broadcast (send the signed transaction with a client extended by `@hashspan/viem`). Accounts turned
 into viem accounts with `toAccount()` are sent through your viem client: extend it with `@hashspan/viem`.
 

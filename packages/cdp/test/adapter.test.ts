@@ -1,4 +1,5 @@
 import { createTxTracker } from '@hashspan/core';
+import { withHashspan as withViemHashspan } from '@hashspan/viem';
 import { diag, SpanStatusCode } from '@opentelemetry/api';
 import { createPublicClient, serializeTransaction } from 'viem';
 import { base, polygon } from 'viem/chains';
@@ -7,7 +8,7 @@ import { mockTransport } from '../../viem/test/mock-transport.js';
 import { withHashspan } from '../src/index.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const HASH = `0x${'ab'.repeat(32)}`;
+const HASH = `0x${'ab'.repeat(32)}` as const;
 const ACCOUNT = '0x1111111111111111111111111111111111111111';
 const TO = '0x2222222222222222222222222222222222222222';
 const USDC = '0x3333333333333333333333333333333333333333';
@@ -33,6 +34,9 @@ function fakeAccount(calls: string[] = []) {
     transfer: send,
     swap: send,
     useSpendPermission: send,
+    async quoteSwap(opts: { network: string }) {
+      return fakeQuote(opts.network);
+    },
     async useNetwork(network: string) {
       return {
         address: ACCOUNT,
@@ -47,6 +51,11 @@ function fakeAccount(calls: string[] = []) {
     },
   };
   return account;
+}
+
+/** A swap quote shaped like the SDK's: `execute()` sends the swap. */
+function fakeQuote(network: string, result: object = { transactionHash: HASH }) {
+  return { liquidityAvailable: true, network, execute: async () => result };
 }
 
 function fakeCdp(calls: string[] = []) {
@@ -65,6 +74,14 @@ function fakeCdp(calls: string[] = []) {
     }
     async importAccount() {
       return fakeAccount(calls);
+    }
+    async updateAccount() {
+      return fakeAccount(calls);
+    }
+    async createSwapQuote(opts: { network: string; smartAccount?: unknown }) {
+      return opts.smartAccount === undefined
+        ? fakeQuote(opts.network)
+        : fakeQuote(opts.network, { userOpHash: HASH });
     }
     async listAccounts() {
       return { accounts: [fakeAccount(calls), fakeAccount(calls)] };
@@ -152,12 +169,16 @@ describe('cdp.evm.sendTransaction', () => {
   });
 
   it('records only send spans without a reader, and skips a reader on another chain', async () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
     const cdp = fakeCdp();
     const other = createPublicClient({ chain: polygon, transport: mockTransport().transport });
     const hashspan = withHashspan(cdp, { reader: other });
     await cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'base', transaction: {} } as never);
     await hashspan.flush();
     expect(tracing.spans().map((s) => s.name)).toEqual(['send 8453']);
+    expect(warn).toHaveBeenCalledWith(
+      'hashspan: the reader is on chain 137, not 8453; not confirming the transaction',
+    );
   });
 
   it('asks a reader function for the chain of the transaction', async () => {
@@ -183,10 +204,14 @@ describe('cdp.evm.sendTransaction', () => {
     ).resolves.toEqual({ transactionHash: HASH });
   });
 
-  it('wraps once when called twice', async () => {
+  it('wraps once when called twice, and returns the first handle', async () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
     const cdp = fakeCdp();
-    withHashspan(cdp);
-    withHashspan(cdp);
+    const first = withHashspan(cdp);
+    expect(withHashspan(cdp, { reader: reader() })).toBe(first);
+    expect(warn).toHaveBeenCalledWith(
+      'hashspan: this CDP client is already traced; ignoring the options of the second withHashspan()',
+    );
     await cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'base', transaction: {} } as never);
     expect(sends()).toHaveLength(1);
   });
@@ -201,7 +226,13 @@ describe('server accounts', () => {
     >;
   };
 
-  for (const factory of ['createAccount', 'getAccount', 'getOrCreateAccount', 'importAccount']) {
+  for (const factory of [
+    'createAccount',
+    'getAccount',
+    'getOrCreateAccount',
+    'importAccount',
+    'updateAccount',
+  ]) {
     it(`traces sends of accounts from ${factory}, with the account as this`, async () => {
       const calls: string[] = [];
       const account = await accountOf(factory, fakeCdp(calls));
@@ -295,6 +326,23 @@ describe('network-scoped accounts', () => {
   });
 });
 
+describe('network-scoped accounts on unknown networks', () => {
+  it('pass sends through untraced, with a diag message', async () => {
+    const debug = vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    const account = (await cdp.evm.createAccount!()) as unknown as {
+      useNetwork: (n: string) => Promise<Record<string, (o: unknown) => Promise<unknown>>>;
+    };
+    const scoped = await account.useNetwork('https://rpc.example.invalid');
+    await scoped.sendTransaction!({ transaction: { to: TO } });
+    expect(sends()).toHaveLength(0);
+    expect(debug).toHaveBeenCalledWith(
+      'hashspan: network-scoped account on an unknown network or RPC URL; not tracing its sends',
+    );
+  });
+});
+
 describe('unexpected inputs and results', () => {
   const accountOf = async (cdp = fakeCdp()) => {
     withHashspan(cdp);
@@ -379,5 +427,70 @@ describe('unexpected inputs and results', () => {
     const account = await accountOf();
     await expect(account.transfer!()).resolves.toEqual({ transactionHash: HASH });
     expect(sends()).toHaveLength(0);
+  });
+});
+
+describe('swap quotes', () => {
+  it('trace execute() of a quote from cdp.evm.createSwapQuote, from the taker', async () => {
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    const quote = (await cdp.evm.createSwapQuote!({ network: 'base', taker: ACCOUNT })) as {
+      execute: () => Promise<unknown>;
+    };
+    await expect(quote.execute()).resolves.toEqual({ transactionHash: HASH });
+    expect(tracing.spanNamed('send 8453').attributes['blockchain.tx.from']).toBe(ACCOUNT);
+  });
+
+  it('trace execute() of a quote from account.quoteSwap, from the account', async () => {
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    const account = (await cdp.evm.createAccount!()) as {
+      quoteSwap: (o: object) => Promise<{ execute: () => Promise<unknown> }>;
+    };
+    const quote = await account.quoteSwap({ network: 'ethereum' });
+    await quote.execute();
+    expect(tracing.spanNamed('send 1').attributes['blockchain.tx.from']).toBe(ACCOUNT);
+  });
+
+  it('leave quotes for smart accounts alone, which send user operations', async () => {
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    const quote = (await cdp.evm.createSwapQuote!({
+      network: 'base',
+      taker: ACCOUNT,
+      smartAccount: {},
+    })) as { execute: () => Promise<unknown> };
+    await expect(quote.execute()).resolves.toEqual({ userOpHash: HASH });
+    expect(tracing.spans()).toHaveLength(0);
+  });
+});
+
+describe('sharing a tracker with @hashspan/viem', () => {
+  it('records one confirm span when the user also waits for the receipt', async () => {
+    const tracker = createTxTracker();
+    const cdp = fakeCdp();
+    const hashspanCdp = withHashspan(cdp, { tracker, reader: reader() });
+    const hashspanViem = withViemHashspan({ tracker });
+    const userReader = reader().extend(hashspanViem);
+
+    await cdp.evm.sendTransaction!({ network: 'base', transaction: {} } as never);
+    await userReader.waitForTransactionReceipt({ hash: HASH });
+    await Promise.all([hashspanCdp.flush(), hashspanViem.flush()]);
+
+    const confirms = tracing.spans().filter((s) => s.name === 'confirm 8453');
+    expect(confirms).toHaveLength(1);
+    expect(confirms[0]?.links[0]?.context.spanId).toBe(
+      tracing.spanNamed('send 8453').spanContext().spanId,
+    );
+  });
+
+  it('records one confirm span with a reader extended by @hashspan/viem', async () => {
+    const tracker = createTxTracker();
+    const cdp = fakeCdp();
+    const hashspanViem = withViemHashspan({ tracker });
+    const hashspanCdp = withHashspan(cdp, { tracker, reader: reader().extend(hashspanViem) });
+    await cdp.evm.sendTransaction!({ network: 'base', transaction: {} } as never);
+    await Promise.all([hashspanCdp.flush(), hashspanViem.flush()]);
+    expect(tracing.spans().filter((s) => s.name === 'confirm 8453')).toHaveLength(1);
   });
 });

@@ -48,6 +48,7 @@ const ACCOUNT_FACTORIES = [
   'getAccount',
   'getOrCreateAccount',
   'importAccount',
+  'updateAccount',
 ] as const;
 
 function errorName(error: unknown): string {
@@ -110,6 +111,11 @@ export function withHashspan(
     try {
       if (typeof reader === 'function') return reader(chainId);
       if (reader && (reader.chain?.id === undefined || reader.chain.id === chainId)) return reader;
+      if (reader) {
+        diag.warn(
+          `hashspan: the reader is on chain ${reader.chain?.id}, not ${chainId}; not confirming the transaction`,
+        );
+      }
     } catch (error) {
       diag.error(`hashspan: the reader function failed (${errorName(error)})`);
     }
@@ -174,7 +180,13 @@ export function withHashspan(
     const account = scoped as AccountLike;
     const chainId = chainIdOf(account.network);
     // Through the CDP API, the scoped methods call the wrapped account's own methods, which trace the call.
-    if (chainId === undefined || CDP_API_SEND_CHAIN_IDS.has(chainId)) return scoped;
+    if (chainId === undefined) {
+      diag.debug(
+        'hashspan: network-scoped account on an unknown network or RPC URL; not tracing its sends',
+      );
+      return scoped;
+    }
+    if (CDP_API_SEND_CHAIN_IDS.has(chainId)) return scoped;
     replace(account, 'sendTransaction', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [{ transaction?: unknown } | undefined];
       return traced(
@@ -212,6 +224,24 @@ export function withHashspan(
     };
   };
 
+  /** Traces `quote.execute()`, which sends the swap of an account (not of a smart account, which sends a user operation). */
+  const wrapQuote = (value: unknown, from: unknown): unknown => {
+    if (value === null || typeof value !== 'object') return value;
+    const quote = value as Record<string, unknown>;
+    replace(
+      quote,
+      'execute',
+      (original) =>
+        async (...args: never[]) =>
+          traced(
+            chainIdOf(quote.network),
+            () => ({ from: addressOf(from) }),
+            () => original(...args),
+          ),
+    );
+    return value;
+  };
+
   const wrapAccount = (value: unknown): unknown => {
     if (value === null || typeof value !== 'object') return value;
     const account = value as AccountLike & { [WRAPPED]?: true };
@@ -244,6 +274,13 @@ export function withHashspan(
         () => original(...args),
       );
     });
+    replace(
+      account,
+      'quoteSwap',
+      (original) =>
+        async (...args: never[]) =>
+          wrapQuote(await original(...args), account),
+    );
     replace(account, 'useSpendPermission', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [{ network?: unknown; value?: unknown } | undefined];
       return traced(
@@ -262,34 +299,45 @@ export function withHashspan(
     return value;
   };
 
-  const evm = cdp.evm as Record<string, unknown> & { [WRAPPED]?: true };
-  if (!evm[WRAPPED]) {
-    Object.defineProperty(evm, WRAPPED, { value: true });
-    replace(evm, 'sendTransaction', (original) => async (...args: never[]) => {
-      const [opts] = args as unknown as [
-        { address?: unknown; network?: unknown; transaction?: unknown } | undefined,
-      ];
-      return traced(
-        chainIdOf(opts?.network),
-        () => ({ from: addressOf(opts?.address), ...describeTransaction(opts?.transaction) }),
-        () => original(...args),
-      );
-    });
-    for (const factory of ACCOUNT_FACTORIES) {
-      replace(
-        evm,
-        factory,
-        (original) =>
-          async (...args: never[]) =>
-            wrapAccount(await original(...args)),
-      );
-    }
-    replace(evm, 'listAccounts', (original) => async (...args: never[]) => {
-      const result = (await original(...args)) as { accounts?: unknown[] } | undefined;
-      if (Array.isArray(result?.accounts)) result.accounts.forEach(wrapAccount);
-      return result;
-    });
+  const handle: HashspanCdp = { flush: (flushOptions) => viem.flush(flushOptions) };
+  const evm = cdp.evm as Record<string, unknown> & { [WRAPPED]?: HashspanCdp };
+  const existing = evm[WRAPPED];
+  if (existing) {
+    diag.warn(
+      'hashspan: this CDP client is already traced; ignoring the options of the second withHashspan()',
+    );
+    return existing;
   }
+  Object.defineProperty(evm, WRAPPED, { value: handle });
+  replace(evm, 'sendTransaction', (original) => async (...args: never[]) => {
+    const [opts] = args as unknown as [
+      { address?: unknown; network?: unknown; transaction?: unknown } | undefined,
+    ];
+    return traced(
+      chainIdOf(opts?.network),
+      () => ({ from: addressOf(opts?.address), ...describeTransaction(opts?.transaction) }),
+      () => original(...args),
+    );
+  });
+  for (const factory of ACCOUNT_FACTORIES) {
+    replace(
+      evm,
+      factory,
+      (original) =>
+        async (...args: never[]) =>
+          wrapAccount(await original(...args)),
+    );
+  }
+  replace(evm, 'createSwapQuote', (original) => async (...args: never[]) => {
+    const [opts] = args as unknown as [{ taker?: unknown; smartAccount?: unknown } | undefined];
+    const quote = await original(...args);
+    return opts?.smartAccount === undefined ? wrapQuote(quote, opts?.taker) : quote;
+  });
+  replace(evm, 'listAccounts', (original) => async (...args: never[]) => {
+    const result = (await original(...args)) as { accounts?: unknown[] } | undefined;
+    if (Array.isArray(result?.accounts)) result.accounts.forEach(wrapAccount);
+    return result;
+  });
 
-  return { flush: (flushOptions) => viem.flush(flushOptions) };
+  return handle;
 }
