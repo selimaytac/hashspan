@@ -1,3 +1,4 @@
+import { SpanStatusCode } from '@opentelemetry/api';
 import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
@@ -113,5 +114,22 @@ describe('the CDP SDK against a local CDP API and Anvil', () => {
     expect(api.requests.filter((r) => r.endsWith('/send/transaction')).length - sendsBefore).toBe(
       2,
     );
+  });
+
+  it("records the CDP API's error type on a failed send and rethrows the SDK's error", async () => {
+    const { cdp } = await client();
+    const account = await cdp.evm.createAccount();
+    api.failNextSend({ status: 400, errorType: 'invalid_request', errorMessage: 'mock: rejected' });
+    await expect(
+      account.sendTransaction({
+        network: 'base-sepolia',
+        transaction: { to: RECIPIENT, value: 1n },
+      }),
+    ).rejects.toMatchObject({ name: 'APIError', errorType: 'invalid_request' });
+
+    const send = tracing.spanNamed('send 84532');
+    expect(send.status.code).toBe(SpanStatusCode.ERROR);
+    expect(send.attributes['error.type']).toBe('invalid_request');
+    expect(send.events[0]?.attributes?.['exception.type']).toBe('APIError');
   });
 });

@@ -58,6 +58,12 @@ function errorName(error: unknown): string {
   return error instanceof Error && error.name ? error.name : 'unknown error';
 }
 
+/** The CDP API's error type (`APIError.errorType`, e.g. `insufficient_balance`), recorded as `error.type`. */
+function cdpErrorType(error: unknown): string | undefined {
+  const type = error instanceof Error ? (error as { errorType?: unknown }).errorType : undefined;
+  return typeof type === 'string' ? type : undefined;
+}
+
 function isHexString(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x[0-9a-fA-F]*$/.test(value);
 }
@@ -162,7 +168,7 @@ export function withHashspan(
       result = await send();
     } catch (error) {
       try {
-        handle?.fail(error);
+        handle?.fail(error, undefined, { errorType: cdpErrorType(error) });
       } catch (thrown) {
         diag.error(`hashspan: failed to record send failure (${errorName(thrown)})`);
       }

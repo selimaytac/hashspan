@@ -8,6 +8,7 @@ export type {
   ConfirmHandle,
   ConfirmInput,
   ErrorMessageMode,
+  FailOptions,
   ReceiptLike,
   ReplacementReason,
   SendHandle,
