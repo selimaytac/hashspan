@@ -1,0 +1,40 @@
+name: CDP SDK latest
+
+# The CDP adapter wraps SDK objects whose shapes are not a public contract, and copies rules the SDK does not export
+# (network names, the chains on which network-scoped accounts send through the API). CI tests the lowest supported
+# SDK from the lockfile; this job tests the newest release within the peer range, so that a change there shows up
+# before users report it. Tests run offline, as in CI.
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cdp-sdk-latest
+  cancel-in-progress: true
+
+jobs:
+  cdp:
+    name: CDP adapter against the newest SDK in range
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Within the range in package.json (^1), so a new major is a deliberate change rather than a failing job.
+      # The updated lockfile is not committed.
+      - name: Update @coinbase/cdp-sdk within its range
+        run: |
+          pnpm --filter @hashspan/cdp update @coinbase/cdp-sdk
+          pnpm --filter @hashspan/cdp list @coinbase/cdp-sdk --depth 0
+      - run: ./scripts/install-anvil.sh
+      - run: pnpm typecheck
+      - name: CDP unit and integration tests
+        run: pnpm vitest run packages/cdp
