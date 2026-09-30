@@ -294,3 +294,87 @@ describe('network-scoped accounts', () => {
     expect(sends().map((s) => s.name)).toEqual(['send 137', 'send 137']);
   });
 });
+
+describe('unexpected inputs and results', () => {
+  const accountOf = async (cdp = fakeCdp()) => {
+    withHashspan(cdp);
+    return (await cdp.evm.createAccount!()) as unknown as Record<
+      string,
+      (o?: unknown) => Promise<unknown>
+    >;
+  };
+
+  it('records a send without transaction fields when the transaction is missing or unparseable', async () => {
+    vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    await cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'base' } as never);
+    await cdp.evm.sendTransaction!({ network: 'base', transaction: '0x1234' } as never);
+    const [first, second] = sends();
+    expect(first?.attributes['blockchain.tx.from']).toBe(ACCOUNT);
+    expect(first?.attributes['blockchain.tx.to']).toBeUndefined();
+    expect(second?.attributes['blockchain.tx.from']).toBeUndefined();
+    expect(second?.attributes['blockchain.tx.to']).toBeUndefined();
+  });
+
+  it('fails the send span when the result has no transaction hash, and returns the result', async () => {
+    const cdp = fakeCdp();
+    cdp.evm.sendTransaction = async () => ({ status: 'pending' });
+    withHashspan(cdp);
+    await expect(
+      cdp.evm.sendTransaction!({ network: 'base', transaction: {} } as never),
+    ).resolves.toEqual({ status: 'pending' });
+    const send = tracing.spanNamed('send 8453');
+    expect(send.status.code).toBe(SpanStatusCode.ERROR);
+    expect(send.attributes['error.type']).toBe('TypeError');
+  });
+
+  it('logs a reader function that throws a non-error, and keeps the send span', async () => {
+    const error = vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const cdp = fakeCdp();
+    withHashspan(cdp, {
+      reader: () => {
+        throw 'no client';
+      },
+    });
+    await cdp.evm.sendTransaction!({ network: 'base', transaction: {} } as never);
+    expect(error).toHaveBeenCalledWith('hashspan: the reader function failed (unknown error)');
+    expect(tracing.spans().map((s) => s.name)).toEqual(['send 8453']);
+  });
+
+  it('leaves missing methods and non-object factory results alone', async () => {
+    const cdp = { evm: { getAccount: async () => undefined, listAccounts: async () => ({}) } };
+    withHashspan(cdp as never);
+    expect(Object.keys(cdp.evm)).toEqual(['getAccount', 'listAccounts']);
+    await expect(cdp.evm.getAccount()).resolves.toBeUndefined();
+    await expect(cdp.evm.listAccounts()).resolves.toEqual({});
+  });
+
+  it('leaves an account without send methods and a non-object scoped account alone', async () => {
+    const cdp = fakeCdp();
+    cdp.evm.createAccount = async () => ({ address: ACCOUNT, useNetwork: async () => null });
+    const account = await accountOf(cdp);
+    expect(account.sendTransaction).toBeUndefined();
+    await expect(account.useNetwork!('polygon')).resolves.toBeNull();
+  });
+
+  it('records a transfer with a token symbol or missing fields without guessing', async () => {
+    const account = await accountOf();
+    await account.transfer!({ to: TO, amount: '1', token: 'usdc', network: 'base' });
+    await account.transfer!({ token: USDC, network: 'base' });
+    const [symbol, bare] = sends();
+    expect(symbol?.attributes['blockchain.tx.to']).toBeUndefined();
+    expect(symbol?.attributes['blockchain.contract.function.name']).toBe('transfer');
+    expect(bare?.attributes['blockchain.tx.to']).toBe(USDC);
+    for (const span of [symbol, bare]) {
+      expect(span?.attributes['blockchain.tx.value']).toBeUndefined();
+    }
+  });
+
+  it('passes a call without options through without a span', async () => {
+    vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const account = await accountOf();
+    await expect(account.transfer!()).resolves.toEqual({ transactionHash: HASH });
+    expect(sends()).toHaveLength(0);
+  });
+});
