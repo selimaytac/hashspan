@@ -88,7 +88,17 @@ export interface SendHandle {
   /** Ends the send span successfully once the transaction hash is known; `endTime` defaults to now. */
   end(hash: string, endTime?: TimeInput): void;
   /** Ends the send span with an error (signing, simulation or broadcast failure); `endTime` defaults to now. */
-  fail(error: unknown, endTime?: TimeInput): void;
+  fail(error: unknown, endTime?: TimeInput, options?: FailOptions): void;
+}
+
+export interface FailOptions {
+  /**
+   * `error.type` to record instead of the error's class name, for adapters whose library reports a stable,
+   * machine-readable error code (for example a wallet API's error type). Recorded only if it matches
+   * `/^[A-Za-z0-9_.-]{1,64}$/`, so that the attribute keeps a bounded set of values; otherwise the class name is
+   * recorded. `exception.type` is always the class name.
+   */
+  errorType?: string | undefined;
 }
 
 export interface ConfirmInput {

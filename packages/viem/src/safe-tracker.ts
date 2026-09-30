@@ -45,7 +45,8 @@ export function guardTracker(tracker: TxTracker): TxTracker {
       if (typeof handle !== 'object' || handle === null) return NOOP_SEND;
       return {
         end: (hash, endTime) => call(handle, 'end', 'end send span', hash, endTime),
-        fail: (error, endTime) => call(handle, 'fail', 'record send failure', error, endTime),
+        fail: (error, endTime, options) =>
+          call(handle, 'fail', 'record send failure', error, endTime, options),
       };
     },
     startConfirm: (input, parent) => {

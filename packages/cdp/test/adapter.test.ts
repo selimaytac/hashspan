@@ -177,6 +177,24 @@ describe('cdp.evm.sendTransaction', () => {
     expect(tracing.spanNamed('send 8453').status.code).toBe(SpanStatusCode.ERROR);
   });
 
+  it("records the CDP API's error type as error.type", async () => {
+    const cdp = fakeCdp();
+    const failure = Object.assign(new Error('not enough funds'), {
+      name: 'APIError',
+      errorType: 'insufficient_balance',
+    });
+    cdp.evm.sendTransaction = async () => {
+      throw failure;
+    };
+    withHashspan(cdp);
+    await expect(cdp.evm.sendTransaction({ network: 'base', transaction: {} })).rejects.toBe(
+      failure,
+    );
+    const send = tracing.spanNamed('send 8453');
+    expect(send.attributes['error.type']).toBe('insufficient_balance');
+    expect(send.events[0]?.attributes?.['exception.type']).toBe('APIError');
+  });
+
   it('passes calls on unknown networks through without a span, warning once per network', async () => {
     const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
     const cdp = fakeCdp();

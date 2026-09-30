@@ -58,7 +58,9 @@ agent toolkits. Relevant facts, from the SDK source (1.57):
   otherwise a `diag` warning is logged. The `tracker` option is shared with `@hashspan/viem`: with the same tracker, the user's own receipt waits
   and the adapter's background confirmation share one confirm span (ADR 0007), and the user flushes both handles.
 - **What is never read or recorded.** The client's configuration, API key, wallet secret, generated JWTs and request
-  bodies. Errors follow ADR 0006; mapping CDP's `errorType` to `error.type` is left for later.
+  bodies. Errors follow ADR 0006. A failed send records the CDP API's
+  error type (`APIError.errorType`, e.g. `insufficient_balance`) as `error.type`, through a core option that accepts
+  only short identifiers; `exception.type` stays the class name.
 - **Retries.** Each call gets its own send span, so a retry with the same `idempotencyKey` records a second one.
 - **Not traced in this step.** Smart account user operations (including swap quotes created for a smart account),
   which need a new identifier in the core and the schema and get their own ADR; EIP-7702 delegated accounts

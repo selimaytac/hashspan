@@ -83,6 +83,31 @@ describe('send span', () => {
     expect(send.events.map((e) => e.name)).toContain('exception');
   });
 
+  it("records an adapter's error type as error.type, keeping the class name as exception.type", () => {
+    const tracker = createTxTracker();
+    class APIError extends Error {
+      override name = 'APIError';
+    }
+    tracker
+      .startSend({ chainId: CHAIN_ID })
+      .fail(new APIError('insufficient balance'), undefined, { errorType: 'insufficient_balance' });
+
+    const send = tracing.spanNamed(`send ${CHAIN_ID}`);
+    expect(send.attributes['error.type']).toBe('insufficient_balance');
+    expect(send.events[0]?.attributes?.['exception.type']).toBe('APIError');
+  });
+
+  it('records the class name when the error type is not a short identifier', () => {
+    vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const tracker = createTxTracker();
+    for (const errorType of ['has spaces', 'x'.repeat(65), '', 42 as unknown as string]) {
+      tracker.startSend({ chainId: CHAIN_ID }).fail(new TypeError('bad'), undefined, { errorType });
+    }
+    tracker.startSend({ chainId: CHAIN_ID }).fail(new TypeError('bad'), undefined, {});
+    const types = tracing.spans().map((s) => s.attributes['error.type']);
+    expect(types).toEqual(['TypeError', 'TypeError', 'TypeError', 'TypeError', 'TypeError']);
+  });
+
   it('ignores repeated end/fail calls', () => {
     const tracker = createTxTracker();
     const handle = tracker.startSend({ chainId: CHAIN_ID });
