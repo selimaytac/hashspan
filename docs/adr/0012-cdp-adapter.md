@@ -44,16 +44,18 @@ agent toolkits. Relevant facts, from the SDK source (1.57):
   logs a `diag` warning, since its options cannot take effect.
 - **Send span.** Started when the call starts (ADR 0009), ended with `transactionHash`, or failed with the error.
   Recorded: chain id from our own network name map, exported as `CDP_NETWORK_CHAIN_IDS` (a call on an unknown
-  network, or on a network-scoped account created from an RPC URL, is not traced), `from` (the account address), and
+  network, or on a network-scoped account created from an RPC URL, is not traced, with a `diag` warning once per
+  network name that never includes an RPC URL). A unit test compares the map and the chains on which network-scoped
+  accounts send through the CDP API with the installed SDK, which does not export them, `from` (the account address), and
   for `sendTransaction` `to`, `value`, `nonce` and the function selector from the request, parsing a serialized
   transaction with viem when one is given. A token `transfer` is recorded as a call to the token contract.
 - **Confirm span, from a reader.** Confirmation needs a viem `PublicClient` for the chain, passed as `reader`.
   `@hashspan/viem` gains `watch(client, { hash })` on the `withHashspan()` result: it confirms a transaction sent
   elsewhere through `client` in the background, like background confirmation (ADR 0002), with revert reasons
   (ADR 0005), replacements (ADR 0008) and `flush()` (ADR 0010). `@hashspan/cdp` uses it. Without a reader, only send
-  spans are recorded; the adapter never picks an RPC endpoint itself. A single reader is used only when its chain
-  matches the transaction's, otherwise a `diag` warning is logged; a function `(chainId) => client` serves several
-  chains. The `tracker` option is shared with `@hashspan/viem`: with the same tracker, the user's own receipt waits
+  spans are recorded; the adapter never picks an RPC endpoint itself. A reader client, given directly or returned by a
+  function `(chainId) => client` that serves several chains, is used only when its chain matches the transaction's;
+  otherwise a `diag` warning is logged. The `tracker` option is shared with `@hashspan/viem`: with the same tracker, the user's own receipt waits
   and the adapter's background confirmation share one confirm span (ADR 0007), and the user flushes both handles.
 - **What is never read or recorded.** The client's configuration, API key, wallet secret, generated JWTs and request
   bodies. Errors follow ADR 0006; mapping CDP's `errorType` to `error.type` is left for later.

@@ -15,6 +15,10 @@ export const CDP_NETWORK_CHAIN_IDS: Readonly<Record<string, number>> = {
   avalanche: 43114,
   world: 480,
   'world-sepolia': 4801,
+  'ethereum-hoodi': 560048,
+  'polygon-mumbai': 80001,
+  binance: 56,
+  zora: 7777777,
 };
 
 /**

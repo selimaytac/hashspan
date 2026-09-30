@@ -158,14 +158,49 @@ describe('cdp.evm.sendTransaction', () => {
     expect(tracing.spanNamed('send 8453').status.code).toBe(SpanStatusCode.ERROR);
   });
 
-  it('passes calls on unknown networks through without a span', async () => {
-    vi.spyOn(diag, 'debug').mockImplementation(() => {});
+  it('passes calls on unknown networks through without a span, warning once per network', async () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
     const cdp = fakeCdp();
     withHashspan(cdp);
-    await expect(
-      cdp.evm.sendTransaction!({ address: ACCOUNT, network: 'moonbase', transaction: {} } as never),
-    ).resolves.toEqual({ transactionHash: HASH });
+    for (const network of [
+      'moonbase',
+      'moonbase',
+      'https://rpc.example.invalid/key',
+      'https://other.invalid',
+    ]) {
+      await expect(
+        cdp.evm.sendTransaction!({ address: ACCOUNT, network, transaction: {} } as never),
+      ).resolves.toEqual({ transactionHash: HASH });
+    }
     expect(tracing.spans()).toHaveLength(0);
+    // An RPC URL can carry an API key: it is never part of the message.
+    expect(warn.mock.calls).toEqual([
+      ['hashspan: not tracing calls on the unknown CDP network "moonbase"'],
+      ['hashspan: not tracing calls on an RPC URL or unknown network'],
+    ]);
+  });
+
+  it('stops warning about unknown networks after a bounded number of them', async () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    for (let i = 0; i < 40; i++) {
+      await cdp.evm.sendTransaction!({ network: `net-${i}`, transaction: {} } as never);
+    }
+    expect(warn).toHaveBeenCalledTimes(32);
+  });
+
+  it('skips a client from a reader function that is on another chain', async () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const cdp = fakeCdp();
+    const other = createPublicClient({ chain: polygon, transport: mockTransport().transport });
+    const hashspan = withHashspan(cdp, { reader: () => other });
+    await cdp.evm.sendTransaction!({ network: 'base', transaction: {} } as never);
+    await hashspan.flush();
+    expect(tracing.spans().map((s) => s.name)).toEqual(['send 8453']);
+    expect(warn).toHaveBeenCalledWith(
+      'hashspan: the reader is on chain 137, not 8453; not confirming the transaction',
+    );
   });
 
   it('records only send spans without a reader, and skips a reader on another chain', async () => {
@@ -328,7 +363,7 @@ describe('network-scoped accounts', () => {
 
 describe('network-scoped accounts on unknown networks', () => {
   it('pass sends through untraced, with a diag message', async () => {
-    const debug = vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
     const cdp = fakeCdp();
     withHashspan(cdp);
     const account = (await cdp.evm.createAccount!()) as unknown as {
@@ -337,8 +372,8 @@ describe('network-scoped accounts on unknown networks', () => {
     const scoped = await account.useNetwork('https://rpc.example.invalid');
     await scoped.sendTransaction!({ transaction: { to: TO } });
     expect(sends()).toHaveLength(0);
-    expect(debug).toHaveBeenCalledWith(
-      'hashspan: network-scoped account on an unknown network or RPC URL; not tracing its sends',
+    expect(warn).toHaveBeenCalledWith(
+      'hashspan: not tracing calls on an RPC URL or unknown network',
     );
   });
 });
@@ -422,11 +457,13 @@ describe('unexpected inputs and results', () => {
     }
   });
 
-  it('passes a call without options through without a span', async () => {
+  it('passes a call without options through without a span or a warning', async () => {
     vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
     const account = await accountOf();
     await expect(account.transfer!()).resolves.toEqual({ transactionHash: HASH });
     expect(sends()).toHaveLength(0);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
