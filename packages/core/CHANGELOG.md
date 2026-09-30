@@ -1,5 +1,13 @@
 # @hashspan/core
 
+## 0.3.0
+
+### Minor Changes
+
+- [#67](https://github.com/selimaytac/hashspan/pull/67) [`28a83c2`](https://github.com/selimaytac/hashspan/commit/28a83c265f11836a5eca26a99971daa402abc4d3) Thanks [@selimaytac](https://github.com/selimaytac)! - `SendHandle.fail(error, endTime, { errorType })` records a library's machine-readable error code as `error.type` instead
+  of the error's class name, when it is a short identifier (`[A-Za-z0-9_.-]`, at most 64 characters). `exception.type`
+  stays the class name.
+
 ## 0.2.0
 
 ### Minor Changes
