@@ -28,7 +28,8 @@
 
 - viem transport wrapper: JSON-RPC spans
 - viem `deployContract`, `sendRawTransaction`, `sendCalls`
-- Coinbase CDP SDK adapter (REST send path)
+- [x] Coinbase CDP SDK adapter for server accounts (REST send path, [ADR 0012](adr/0012-cdp-adapter.md))
+- [ ] CDP smart account user operations (ERC-4337)
 - x402 adapter (payment signing → facilitator settlement)
 - Metrics: transaction fee and confirmation latency histograms
 

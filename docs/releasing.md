@@ -21,7 +21,7 @@ together.
 
 ## One-time setup
 
-Done once, by a maintainer, before the first release.
+Done once, by a maintainer, before the first release of each package (steps 1 and 3 again for a new package).
 
 **1. Reserve the package names.** npm can only attach a trusted publisher to a package that exists, so each package
 gets a `0.0.0` placeholder. Use npm 11.10 or later, and a machine and account you trust with your npm login:
@@ -29,7 +29,7 @@ gets a `0.0.0` placeholder. Use npm 11.10 or later, and a machine and account yo
 ```sh
 npm login
 dir="$(mktemp -d)"
-for pkg in core viem; do
+for pkg in core viem cdp; do
   mkdir "$dir/$pkg"
   cat > "$dir/$pkg/package.json" <<JSON
 {
@@ -56,6 +56,7 @@ other branch, even if the workflow file is changed there.
 ```sh
 npm trust github @hashspan/core --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust github @hashspan/viem --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
+npm trust github @hashspan/cdp --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust list @hashspan/core
 npm logout
 ```

@@ -42,7 +42,7 @@ decoded custom error.</sub>
 |---|---|---|
 | [`@hashspan/core`](packages/core) | Transaction lifecycle tracker | released |
 | [`@hashspan/viem`](packages/viem) | Adapter for [viem](https://viem.sh) clients | released |
-| `@hashspan/cdp` | Adapter for Coinbase CDP wallets | planned (v0.2) |
+| [`@hashspan/cdp`](packages/cdp) | Adapter for Coinbase CDP server accounts | new |
 | `@hashspan/x402` | Adapter for x402 payments | planned (v0.2) |
 
 ## Quick start

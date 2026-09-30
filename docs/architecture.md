@@ -5,12 +5,12 @@ flowchart LR
   subgraph App["Agent application"]
     Tool["execute_tool span<br/>(AI SDK, Mastra, ...)"]
     Viem["viem client"]
-    CDP["CDP / wallet API<br/>(planned)"]
+    CDP["CDP SDK<br/>(server accounts)"]
     X402["x402 client<br/>(planned)"]
   end
   subgraph Lib["hashspan"]
     VA["@hashspan/viem<br/>capture adapter"]
-    CA["@hashspan/cdp<br/>(planned)"]
+    CA["@hashspan/cdp<br/>capture adapter"]
     XA["@hashspan/x402<br/>(planned)"]
     Core["@hashspan/core<br/>tx lifecycle: send → confirm"]
   end
@@ -26,6 +26,7 @@ flowchart LR
 |---|---|---|
 | core | Lifecycle tracker: `send`/`confirm` spans, links, one confirm span per transaction, replaced transactions, fees, privacy modes. No network calls: adapters pass it receipts | `packages/core` |
 | viem adapter | Hooks `sendTransaction` / `writeContract` / `waitForTransactionReceipt` via `client.extend()`; background confirmation, revert reason decoding by replay, `flush()`. RPC spans via a transport wrapper are planned (v0.2) | `packages/viem` |
+| cdp adapter | Wraps a Coinbase CDP client in place: sends of server accounts become send spans; confirmations through a viem reader and `@hashspan/viem`'s `watch()` | `packages/cdp` |
 | examples | Runnable agent integrations | `examples/` |
 | lab | Local Jaeger (Docker) + project-local Anvil | `docker/`, `scripts/`, `Makefile` |
 

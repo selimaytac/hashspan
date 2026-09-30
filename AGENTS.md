@@ -35,6 +35,10 @@ Run lint, typecheck and tests before proposing a change.
     Work that outlives a traced call must be passed to `track()`, so `flush()` can await it (ADR 0010)
   - `src/revert-reason.ts` replays reverted transactions and decodes the revert data (ADR 0005)
   - `test/mock-transport.ts` EIP-1193 mock for unit tests; `test/*.int.test.ts` run against Anvil via prool
+- `packages/cdp` → capture adapter for the Coinbase CDP SDK (ADR 0012)
+  - `src/index.ts` `withHashspan(cdp, { reader })` wraps `cdp.evm` and the accounts its factories return, in place;
+    confirmations go through `@hashspan/viem`'s `watch()`; `src/networks.ts` maps CDP network names to chain ids
+  - `test/mock-cdp-api.ts` local stand-in for the CDP API that broadcasts on Anvil; tests never leave localhost
 - `examples/` → runnable agent integrations
   - `ai-sdk-agent`: AI SDK agent with a scripted model (no API key), run by `make demo`; its
     `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break
@@ -44,7 +48,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 
 ## Conventions
 - Language: all code, comments, docs, commits and PRs in English.
-- Commits: Conventional Commits `<type>(<scope>): <description>`, subject ≤ 72 chars. Scopes: `core`, `viem`,
+- Commits: Conventional Commits `<type>(<scope>): <description>`, subject ≤ 72 chars. Scopes: `core`, `viem`, `cdp`,
   `examples`, `docs`, `ci`, `lab`.
 - Small, focused PRs; one concern per PR; update tests and docs with the change.
 - Tests first: every behaviour change comes with a unit test; anything touching RPC or receipts also gets an Anvil
