@@ -39,7 +39,8 @@ await hashspan.flush();
 
 `reader` is a viem public client, or a function `(chainId) => client | undefined` for several chains. Confirmations
 run in the background through it and never delay your call. Without a reader, only send spans are recorded: the
-adapter never picks an RPC endpoint itself.
+adapter never picks an RPC endpoint itself. The exception is `waitForTransactionReceipt` on a network-scoped
+account, which records a confirm span from the receipt it returns, without a revert reason.
 
 `withHashspan(cdp, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/main/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem`, `tracker`, `reader`,
@@ -64,7 +65,8 @@ const hashspanCdp = withHashspan(cdp, { tracker, reader });
 await Promise.all([hashspanCdp.flush(), hashspanViem.flush()]);
 ```
 
-A `reader` whose chain differs from the transaction's is not used; a `diag` warning says so.
+A reader client whose chain differs from the transaction's, given directly or returned by a reader function, is not
+used; a `diag` warning says so.
 
 ## Traced
 
@@ -76,10 +78,12 @@ A `reader` whose chain differs from the transaction's is not used; a `diag` warn
 | account `swap`, `useSpendPermission` | chain id and from |
 | `execute()` of a quote from `cdp.evm.createSwapQuote` or account `quoteSwap` | chain id and from (the taker) |
 | network-scoped accounts (`useNetwork`) | as above; on Base and Ethereum they send through the account itself, elsewhere through the SDK's own viem client, and both are traced once |
+| network-scoped `waitForTransactionReceipt` | without a reader: a confirm span with status, block, gas and fees, but no revert reason; with a reader, the background confirmation records it |
 
 Accounts are traced when they come from `createAccount`, `getAccount`, `getOrCreateAccount`, `importAccount`,
 `updateAccount` or `listAccounts`. Networks are mapped to chain ids with `CDP_NETWORK_CHAIN_IDS`; a call on another network, or a
-network-scoped account created from an RPC URL, is passed through untraced.
+network-scoped account created from an RPC URL, is passed through untraced, with a `diag` warning once per network
+(an RPC URL is never logged, as it can contain an API key).
 
 Each call gets its own send span: retrying a call with the same `idempotencyKey` records a second send span, even
 when CDP returns the transaction of the first attempt; the confirm span is shared.

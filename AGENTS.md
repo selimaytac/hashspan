@@ -39,6 +39,8 @@ Run lint, typecheck and tests before proposing a change.
   - `src/index.ts` `withHashspan(cdp, { reader })` wraps `cdp.evm` and the accounts its factories return, in place;
     confirmations go through `@hashspan/viem`'s `watch()`; `src/networks.ts` maps CDP network names to chain ids
   - `test/mock-cdp-api.ts` local stand-in for the CDP API that broadcasts on Anvil; tests never leave localhost
+  - `test/sdk-drift.test.ts` compares the adapter's copies of SDK rules with the installed SDK;
+    `.github/workflows/cdp-sdk-latest.yml` runs the cdp tests weekly against the newest SDK in the peer range
 - `examples/` → runnable agent integrations
   - `ai-sdk-agent`: AI SDK agent with a scripted model (no API key), run by `make demo`; its
     `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break
