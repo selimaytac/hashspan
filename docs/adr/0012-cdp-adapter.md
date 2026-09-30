@@ -38,8 +38,10 @@ agent toolkits. Relevant facts, from the SDK source (1.57):
   traced too, except for quotes created for a smart account, which send a user operation. A
   network-scoped account's `sendTransaction` and `transfer` are traced by the adapter only on chains where the SDK
   sends through its internal viem client; on Base and Ethereum they call the wrapped account, which traces them, so
-  each transaction gets one send span. The scoped `waitForTransactionReceipt` is not wrapped: confirmations come from
-  the reader. It never patches prototypes or the SDK's HTTP client. Wrapping is idempotent, happens in place, and
+  each transaction gets one send span. The scoped `waitForTransactionReceipt` (`{ hash }` or `{ transactionHash }`)
+  records a confirm span from the receipt it returns when there is no reader for its chain, without a revert
+  reason, since the adapter has no client to replay the call with; with a reader, the background confirmation
+  records it and the wait is passed on untraced. It never patches prototypes or the SDK's HTTP client. Wrapping is idempotent, happens in place, and
   `withHashspan()` returns a handle with `flush()`; a second call on the same client returns the first handle and
   logs a `diag` warning, since its options cannot take effect.
 - **Send span.** Started when the call starts (ADR 0009), ended with `transactionHash`, or failed with the error.
@@ -53,7 +55,7 @@ agent toolkits. Relevant facts, from the SDK source (1.57):
   `@hashspan/viem` gains `watch(client, { hash })` on the `withHashspan()` result: it confirms a transaction sent
   elsewhere through `client` in the background, like background confirmation (ADR 0002), with revert reasons
   (ADR 0005), replacements (ADR 0008) and `flush()` (ADR 0010). `@hashspan/cdp` uses it. Without a reader, only send
-  spans are recorded; the adapter never picks an RPC endpoint itself. A reader client, given directly or returned by a
+  spans are recorded, except for waits on network-scoped accounts; the adapter never picks an RPC endpoint itself. A reader client, given directly or returned by a
   function `(chainId) => client` that serves several chains, is used only when its chain matches the transaction's;
   otherwise a `diag` warning is logged. The `tracker` option is shared with `@hashspan/viem`: with the same tracker, the user's own receipt waits
   and the adapter's background confirmation share one confirm span (ADR 0007), and the user flushes both handles.

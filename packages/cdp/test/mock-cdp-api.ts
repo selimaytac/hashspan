@@ -49,6 +49,18 @@ export async function startMockCdpApi(options: { rpcUrl: string; account: Addres
     };
     try {
       const body = await readJson(request);
+      // Network-scoped accounts on Base read through CDP's node: the SDK asks for a token, then calls its RPC URL.
+      if (request.method === 'GET' && path === '/apikeys/v1/tokens/active') {
+        return reply(200, { id: 'mock-token' });
+      }
+      if (request.method === 'POST' && /^\/rpc\/v1\/[a-z-]+\/mock-token$/.test(path)) {
+        const upstream = await fetch(options.rpcUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        return reply(upstream.status, await upstream.json());
+      }
       if (request.method === 'POST' && path === '/platform/v2/evm/accounts') {
         return reply(201, { address: options.account, name: body.name ?? 'agent' });
       }

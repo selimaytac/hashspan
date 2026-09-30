@@ -13,6 +13,14 @@ const ACCOUNT = '0x1111111111111111111111111111111111111111';
 const TO = '0x2222222222222222222222222222222222222222';
 const USDC = '0x3333333333333333333333333333333333333333';
 
+const viemReceipt = {
+  transactionHash: HASH,
+  status: 'success',
+  blockNumber: 123n,
+  gasUsed: 21_000n,
+  effectiveGasPrice: 2n,
+};
+
 let tracing: TestTracing;
 beforeEach(() => {
   tracing = setupTracing();
@@ -47,6 +55,8 @@ function fakeAccount(calls: string[] = []) {
             ? (account.sendTransaction as (o: object) => Promise<unknown>)({ ...opts, network })
             : { transactionHash: HASH },
         transfer: async () => ({ transactionHash: HASH }),
+        // The SDK waits through its own viem client and returns viem's receipt.
+        waitForTransactionReceipt: async () => viemReceipt,
       };
     },
   };
@@ -75,7 +85,7 @@ type TracedAccount = Record<
   'sendTransaction' | 'transfer' | 'swap' | 'quoteSwap' | 'useSpendPermission' | 'useNetwork',
   Method
 >;
-type ScopedAccount = Record<'sendTransaction' | 'transfer', Method>;
+type ScopedAccount = Record<'sendTransaction' | 'transfer' | 'waitForTransactionReceipt', Method>;
 
 function fakeCdp(calls: string[] = []) {
   class EvmClient {
@@ -559,3 +569,104 @@ describe('sharing a tracker with @hashspan/viem', () => {
     expect(tracing.spans().filter((s) => s.name === 'confirm 8453')).toHaveLength(1);
   });
 });
+
+describe("a network-scoped account's waitForTransactionReceipt", () => {
+  const scopedOn = async (network: string, cdp = fakeCdp(), options = {}) => {
+    const hashspan = withHashspan(cdp, options);
+    const account = (await cdp.evm.createAccount()) as unknown as {
+      useNetwork: (n: string) => Promise<ScopedAccount>;
+    };
+    return { hashspan, scoped: await account.useNetwork(network) };
+  };
+
+  for (const network of ['base', 'polygon']) {
+    it(`records a confirm span from the receipt without a reader, on ${network}`, async () => {
+      const { scoped } = await scopedOn(network);
+      await scoped.sendTransaction({ transaction: { to: TO } });
+      await expect(scoped.waitForTransactionReceipt({ hash: HASH })).resolves.toBe(viemReceipt);
+      const chainId = network === 'base' ? 8453 : 137;
+      const confirm = tracing.spanNamed(`confirm ${chainId}`);
+      expect(confirm.attributes).toMatchObject({
+        'blockchain.tx.status': 'success',
+        'blockchain.block.number': 123,
+        'blockchain.tx.gas.used': 21_000,
+        'blockchain.tx.fee': '42000',
+      });
+      expect(confirm.links[0]?.context.spanId).toBe(
+        tracing.spanNamed(`send ${chainId}`).spanContext().spanId,
+      );
+    });
+  }
+
+  it('accepts the transactionHash form of the options', async () => {
+    const { scoped } = await scopedOn('base');
+    await scoped.waitForTransactionReceipt({ transactionHash: HASH });
+    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.hash']).toBe(HASH);
+  });
+
+  it('leaves the wait to the background confirmation when there is a reader', async () => {
+    const tracker = createTxTracker();
+    const startConfirm = vi.spyOn(tracker, 'startConfirm');
+    const { hashspan, scoped } = await scopedOn('base', fakeCdp(), { tracker, reader: reader() });
+    await scoped.sendTransaction({ transaction: { to: TO } });
+    await scoped.waitForTransactionReceipt({ hash: HASH });
+    await hashspan.flush();
+    // Only the background confirmation, which also fetches revert reasons, waits for the receipt.
+    expect(startConfirm).toHaveBeenCalledTimes(1);
+    expect(tracing.spans().filter((s) => s.name === 'confirm 8453')).toHaveLength(1);
+  });
+
+  it('ends as a timeout, or as a failure, and rethrows the error', async () => {
+    const timeout = Object.assign(new Error('timed out'), {
+      name: 'WaitForTransactionReceiptTimeoutError',
+    });
+    const failure = new Error('rpc down');
+    const waits = [timeout, failure];
+    for (const error of waits) {
+      const failing = await scopedWithWait(async () => {
+        throw error;
+      });
+      await expect(failing.waitForTransactionReceipt({ hash: HASH })).rejects.toBe(error);
+    }
+    const statuses = tracing
+      .spans()
+      .filter((s) => s.name === 'confirm 8453')
+      .map((s) => [s.attributes['blockchain.tx.status'], s.attributes['error.type']]);
+    expect(statuses).toEqual([
+      ['timeout', 'timeout'],
+      [undefined, 'Error'],
+    ]);
+  });
+
+  it('fails the confirm span when the result is not a receipt, and returns it', async () => {
+    const odd = await scopedWithWait(async () => ({ status: 'pending' }));
+    await expect(odd.waitForTransactionReceipt({ hash: HASH })).resolves.toEqual({
+      status: 'pending',
+    });
+    expect(tracing.spanNamed('confirm 8453').attributes['error.type']).toBe('TypeError');
+  });
+
+  it('passes a wait without a hash through untraced', async () => {
+    const { scoped } = await scopedOn('base');
+    await scoped.waitForTransactionReceipt({});
+    expect(tracing.spans()).toHaveLength(0);
+  });
+});
+
+/** A network-scoped account on Base whose SDK wait is `wait`, traced by the adapter. */
+async function scopedWithWait(wait: Method): Promise<ScopedAccount> {
+  const cdp = fakeCdp();
+  cdp.evm.createAccount = async () => ({
+    address: ACCOUNT,
+    useNetwork: async (network: string) => ({
+      address: ACCOUNT,
+      network,
+      waitForTransactionReceipt: wait,
+    }),
+  });
+  withHashspan(cdp);
+  const account = (await cdp.evm.createAccount()) as unknown as {
+    useNetwork: (n: string) => Promise<ScopedAccount>;
+  };
+  return account.useNetwork('base');
+}
