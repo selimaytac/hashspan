@@ -1,8 +1,9 @@
-import type { ConfirmHandle, SendHandle, TxTracker } from '@hashspan/core';
+import type { ConfirmHandle, PaymentHandle, SendHandle, TxTracker } from '@hashspan/core';
 import { diag } from '@opentelemetry/api';
 
 export const NOOP_SEND: SendHandle = { end: () => {}, fail: () => {} };
 const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
+const NOOP_PAYMENT: PaymentHandle = { end: () => {}, fail: () => {} };
 
 /**
  * What `diag` logs for an error: its name only. viem errors carry request arguments and RPC URLs, which may
@@ -61,6 +62,24 @@ export function guardTracker(tracker: TxTracker): TxTracker {
         timeout: (endTime) => call(handle, 'timeout', 'record confirmation timeout', endTime),
         fail: (error, endTime) =>
           call(handle, 'fail', 'record confirmation failure', error, endTime),
+      };
+    },
+    // A tracker written for an older `@hashspan/core` has no `startPayment`: it records no payment spans.
+    startPayment: (input, parent) => {
+      const handle = safely(
+        'start payment span',
+        () =>
+          typeof tracker.startPayment === 'function'
+            ? tracker.startPayment(input, parent)
+            : NOOP_PAYMENT,
+        NOOP_PAYMENT,
+      );
+      if (typeof handle !== 'object' || handle === null) return NOOP_PAYMENT;
+      return {
+        end: (settlement, endTime) =>
+          call(handle, 'end', 'record payment settlement', settlement, endTime),
+        fail: (error, endTime, options) =>
+          call(handle, 'fail', 'record payment failure', error, endTime, options),
       };
     },
   };

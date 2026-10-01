@@ -28,6 +28,20 @@ telling us how the spans look in your backend, or where the docs lost you, is ju
    weeks may be offered to someone else.
 4. Draft pull requests are welcome if you want early feedback.
 
+## Priority labels
+
+Bugs and other work are triaged with a priority label, which sets the order they are handled in:
+
+| Label | Meaning | Handled |
+|---|---|---|
+| `priority: P0` | Breaks a released user's call or leaks data | First, before any other work, including work in progress |
+| `priority: P1` | Correctness issue | In the next round of fixes |
+| `priority: P2` | Important | Together, at the end of a milestone |
+| `priority: P3` | Nice to have | When there is time; may be deferred |
+
+An issue without a priority label has not been triaged yet. Security issues never get a public issue; see
+[SECURITY.md](SECURITY.md).
+
 ## Development setup
 
 **Requirements**

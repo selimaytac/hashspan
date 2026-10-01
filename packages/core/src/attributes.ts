@@ -31,12 +31,35 @@ export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR =
 export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS =
   'blockchain.contract.function.arguments' as const;
 
+/**
+ * Payments settled on chain by a party other than the agent, e.g. an x402 facilitator. See
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0013-x402-payments.md.
+ */
+export const ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL = 'blockchain.payment.protocol' as const;
+export const ATTR_BLOCKCHAIN_PAYMENT_PAYER = 'blockchain.payment.payer' as const;
+export const ATTR_BLOCKCHAIN_PAYMENT_RECIPIENT = 'blockchain.payment.recipient' as const;
+export const ATTR_BLOCKCHAIN_PAYMENT_ASSET = 'blockchain.payment.asset' as const;
+export const ATTR_BLOCKCHAIN_PAYMENT_AMOUNT = 'blockchain.payment.amount' as const;
+export const ATTR_BLOCKCHAIN_PAYMENT_STATUS = 'blockchain.payment.status' as const;
+/** x402's own payment fields. */
+export const ATTR_X402_SCHEME = 'x402.scheme' as const;
+export const ATTR_X402_RESOURCE = 'x402.resource' as const;
+
 /** Values for {@link ATTR_BLOCKCHAIN_SYSTEM}. */
 export const BLOCKCHAIN_SYSTEM_VALUE_EVM = 'evm' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_OPERATION_NAME}. */
 export const BLOCKCHAIN_OPERATION_NAME_VALUE_SEND = 'send' as const;
 export const BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM = 'confirm' as const;
+export const BLOCKCHAIN_OPERATION_NAME_VALUE_PAYMENT = 'payment' as const;
+
+/** Values for {@link ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL}. */
+export const BLOCKCHAIN_PAYMENT_PROTOCOL_VALUE_X402 = 'x402' as const;
+
+/** Values for {@link ATTR_BLOCKCHAIN_PAYMENT_STATUS}. */
+export const BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED = 'settled' as const;
+export const BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING = 'pending' as const;
+export const BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED = 'failed' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_TX_STATUS}. */
 export const BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS = 'success' as const;
