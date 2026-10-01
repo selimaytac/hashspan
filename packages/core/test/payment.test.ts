@@ -91,14 +91,50 @@ describe('payment span', () => {
     ]);
   });
 
-  it('records the payer and amount reported by the settlement instead of the input', () => {
+  it('keeps the payer and amount the payer knew over those the settlement reports', () => {
+    // The settling party reports these values; the payer's own are the ones it signed.
+    createTxTracker().startPayment(payment).end({
+      status: 'settled',
+      hash: HASH,
+      payer: '0x3333333333333333333333333333333333333333',
+      amount: '9000',
+    });
+    const span = tracing.spanNamed(PAYMENT_SPAN);
+    expect(span.attributes['blockchain.payment.payer']).toBe(PAYER);
+    expect(span.attributes['blockchain.payment.amount']).toBe('10000');
+  });
+
+  it('records the payer and amount of the settlement only where the input had none', () => {
     const settledPayer = '0x3333333333333333333333333333333333333333';
     createTxTracker()
-      .startPayment({ ...payment, payer: undefined })
+      .startPayment({ ...payment, payer: undefined, amount: undefined })
       .end({ status: 'settled', hash: HASH, payer: settledPayer, amount: '9000' });
     const span = tracing.spanNamed(PAYMENT_SPAN);
     expect(span.attributes['blockchain.payment.payer']).toBe(settledPayer);
     expect(span.attributes['blockchain.payment.amount']).toBe('9000');
+  });
+
+  it('does not take over the link of a transaction the tracker already sent', () => {
+    const tracker = createTxTracker();
+    const tool = trace.getTracer('test').startSpan('execute_tool pay');
+    const sent = context.with(trace.setSpan(context.active(), tool), () => {
+      const send = tracker.startSend({ chainId: CHAIN_ID });
+      send.end({ hash: HASH });
+      return send;
+    });
+    tool.end();
+    // A settlement that names the hash of a transaction this tracker sent itself.
+    tracker.startPayment(payment).end({ status: 'settled', hash: HASH });
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end({
+      status: 'success',
+      blockNumber: 1n,
+      gasUsed: 21_000n,
+    });
+    expect(sent).toBeDefined();
+    const confirm = tracing.spanNamed(`confirm ${CHAIN_ID}`);
+    expect(confirm.links.map((l) => l.context.spanId)).toEqual([
+      tracing.spanNamed(`send ${CHAIN_ID}`).spanContext().spanId,
+    ]);
   });
 
   it('records a failure to create the payment as an error with no settlement', () => {

@@ -60,7 +60,8 @@ describe('a paid request', () => {
       'blockchain.payment.payer': PAYER,
       'blockchain.payment.recipient': PAY_TO,
       'blockchain.payment.asset': ASSET,
-      'blockchain.payment.amount': '9000',
+      // The amount the payer signed for, not the one the settlement reports.
+      'blockchain.payment.amount': '10000',
       'blockchain.payment.status': 'settled',
       'blockchain.tx.hash': HASH,
       'x402.scheme': 'exact',

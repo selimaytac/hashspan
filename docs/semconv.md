@@ -108,7 +108,7 @@ today.
 | `blockchain.payment.payer` | string | payment | raw | address that pays, subject to address mode |
 | `blockchain.payment.recipient` | string | payment | raw | address that is paid, subject to address mode |
 | `blockchain.payment.asset` | string | payment | raw | contract address of the token paid with, subject to address mode |
-| `blockchain.payment.amount` | string | payment | on | amount in the asset's smallest unit, decimal string; the settled amount when the settlement reports one |
+| `blockchain.payment.amount` | string | payment | on | amount in the asset's smallest unit, decimal string; the settlement's amount only when the payer knew none |
 | `blockchain.payment.status` | string | payment | on | `settled` \| `pending` \| `failed` |
 | `x402.scheme` | string | payment | on | x402 payment scheme, e.g. `exact` |
 | `x402.resource` | string | payment | origin | the resource paid for, per the tracker's `paymentResource` mode: `origin` (default) records scheme, host and port only, `path` the URL without query string, fragment or user info, `off` nothing |

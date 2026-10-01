@@ -59,6 +59,11 @@ and paid MCP tools. Relevant facts, from the v2 JavaScript SDK (`@x402/core`, `@
   - the settlement: the transaction hash and a status `settled`, `pending` (`settlement_pending`) or `failed`, with
     the facilitator's `errorReason` as `error.type` when it failed.
 
+  The settlement comes from the server and its facilitator, which the payer does not control. It never replaces
+  what the payer knew itself: the payer and amount it reports are recorded only where the requirements and the
+  payload had none, and its transaction hash links to the payment span only when the tracker links that hash to
+  nothing yet, such as to one of its own sends.
+
   Creating the payment failing, for example signing it, ends the span as an error with no hash. Refusals by
   policies and spend controls happen before any hook and are not recorded. If a failure hook registered after
   hashspan's recovers the payment, the span still records the failure. The attribute names are in
