@@ -1,5 +1,17 @@
 # @hashspan/viem
 
+## 0.3.1
+
+### Patch Changes
+
+- [#72](https://github.com/selimaytac/hashspan/pull/72) [`f8828e3`](https://github.com/selimaytac/hashspan/commit/f8828e331f8dd4a1684a97ec87be254bf9de2010) Thanks [@selimaytac](https://github.com/selimaytac)! - Tracing no longer runs getters on call arguments. The adapters read the fields they record (such as `to`, `value`,
+  `network` or a transaction's fields) only from own data properties, so a getter with side effects, or one that
+  returns a different value per read, now sees the same reads as without tracing; a field behind a getter is left out
+  of the span. A `waitForTransactionReceipt` call whose `hash` or `onReplaced` is a getter is passed on untraced.
+
+- [#73](https://github.com/selimaytac/hashspan/pull/73) [`d8748f9`](https://github.com/selimaytac/hashspan/commit/d8748f90964eaa5ec643de9fb4d409e6c47bda0c) Thanks [@selimaytac](https://github.com/selimaytac)! - `watch()` records nothing, with a `diag` warning, when its `chainId` option contradicts the chain of the client it
+  was given, instead of polling that client and ending the confirm span as a timeout for the wrong chain.
+
 ## 0.3.0
 
 ### Minor Changes
