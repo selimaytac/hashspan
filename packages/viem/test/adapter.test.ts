@@ -1,5 +1,5 @@
 import { createTxTracker, type TxTracker } from '@hashspan/core';
-import { context, diag, SpanStatusCode, trace } from '@opentelemetry/api';
+import { context, diag, ROOT_CONTEXT, SpanStatusCode, trace } from '@opentelemetry/api';
 import { createPublicClient, createWalletClient, parseAbi, publicActions } from 'viem';
 import { base, mainnet } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
@@ -258,7 +258,7 @@ describe('robustness', () => {
       throw new Error('tracker bug');
     };
     return {
-      startSend: () => ({ end: boom, fail: boom }),
+      startSend: () => ({ context: ROOT_CONTEXT, end: boom, fail: boom }),
       startConfirm: () => ({ end: boom, timeout: boom, fail: boom }),
       startPayment: () => ({ end: boom, fail: boom, timeout: boom }),
     };

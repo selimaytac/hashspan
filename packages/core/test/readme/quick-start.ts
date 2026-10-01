@@ -17,6 +17,7 @@ declare function waitSomehow(hash: string): Promise<{
 
 // #region readme
 import { createTxTracker } from '@hashspan/core';
+import { context } from '@opentelemetry/api';
 
 const tracker = createTxTracker({ agent: { name: 'treasury-bot' } });
 
@@ -24,7 +25,8 @@ const tracker = createTxTracker({ agent: { name: 'treasury-bot' } });
 const send = tracker.startSend({ chainId: 8453, from, to, value, functionName: 'transfer' });
 let hash: string;
 try {
-  hash = await sendSomehow();
+  // Run in the send span's context, so that wallet or RPC spans of the call nest under it.
+  hash = await context.with(send.context, () => sendSomehow());
   send.end({ hash });
 } catch (error) {
   send.fail(error);

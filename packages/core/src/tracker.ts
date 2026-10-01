@@ -157,7 +157,12 @@ export interface TxTracker {
   startPayment(input: PaymentInput, parent?: Context): PaymentHandle;
 }
 
-const NOOP_SEND: SendHandle = { end: () => {}, fail: () => {} };
+/** Records nothing; its context is the parent, so a call run in it still nests under the caller. */
+const noopSend = (parent: Context): SendHandle => ({
+  context: parent,
+  end: () => {},
+  fail: () => {},
+});
 const NOOP_PAYMENT: PaymentHandle = { end: () => {}, fail: () => {}, timeout: () => {} };
 const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
 
@@ -439,6 +444,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     const finish = finisher(span);
 
     return {
+      context: trace.setSpan(parent, span),
       end: (result: SendResult | string, second?: EndOptions | TimeInput): void =>
         finish(
           'record transaction hash',
@@ -773,7 +779,11 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
 
   return {
     startSend: (input, parent) =>
-      safely('start send span', () => startSend(input, parent), NOOP_SEND),
+      safely(
+        'start send span',
+        () => startSend(input, parent),
+        noopSend(parent ?? context.active()),
+      ),
     startConfirm: (input, parent) =>
       safely('start confirm span', () => startConfirm(input, parent), NOOP_CONFIRM),
     startPayment: (input, parent) =>

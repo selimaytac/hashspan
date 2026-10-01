@@ -153,7 +153,11 @@ describe('a custom tracker', () => {
     const tracker: TxTracker = {
       startSend: (input) => {
         inputs.push(input);
-        return { end: (...args) => void ended.push(args), fail: () => {} };
+        return {
+          context: context.active(),
+          end: (...args) => void ended.push(args),
+          fail: () => {},
+        };
       },
       startConfirm: () => ({ end: () => {}, timeout: () => {}, fail: () => {} }),
       startPayment: () => ({ end: () => {}, fail: () => {}, timeout: () => {} }),

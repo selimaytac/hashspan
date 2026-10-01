@@ -1,4 +1,4 @@
-import type { Attributes, TimeInput, TracerProvider } from '@opentelemetry/api';
+import type { Attributes, Context, TimeInput, TracerProvider } from '@opentelemetry/api';
 
 /**
  * How wallet addresses are recorded. See
@@ -111,6 +111,14 @@ export interface SendInput {
  * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface SendHandle {
+  /**
+   * The parent context with the send span set. Run the call that sends the transaction in it, e.g.
+   * `await context.with(send.context, () => sendSomehow())`, so that spans of wallet, RPC or HTTP instrumentation
+   * nest under the send span
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0015-send-span-as-active-context.md).
+   * Run only that call in it: a confirm span started in it becomes a child of the send span.
+   */
+  readonly context: Context;
   /** Ends the send span successfully once the transaction hash is known. */
   end(result: SendResult, options?: EndOptions): void;
   /** @deprecated Use `end({ hash }, { endTime })`; removed in 1.0. */

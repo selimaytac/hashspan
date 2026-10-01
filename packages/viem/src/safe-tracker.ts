@@ -1,7 +1,10 @@
 import type { ConfirmHandle, PaymentHandle, SendHandle, TxTracker } from '@hashspan/core';
-import { diag } from '@opentelemetry/api';
+import { type Context, context, diag } from '@opentelemetry/api';
 
-export const NOOP_SEND: SendHandle = { end: () => {}, fail: () => {} };
+/** A send handle that records nothing; its context is `parent`, so the traced call still nests under the caller. */
+export function noopSend(parent: Context): SendHandle {
+  return { context: parent, end: () => {}, fail: () => {} };
+}
 const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
 const NOOP_PAYMENT: PaymentHandle = { end: () => {}, fail: () => {}, timeout: () => {} };
 
@@ -21,6 +24,14 @@ function safely<T>(what: string, fn: () => T, fallback: T): T {
     diag.error(`hashspan: failed to ${what} (${errorName(error)})`);
     return fallback;
   }
+}
+
+function isContext(value: unknown): value is Context {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { getValue?: unknown }).getValue === 'function'
+  );
 }
 
 /**
@@ -47,9 +58,24 @@ function call<H>(handle: H, method: keyof H, what: string, ...args: unknown[]): 
 export function guardTracker(tracker: TxTracker): TxTracker {
   return {
     startSend: (input, parent) => {
-      const handle = safely('start send span', () => tracker.startSend(input, parent), NOOP_SEND);
-      if (typeof handle !== 'object' || handle === null) return NOOP_SEND;
+      const caller = parent ?? context.active();
+      const handle = safely(
+        'start send span',
+        () => tracker.startSend(input, parent),
+        noopSend(caller),
+      );
+      if (typeof handle !== 'object' || handle === null) return noopSend(caller);
+      // A tracker from a core before 0.4 has no send context: the call then runs in the caller's context.
+      const sendContext = safely(
+        'read the send context',
+        () => {
+          const value: unknown = handle.context;
+          return isContext(value) ? value : caller;
+        },
+        caller,
+      );
       return {
+        context: sendContext,
         end: (...args: unknown[]) => call(handle, 'end', 'end send span', ...args),
         fail: (...args: unknown[]) => call(handle, 'fail', 'record send failure', ...args),
       };
