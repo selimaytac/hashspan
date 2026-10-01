@@ -36,7 +36,7 @@ const send = tracker.startSend({ chainId: 8453, from, to, value, functionName: '
 let hash: string;
 try {
   hash = await sendSomehow();
-  send.end(hash);
+  send.end({ hash });
 } catch (error) {
   send.fail(error);
   throw error;
@@ -60,7 +60,7 @@ confirm.end({
 share one confirm span. A receipt from any of them ends it; a timeout or failure ends it once every caller gave up.
 End every handle you start, since an open handle keeps the shared span open.
 
-`send.fail(error, endTime, { errorType })` records a library's machine-readable error code as `error.type` instead
+`send.fail(error, { errorType })` records a library's machine-readable error code as `error.type` instead
 of the error's class name, if it is a short identifier (`[A-Za-z0-9_.-]`, at most 64 characters); `exception.type`
 stays the class name.
 
@@ -70,9 +70,11 @@ party settles on chain, such as an x402 facilitator, as a `payment {chainId}` sp
 span ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0013-x402-payments.md)).
 
 All three calls accept an explicit parent `Context` as a second argument. An integration that learns about a call only
-after it started can record it after the fact: pass `startTime` in the input and the end time as the last argument
-of the handle method, e.g. `send.end(hash, endTime)` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
-the instrumentation are reported through `diag` and never thrown into your code.
+after it started can record it after the fact: pass `startTime` in the input and `endTime` in the options of the
+handle method, e.g. `send.end({ hash }, { endTime })` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
+the instrumentation are reported through `diag` and never thrown into your code. The positional forms of earlier
+releases, `send.end(hash, endTime)` and `send.fail(error, endTime, { errorType })`, still work and are deprecated
+until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0014-core-api-boundary.md)).
 
 ## Options
 

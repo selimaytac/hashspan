@@ -50,3 +50,5 @@ supplies the end time.
 - If both the sending and the waiting client lack a chain and the wait's chain id answers before the send's, the
   confirm span can miss its link to the send span.
 - Custom trackers receive the extra arguments; implementations that ignore them keep working.
+- Amended by [ADR 0014](0014-core-api-boundary.md): the end time moves into an options object, `{ endTime }`; the
+  trailing positional form is deprecated until 1.0.

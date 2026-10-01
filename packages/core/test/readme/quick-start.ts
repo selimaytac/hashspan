@@ -25,7 +25,7 @@ const send = tracker.startSend({ chainId: 8453, from, to, value, functionName: '
 let hash: string;
 try {
   hash = await sendSomehow();
-  send.end(hash);
+  send.end({ hash });
 } catch (error) {
   send.fail(error);
   throw error;

@@ -107,7 +107,7 @@ describe('payment span', () => {
     }
     createTxTracker()
       .startPayment(payment)
-      .fail(new SpendLimitError('over the limit'), undefined, { errorType: 'spend_limit' });
+      .fail(new SpendLimitError('over the limit'), { errorType: 'spend_limit' });
     const span = tracing.spanNamed(PAYMENT_SPAN);
     expect(span.status.code).toBe(SpanStatusCode.ERROR);
     expect(span.attributes['error.type']).toBe('spend_limit');
@@ -130,7 +130,7 @@ describe('payment span', () => {
     const start = new Date(Date.now() - 5_000);
     tracker
       .startPayment({ ...payment, startTime: start }, trace.setSpan(context.active(), parent))
-      .end({ status: 'settled' }, new Date());
+      .end({ status: 'settled' }, { endTime: new Date() });
     parent.end();
     const span = tracing.spanNamed(PAYMENT_SPAN);
     expect(span.parentSpanContext?.spanId).toBe(parent.spanContext().spanId);
