@@ -299,24 +299,44 @@ function own(target: unknown, key: string): unknown {
   return descriptor && 'value' in descriptor ? descriptor.value : undefined;
 }
 
-const MAX_COPY_DEPTH = 8;
+const MAX_ARGUMENTS_COPY_DEPTH = 8;
+// Deep enough for nested tuples, which add two levels each.
+const MAX_ABI_COPY_DEPTH = 32;
 
 /**
- * A copy of call arguments made of own data properties only, for code that reads them deeply (ABI overload
- * matching); accessors become undefined and nothing deeper than {@link MAX_COPY_DEPTH} is copied.
+ * A copy of `value` made of own data properties only, for code that reads it deeply (viem's ABI matching);
+ * accessors become undefined and nothing deeper than `maxDepth` is copied.
  */
-function dataOnly(value: unknown, depth = 0): unknown {
+function dataOnly(value: unknown, maxDepth: number, depth = 0): unknown {
   if (value === null || typeof value !== 'object') return value;
-  if (depth >= MAX_COPY_DEPTH) return undefined;
+  if (depth >= maxDepth) return undefined;
   if (Array.isArray(value)) {
     const length = own(value, 'length');
     return Array.from({ length: typeof length === 'number' ? length : 0 }, (_, i) =>
-      dataOnly(own(value, String(i)), depth + 1),
+      dataOnly(own(value, String(i)), maxDepth, depth + 1),
     );
   }
   const copy: Record<string, unknown> = {};
-  for (const key of Object.keys(value)) copy[key] = dataOnly(own(value, key), depth + 1);
+  for (const key of Object.keys(value)) copy[key] = dataOnly(own(value, key), maxDepth, depth + 1);
   return copy;
+}
+
+/**
+ * The ABI items telemetry needs, copied without accessors: the functions named `functionName`, for the selector,
+ * and the errors, to decode revert reasons. viem gets this copy, never the caller's ABI, so no getter in it runs.
+ */
+function abiForTelemetry(abi: unknown, functionName: unknown): Abi | undefined {
+  if (!Array.isArray(abi)) return undefined;
+  const length = own(abi, 'length');
+  const items: unknown[] = [];
+  for (let i = 0; i < (typeof length === 'number' ? length : 0); i++) {
+    const item = own(abi, String(i));
+    const type = own(item, 'type');
+    if (type === 'error' || (type === 'function' && own(item, 'name') === functionName)) {
+      items.push(dataOnly(item, MAX_ABI_COPY_DEPTH));
+    }
+  }
+  return items as Abi;
 }
 
 /** The descriptor of `key` on `target` or the first prototype that has it; reading it runs no getter. */
@@ -797,8 +817,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
 
     if (typeof writeContract === 'function') {
       actions.writeContract = (args: WriteContractArgs) => {
-        const abi = own(args, 'abi') as Abi | undefined;
         const functionName = own(args, 'functionName') as string | undefined;
+        const abi = abiForTelemetry(own(args, 'abi'), functionName);
         const functionArguments = own(args, 'args') as readonly unknown[] | undefined;
         return traceSend(
           args,
@@ -809,7 +829,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
                 abi,
                 name: functionName,
                 // Overload matching reads the arguments deeply: it gets a copy without accessors.
-                args: dataOnly(functionArguments),
+                args: dataOnly(functionArguments, MAX_ARGUMENTS_COPY_DEPTH),
               } as never);
               functionSelector = item ? toFunctionSelector(item as never) : undefined;
             } catch {
