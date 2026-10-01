@@ -255,6 +255,37 @@ describe('payment privacy', () => {
     ]);
   });
 
+  it('records no resource whose user info hides a query or fragment character, in either mode', () => {
+    // Not a valid URL: in one, `?` and `#` inside the user info are percent-encoded.
+    const resources = [
+      'https://user:p?ss@api.example.com/weather',
+      'https://user:p#ss@api.example.com/weather',
+    ];
+    for (const paymentResource of ['origin', 'path'] as const) {
+      const tracker = createTxTracker({ paymentResource });
+      for (const resource of resources) {
+        tracker.startPayment({ ...payment, x402: { resource } }).end({ status: 'settled' });
+      }
+    }
+    expect(tracing.spans().map((s) => s.attributes['x402.resource'])).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it('bounds the length of the resource it records', () => {
+    const resource = `https://api.example.com/${'a'.repeat(5_000)}`;
+    createTxTracker({ paymentResource: 'path' })
+      .startPayment({ ...payment, x402: { resource } })
+      .end({ status: 'settled' });
+    const recorded = tracing.spans()[0]?.attributes['x402.resource'];
+    expect(typeof recorded).toBe('string');
+    expect((recorded as string).length).toBeLessThanOrEqual(512 + 3);
+    expect(recorded as string).toMatch(/^https:\/\/api\.example\.com\/a+\.\.\.$/);
+  });
+
   it('records addresses in the resource per the address mode', () => {
     const resource = `https://api.example.com/balance/${PAYER}`;
     createTxTracker({ address: 'off', paymentResource: 'path' })

@@ -220,11 +220,37 @@ const URL_ORIGIN = /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)(?:[^/?#]*@)?([^/?#]+)/;
  * for a resource that is not a URL.
  */
 export function paymentResourceOf(resource: string, mode: PaymentResourceMode): string | undefined {
-  if (mode === 'off') return undefined;
-  if (mode === 'path') return sanitizeResource(resource);
+  if (mode === 'off' || hidesUserInfo(resource)) return undefined;
+  const recorded = mode === 'path' ? sanitizeResource(resource) : originOf(resource);
+  if (recorded === undefined) return undefined;
+  return recorded.length > MAX_RESOURCE_LENGTH
+    ? `${recorded.slice(0, MAX_RESOURCE_LENGTH)}...`
+    : recorded;
+}
+
+/** Longest `x402.resource` recorded; the value comes from the server that asks for the payment. */
+const MAX_RESOURCE_LENGTH = 512;
+
+function originOf(resource: string): string | undefined {
   const origin = URL_ORIGIN.exec(resource);
   return origin ? `${origin[1]}${origin[2]}` : undefined;
 }
+
+/**
+ * True for `scheme://` text whose user info contains `?` or `#`, such as `https://user:p?ss@host`. A valid URL
+ * percent-encodes them; reading such text by its first `?` or `#` would record part of the user info as the host.
+ */
+function hidesUserInfo(resource: string): boolean {
+  const scheme = URL_SCHEME.exec(resource);
+  if (!scheme) return false;
+  const rest = resource.slice(scheme[0].length);
+  const slash = rest.indexOf('/');
+  const authority = slash === -1 ? rest : rest.slice(0, slash);
+  const at = authority.lastIndexOf('@');
+  return at !== -1 && /[?#]/.test(authority.slice(0, at));
+}
+
+const URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//;
 
 /** `scheme://user:password@` at the start of a URL; the user info is removed. */
 const URL_USER_INFO = /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^/?#]*@/;
