@@ -1,5 +1,17 @@
 # @hashspan/viem
 
+## 0.3.2
+
+### Patch Changes
+
+- [#79](https://github.com/selimaytac/hashspan/pull/79) [`1051084`](https://github.com/selimaytac/hashspan/commit/1051084da16520ce00d337457e4c8823f0ff70ec) Thanks [@selimaytac](https://github.com/selimaytac)! - Tracing `writeContract` no longer runs getters inside the ABI. To find the function selector and to decode revert
+  reasons, the adapter now uses a copy of the needed ABI items (the called function's overloads and the errors) made
+  of own data properties only, so an ABI built at runtime with accessors encodes the same call as without tracing.
+
+- [#78](https://github.com/selimaytac/hashspan/pull/78) [`6cf7e8a`](https://github.com/selimaytac/hashspan/commit/6cf7e8ad87de0789c1093b38b746c984b4efc15b) Thanks [@selimaytac](https://github.com/selimaytac)! - A traced `waitForTransactionReceipt` behaves like viem's own with any options object: frozen options no longer throw
+  "Cannot redefine property: onReplaced", and an `onReplaced` callback inherited from a prototype is called again.
+  The adapter now passes viem an object whose prototype is the caller's options instead of a copy.
+
 ## 0.3.1
 
 ### Patch Changes

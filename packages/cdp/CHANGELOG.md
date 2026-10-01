@@ -1,5 +1,18 @@
 # @hashspan/cdp
 
+## 0.3.2
+
+### Patch Changes
+
+- [#76](https://github.com/selimaytac/hashspan/pull/76) [`db45f8c`](https://github.com/selimaytac/hashspan/commit/db45f8c1f2c791e7ab124ad80acde00db2bd4380) Thanks [@selimaytac](https://github.com/selimaytac)! - `withHashspan(cdp)` accepts a `CdpClient` of the CDP SDK in TypeScript. It used to fail to type-check with "Index
+  signature for type 'string' is missing in type 'EvmClient'", so the README's example needed a cast.
+
+- [#80](https://github.com/selimaytac/hashspan/pull/80) [`1f18ec0`](https://github.com/selimaytac/hashspan/commit/1f18ec03db8edff6e61c3d9c611d1cde86f81151) Thanks [@selimaytac](https://github.com/selimaytac)! - `flush()` now also waits for the confirm span of a `waitForTransactionReceipt` on a network-scoped account without a
+  reader, and ends it as `timeout` if it cannot wait longer. Before, `flush()` could return while that span was still
+  open, so a short-lived process could exit without exporting it.
+- Updated dependencies [[`1051084`](https://github.com/selimaytac/hashspan/commit/1051084da16520ce00d337457e4c8823f0ff70ec), [`6cf7e8a`](https://github.com/selimaytac/hashspan/commit/6cf7e8ad87de0789c1093b38b746c984b4efc15b)]:
+  - @hashspan/viem@0.3.2
+
 ## 0.3.1
 
 ### Patch Changes
