@@ -6,7 +6,7 @@ OpenTelemetry.
 CDP signs and broadcasts transactions through its API, so no RPC client of yours sees them. This adapter wraps a
 `CdpClient` so that each transaction becomes a `send {chainId}` span inside your agent's trace, and, with a reader,
 a linked `confirm {chainId}` span with status, gas, fees and revert reason, like
-[`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.3.0/packages/viem).
+[`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.3.1/packages/viem).
 
 ## Install
 
@@ -42,7 +42,7 @@ run in the background through it and never delay your call. Without a reader, on
 adapter never picks an RPC endpoint itself. The exception is `waitForTransactionReceipt` on a network-scoped
 account, which records a confirm span from the receipt it returns, without a revert reason.
 
-`withHashspan(cdp, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.3.0/packages/core#options)
+`withHashspan(cdp, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.3.1/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem`, `tracker`, `reader`,
 and `confirmTimeoutMs` (default 120 000 ms). Call it once per client: a second call returns the first handle, ignores
 its options and logs a `diag` warning.
