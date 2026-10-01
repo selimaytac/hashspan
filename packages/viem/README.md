@@ -75,7 +75,7 @@ await provider.shutdown();
 
 `flush()` resolves `true` when all pending work finished and `false` on timeout; it never rejects, and it keeps the
 process alive while it waits. On timeout, confirm spans still waiting are ended and exported: with the receipt if
-only the revert reason was still pending, otherwise with status `timeout`. Background confirmations keep polling
+only the revert reason was still pending, otherwise as an error with `error.type` `timeout`. Background confirmations keep polling
 until their own `timeoutMs`, so short-lived processes should keep that short. The timeout also ends the spans of
 your own `waitForTransactionReceipt` calls that are still waiting, and a receipt they return later is not recorded:
 call `flush()` only when the process is shutting down. Long-running services do not need
@@ -143,7 +143,7 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
   It polls independently of your own `waitForTransactionReceipt` calls, so your `timeout`, `confirmations` and other
   options always apply to your wait; while both run, receipt requests are made for each.
 - A pending confirmation keeps the Node.js process alive until the receipt arrives or `timeoutMs` (default
-  120 000 ms) passes; the span then ends with status `timeout`.
+  120 000 ms) passes; the span then ends as an error with `error.type` `timeout`.
 - Some nodes return a mined transaction before its receipt. viem's `waitForTransactionReceipt` can then fail with
   `TransactionReceiptNotFoundError`; background confirmation and `watch()` wait again until `timeoutMs`. Your own
   waits are passed on unchanged, including that error.

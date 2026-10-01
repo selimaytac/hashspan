@@ -64,6 +64,11 @@ export const BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED = 'failed' as const;
 /** Values for {@link ATTR_BLOCKCHAIN_TX_STATUS}. */
 export const BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS = 'success' as const;
 export const BLOCKCHAIN_TX_STATUS_VALUE_REVERTED = 'reverted' as const;
+/**
+ * @deprecated A confirm span that gave up waiting records `error.type` `timeout`; this value of
+ * `blockchain.tx.status` stops being recorded in a later minor release and the constant is removed in 1.0. See
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0016-timeout-is-an-observer-outcome.md.
+ */
 export const BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT = 'timeout' as const;
 export const BLOCKCHAIN_TX_STATUS_VALUE_REPLACED = 'replaced' as const;
 

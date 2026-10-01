@@ -40,3 +40,5 @@ its reason, are the ones that go missing.
 - A timed-out flush also ends the spans of the application's own receipt waits that are still running; a receipt
   they return later is not recorded. `flush()` is therefore meant for shutdown only.
 - Long-running services do not need to call it.
+- Amended by [ADR 0016](0016-timeout-is-an-observer-outcome.md): a confirm span ended this way records `error.type`
+  `timeout`; its `blockchain.tx.status` `timeout` is deprecated.
