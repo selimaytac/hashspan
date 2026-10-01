@@ -1,6 +1,6 @@
 # 0013. x402 payments as payment spans
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-01
 
 ## Context
@@ -16,7 +16,9 @@ and paid MCP tools. Relevant facts, from the v2 JavaScript SDK (`@x402/core`, `@
 - **The client reports the outcome.** The paid response carries a `PAYMENT-RESPONSE` header (base64 JSON):
   `success`, `transaction` (the transaction hash for EVM networks), `network`, `payer`, `amount`, `errorReason`.
   `success: true` is returned only after the facilitator saw a successful receipt; `errorReason: settlement_pending`
-  means the hash is known but the receipt was not; a failed payment comes back as a 402, not as an error.
+  means the hash is known but the receipt was not; a failed payment comes back as a 402, not as an error. A
+  payment the facilitator refuses before settling (for example for a balance too low) comes back as a 402 with new
+  requirements and no `PAYMENT-RESPONSE`.
 - **Networks are CAIP-2 identifiers**, e.g. `eip155:8453`. The SDK's parser for them is not exported.
 - **The client has hooks.** `x402Client` runs `onBeforePaymentCreation`, `onAfterPaymentCreation`,
   `onPaymentCreationFailure` and `onPaymentResponse`. `@x402/fetch`, `@x402/axios` and `@x402/mcp` all pay through
@@ -85,8 +87,8 @@ and paid MCP tools. Relevant facts, from the v2 JavaScript SDK (`@x402/core`, `@
   reader, the on-chain confirmation, without claiming a send the agent did not make.
 - A new span name and attributes enter the schema; it is still `development` (ADR 0003), so this is a minor change.
 - The adapter depends on the hook API of `@x402/core` 2.x, which is public, and on the identities of the
-  requirements and payload objects across hooks, which are not documented. A test asserts them, and the weekly job
-  of ADR 0012 gains an x402 run against the newest SDK in range.
+  requirements and payload objects across hooks, which are not documented. A test asserts them, and a weekly job like
+  ADR 0012's runs the x402 tests against the newest SDK in range and the adapter's tests against the oldest.
 - Payments refused before a hook runs, and x402 v1 payments, are invisible to the trace.
 - Schemes that batch or defer settlement (`upto`, `batch-settlement`) may report no per-request hash; their payment
   spans then end without one, and how to trace their later settlement is left open.

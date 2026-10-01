@@ -19,5 +19,5 @@ them.
 | [0010. Flush pending tracing work before shutdown](0010-flush-before-shutdown.md) | accepted | `flush({ timeoutMs })` awaits the work a `withHashspan()` result started after its calls returned, and never rejects |
 | [0011. Agent identity precedence](0011-agent-identity-precedence.md) | accepted | The static `agent` option wins field by field over Baggage, and `agentFromBaggage: false` ignores Baggage |
 | [0012. Coinbase CDP adapter for server accounts](0012-cdp-adapter.md) | accepted | `@hashspan/cdp` wraps a CDP client in place, records sends of server accounts and confirms them through a viem `reader` |
-| [0013. x402 payments as payment spans](0013-x402-payments.md) | proposed | `@hashspan/x402` registers hooks on an `x402Client` and records each payment as a `payment` span, not a `send`; confirmation via a viem `reader` |
+| [0013. x402 payments as payment spans](0013-x402-payments.md) | accepted | `@hashspan/x402` registers hooks on an `x402Client` and records each payment as a `payment` span, not a `send`; confirmation via a viem `reader` |
 | [0014. Core API boundary before 1.0](0014-core-api-boundary.md) | accepted | Only `createTxTracker()` produces trackers and handles, so members can be added in minor releases; handle methods take an options object; new identifiers are optional fields |

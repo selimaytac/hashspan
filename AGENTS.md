@@ -47,6 +47,9 @@ Run lint, typecheck and tests before proposing a change.
     Hooks never throw or return a value; payments without a response end as `timeout`, bounded in time and number
   - `test/fake-x402.ts` a real `x402Client` with a signing-free scheme and a fake paid API, offline; the identities
     of SDK objects across hooks, which the adapter relies on, are asserted in `test/adapter.test.ts`
+  - `test/settlement.int.test.ts` settles real EIP-3009 payments on Anvil through the SDK's resource server and
+    facilitator, with `test/token/TestUsd.sol` (compiled into `test-usd.ts` by `test/token/compile.mjs`);
+    `.github/workflows/x402-sdk.yml` runs the x402 tests weekly against both ends of the SDK peer range
 - `examples/` → runnable agent integrations
   - `ai-sdk-agent`: AI SDK agent with a scripted model (no API key), run by `make demo`; its
     `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break
