@@ -76,10 +76,13 @@ confirmations through the reader, and ends what is left as `timeout`. Call it be
 | No response: the paid request failed on the network, `@x402/axios` got a status other than 2xx or 402, or no response came before the authorization expired | error status, `error.type` `timeout`, once the requirements' `maxTimeoutSeconds` plus 30 s passed, or on `flush()` |
 | Creating the payment failed (e.g. signing) | error status, the error's class name as `error.type` |
 
-Every payment span records the payer, recipient (`payTo`), asset, amount and scheme, and the origin of the resource
-URL, e.g. `https://api.example.com`: paths of paid APIs often carry user or account identifiers. The core option
-`paymentResource: 'path'` records the path too (never the query string, fragment or user info), and `'off'` nothing;
-see [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.4.0/docs/semconv.md).
+Every payment span records the payer, recipient (`payTo`), asset, the amount the payer signed for and scheme, and the
+origin of the resource URL, e.g. `https://api.example.com`: paths of paid APIs often carry user or account
+identifiers. The core option `paymentResource: 'path'` records the path too (never the query string, fragment or user
+info), and `'off'` nothing; see
+[docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.4.0/docs/semconv.md). When the
+settlement reports the amount it settled, it is recorded as `blockchain.payment.settled_amount`, as reported: with the
+`upto` scheme, it can be less than the amount signed for.
 
 Not traced: x402 v1 payments (`registerExactEvmScheme` registers v1 networks too) and networks other than `eip155`,
 with a `diag` warning once per version or network; payments that client policies or spend controls refuse, which
