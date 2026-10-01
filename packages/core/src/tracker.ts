@@ -125,6 +125,11 @@ const REPLACEMENT_REASONS: ReadonlySet<string> = new Set([
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPLACED,
 ]);
 
+/**
+ * Records transactions and payments as spans. Obtain one from {@link createTxTracker}: it is not meant to be
+ * implemented, and members may be added to it and to its handles in minor releases
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0014-core-api-boundary.md).
+ */
 export interface TxTracker {
   /**
    * Starts a `send` span as a child of `parent` (default: the active context).

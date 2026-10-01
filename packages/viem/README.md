@@ -39,7 +39,7 @@ agent identity, redaction hook) plus:
 
 | Option | Default | Description |
 |---|---|---|
-| `tracker` | new tracker | Report to an existing `@hashspan/core` tracker; errors thrown by it or its handles are logged through `diag`, never thrown into your call |
+| `tracker` | new tracker | A tracker from `createTxTracker()`, to share one between adapters |
 | `confirm` | none | `{ mode: 'background', timeoutMs? }` confirms every sent transaction without an explicit wait |
 | `decodeRevertReason` | `true` | Replay reverted transactions to record their revert reason; `{ timeoutMs }` bounds the replay (default 10 000 ms) |
 

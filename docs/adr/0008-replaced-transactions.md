@@ -94,3 +94,4 @@ through the redaction hook like every attribute, and are kept when the hook fail
 - No new tracker or handle methods: user-implemented trackers keep working. They receive the new optional receipt
   fields but may ignore them, so correct attribution of replaced transactions is guaranteed for `createTxTracker()`
   only; a custom tracker that ignores `transactionHash` records the receipt under the original hash as before.
+- Amended by [ADR 0014](0014-core-api-boundary.md): trackers are no longer meant to be implemented outside the core.

@@ -105,7 +105,11 @@ export interface SendInput {
   startTime?: TimeInput | undefined;
 }
 
-/** Ends a send span. Only the first call counts; methods never throw. */
+/**
+ * Ends a send span. Only the first call counts; methods never throw.
+ * Produced by the tracker only; methods may be added in minor releases
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0014-core-api-boundary.md).
+ */
 export interface SendHandle {
   /** Ends the send span successfully once the transaction hash is known; `endTime` defaults to now. */
   end(hash: string, endTime?: TimeInput): void;
@@ -163,6 +167,8 @@ export interface ReceiptLike {
 /**
  * One wait for a transaction's receipt, joined to the transaction's shared confirm span. Only the first call counts;
  * methods never throw.
+ * Produced by the tracker only; methods may be added in minor releases
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface ConfirmHandle {
   /** Ends the shared confirm span with the receipt, for every handle of the transaction. */
@@ -226,7 +232,11 @@ export interface PaymentSettlement {
   errorReason?: string | undefined;
 }
 
-/** Ends a payment span. Only the first call counts; methods never throw. */
+/**
+ * Ends a payment span. Only the first call counts; methods never throw.
+ * Produced by the tracker only; methods may be added in minor releases
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0014-core-api-boundary.md).
+ */
 export interface PaymentHandle {
   /** Ends the payment span with its settlement; `endTime` defaults to now. */
   end(settlement: PaymentSettlement, endTime?: TimeInput): void;
