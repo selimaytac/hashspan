@@ -357,12 +357,16 @@ function descriptorOf(target: object, key: string): PropertyDescriptor | undefin
 }
 
 /**
- * `target` with `key` shadowed by `value`, and every other property, own or inherited, data or accessor, read
- * through to `target`: an object whose prototype is `target`. Unlike a copy, this works for frozen objects and
- * keeps inherited properties and the number of times a getter runs.
+ * `target` with `key` shadowed by `value`: an object whose prototype is `target`, so inherited properties read through,
+ * that also carries `target`'s own properties as they are (data as data, accessors as accessors, so no getter runs).
+ * This works for frozen objects, keeps the number of times a getter runs, and keeps the own properties for code that
+ * copies the options with a spread, such as another extension applied before this one.
  */
 function shadowing<T extends object>(target: T, key: string, value: unknown): T {
+  const descriptors = Object.getOwnPropertyDescriptors(target) as PropertyDescriptorMap;
+  delete descriptors[key];
   return Object.create(target, {
+    ...descriptors,
     [key]: { value, enumerable: true, writable: true, configurable: true },
   }) as T;
 }
