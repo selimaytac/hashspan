@@ -133,7 +133,8 @@ describe('calls that fail before the chain id is known', () => {
 
     const confirm = tracing.spanNamed('confirm 1');
     expect(confirm.status.code).toBe(SpanStatusCode.ERROR);
-    expect(confirm.attributes['blockchain.tx.status']).toBe('timeout');
+    expect(confirm.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(confirm.attributes['error.type']).toBe('timeout');
     expect(toMs(confirm.endTime)).toBeLessThan(settled + 75);
   });
 });

@@ -41,4 +41,4 @@ its reason, are the ones that go missing.
   they return later is not recorded. `flush()` is therefore meant for shutdown only.
 - Long-running services do not need to call it.
 - Amended by [ADR 0016](0016-timeout-is-an-observer-outcome.md): a confirm span ended this way records `error.type`
-  `timeout`; its `blockchain.tx.status` `timeout` is deprecated.
+  `timeout` and, after 0.4, no `blockchain.tx.status`.

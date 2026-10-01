@@ -49,7 +49,7 @@ Not tied to a version: an item ships with the first release after its pull reque
   ([ADR 0014](adr/0014-core-api-boundary.md))
 - [x] The send span is the active span while the transaction is sent
   ([ADR 0015](adr/0015-send-span-as-active-context.md))
-- [ ] `blockchain.tx.status` from chain data only: `timeout` deprecated, then no longer recorded
+- [x] `blockchain.tx.status` from chain data only: `timeout` deprecated, then no longer recorded
   ([ADR 0016](adr/0016-timeout-is-an-observer-outcome.md))
 
 ## Later

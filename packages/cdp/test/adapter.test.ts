@@ -633,7 +633,7 @@ describe("a network-scoped account's waitForTransactionReceipt", () => {
       .filter((s) => s.name === 'confirm 8453')
       .map((s) => [s.attributes['blockchain.tx.status'], s.attributes['error.type']]);
     expect(statuses).toEqual([
-      ['timeout', 'timeout'],
+      [undefined, 'timeout'],
       [undefined, 'Error'],
     ]);
   });
@@ -802,13 +802,15 @@ describe('flush() and waits on network-scoped accounts without a reader', () => 
     const { scoped, hashspan } = await tracedScopedWait(wait);
     const call = scoped.waitForTransactionReceipt({ hash: HASH });
     await expect(hashspan.flush({ timeoutMs: 20 })).resolves.toBe(false);
-    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.status']).toBe('timeout');
+    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.status']).toBeUndefined();
+    expect(tracing.spanNamed('confirm 8453').attributes['error.type']).toBe('timeout');
 
     // The user's wait is not affected, and a late receipt does not end the span again.
     control.resolve(viemReceipt);
     await expect(call).resolves.toBe(viemReceipt);
     expect(tracing.spans().filter((s) => s.name === 'confirm 8453')).toHaveLength(1);
-    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.status']).toBe('timeout');
+    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.status']).toBeUndefined();
+    expect(tracing.spanNamed('confirm 8453').attributes['error.type']).toBe('timeout');
   });
 
   it('ends a handle once, even with a tracker that does not ignore repeated calls', async () => {
