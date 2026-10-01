@@ -295,3 +295,46 @@ describe('code examples', () => {
     expect(unused.map(({ path }) => path)).toEqual([]);
   });
 });
+
+describe('package README options', () => {
+  /** Own properties of an exported interface in a source file, from its top-level members. */
+  const optionsOf = (file: string, name: string) => {
+    const body = read(file).match(
+      new RegExp(`^export interface ${name}\\b[^{]*\\{\\n([\\s\\S]*?)^\\}`, 'm'),
+    )?.[1];
+    return [...(body ?? '').matchAll(/^ {2}(?:readonly )?(\w+)\??:/gm)]
+      .map((m) => m[1] as string)
+      .sort();
+  };
+  /** Option names in the first column of a README's `| Option | Default | Description |` table. */
+  const tableOf = (readme: string) => {
+    const table = read(readme).match(
+      /^\| Option \| Default \| Description \|\n\|[-|]+\|\n((?:\|.*\n)+)/m,
+    )?.[1];
+    return [...(table ?? '').matchAll(/^\| `(\w+)` \|/gm)].map((m) => m[1] as string).sort();
+  };
+
+  it('finds the options it checks', () => {
+    expect(optionsOf('packages/core/src/types.ts', 'TxTrackerOptions').length).toBeGreaterThan(5);
+    expect(tableOf('packages/core/README.md').length).toBeGreaterThan(5);
+  });
+
+  it('list every option of the core tracker, and no other', () => {
+    expect(tableOf('packages/core/README.md')).toEqual(
+      optionsOf('packages/core/src/types.ts', 'TxTrackerOptions'),
+    );
+  });
+
+  it('list every option the viem adapter adds, and no other', () => {
+    expect(tableOf('packages/viem/README.md')).toEqual(
+      optionsOf('packages/viem/src/index.ts', 'WithHashspanOptions'),
+    );
+  });
+
+  it('name every option the cdp adapter adds', () => {
+    const readme = read('packages/cdp/README.md');
+    const options = optionsOf('packages/cdp/src/index.ts', 'WithHashspanCdpOptions');
+    expect(options.length).toBeGreaterThan(0);
+    expect(options.filter((option) => !readme.includes(`\`${option}\``))).toEqual([]);
+  });
+});
