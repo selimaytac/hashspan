@@ -174,7 +174,10 @@ it("keeps a wait's onReplaced getter working and unread by telemetry", async () 
 
 describe('wait options the adapter forwards', () => {
   /** Runs one wait untraced and traced; both must succeed and call onReplaced the same number of times. */
-  const sameAsUntraced = async (options: (onReplaced: () => void) => object) => {
+  const sameAsUntraced = async (
+    options: (onReplaced: () => void) => object,
+    { spreadFirst = false }: { spreadFirst?: boolean } = {},
+  ) => {
     const run = async (traced: boolean) => {
       // The receipt is that of another transaction: viem reports a replacement.
       const mock = mockTransport({
@@ -190,7 +193,16 @@ describe('wait options the adapter forwards', () => {
         transport: mock.transport,
         pollingInterval: 10,
       });
-      const reader = traced ? plain.extend(withHashspan()) : plain;
+      // An extension applied before hashspan that copies the wait options, as wrappers often do.
+      const spreading = spreadFirst
+        ? plain.extend((client) => {
+            const wait = client.waitForTransactionReceipt;
+            return {
+              waitForTransactionReceipt: (args: Parameters<typeof wait>[0]) => wait({ ...args }),
+            };
+          })
+        : plain;
+      const reader = traced ? spreading.extend(withHashspan()) : spreading;
       let replaced = 0;
       // Passed as built: a copy would lose the freezing or the prototype under test.
       const receipt = await reader.waitForTransactionReceipt(options(() => replaced++) as never);
@@ -203,6 +215,12 @@ describe('wait options the adapter forwards', () => {
 
   it('keep an onReplaced callback of frozen options', async () => {
     await sameAsUntraced((onReplaced) => Object.freeze({ hash: HASH, onReplaced, retryDelay: 1 }));
+  });
+
+  it('keep every option when an extension applied before hashspan spreads them', async () => {
+    await sameAsUntraced((onReplaced) => ({ hash: HASH, onReplaced, retryDelay: 1 }), {
+      spreadFirst: true,
+    });
   });
 
   it('keep an onReplaced callback inherited from a prototype', async () => {
