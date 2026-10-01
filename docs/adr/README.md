@@ -21,3 +21,4 @@ them.
 | [0012. Coinbase CDP adapter for server accounts](0012-cdp-adapter.md) | accepted | `@hashspan/cdp` wraps a CDP client in place, records sends of server accounts and confirms them through a viem `reader` |
 | [0013. x402 payments as payment spans](0013-x402-payments.md) | accepted | `@hashspan/x402` registers hooks on an `x402Client` and records each payment as a `payment` span, not a `send`; confirmation via a viem `reader` |
 | [0014. Core API boundary before 1.0](0014-core-api-boundary.md) | accepted | Only `createTxTracker()` produces trackers and handles, so members can be added in minor releases; handle methods take an options object; new identifiers are optional fields |
+| [0015. The send span as the active context of the sending call](0015-send-span-as-active-context.md) | proposed | `SendHandle.context` has the send span set; adapters run only the sending call in it, so wallet, RPC and HTTP spans nest under the send span |

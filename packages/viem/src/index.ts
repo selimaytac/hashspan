@@ -16,7 +16,7 @@ import {
 } from 'viem';
 import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
 import { fetchRevertReason } from './revert-reason.js';
-import { errorName, guardTracker, NOOP_SEND } from './safe-tracker.js';
+import { errorName, guardTracker, noopSend } from './safe-tracker.js';
 
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
@@ -779,7 +779,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         track(recordLateSend(ctx, startTime, chainIdQuery, result, describe, abi));
         return result;
       }
-      let handle = NOOP_SEND;
+      let handle = noopSend(context.active());
       try {
         handle = tracker.startSend(describe(chainId));
       } catch (error) {
