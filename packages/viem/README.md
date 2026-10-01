@@ -2,7 +2,7 @@
 
 Trace the transactions your AI agents send with [viem](https://viem.sh), using OpenTelemetry.
 
-A viem client extension that reports to [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.3.2/packages/core): each transaction becomes a
+A viem client extension that reports to [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.4.0/packages/core): each transaction becomes a
 `send {chainId}` span inside your agent's trace, and each receipt wait a linked `confirm {chainId}` span with status,
 gas and fees.
 
@@ -34,7 +34,7 @@ await reader.waitForTransactionReceipt({ hash }); // confirm span, linked to the
 Reuse the same `withHashspan()` result for every client of one agent: the clients then share one tracker, so
 confirmations are linked to their sends even when they happen on a different client.
 
-`withHashspan(options)` accepts all [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.3.2/packages/core#options) (address mode, error messages,
+`withHashspan(options)` accepts all [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.4.0/packages/core#options) (address mode, error messages,
 agent identity, redaction hook) plus:
 
 | Option | Default | Description |

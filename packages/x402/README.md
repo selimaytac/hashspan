@@ -6,7 +6,7 @@ With x402, an agent pays for an API call by signing an authorization; the API's 
 settling transaction from its own account. This adapter records each payment as a `payment {chainId}` span inside
 your agent's trace, with what was paid, to whom, for which resource and whether it settled, and, with a reader, a
 linked `confirm {chainId}` span with block, gas and fees. It records no `send` span, since the agent did not send the
-transaction ([ADR 0013](https://github.com/selimaytac/hashspan/blob/main/docs/adr/0013-x402-payments.md)).
+transaction ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.4.0/docs/adr/0013-x402-payments.md)).
 
 ## Install
 
@@ -51,7 +51,7 @@ Call `withHashspan` right after creating the client, before registering hooks of
 the order they were registered, and stops at the first that recovers a failed payment or a response, so a hook
 registered earlier can keep hashspan from seeing the outcome, which then ends as `timeout`.
 
-`withHashspan(client, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/main/packages/core#options)
+`withHashspan(client, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@0.4.0/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem` but off by default,
 `tracker`, `reader` (a viem public client, or a function returning one for a chain id) and `confirmTimeoutMs` (default
 120 000 ms). Without a reader, only payment spans are recorded. Give it the same `tracker` as `@hashspan/viem` or
@@ -79,7 +79,7 @@ confirmations through the reader, and ends what is left as `timeout`. Call it be
 Every payment span records the payer, recipient (`payTo`), asset, amount and scheme, and the origin of the resource
 URL, e.g. `https://api.example.com`: paths of paid APIs often carry user or account identifiers. The core option
 `paymentResource: 'path'` records the path too (never the query string, fragment or user info), and `'off'` nothing;
-see [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/main/docs/semconv.md).
+see [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.4.0/docs/semconv.md).
 
 Not traced: x402 v1 payments (`registerExactEvmScheme` registers v1 networks too) and networks other than `eip155`,
 with a `diag` warning once per version or network; payments that client policies or spend controls refuse, which

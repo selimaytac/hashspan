@@ -34,7 +34,7 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    * Replay reverted transactions to record their revert reason (two extra RPC requests per reverted transaction).
    * `{ timeoutMs }` bounds the replay; if the provider has not answered by then, the receipt is recorded without a
    * reason. Default: true, with a 10 000 ms bound. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.3.2/docs/adr/0005-revert-reason-replay.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.4.0/docs/adr/0005-revert-reason-replay.md.
    */
   decodeRevertReason?: boolean | { timeoutMs?: number | undefined } | undefined;
 }
@@ -172,14 +172,14 @@ export interface HashspanExtension {
    * Waits for tracing work still running after traced calls returned (background confirmations, revert reason
    * replays, calls recorded once their chain id is known), so their spans are ended before the OpenTelemetry SDK
    * shuts down. Resolves true when all of it finished, false on timeout; never rejects. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.3.2/docs/adr/0010-flush-before-shutdown.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.4.0/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
   /**
    * Confirms a transaction sent outside the extended clients (for example by a wallet API) through `client`, in the
    * background: a confirm span with the receipt, revert reason and fees, linked to the send span when the same
    * tracker recorded one. Never throws and never waits; `flush()` awaits it. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.3.2/docs/adr/0012-cdp-adapter.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.4.0/docs/adr/0012-cdp-adapter.md.
    */
   watch(client: ViemClientLike, options: WatchOptions): void;
 }
@@ -516,9 +516,9 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   /**
    * Ends `handle` from the outcome of `wait`; never rejects. The tracker joins handles for one transaction into one
    * confirm span
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.3.2/docs/adr/0007-confirmation-ownership.md) and
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.4.0/docs/adr/0007-confirmation-ownership.md) and
    * attributes the receipt of a replacing transaction to that transaction
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.3.2/docs/adr/0008-replaced-transactions.md). For
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.4.0/docs/adr/0008-replaced-transactions.md). For
    * reverted receipts, the span ends after the revert reason was fetched with `client`.
    */
   const recordReceipt = async (
@@ -593,7 +593,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   /**
    * Records the outcome of `wait` on `waitingHandle`; never rejects. Resolves as soon as the handle has ended,
    * including when a flush that gave up ended it
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.3.2/docs/adr/0010-flush-before-shutdown.md), so the
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.4.0/docs/adr/0010-flush-before-shutdown.md), so the
    * tracked work drains.
    */
   const recordConfirmation = (
@@ -699,7 +699,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     /**
      * Asks a client without a chain for its chain id. Concurrent calls share one request; the answer is not cached,
      * since a wallet can switch networks. Callers never await it before the call they trace
-     * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.3.2/docs/adr/0009-telemetry-off-the-call-path.md).
+     * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.4.0/docs/adr/0009-telemetry-off-the-call-path.md).
      */
     let pendingChainId: Promise<number> | undefined;
     const queryChainId = (): Promise<number> => {

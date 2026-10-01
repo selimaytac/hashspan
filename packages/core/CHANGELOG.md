@@ -1,5 +1,38 @@
 # @hashspan/core
 
+## 0.4.0
+
+### Minor Changes
+
+- [#107](https://github.com/selimaytac/hashspan/pull/107) [`c20d91d`](https://github.com/selimaytac/hashspan/commit/c20d91da7ec552fc9d6a6d50c62b8eb4b3a2412f) Thanks [@selimaytac](https://github.com/selimaytac)! - Deprecate the value `timeout` of `blockchain.tx.status` and the constant `BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT`
+  (ADR 0016). `blockchain.tx.status` describes the transaction as the chain recorded it; a confirm span that gave up
+  waiting already records error status and `error.type` `timeout`, so query that instead. The value is still recorded
+  in this release and stops being recorded in the next minor release; the constant is removed in 1.0.
+
+- [#94](https://github.com/selimaytac/hashspan/pull/94) [`15f16ba`](https://github.com/selimaytac/hashspan/commit/15f16bac79dc5dc13506a224fdea9c4abf5d0a34) Thanks [@selimaytac](https://github.com/selimaytac)! - Handle methods take an options object: `send.end({ hash }, { endTime })`, `send.fail(error, { endTime, errorType })`,
+  `confirm.end(receipt, { endTime })`, `confirm.timeout({ endTime })` and `confirm.fail(error, { endTime })` (ADR 0014).
+  The positional forms still work and are deprecated until 1.0: `send.end(hash, endTime)`,
+  `send.fail(error, endTime, { errorType })`, `confirm.end(receipt, endTime)`, `confirm.timeout(endTime)` and
+  `confirm.fail(error, endTime)`. An end time that is not a `Date`, an `HrTime` or a finite number is ignored.
+
+- [#92](https://github.com/selimaytac/hashspan/pull/92) [`990a2ea`](https://github.com/selimaytac/hashspan/commit/990a2ea75536f6451923bbb51d1f4684aee48b3d) Thanks [@selimaytac](https://github.com/selimaytac)! - Add `tracker.startPayment()`, which records a payment that another party settles on chain, such as an x402
+  facilitator, as a `payment {chainId}` span with the new `blockchain.payment.*` and `x402.*` attributes. A settlement
+  with a transaction hash links that transaction's confirm span to the payment span (ADR 0013). The settling party's
+  report never replaces what the payer knew: its payer and amount fill only fields the input left empty, and its hash
+  does not take over a link the tracker already has. A payment whose
+  outcome was never learned ends with `timeout()`: `error.type` `timeout` and no `blockchain.payment.status`. The
+  `paymentResource` option sets how much of the paid resource's URL `x402.resource` records: `origin` (default), `path`
+  or `off`, at most 512 characters.
+
+- [#93](https://github.com/selimaytac/hashspan/pull/93) [`2f424f2`](https://github.com/selimaytac/hashspan/commit/2f424f2896d66d7d6b32e448b5643c81f0bee1a2) Thanks [@selimaytac](https://github.com/selimaytac)! - `TxTracker` and its handles are produced by `createTxTracker()` only and are not meant to be implemented: members
+  may be added to them in minor releases (ADR 0014). This release adds `startPayment` to the tracker and `context` to
+  the send handle, so a hand-written tracker no longer type-checks; use `createTxTracker()` instead, which adapters
+  accept to share one tracker between them.
+
+- [#103](https://github.com/selimaytac/hashspan/pull/103) [`905d2f8`](https://github.com/selimaytac/hashspan/commit/905d2f859b1130657ab92d11dcb90bae86e7517e) Thanks [@selimaytac](https://github.com/selimaytac)! - `SendHandle.context` is the parent context with the send span set: run the call that sends the transaction in it,
+  e.g. `await context.with(send.context, () => sendSomehow())`, so that spans of wallet, RPC or HTTP instrumentation
+  nest under the send span (ADR 0015). When starting the send span fails, it is the parent context.
+
 ## 0.3.0
 
 ### Minor Changes
