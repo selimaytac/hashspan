@@ -30,6 +30,10 @@
 - [x] Coinbase CDP SDK adapter for server accounts (REST send path, [ADR 0012](adr/0012-cdp-adapter.md)), tested
   weekly against the newest SDK in its peer range
 
+## v0.4: Payments over x402
+
+- [x] x402 adapter (payment signing → facilitator settlement, [ADR 0013](adr/0013-x402-payments.md))
+
 ## Next: more send paths
 
 Not tied to a version: an item ships with the first release after its pull request is merged.
@@ -37,7 +41,6 @@ Not tied to a version: an item ships with the first release after its pull reque
 - [ ] viem transport wrapper: JSON-RPC spans
 - [ ] viem `deployContract`, `sendRawTransaction`, `sendCalls`
 - [ ] CDP smart account user operations (ERC-4337)
-- [x] x402 adapter (payment signing → facilitator settlement, [ADR 0013](adr/0013-x402-payments.md))
 - [ ] Metrics: transaction fee and confirmation latency histograms
 
 ## Toward 1.0: a stable API
