@@ -156,6 +156,7 @@ describe('a custom tracker', () => {
         return { end: (...args) => void ended.push(args), fail: () => {} };
       },
       startConfirm: () => ({ end: () => {}, timeout: () => {}, fail: () => {} }),
+      startPayment: () => ({ end: () => {}, fail: () => {} }),
     };
     const { transport } = mockTransport({ chainId: () => later(20, '0x2105') });
     const wallet = createWalletClient({ account: FROM, transport }).extend(

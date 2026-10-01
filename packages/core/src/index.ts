@@ -9,10 +9,15 @@ export type {
   ConfirmInput,
   ErrorMessageMode,
   FailOptions,
+  PaymentHandle,
+  PaymentInput,
+  PaymentSettlement,
+  PaymentStatus,
   ReceiptLike,
   ReplacementReason,
   SendHandle,
   SendInput,
   TxTrackerOptions,
+  X402PaymentDetails,
 } from './types.js';
 export { VERSION } from './version.js';

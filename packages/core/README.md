@@ -61,7 +61,12 @@ End every handle you start, since an open handle keeps the shared span open.
 of the error's class name, if it is a short identifier (`[A-Za-z0-9_.-]`, at most 64 characters); `exception.type`
 stays the class name.
 
-Both calls accept an explicit parent `Context` as a second argument. An integration that learns about a call only
+`tracker.startPayment({ chainId, protocol, payer, recipient, asset, amount })` records a payment that another
+party settles on chain, such as an x402 facilitator, as a `payment {chainId}` span; end it with
+`end({ status, hash })` or `fail(error)`. A settlement with a hash links the transaction's confirm span to the payment
+span ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0013-x402-payments.md)).
+
+All three calls accept an explicit parent `Context` as a second argument. An integration that learns about a call only
 after it started can record it after the fact: pass `startTime` in the input and the end time as the last argument
 of the handle method, e.g. `send.end(hash, endTime)` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
 the instrumentation are reported through `diag` and never thrown into your code.

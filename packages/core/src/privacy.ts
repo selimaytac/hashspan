@@ -194,3 +194,16 @@ export function resolveErrorMessageMode(mode: ErrorMessageMode | undefined): Err
   diag.warn(`hashspan: unknown error message mode "${String(mode)}"; recording error types only`);
   return 'off';
 }
+
+/** `scheme://user:password@` at the start of a URL; the user info is removed. */
+const URL_USER_INFO = /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^/?#]*@/;
+
+/**
+ * The resource of a payment without what can carry credentials: the query string, the fragment and the user info.
+ * Works on the text, so names that are not URLs are kept as they are.
+ */
+export function sanitizeResource(resource: string): string {
+  const end = resource.search(/[?#]/);
+  const withoutQuery = end === -1 ? resource : resource.slice(0, end);
+  return withoutQuery.replace(URL_USER_INFO, '$1');
+}
