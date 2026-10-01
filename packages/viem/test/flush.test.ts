@@ -86,7 +86,8 @@ describe('flush', () => {
 
     await wallet.sendTransaction({ to: TO });
     await expect(hashspan.flush({ timeoutMs: 50 })).resolves.toBe(false);
-    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.status']).toBe('timeout');
+    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.status']).toBeUndefined();
+    expect(tracing.spanNamed('confirm 8453').attributes['error.type']).toBe('timeout');
     // The abandoned work no longer counts as pending.
     await expect(hashspan.flush({ timeoutMs: 50 })).resolves.toBe(true);
   });

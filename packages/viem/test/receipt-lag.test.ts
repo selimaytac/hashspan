@@ -108,7 +108,8 @@ describe('a node that returns the receipt late', () => {
     await expect(hashspan.flush()).resolves.toBe(true);
 
     const [confirm] = confirms();
-    expect(confirm?.attributes['blockchain.tx.status']).toBe('timeout');
+    expect(confirm?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(confirm?.attributes['error.type']).toBe('timeout');
     expect(confirm?.status.code).toBe(SpanStatusCode.ERROR);
   });
 });

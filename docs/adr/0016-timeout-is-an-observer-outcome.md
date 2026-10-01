@@ -1,6 +1,6 @@
 # 0016. A timeout is an outcome of the observer, not of the transaction
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-01
 
 ## Context

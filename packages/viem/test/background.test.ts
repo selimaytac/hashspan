@@ -55,7 +55,8 @@ describe('background confirmation', () => {
     await vi.waitFor(() => expect(confirmSpans()).toHaveLength(1));
     const [confirm] = confirmSpans();
     expect(confirm?.status.code).toBe(SpanStatusCode.ERROR);
-    expect(confirm?.attributes['blockchain.tx.status']).toBe('timeout');
+    expect(confirm?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(confirm?.attributes['error.type']).toBe('timeout');
   });
 
   it('emits a single confirm span when the caller also waits for the receipt', async () => {

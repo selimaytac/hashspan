@@ -230,10 +230,9 @@ describe('waitForTransactionReceipt', () => {
       .waitForTransactionReceipt({ hash: HASH, timeout: 60 })
       .catch((e: unknown) => e);
     expect((error as Error).name).toBe('WaitForTransactionReceiptTimeoutError');
-    expect(tracing.spanNamed('confirm 8453').attributes).toMatchObject({
-      'blockchain.tx.status': 'timeout',
-      'error.type': 'timeout',
-    });
+    const confirm = tracing.spanNamed('confirm 8453');
+    expect(confirm.attributes['error.type']).toBe('timeout');
+    expect(confirm.attributes['blockchain.tx.status']).toBeUndefined();
   });
 });
 

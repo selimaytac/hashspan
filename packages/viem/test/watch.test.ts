@@ -142,7 +142,8 @@ describe('watch', () => {
 
     hashspan.watch(reader, { hash: HASH, timeoutMs: 50 });
     await hashspan.flush();
-    expect(confirms()[0]?.attributes['blockchain.tx.status']).toBe('timeout');
+    expect(confirms()[0]?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(confirms()[0]?.attributes['error.type']).toBe('timeout');
   });
 
   it('records one confirm span when a transaction is watched twice', async () => {

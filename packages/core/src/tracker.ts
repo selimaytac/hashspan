@@ -55,7 +55,6 @@ import {
   BLOCKCHAIN_TX_STATUS_VALUE_REPLACED,
   BLOCKCHAIN_TX_STATUS_VALUE_REVERTED,
   BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS,
-  BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT,
   ERROR_TYPE_VALUE_OTHER,
 } from './attributes.js';
 import { ConfirmRegistry, type SharedConfirm } from './confirm-registry.js';
@@ -117,8 +116,8 @@ const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 /** A non-negative integer that fits in 256 bits. */
 const AMOUNT = /^(0|[1-9][0-9]{0,77})$/;
-/** `error.type` of a payment whose outcome was never learned, as for a confirmation that timed out. */
-const PAYMENT_TIMEOUT = 'timeout';
+/** `error.type` of a wait that gave up: a confirmation or a payment whose outcome was never learned. */
+const OBSERVER_TIMEOUT = 'timeout';
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
@@ -555,17 +554,9 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
           },
           endTime,
         ),
+      // Giving up describes the observer, not the transaction: no blockchain.tx.status (docs/adr/0016).
       timeout: (endTime) =>
-        finish(
-          'record confirmation timeout',
-          () => {
-            span.setAttributes(
-              redact({ [ATTR_BLOCKCHAIN_TX_STATUS]: BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT }),
-            );
-            markError(span, BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT);
-          },
-          endTime,
-        ),
+        finish('record confirmation timeout', () => markError(span, OBSERVER_TIMEOUT), endTime),
       fail: (error, endTime) =>
         finish(
           'record confirmation failure',
@@ -783,7 +774,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       timeout: (options) =>
         finish(
           'record payment timeout',
-          () => markError(span, PAYMENT_TIMEOUT),
+          () => markError(span, OBSERVER_TIMEOUT),
           handleOptions(options).endTime,
         ),
     };

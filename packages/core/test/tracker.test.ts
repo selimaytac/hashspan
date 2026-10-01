@@ -201,10 +201,9 @@ describe('confirm span', () => {
     tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).timeout();
     const confirm = tracing.spanNamed(`confirm ${CHAIN_ID}`);
     expect(confirm.status.code).toBe(SpanStatusCode.ERROR);
-    expect(confirm.attributes).toMatchObject({
-      'blockchain.tx.status': 'timeout',
-      'error.type': 'timeout',
-    });
+    expect(confirm.attributes['error.type']).toBe('timeout');
+    // Giving up says nothing about the transaction (ADR 0016).
+    expect(confirm.attributes['blockchain.tx.status']).toBeUndefined();
   });
 
   it('omits the fee when the gas price is unknown', () => {
@@ -633,7 +632,8 @@ describe('concurrent confirmations', () => {
     first.fail(new Error('rpc down'));
     second.timeout();
     expect(confirms()).toHaveLength(1);
-    expect(confirms()[0]?.attributes['blockchain.tx.status']).toBe('timeout');
+    expect(confirms()[0]?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(confirms()[0]?.attributes['error.type']).toBe('timeout');
   });
 
   it('ignores calls after the span ended', () => {
@@ -659,10 +659,12 @@ describe('concurrent confirmations', () => {
     tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).timeout();
     tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).fail(new Error('rpc down'));
     tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
-    expect(confirms().map((s) => s.attributes['blockchain.tx.status'])).toEqual([
-      'timeout',
-      undefined,
-      'success',
+    expect(
+      confirms().map((s) => [s.attributes['blockchain.tx.status'], s.attributes['error.type']]),
+    ).toEqual([
+      [undefined, 'timeout'],
+      [undefined, 'Error'],
+      ['success', undefined],
     ]);
   });
 

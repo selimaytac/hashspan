@@ -43,6 +43,12 @@ describe('docs/semconv.md', () => {
     const row = doc.split('\n').find((line) => line.startsWith(`| \`${attribute}\` |`));
     // Values are the backticked words without a dot; the cells use escaped pipes (\|) as separators.
     const listed = [...(row ?? '').matchAll(/`([a-z0-9_]+)`/g)].map((m) => m[1] as string);
-    expect(listed.sort()).toEqual(exported(prefix).sort());
+    // Values no longer recorded whose constants stay exported, deprecated, until 1.0.
+    const retired: unknown[] = [core.BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT];
+    expect(listed.sort()).toEqual(
+      exported(prefix)
+        .filter((value) => !retired.includes(value))
+        .sort(),
+    );
   });
 });
