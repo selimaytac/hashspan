@@ -15,6 +15,15 @@ export type AddressMode = 'raw' | 'hashed' | 'off';
  */
 export type ErrorMessageMode = 'off' | 'sanitized' | 'raw';
 
+/**
+ * How much of a paid resource's URL `x402.resource` records. Paths often carry user or account identifiers, so only
+ * the origin is recorded by default (ADR 0004).
+ * - `origin`: scheme, host and port only, e.g. `https://api.example.com`; a resource that is not a URL is not recorded
+ * - `path`: the URL without its query string, fragment and user info
+ * - `off`: nothing
+ */
+export type PaymentResourceMode = 'origin' | 'path' | 'off';
+
 export interface AddressOptions {
   /** How addresses are recorded; `hash` applies to `hashed` mode only. */
   mode: AddressMode;
@@ -46,6 +55,8 @@ export interface TxTrackerOptions {
    * attributes.
    */
   errorMessages?: ErrorMessageMode | undefined;
+  /** How much of a paid resource's URL `x402.resource` records. Default: `origin`. */
+  paymentResource?: PaymentResourceMode | undefined;
   /**
    * Record decoded contract call arguments ({@link SendInput.functionArguments}) as
    * `blockchain.contract.function.arguments`. Default: false. Arguments can carry amounts, counterparties and free

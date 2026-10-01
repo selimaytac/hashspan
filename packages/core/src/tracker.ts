@@ -64,10 +64,11 @@ import {
   type AddressFormatter,
   formatAddressesIn,
   OFF_ADDRESS_FORMATTER,
+  paymentResourceOf,
   resolveAddressFormatter,
   resolveErrorMessageMode,
+  resolvePaymentResourceMode,
   sanitizeErrorMessage,
-  sanitizeResource,
   serializeFunctionArguments,
 } from './privacy.js';
 import type {
@@ -299,6 +300,11 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
   const errorMessages = safely(
     'configure error message mode',
     () => resolveErrorMessageMode(options.errorMessages),
+    'off',
+  );
+  const paymentResource = safely(
+    'configure payment resource mode',
+    () => resolvePaymentResourceMode(options.paymentResource),
     'off',
   );
   let tracer: Tracer | undefined;
@@ -717,9 +723,9 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     const scheme = identifier(input.x402?.scheme);
     if (scheme !== undefined) attributes[ATTR_X402_SCHEME] = scheme;
     const resource = input.x402?.resource;
-    if (typeof resource === 'string' && resource !== '') {
-      attributes[ATTR_X402_RESOURCE] = formatAddressesIn(sanitizeResource(resource), formatAddress);
-    }
+    const recorded =
+      typeof resource === 'string' ? paymentResourceOf(resource, paymentResource) : undefined;
+    if (recorded) attributes[ATTR_X402_RESOURCE] = formatAddressesIn(recorded, formatAddress);
 
     const span = getTracer().startSpan(
       `payment ${input.chainId}`,

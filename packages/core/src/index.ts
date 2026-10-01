@@ -12,6 +12,7 @@ export type {
   FailOptions,
   PaymentHandle,
   PaymentInput,
+  PaymentResourceMode,
   PaymentSettlement,
   PaymentStatus,
   ReceiptLike,

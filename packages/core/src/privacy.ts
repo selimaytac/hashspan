@@ -1,5 +1,10 @@
 import { diag } from '@opentelemetry/api';
-import type { AddressMode, AddressOptions, ErrorMessageMode } from './types.js';
+import type {
+  AddressMode,
+  AddressOptions,
+  ErrorMessageMode,
+  PaymentResourceMode,
+} from './types.js';
 
 /** Formats one address per the address mode; undefined means "do not record it". */
 export interface AddressFormatter {
@@ -193,6 +198,32 @@ export function resolveErrorMessageMode(mode: ErrorMessageMode | undefined): Err
   }
   diag.warn(`hashspan: unknown error message mode "${String(mode)}"; recording error types only`);
   return 'off';
+}
+
+export function resolvePaymentResourceMode(
+  mode: PaymentResourceMode | undefined,
+): PaymentResourceMode {
+  if (mode === undefined || mode === 'origin' || mode === 'path' || mode === 'off') {
+    return mode ?? 'origin';
+  }
+  diag.warn(
+    `hashspan: unknown payment resource mode "${String(mode)}"; not recording payment resources`,
+  );
+  return 'off';
+}
+
+/** The origin of a URL: `scheme://`, then the host and port, without user info. */
+const URL_ORIGIN = /^([A-Za-z][A-Za-z0-9+.-]*:\/\/)(?:[^/?#]*@)?([^/?#]+)/;
+
+/**
+ * The part of a payment's resource that `mode` records, or undefined for none. Works on the text, so it never throws
+ * for a resource that is not a URL.
+ */
+export function paymentResourceOf(resource: string, mode: PaymentResourceMode): string | undefined {
+  if (mode === 'off') return undefined;
+  if (mode === 'path') return sanitizeResource(resource);
+  const origin = URL_ORIGIN.exec(resource);
+  return origin ? `${origin[1]}${origin[2]}` : undefined;
 }
 
 /** `scheme://user:password@` at the start of a URL; the user info is removed. */

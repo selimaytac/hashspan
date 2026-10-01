@@ -111,7 +111,7 @@ today.
 | `blockchain.payment.amount` | string | payment | on | amount in the asset's smallest unit, decimal string; the settled amount when the settlement reports one |
 | `blockchain.payment.status` | string | payment | on | `settled` \| `pending` \| `failed` |
 | `x402.scheme` | string | payment | on | x402 payment scheme, e.g. `exact` |
-| `x402.resource` | string | payment | on | URL or name of the resource paid for, without query string, fragment or user info |
+| `x402.resource` | string | payment | origin | the resource paid for, per the tracker's `paymentResource` mode: `origin` (default) records scheme, host and port only, `path` the URL without query string, fragment or user info, `off` nothing |
 | `error.type` | string | all | on | see *Span status*; reused from OpenTelemetry general conventions |
 
 Agent identity is recorded with the GenAI conventions `gen_ai.agent.id` and `gen_ai.agent.name`. A field set in the
@@ -139,8 +139,10 @@ attributes; if it throws, only `exception.type` is kept on the event.
 
 Payment values usually come from a remote party (the paid server or the settling party): addresses that are not
 `0x`-prefixed 20-byte hex, amounts that are not non-negative integers, hashes that are not 32-byte hex and
-identifiers (protocol, scheme, failure reason) that are not short identifiers are not recorded. `x402.resource` is
-recorded without its query string, fragment and user info, which can carry credentials.
+identifiers (protocol, scheme, failure reason) that are not short identifiers are not recorded. Paths of paid
+APIs often carry user or account identifiers, so `x402.resource` records only the origin by default; with
+`paymentResource: 'path'` it records the path too, never the query string, fragment or user info, which can carry
+credentials ([ADR 0004](adr/0004-privacy-defaults.md)).
 
 ## Change policy
 

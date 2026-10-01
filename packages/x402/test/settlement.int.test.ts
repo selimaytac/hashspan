@@ -191,7 +191,7 @@ describe('an EIP-3009 payment settled by the SDK facilitator', () => {
       'blockchain.payment.asset': token,
       'blockchain.payment.amount': String(PRICE),
       'x402.scheme': 'exact',
-      'x402.resource': 'http://api.test/weather',
+      'x402.resource': 'http://api.test',
     });
     const hash = payment.attributes['blockchain.tx.hash'] as string;
     const receipt = await reader.getTransactionReceipt({ hash: hash as `0x${string}` });

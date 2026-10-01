@@ -53,7 +53,7 @@ describe('payment span', () => {
       'blockchain.payment.status': 'settled',
       'blockchain.tx.hash': HASH,
       'x402.scheme': 'exact',
-      'x402.resource': 'https://api.example.com/weather',
+      'x402.resource': 'https://api.example.com',
     });
     expect(span.status.code).toBe(SpanStatusCode.UNSET);
   });
@@ -190,8 +190,50 @@ describe('payment confirmation', () => {
 });
 
 describe('payment privacy', () => {
+  const resources = [
+    'https://api.example.com/v1/users/alice/report?apiKey=secret',
+    'https://user:secret@api.example.com:8443/weather#token=secret',
+    'mcp://tool/get_weather',
+    'get_weather?key=secret',
+  ];
+  const recorded = (paymentResource?: 'origin' | 'path' | 'off') => {
+    const tracker = createTxTracker({ paymentResource });
+    for (const resource of resources) {
+      tracker.startPayment({ ...payment, x402: { resource } }).end({ status: 'settled' });
+    }
+    return tracing.spans().map((s) => s.attributes['x402.resource']);
+  };
+
+  it('records only the origin of the resource by default, and nothing for a resource that is not a URL', () => {
+    expect(recorded()).toEqual([
+      'https://api.example.com',
+      'https://api.example.com:8443',
+      'mcp://tool',
+      undefined,
+    ]);
+  });
+
+  it('records no resource with paymentResource off, or an unknown mode', () => {
+    expect(recorded('off')).toEqual([undefined, undefined, undefined, undefined]);
+    tracing.exporter.reset();
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    expect(recorded('everything' as 'path')).toEqual([undefined, undefined, undefined, undefined]);
+    expect(warn).toHaveBeenCalledWith(
+      'hashspan: unknown payment resource mode "everything"; not recording payment resources',
+    );
+  });
+
+  it('records the path, without query string, fragment or user info, with paymentResource path', () => {
+    expect(recorded('path')).toEqual([
+      'https://api.example.com/v1/users/alice/report',
+      'https://api.example.com:8443/weather',
+      'mcp://tool/get_weather',
+      'get_weather',
+    ]);
+  });
+
   it('records the resource without query string, fragment or user info', () => {
-    const tracker = createTxTracker();
+    const tracker = createTxTracker({ paymentResource: 'path' });
     const resources = [
       'https://api.example.com/weather?apiKey=secret',
       'https://api.example.com/weather#token=secret',
@@ -215,10 +257,10 @@ describe('payment privacy', () => {
 
   it('records addresses in the resource per the address mode', () => {
     const resource = `https://api.example.com/balance/${PAYER}`;
-    createTxTracker({ address: 'off' })
+    createTxTracker({ address: 'off', paymentResource: 'path' })
       .startPayment({ ...payment, x402: { resource } })
       .end({ status: 'settled' });
-    createTxTracker({ address: { mode: 'hashed', hash: () => 'h' } })
+    createTxTracker({ address: { mode: 'hashed', hash: () => 'h' }, paymentResource: 'path' })
       .startPayment({ ...payment, x402: { resource } })
       .end({ status: 'settled' });
     expect(tracing.spans().map((s) => s.attributes['x402.resource'])).toEqual([

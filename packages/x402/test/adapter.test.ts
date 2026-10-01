@@ -64,7 +64,7 @@ describe('a paid request', () => {
       'blockchain.payment.status': 'settled',
       'blockchain.tx.hash': HASH,
       'x402.scheme': 'exact',
-      'x402.resource': 'https://api.example.com/weather',
+      'x402.resource': 'https://api.example.com',
     });
     expect(span.status.code).toBe(SpanStatusCode.UNSET);
   });
@@ -116,7 +116,7 @@ describe('a paid request', () => {
 
   it('gives each of two concurrent payments its own settlement', async () => {
     const client = testClient();
-    withHashspan(client);
+    withHashspan(client, { paymentResource: 'path' });
     const first = deferred<Response>();
     const second = deferred<Response>();
     const hashOf = (n: number) => `0x${String(n).repeat(64)}`;

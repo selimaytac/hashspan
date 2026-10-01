@@ -29,3 +29,6 @@ while removing the ability to look the address up in a block explorer.
 
 - Defaults favour debuggability while keeping the most sensitive payload opt-in.
 - The README documents what is recorded by default, so operators can make an informed decision.
+- Amended for payments (ADR 0013): the resource an agent paid for is recorded as its URL's origin by default, since
+  paths often carry user or account identifiers; its path is opt-in (`paymentResource: 'path'`), and its query
+  string, fragment and user info are never recorded.
