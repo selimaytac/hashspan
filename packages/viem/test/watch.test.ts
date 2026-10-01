@@ -39,6 +39,37 @@ describe('watch', () => {
     });
   });
 
+  it('records nothing and warns when the chain id contradicts the client', async () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const hashspan = withHashspan();
+    const mock = mockTransport();
+    const reader = createPublicClient({
+      chain: base,
+      transport: mock.transport,
+      pollingInterval: 10,
+    });
+
+    hashspan.watch(reader, { hash: HASH, chainId: 1 });
+    await expect(hashspan.flush()).resolves.toBe(true);
+
+    expect(tracing.spans()).toHaveLength(0);
+    expect(mock.calls).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      'hashspan: watch() got chain 1 and a client on chain 8453; not recording it',
+    );
+  });
+
+  it('uses an explicit chain id with a client without a chain', async () => {
+    const hashspan = withHashspan();
+    const reader = createPublicClient({
+      transport: mockTransport().transport,
+      pollingInterval: 10,
+    });
+    hashspan.watch(reader, { hash: HASH, chainId: 8453 });
+    await expect(hashspan.flush()).resolves.toBe(true);
+    expect(confirms()[0]?.attributes['blockchain.tx.status']).toBe('success');
+  });
+
   it('links to a send span recorded by the same tracker', async () => {
     const tracker = createTxTracker();
     tracker.startSend({ chainId: 8453 }).end(HASH);
