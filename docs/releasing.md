@@ -27,7 +27,9 @@ script sets each package's status in the package table of the root README: a ver
 
 ## One-time setup
 
-Done once, by a maintainer, before the first release of each package (steps 1 and 3 again for a new package).
+Done once, by a maintainer, before the first release of each package. For a new package, run steps 1, 3 and 4 for
+it alone (only its name in the loop and the commands) before approving the release that publishes it: without its
+trusted publisher, that release publishes the other packages and fails on the new one.
 
 **1. Reserve the package names.** npm can only attach a trusted publisher to a package that exists, so each package
 gets a `0.0.0` placeholder. Use npm 11.10 or later, and a machine and account you trust with your npm login:
@@ -35,7 +37,7 @@ gets a `0.0.0` placeholder. Use npm 11.10 or later, and a machine and account yo
 ```sh
 npm login
 dir="$(mktemp -d)"
-for pkg in core viem cdp; do
+for pkg in core viem cdp x402; do
   mkdir "$dir/$pkg"
   cat > "$dir/$pkg/package.json" <<JSON
 {
@@ -63,6 +65,7 @@ other branch, even if the workflow file is changed there.
 npm trust github @hashspan/core --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust github @hashspan/viem --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust github @hashspan/cdp --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
+npm trust github @hashspan/x402 --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust list @hashspan/core
 npm logout
 ```
@@ -77,5 +80,5 @@ disallow tokens, so the trusted publisher is the only way to publish.
 permissions), enable "Allow GitHub Actions to create and approve pull requests". Under Code security, enable
 Dependabot alerts and security updates.
 
-After the first real release, deprecate the placeholders:
-`npm deprecate @hashspan/core@0.0.0 "Placeholder; use a later version"` (and the same for `@hashspan/viem`).
+After a package's first real release, deprecate its placeholder:
+`npm deprecate @hashspan/<pkg>@0.0.0 "Placeholder; use a later version"`, e.g. for `@hashspan/x402`.
