@@ -24,14 +24,18 @@
   - [x] One-time setup (placeholders, trusted publishers) and the first release: 0.1.0, published with provenance
   - [x] Good first issues ([open issues](https://github.com/selimaytac/hashspan/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22))
 
+## v0.3: Transactions sent by wallet APIs
+
+- [x] viem `watch()`: confirm transactions sent outside the extended clients, such as by a wallet API
+- [x] Coinbase CDP SDK adapter for server accounts (REST send path, [ADR 0012](adr/0012-cdp-adapter.md)), tested
+  weekly against the newest SDK in its peer range
+
 ## Next: more send paths
 
 Not tied to a version: an item ships with the first release after its pull request is merged.
 
 - [ ] viem transport wrapper: JSON-RPC spans
 - [ ] viem `deployContract`, `sendRawTransaction`, `sendCalls`
-- [x] viem `watch()`: confirm transactions sent outside the extended clients, such as by a wallet API
-- [x] Coinbase CDP SDK adapter for server accounts (REST send path, [ADR 0012](adr/0012-cdp-adapter.md))
 - [ ] CDP smart account user operations (ERC-4337)
 - [ ] x402 adapter (payment signing → facilitator settlement)
 - [ ] Metrics: transaction fee and confirmation latency histograms
