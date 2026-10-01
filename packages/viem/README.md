@@ -107,6 +107,7 @@ traced call, never before it, and records the span once the answer arrives, with
 - The chain id is asked for on every call, so spans follow a wallet that switches networks (one extra `eth_chainId`
   per traced call).
 - These spans have millisecond precision and are exported shortly after the call ends.
+- RPC or HTTP spans of the call do not nest under the send span, since it does not exist yet while the call runs.
 
 ## Replaced transactions
 
@@ -156,6 +157,9 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
 | `sendTransaction` | `send` | chain id, from, to, value, nonce, function selector, hash |
 | `writeContract` | `send` | as above, plus the function name, and the call arguments with `recordFunctionArguments: true` |
 | `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack), total fee |
+
+While `sendTransaction` or `writeContract` runs, its send span is the active span, so spans that your RPC or HTTP
+instrumentation creates for the request nest under it; the code after the call stays in your own context.
 
 Failed sends, reverted receipts and receipt timeouts set error status; the original error is always rethrown
 unchanged. Spans record only the error type unless `errorMessages` allows more, because viem error messages

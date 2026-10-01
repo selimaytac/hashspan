@@ -11,6 +11,12 @@ Rationale: [ADR 0003](adr/0003-attribute-namespace.md). Privacy defaults: [ADR 0
 | `confirm {blockchain.chain.id}` | CLIENT | see below | receipt retrieved, timeout or error; links to `send` or `payment` |
 | `payment {blockchain.chain.id}` | CLIENT | active context (e.g. `execute_tool`) | settlement reported or payment failed |
 
+**Send span as the active span.** While the call that sends the transaction runs, the send span is the active span,
+so spans that wallet, RPC or HTTP instrumentation creates for it nest under the send span. This holds for the viem
+adapter's clients with a chain and for the CDP adapter, not for viem clients without a chain, whose send span is
+recorded after the call, and not for x402's paid request
+([ADR 0015](adr/0015-send-span-as-active-context.md)).
+
 **Confirm span parent**, in order: an explicitly passed context; otherwise the active span (whatever is waiting
 for the receipt); otherwise the parent of the `send` span (confirmation in the background); otherwise none.
 The link to the `send` span is added whenever the transaction was sent through the same tracker within the link

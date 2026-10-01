@@ -5,7 +5,7 @@ import {
   type WithHashspanOptions as ViemOptions,
   withHashspan as withViemHashspan,
 } from '@hashspan/viem';
-import { diag } from '@opentelemetry/api';
+import { type Context, context, diag } from '@opentelemetry/api';
 import { parseTransaction } from 'viem';
 import { CDP_API_SEND_CHAIN_IDS, chainIdOf } from './networks.js';
 
@@ -79,6 +79,25 @@ function own(target: unknown, key: string): unknown {
     return undefined;
   const descriptor = Object.getOwnPropertyDescriptor(target, key);
   return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+}
+
+/**
+ * The context a send handle's call runs in: its send context, or the caller's for a handle without a usable one, such
+ * as one from a tracker of a core before 0.4 (ADR 0014).
+ */
+function sendContextOf(handle: { context?: unknown } | undefined): Context {
+  const caller = context.active();
+  try {
+    const sendContext = handle?.context;
+    return typeof sendContext === 'object' &&
+      sendContext !== null &&
+      typeof (sendContext as { getValue?: unknown }).getValue === 'function'
+      ? (sendContext as Context)
+      : caller;
+  } catch (error) {
+    diag.debug(`hashspan: could not read the send context (${errorName(error)})`);
+    return caller;
+  }
 }
 
 /** The CDP API's error type (`APIError.errorType`, e.g. `insufficient_balance`), recorded as `error.type`. */
@@ -229,7 +248,9 @@ export function withHashspan(
     }
     let result: unknown;
     try {
-      result = await send();
+      // Only the call runs in the send span's context, so the spans it creates nest under the send span; what
+      // follows runs in the caller's (ADR 0015).
+      result = await context.with(sendContextOf(handle), send);
     } catch (error) {
       try {
         handle?.fail(error, undefined, { errorType: cdpErrorType(error) });
