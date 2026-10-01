@@ -6,12 +6,12 @@ flowchart LR
     Tool["execute_tool span<br/>(AI SDK, Mastra, ...)"]
     Viem["viem client"]
     CDP["CDP SDK<br/>(server accounts)"]
-    X402["x402 client<br/>(planned)"]
+    X402["x402 client<br/>(@x402/fetch, axios, mcp)"]
   end
   subgraph Lib["hashspan"]
     VA["@hashspan/viem<br/>capture adapter"]
     CA["@hashspan/cdp<br/>capture adapter"]
-    XA["@hashspan/x402<br/>(planned)"]
+    XA["@hashspan/x402<br/>payment hooks"]
     Core["@hashspan/core<br/>tx lifecycle: send → confirm"]
   end
   Tool --> Viem --> VA
@@ -27,6 +27,7 @@ flowchart LR
 | core | Lifecycle tracker: `send`/`confirm` spans, links, one confirm span per transaction, replaced transactions, fees, privacy modes. No network calls: adapters pass it receipts | `packages/core` |
 | viem adapter | Hooks `sendTransaction` / `writeContract` / `waitForTransactionReceipt` via `client.extend()`; background confirmation, `watch()` for transactions sent elsewhere, revert reason decoding by replay, `flush()`. RPC spans via a transport wrapper are planned | `packages/viem` |
 | cdp adapter | Wraps a Coinbase CDP client in place: sends of server accounts become send spans; confirmations through a viem reader and `@hashspan/viem`'s `watch()` | `packages/cdp` |
+| x402 adapter | Registers hooks on an `x402Client`: each payment becomes a `payment` span, as the facilitator, not the agent, sends the settling transaction; confirmations through a viem reader and `@hashspan/viem`'s `watch()` | `packages/x402` |
 | examples | Runnable agent integrations | `examples/` |
 | lab | Local Jaeger (Docker) + project-local Anvil | `docker/`, `scripts/`, `Makefile` |
 

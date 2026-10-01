@@ -41,6 +41,12 @@ Run lint, typecheck and tests before proposing a change.
   - `test/mock-cdp-api.ts` local stand-in for the CDP API that broadcasts on Anvil; tests never leave localhost
   - `test/sdk-drift.test.ts` compares the adapter's copies of SDK rules with the installed SDK;
     `.github/workflows/cdp-sdk-latest.yml` runs the cdp tests weekly against the newest SDK in the peer range
+- `packages/x402` → adapter for x402 payments (ADR 0013)
+  - `src/index.ts` `withHashspan(client, { reader })` registers hooks on an `x402Client`: each payment becomes a
+    `payment` span (no send span: the facilitator sends); confirmations go through `@hashspan/viem`'s `watch()`.
+    Hooks never throw or return a value; payments without a response end as `timeout`, bounded in time and number
+  - `test/fake-x402.ts` a real `x402Client` with a signing-free scheme and a fake paid API, offline; the identities
+    of SDK objects across hooks, which the adapter relies on, are asserted in `test/adapter.test.ts`
 - `examples/` → runnable agent integrations
   - `ai-sdk-agent`: AI SDK agent with a scripted model (no API key), run by `make demo`; its
     `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break
@@ -53,7 +59,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 ## Conventions
 - Language: all code, comments, docs, commits and PRs in English.
 - Commits: Conventional Commits `<type>(<scope>): <description>`, subject ≤ 72 chars. Scopes: `core`, `viem`, `cdp`,
-  `examples`, `docs`, `ci`, `lab`.
+  `x402`, `examples`, `docs`, `ci`, `lab`.
 - Small, focused PRs; one concern per PR; update tests and docs with the change.
 - Pick open issues by their priority label, `priority: P0` first: a P0 comes before work in progress
   ([CONTRIBUTING.md](CONTRIBUTING.md#priority-labels)). Link the issue in the PR (`Closes #123`).
