@@ -14,7 +14,7 @@ a linked `confirm {chainId}` span with status, gas, fees and revert reason, like
 npm install @hashspan/cdp @coinbase/cdp-sdk @opentelemetry/api viem
 ```
 
-Requires Node.js 22.3 or later. Bring your own OpenTelemetry SDK and exporter.
+Requires Node.js 22.3 or later. Bring your own [OpenTelemetry SDK and exporter](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/).
 
 ## Usage
 

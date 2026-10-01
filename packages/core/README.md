@@ -17,7 +17,7 @@ The core is library-agnostic and read-only: it never signs, sends or fetches any
 npm install @hashspan/core @opentelemetry/api
 ```
 
-`@opentelemetry/api` is the only peer dependency. Bring your own OpenTelemetry SDK and exporter. Requires Node.js 22.3
+`@opentelemetry/api` is the only peer dependency. Bring your own [OpenTelemetry SDK and exporter](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/). Requires Node.js 22.3
 or later; in other runtimes, `hashed` address mode needs a custom `hash` function and otherwise records no addresses,
 with a `diag` warning.
 
@@ -104,6 +104,10 @@ Attribute definitions:
   ([ADR 0011](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0011-agent-identity-precedence.md)).
 - The redaction hook (`redact`) runs last on every attribute set and on exception attributes; use it for anything
   else your policy forbids.
+- **Your callbacks' errors go to the diagnostic logger.** If a custom `hash` function or the `redact` hook throws,
+  its error object is logged through the OpenTelemetry `diag` logger, outside the address mode and the redaction
+  hook. Errors of the instrumented call never are. Do not put sensitive values, such as the address being hashed,
+  into errors your callbacks throw, or route `diag` to a sink your policy allows.
 
 ## License
 

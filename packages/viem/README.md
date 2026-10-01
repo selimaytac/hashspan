@@ -12,7 +12,7 @@ gas and fees.
 npm install @hashspan/viem @opentelemetry/api viem
 ```
 
-Bring your own OpenTelemetry SDK and exporter.
+Bring your own [OpenTelemetry SDK and exporter](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/).
 
 ## Usage
 

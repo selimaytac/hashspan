@@ -37,4 +37,5 @@ API keys.
   who trust their backend opt into `sanitized` or `raw`.
 - `sanitized` cannot guarantee that free text is harmless; the redaction hook remains the last line of defence.
 - Instrumentation-internal failures (for example a throwing redaction hook) are still logged through `diag` with
-  their error object; they never contain the instrumented call's error.
+  their error object; they never contain the instrumented call's error, but an error thrown by a user callback
+  (`hash`, `redact`) carries whatever that callback put in it. The core README's privacy notes say so.
