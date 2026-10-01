@@ -670,3 +670,95 @@ async function scopedWithWait(wait: Method): Promise<ScopedAccount> {
   };
   return account.useNetwork('base');
 }
+
+describe('call arguments behind getters', () => {
+  /**
+   * Runs one call twice, untraced and traced, with options whose `key` getter returns a different value per read.
+   * Telemetry must not run the getter, so both runs pass the SDK the same value after the same number of reads.
+   */
+  const unchangedByTracing = async (
+    key: string,
+    values: readonly unknown[],
+    call: (cdp: ReturnType<typeof fakeCdp>, options: object) => Promise<unknown>,
+    { nested, base = {} }: { nested?: string; base?: object } = {},
+  ) => {
+    const run = async (traced: boolean) => {
+      let reads = 0;
+      const getter = Object.defineProperty({ ...base }, key, {
+        enumerable: true,
+        get: () => values[Math.min(reads++, values.length - 1)],
+      });
+      const options = nested ? { network: 'base', [nested]: getter } : getter;
+      const cdp = fakeCdp();
+      const seen: unknown[] = [];
+      for (const name of ['sendTransaction', 'createAccount', 'createSwapQuote'] as const) {
+        const original = cdp.evm[name];
+        cdp.evm[name] = async (opts?: unknown) => {
+          const target = nested ? (opts as Record<string, unknown>)[nested] : opts;
+          seen.push((target as Record<string, unknown>)[key]);
+          return original(opts);
+        };
+      }
+      if (traced) withHashspan(cdp);
+      await call(cdp, options);
+      return { seen, reads };
+    };
+    expect(await run(true)).toEqual(await run(false));
+  };
+
+  it("leave a transaction's fields to the SDK, as in the review's repro", async () => {
+    await unchangedByTracing(
+      'to',
+      [ACCOUNT, TO],
+      (cdp, options) => cdp.evm.sendTransaction(options),
+      { nested: 'transaction' },
+    );
+  });
+
+  it('leave the network to the SDK', async () => {
+    await unchangedByTracing(
+      'network',
+      ['base', 'polygon'],
+      (cdp, options) => cdp.evm.sendTransaction(options),
+      { base: { transaction: {} } },
+    );
+  });
+
+  it('leave a quote request to the SDK, including whether it is for a smart account', async () => {
+    await unchangedByTracing(
+      'smartAccount',
+      [undefined, {}],
+      async (cdp, options) => {
+        const quote = (await cdp.evm.createSwapQuote(options)) as {
+          execute: () => Promise<unknown>;
+        };
+        return quote.execute();
+      },
+      { base: { network: 'base', taker: ACCOUNT } },
+    );
+  });
+
+  it('record a send with the getter fields left out', async () => {
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    const transaction = Object.defineProperty({ value: 3n }, 'to', {
+      enumerable: true,
+      get: () => TO,
+    });
+    await cdp.evm.sendTransaction({ network: 'base', transaction });
+    expect(tracing.spanNamed('send 8453').attributes).toMatchObject({ 'blockchain.tx.value': '3' });
+    expect(tracing.spanNamed('send 8453').attributes['blockchain.tx.to']).toBeUndefined();
+  });
+
+  it('treat a smart account given through a getter as a smart account', async () => {
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    const options = Object.defineProperty({ network: 'base', taker: ACCOUNT }, 'smartAccount', {
+      enumerable: true,
+      get: () => ({}),
+    });
+    const quote = (await cdp.evm.createSwapQuote(options)) as { execute: () => Promise<unknown> };
+    await quote.execute();
+    expect(tracing.spans()).toHaveLength(0);
+  });
+});

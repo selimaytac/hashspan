@@ -283,9 +283,62 @@ function selectorOf(data: string | undefined): string | undefined {
   return data && data.length >= 10 ? data.slice(0, 10) : undefined;
 }
 
-function addressOf(account: string | { address: string } | null | undefined): string | undefined {
-  if (!account) return undefined;
-  return typeof account === 'string' ? account : account.address;
+/**
+ * The value of `target`'s own data property `key`, or undefined for an accessor, an inherited or a missing
+ * property. Telemetry reads the user's call arguments only this way, so it never runs a getter: a getter with side
+ * effects, or one that returns a different value per read, would otherwise change what the call sends. A Proxy's
+ * `getOwnPropertyDescriptor` trap still runs.
+ */
+function own(target: unknown, key: string): unknown {
+  if (target === null || (typeof target !== 'object' && typeof target !== 'function'))
+    return undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(target, key);
+  return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+}
+
+const MAX_COPY_DEPTH = 8;
+
+/**
+ * A copy of call arguments made of own data properties only, for code that reads them deeply (ABI overload
+ * matching); accessors become undefined and nothing deeper than {@link MAX_COPY_DEPTH} is copied.
+ */
+function dataOnly(value: unknown, depth = 0): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  if (depth >= MAX_COPY_DEPTH) return undefined;
+  if (Array.isArray(value)) {
+    const length = own(value, 'length');
+    return Array.from({ length: typeof length === 'number' ? length : 0 }, (_, i) =>
+      dataOnly(own(value, String(i)), depth + 1),
+    );
+  }
+  const copy: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) copy[key] = dataOnly(own(value, key), depth + 1);
+  return copy;
+}
+
+/**
+ * A copy of `target` with `key` set to `value`: like `{ ...target, [key]: value }`, but accessors are copied as
+ * accessors instead of being read.
+ */
+function withOwnProperty<T extends object>(target: T, key: string, value: unknown): T {
+  const copy = {} as T;
+  for (const property of Reflect.ownKeys(target)) {
+    const descriptor = Object.getOwnPropertyDescriptor(target, property);
+    if (descriptor?.enumerable) Object.defineProperty(copy, property, descriptor);
+  }
+  Object.defineProperty(copy, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+  return copy;
+}
+
+function addressOf(account: unknown): string | undefined {
+  if (typeof account === 'string') return account;
+  const address = own(account, 'address');
+  return typeof address === 'string' ? address : undefined;
 }
 
 /** Normalises a viem receipt; `l1Fee` is a bigint with the OP-stack formatter, else a raw hex string. */
@@ -590,7 +643,10 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   const extension = (client: ViemClientLike & Partial<Record<TracedAction, AnyAction>>) => {
     const knownChainId = (args: {
       chain?: { id: number } | null | undefined;
-    }): number | undefined => args.chain?.id ?? client.chain?.id;
+    }): number | undefined => {
+      const id = own(own(args, 'chain'), 'id');
+      return typeof id === 'number' ? id : client.chain?.id;
+    };
 
     /**
      * Asks a client without a chain for its chain id. Concurrent calls share one request; the answer is not cached,
@@ -702,10 +758,10 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       chainId: number,
     ): SendInput => ({
       chainId,
-      from: addressOf(args.account ?? client.account),
-      to: to ?? undefined,
-      value: args.value,
-      nonce: args.nonce,
+      from: addressOf(own(args, 'account') ?? client.account),
+      to: typeof to === 'string' ? to : undefined,
+      value: own(args, 'value') as SendInput['value'],
+      nonce: own(args, 'nonce') as SendInput['nonce'],
     });
 
     const actions: Partial<Record<TracedAction, AnyAction>> = {};
@@ -716,39 +772,44 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         traceSend(
           args,
           (chainId) => ({
-            ...sendInput(args, args.to, chainId),
-            functionSelector: selectorOf(args.data),
+            ...sendInput(args, own(args, 'to') as string | undefined, chainId),
+            functionSelector: selectorOf(own(args, 'data') as string | undefined),
           }),
           () => sendTransaction(args),
         );
     }
 
     if (typeof writeContract === 'function') {
-      actions.writeContract = (args: WriteContractArgs) =>
-        traceSend(
+      actions.writeContract = (args: WriteContractArgs) => {
+        const abi = own(args, 'abi') as Abi | undefined;
+        const functionName = own(args, 'functionName') as string | undefined;
+        const functionArguments = own(args, 'args') as readonly unknown[] | undefined;
+        return traceSend(
           args,
           (chainId) => {
             let functionSelector: string | undefined;
             try {
               const item = getAbiItem({
-                abi: args.abi,
-                name: args.functionName,
-                args: args.args,
+                abi,
+                name: functionName,
+                // Overload matching reads the arguments deeply: it gets a copy without accessors.
+                args: dataOnly(functionArguments),
               } as never);
               functionSelector = item ? toFunctionSelector(item as never) : undefined;
             } catch {
               // Unknown or ambiguous ABI item: record the function name only.
             }
             return {
-              ...sendInput(args, args.address, chainId),
-              functionName: args.functionName,
+              ...sendInput(args, own(args, 'address') as string | undefined, chainId),
+              functionName,
               functionSelector,
-              functionArguments: args.args,
+              functionArguments,
             };
           },
           () => writeContract(args),
-          args.abi,
+          abi,
         );
+      };
     }
 
     if (typeof waitForTransactionReceipt === 'function') {
@@ -791,11 +852,17 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       };
 
       actions.waitForTransactionReceipt = async (args: WaitArgs) => {
+        const hash = own(args, 'hash');
+        const onReplaced = Object.getOwnPropertyDescriptor(args ?? {}, 'onReplaced');
+        // A hash or callback behind an accessor is passed on untouched and not traced, so no getter runs.
+        if (typeof hash !== 'string' || (onReplaced !== undefined && !('value' in onReplaced))) {
+          return waitForTransactionReceipt(args);
+        }
         const chainId = knownChainId(args);
         let handle: ConfirmHandle | undefined;
         if (chainId !== undefined) {
           try {
-            handle = tracker.startConfirm({ chainId, hash: args.hash });
+            handle = tracker.startConfirm({ chainId, hash });
           } catch (error) {
             diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
           }
@@ -806,22 +873,14 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
             : undefined;
         // Always wrapped, so that a replacement is attributed however the span is recorded (docs/adr/0008).
         const capture: ReplacementCapture = {};
-        const wait = waitForTransactionReceipt({
-          ...args,
-          onReplaced: capturing(capture, args.onReplaced),
-        }) as Promise<ViemReceipt>;
+        const wait = waitForTransactionReceipt(
+          withOwnProperty(args, 'onReplaced', capturing(capture, onReplaced?.value)),
+        ) as Promise<ViemReceipt>;
         if (handle && chainId !== undefined) {
-          track(recordConfirmation(chainId, args.hash, handle, wait, capture, client));
+          track(recordConfirmation(chainId, hash, handle, wait, capture, client));
         } else if (late) {
           track(
-            recordLateConfirmation(
-              late.ctx,
-              late.startTime,
-              late.chainId,
-              args.hash,
-              wait,
-              capture,
-            ),
+            recordLateConfirmation(late.ctx, late.startTime, late.chainId, hash, wait, capture),
           );
         }
         return wait;

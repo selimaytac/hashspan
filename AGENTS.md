@@ -61,7 +61,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 - Changesets describe released behaviour: a follow-up change to a feature that has not been published yet updates
   that feature's changeset instead of adding a new one.
 - Instrumentation must never throw into or alter the result of the user's call; failures are swallowed and logged
-  via `diag`.
+  via `diag`. Adapters read call arguments only from own data properties, so no getter of the user's runs.
 - Only `@opentelemetry/api` and the instrumented library may be peer dependencies of published packages; an adapter
   may also peer-depend on a library its API takes values from (`@hashspan/cdp` on `viem`, for the `reader`).
 - `src/` must not use Node.js-only APIs at import time (it is type-checked without Node types via `tsconfig.json`;
