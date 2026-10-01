@@ -1,6 +1,6 @@
 import { createPublicClient, createWalletClient, encodeFunctionData, parseAbi } from 'viem';
 import { base } from 'viem/chains';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
 import { FROM, HASH, mockTransport, TO } from './mock-transport.js';
 import { setupTracing, type TestTracing } from './tracing.js';
@@ -164,4 +164,44 @@ it("keeps a wait's onReplaced getter working and unread by telemetry", async () 
     return reads;
   };
   expect(await run(true)).toBe(await run(false));
+});
+
+describe('wait options the adapter forwards', () => {
+  /** Runs one wait untraced and traced; both must succeed and call onReplaced the same number of times. */
+  const sameAsUntraced = async (options: (onReplaced: () => void) => object) => {
+    const run = async (traced: boolean) => {
+      // The receipt is that of another transaction: viem reports a replacement.
+      const mock = mockTransport({
+        advanceBlocks: true,
+        blockIncludesTransaction: true,
+        mined: (() => {
+          let calls = 0;
+          return () => ++calls > 2;
+        })(),
+      });
+      const plain = createPublicClient({
+        chain: base,
+        transport: mock.transport,
+        pollingInterval: 10,
+      });
+      const reader = traced ? plain.extend(withHashspan()) : plain;
+      let replaced = 0;
+      // Passed as built: a copy would lose the freezing or the prototype under test.
+      const receipt = await reader.waitForTransactionReceipt(options(() => replaced++) as never);
+      return { status: receipt.status, replaced };
+    };
+    const plain = await run(false);
+    expect(plain.replaced).toBe(1);
+    expect(await run(true)).toEqual(plain);
+  };
+
+  it('keep an onReplaced callback of frozen options', async () => {
+    await sameAsUntraced((onReplaced) => Object.freeze({ hash: HASH, onReplaced, retryDelay: 1 }));
+  });
+
+  it('keep an onReplaced callback inherited from a prototype', async () => {
+    await sameAsUntraced((onReplaced) =>
+      Object.assign(Object.create({ onReplaced }), { hash: HASH, retryDelay: 1 }),
+    );
+  });
 });
