@@ -1,0 +1,54 @@
+name: x402 SDK range
+
+# The x402 adapter relies on behaviour of the x402 SDK that is not a documented contract: which objects its hooks
+# pass on from one hook to the next (ADR 0013). CI tests the SDK from the lockfile; this job tests both ends of the
+# peer range, so that a change shows up before users report it: the newest release, with every x402 test, and the
+# oldest version the range allows, with the adapter's own tests (the settlement test uses newer server APIs). Tests
+# run offline, as in CI. The updated lockfile is not committed.
+on:
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x402-sdk
+  cancel-in-progress: true
+
+jobs:
+  x402:
+    name: x402 adapter against the ${{ matrix.end }} SDK in range
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        end: [newest, oldest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: ./scripts/install-anvil.sh
+      # Within the range in package.json (^2), so a new major is a deliberate change rather than a failing job.
+      - name: Update the x402 SDK to the newest release in range
+        if: matrix.end == 'newest'
+        run: pnpm --filter @hashspan/x402 update @x402/core @x402/fetch @x402/evm
+      - name: Install the oldest x402 SDK of the peer range
+        if: matrix.end == 'oldest'
+        run: |
+          floor=$(node -p "require('./packages/x402/package.json').peerDependencies['@x402/core'].replace(/^\^/, '')")
+          pnpm --filter @hashspan/x402 add -D "@x402/core@$floor" "@x402/fetch@$floor" "@x402/evm@$floor"
+      - run: pnpm --filter @hashspan/x402 list @x402/core @x402/fetch @x402/evm --depth 0
+      - name: Typecheck and all x402 tests
+        if: matrix.end == 'newest'
+        run: |
+          pnpm typecheck
+          pnpm vitest run packages/x402
+      - name: The adapter's own x402 tests
+        if: matrix.end == 'oldest'
+        run: pnpm vitest run packages/x402 --exclude '**/settlement.int.test.ts'
