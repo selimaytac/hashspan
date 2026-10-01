@@ -1,7 +1,7 @@
 /**
  * Attribute keys emitted by hashspan.
  *
- * Stability: development. See https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.4.0/docs/semconv.md for
+ * Stability: development. See https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.5.0/docs/semconv.md for
  * definitions and value types. These names are a public contract: changes follow the deprecation policy in AGENTS.md.
  */
 export const ATTR_BLOCKCHAIN_SYSTEM = 'blockchain.system' as const;
@@ -26,14 +26,14 @@ export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR =
   'blockchain.contract.function.selector' as const;
 /**
  * Opt-in: decoded call arguments as a JSON array. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.4.0/docs/adr/0004-privacy-defaults.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.5.0/docs/adr/0004-privacy-defaults.md.
  */
 export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS =
   'blockchain.contract.function.arguments' as const;
 
 /**
  * Payments settled on chain by a party other than the agent, e.g. an x402 facilitator. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.4.0/docs/adr/0013-x402-payments.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.5.0/docs/adr/0013-x402-payments.md.
  */
 export const ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL = 'blockchain.payment.protocol' as const;
 export const ATTR_BLOCKCHAIN_PAYMENT_PAYER = 'blockchain.payment.payer' as const;
@@ -69,7 +69,7 @@ export const BLOCKCHAIN_TX_STATUS_VALUE_REVERTED = 'reverted' as const;
 /**
  * @deprecated No longer recorded: a confirm span that gave up waiting records `error.type` `timeout` and no
  * `blockchain.tx.status`. The constant is removed in 1.0. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.4.0/docs/adr/0016-timeout-is-an-observer-outcome.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.5.0/docs/adr/0016-timeout-is-an-observer-outcome.md.
  */
 export const BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT = 'timeout' as const;
 export const BLOCKCHAIN_TX_STATUS_VALUE_REPLACED = 'replaced' as const;
