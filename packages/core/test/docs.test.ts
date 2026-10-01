@@ -236,3 +236,62 @@ describe('repository docs', () => {
     expect(read('CONTRIBUTING.md')).toContain(`development needs Node.js ${development}`);
   });
 });
+
+describe('code examples', () => {
+  // Every TypeScript or JavaScript block in the docs is the `#region readme` of a file in packages/*/test/readme/,
+  // which `pnpm typecheck` compiles: an example cannot stop compiling without failing CI.
+  const blocks = markdownFiles().flatMap((file) =>
+    [...read(file).matchAll(/^```(ts|typescript|tsx|js|javascript|jsx)\n([\s\S]*?)^```$/gm)].map(
+      (m) => ({
+        file,
+        code: m[2] as string,
+      }),
+    ),
+  );
+  const examples = readdirSync(join(root, 'packages')).flatMap((dir) => {
+    const folder = `packages/${dir}/test/readme`;
+    if (!existsSync(join(root, folder))) return [];
+    return readdirSync(join(root, folder)).map((name) => {
+      const source = read(`${folder}/${name}`);
+      return {
+        path: `${folder}/${name}`,
+        readme: source.match(/^\/\/ Example from (\S+)\.$/m)?.[1],
+        regions: [...source.matchAll(/^\/\/ #region readme\n([\s\S]*?)^\/\/ #endregion$/gm)].map(
+          (m) => m[1] as string,
+        ),
+      };
+    });
+  });
+
+  it('finds the examples it checks', () => {
+    expect(blocks.length).toBeGreaterThan(5);
+    expect(examples.length).toBeGreaterThan(5);
+  });
+
+  it('keep one region per file and name an existing README', () => {
+    const malformed = examples.filter(
+      ({ readme, regions }) =>
+        regions.length !== 1 || readme === undefined || !existsSync(join(root, readme)),
+    );
+    expect(malformed.map(({ path }) => path)).toEqual([]);
+  });
+
+  it('are shown in the docs exactly as compiled', () => {
+    const unchecked = blocks.filter(
+      ({ file, code }) =>
+        !examples.some(({ readme, regions }) => readme === file && regions[0] === code),
+    );
+    expect(
+      unchecked.map(({ file, code }) => `${file}: ${code.split('\n')[0]}`),
+      'copy the block into the matching packages/*/test/readme/ file, or add one',
+    ).toEqual([]);
+  });
+
+  it('are all still shown in the docs', () => {
+    const unused = examples.filter(
+      ({ readme, regions }) =>
+        !blocks.some(({ file, code }) => file === readme && code === regions[0]),
+    );
+    expect(unused.map(({ path }) => path)).toEqual([]);
+  });
+});
