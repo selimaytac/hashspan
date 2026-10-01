@@ -37,10 +37,6 @@ interface AccountLike {
   address?: unknown;
   [key: string]: unknown;
 }
-interface TransactionResultLike {
-  transactionHash?: unknown;
-}
-
 const WRAPPED = Symbol.for('hashspan.cdp.wrapped');
 const TRANSFER_SELECTOR = '0xa9059cbb';
 // Unknown network values are named in warnings only when they look like a network name, never an RPC URL.
@@ -58,17 +54,31 @@ function errorName(error: unknown): string {
   return error instanceof Error && error.name ? error.name : 'unknown error';
 }
 
+/**
+ * The value of `target`'s own data property `key`, or undefined for an accessor, an inherited or a missing
+ * property. Telemetry reads the user's arguments only this way, so it never runs a getter: a getter with side
+ * effects, or one that returns a different value per read, would otherwise change what the call sends. A Proxy's
+ * `getOwnPropertyDescriptor` trap still runs.
+ */
+function own(target: unknown, key: string): unknown {
+  if (target === null || (typeof target !== 'object' && typeof target !== 'function'))
+    return undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(target, key);
+  return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+}
+
 /** The CDP API's error type (`APIError.errorType`, e.g. `insufficient_balance`), recorded as `error.type`. */
 function cdpErrorType(error: unknown): string | undefined {
-  const type = error instanceof Error ? (error as { errorType?: unknown }).errorType : undefined;
+  const type = error instanceof Error ? own(error, 'errorType') : undefined;
   return typeof type === 'string' ? type : undefined;
 }
 
 /** The fields of a viem receipt that the confirm span records, or undefined if `value` is not one. */
 function receiptOf(value: unknown): ReceiptLike | undefined {
   if (value === null || typeof value !== 'object') return undefined;
-  const receipt = value as Record<string, unknown>;
-  const { status, blockNumber, gasUsed } = receipt;
+  const status = own(value, 'status');
+  const blockNumber = own(value, 'blockNumber');
+  const gasUsed = own(value, 'gasUsed');
   if (status !== 'success' && status !== 'reverted') return undefined;
   if (typeof blockNumber !== 'bigint' || typeof gasUsed !== 'bigint') return undefined;
   const optional = (v: unknown) => (typeof v === 'bigint' ? v : undefined);
@@ -76,10 +86,9 @@ function receiptOf(value: unknown): ReceiptLike | undefined {
     status,
     blockNumber,
     gasUsed,
-    effectiveGasPrice: optional(receipt.effectiveGasPrice),
-    l1Fee: optional(receipt.l1Fee),
-    transactionHash:
-      typeof receipt.transactionHash === 'string' ? receipt.transactionHash : undefined,
+    effectiveGasPrice: optional(own(value, 'effectiveGasPrice')),
+    l1Fee: optional(own(value, 'l1Fee')),
+    transactionHash: stringOrUndefined(own(value, 'transactionHash')),
   };
 }
 
@@ -87,36 +96,34 @@ function isHexString(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x[0-9a-fA-F]*$/.test(value);
 }
 
+function stringOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
 function addressOf(value: unknown): string | undefined {
-  if (typeof value === 'string') return value;
-  if (
-    value !== null &&
-    typeof value === 'object' &&
-    typeof (value as AccountLike).address === 'string'
-  ) {
-    return (value as { address: string }).address;
-  }
-  return undefined;
+  return typeof value === 'string' ? value : stringOrUndefined(own(value, 'address'));
 }
 
 /** Transaction fields for the send span, from a request object or a serialized transaction. */
 function describeTransaction(transaction: unknown): Omit<SendInput, 'chainId'> {
-  let request: Record<string, unknown> | undefined;
+  let request: object | undefined;
   if (isHexString(transaction)) {
     try {
-      request = parseTransaction(transaction) as Record<string, unknown>;
+      request = parseTransaction(transaction);
     } catch {
       diag.debug('hashspan: could not parse the serialized transaction');
     }
   } else if (transaction !== null && typeof transaction === 'object') {
-    request = transaction as Record<string, unknown>;
+    request = transaction;
   }
   if (!request) return {};
-  const data = request.data;
+  const data = own(request, 'data');
+  const value = own(request, 'value');
+  const nonce = own(request, 'nonce');
   return {
-    to: typeof request.to === 'string' ? request.to : undefined,
-    value: typeof request.value === 'bigint' ? request.value : undefined,
-    nonce: typeof request.nonce === 'number' ? request.nonce : undefined,
+    to: stringOrUndefined(own(request, 'to')),
+    value: typeof value === 'bigint' ? value : undefined,
+    nonce: typeof nonce === 'number' ? nonce : undefined,
     functionSelector: typeof data === 'string' && data.length >= 10 ? data.slice(0, 10) : undefined,
   };
 }
@@ -194,7 +201,7 @@ export function withHashspan(
       throw error;
     }
     try {
-      const hash = (result as TransactionResultLike | undefined)?.transactionHash;
+      const hash = own(result, 'transactionHash');
       if (typeof hash === 'string') {
         handle?.end(hash);
         const client = readerFor(chainId);
@@ -218,8 +225,7 @@ export function withHashspan(
     options: unknown,
     wait: () => Promise<unknown>,
   ): Promise<unknown> => {
-    const opts = (options ?? {}) as { hash?: unknown; transactionHash?: unknown };
-    const hash = typeof opts.hash === 'string' ? opts.hash : opts.transactionHash;
+    const hash = stringOrUndefined(own(options, 'hash')) ?? own(options, 'transactionHash');
     if (typeof hash !== 'string' || readerFor(chainId)) return wait();
     let handle: ReturnType<TxTracker['startConfirm']> | undefined;
     try {
@@ -266,7 +272,7 @@ export function withHashspan(
   const wrapScopedAccount = (scoped: unknown): unknown => {
     if (scoped === null || typeof scoped !== 'object') return scoped;
     const account = scoped as AccountLike;
-    const chainId = chainIdFor(account.network);
+    const chainId = chainIdFor(own(account, 'network'));
     if (chainId === undefined) return scoped;
     replace(
       account,
@@ -281,7 +287,7 @@ export function withHashspan(
       const [opts] = args as unknown as [{ transaction?: unknown } | undefined];
       return traced(
         chainId,
-        () => ({ from: addressOf(account), ...describeTransaction(opts?.transaction) }),
+        () => ({ from: addressOf(account), ...describeTransaction(own(opts, 'transaction')) }),
         () => original(...args),
       );
     });
@@ -300,13 +306,15 @@ export function withHashspan(
     account: AccountLike,
     opts: Record<string, unknown> | undefined,
   ): Omit<SendInput, 'chainId'> => {
-    const recipient = addressOf(opts?.to);
-    const amount = typeof opts?.amount === 'bigint' ? opts.amount : undefined;
-    if (opts?.token === 'eth') return { from: addressOf(account), to: recipient, value: amount };
+    const recipient = addressOf(own(opts, 'to'));
+    const given = own(opts, 'amount');
+    const amount = typeof given === 'bigint' ? given : undefined;
+    const token = own(opts, 'token');
+    if (token === 'eth') return { from: addressOf(account), to: recipient, value: amount };
     // An ERC-20 transfer: the transaction goes to the token contract.
     return {
       from: addressOf(account),
-      to: isHexString(opts?.token) ? opts.token : undefined,
+      to: isHexString(token) ? token : undefined,
       functionName: 'transfer',
       functionSelector: TRANSFER_SELECTOR,
       functionArguments:
@@ -324,7 +332,7 @@ export function withHashspan(
       (original) =>
         async (...args: never[]) =>
           traced(
-            chainIdFor(quote.network),
+            chainIdFor(own(quote, 'network')),
             () => ({ from: addressOf(from) }),
             () => original(...args),
           ),
@@ -341,15 +349,15 @@ export function withHashspan(
     replace(account, 'sendTransaction', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [{ network?: unknown; transaction?: unknown } | undefined];
       return traced(
-        chainIdFor(opts?.network),
-        () => ({ from: addressOf(account), ...describeTransaction(opts?.transaction) }),
+        chainIdFor(own(opts, 'network')),
+        () => ({ from: addressOf(account), ...describeTransaction(own(opts, 'transaction')) }),
         () => original(...args),
       );
     });
     replace(account, 'transfer', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [Record<string, unknown> | undefined];
       return traced(
-        chainIdFor(opts?.network),
+        chainIdFor(own(opts, 'network')),
         () => describeTransfer(account, opts),
         () => original(...args),
       );
@@ -359,7 +367,7 @@ export function withHashspan(
         { network?: unknown; swapQuote?: { network?: unknown } } | undefined,
       ];
       return traced(
-        chainIdFor(opts?.network ?? opts?.swapQuote?.network),
+        chainIdFor(own(opts, 'network') ?? own(own(opts, 'swapQuote'), 'network')),
         () => ({ from: addressOf(account) }),
         () => original(...args),
       );
@@ -374,7 +382,7 @@ export function withHashspan(
     replace(account, 'useSpendPermission', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [{ network?: unknown; value?: unknown } | undefined];
       return traced(
-        chainIdFor(opts?.network),
+        chainIdFor(own(opts, 'network')),
         () => ({ from: addressOf(account) }),
         () => original(...args),
       );
@@ -404,8 +412,11 @@ export function withHashspan(
       { address?: unknown; network?: unknown; transaction?: unknown } | undefined,
     ];
     return traced(
-      chainIdFor(opts?.network),
-      () => ({ from: addressOf(opts?.address), ...describeTransaction(opts?.transaction) }),
+      chainIdFor(own(opts, 'network')),
+      () => ({
+        from: addressOf(own(opts, 'address')),
+        ...describeTransaction(own(opts, 'transaction')),
+      }),
       () => original(...args),
     );
   });
@@ -421,7 +432,12 @@ export function withHashspan(
   replace(evm, 'createSwapQuote', (original) => async (...args: never[]) => {
     const [opts] = args as unknown as [{ taker?: unknown; smartAccount?: unknown } | undefined];
     const quote = await original(...args);
-    return opts?.smartAccount === undefined ? wrapQuote(quote, opts?.taker) : quote;
+    // A smart account given through a getter still makes a user operation quote: it is left alone too.
+    const smartAccount = opts ? Object.getOwnPropertyDescriptor(opts, 'smartAccount') : undefined;
+    const forSmartAccount =
+      smartAccount !== undefined &&
+      (!('value' in smartAccount) || smartAccount.value !== undefined);
+    return forSmartAccount ? quote : wrapQuote(quote, own(opts, 'taker'));
   });
   replace(evm, 'listAccounts', (original) => async (...args: never[]) => {
     const result = (await original(...args)) as { accounts?: unknown[] } | undefined;

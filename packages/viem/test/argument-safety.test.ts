@@ -1,8 +1,8 @@
-import { createWalletClient, encodeFunctionData, parseAbi } from 'viem';
+import { createPublicClient, createWalletClient, encodeFunctionData, parseAbi } from 'viem';
 import { base } from 'viem/chains';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
-import { FROM, mockTransport, TO } from './mock-transport.js';
+import { FROM, HASH, mockTransport, TO } from './mock-transport.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
 const payroll = parseAbi(['function pay((address to, uint256 amount) order)']);
@@ -57,4 +57,111 @@ it('recording arguments leaves the argument and the sent calldata unchanged', as
   expect(tracing.spanNamed('send 8453').attributes['blockchain.contract.function.arguments']).toBe(
     `[{"to":"${TO}","amount":"5"}]`,
   );
+});
+
+/**
+ * Call arguments whose `to` getter returns a different address on every read, counting the reads: telemetry must
+ * not run it, so the wrapped call sends what the unwrapped call sends.
+ */
+function shiftingArgs() {
+  let reads = 0;
+  const addresses = [TO, FROM, '0x3333333333333333333333333333333333333333'] as const;
+  const args = {
+    value: 1n,
+    get to() {
+      return addresses[Math.min(reads++, addresses.length - 1)];
+    },
+  };
+  return { args, reads: () => reads };
+}
+
+const sentTo = (requests: { method: string; params?: unknown }[]) =>
+  requests
+    .filter((r) => r.method === 'eth_sendTransaction')
+    .map((r) => (r.params as [{ to: string }])[0].to);
+
+it('runs no getter of sendTransaction arguments: the call sends the same as without tracing', async () => {
+  const run = async (traced: boolean) => {
+    const mock = mockTransport();
+    const client = createWalletClient({ account: FROM, chain: base, transport: mock.transport });
+    const wallet = traced ? client.extend(withHashspan()) : client;
+    const { args, reads } = shiftingArgs();
+    await wallet.sendTransaction(args as never);
+    return { sent: sentTo(mock.requests), reads: reads() };
+  };
+  const plain = await run(false);
+  expect(await run(true)).toEqual(plain);
+  // The getter is left out of the span rather than read.
+  expect(tracing.spanNamed('send 8453').attributes['blockchain.tx.to']).toBeUndefined();
+});
+
+it('runs no getter inside writeContract arguments while matching ABI overloads', async () => {
+  const overloaded = parseAbi([
+    'function pay(address to)',
+    'function pay(address to, uint256 amount)',
+  ]);
+  const run = async (traced: boolean) => {
+    const mock = mockTransport();
+    const client = createWalletClient({ account: FROM, chain: base, transport: mock.transport });
+    const wallet = traced ? client.extend(withHashspan()) : client;
+    let reads = 0;
+    const args = [TO, 5n];
+    Object.defineProperty(args, '1', {
+      enumerable: true,
+      get: () => {
+        reads++;
+        return 5n;
+      },
+    });
+    await wallet.writeContract({
+      address: TO,
+      abi: overloaded,
+      functionName: 'pay',
+      args: args as unknown as readonly [`0x${string}`, bigint],
+    });
+    return { reads, data: mock.requests.find((r) => r.method === 'eth_sendTransaction')?.params };
+  };
+  const plain = await run(false);
+  expect(await run(true)).toEqual(plain);
+});
+
+it('passes a wait whose hash is a getter on untouched, without tracing it', async () => {
+  const mock = mockTransport();
+  const reader = createPublicClient({ chain: base, transport: mock.transport }).extend(
+    withHashspan(),
+  );
+  let reads = 0;
+  const args = {
+    get hash() {
+      reads++;
+      return HASH;
+    },
+  };
+  await reader.waitForTransactionReceipt(args as never);
+  const plainReads = reads;
+  reads = 0;
+  await createPublicClient({
+    chain: base,
+    transport: mockTransport().transport,
+  }).waitForTransactionReceipt(args as never);
+  expect(plainReads).toBe(reads);
+  expect(tracing.spans()).toHaveLength(0);
+});
+
+it("keeps a wait's onReplaced getter working and unread by telemetry", async () => {
+  const run = async (traced: boolean) => {
+    const plain = createPublicClient({ chain: base, transport: mockTransport().transport });
+    const reader = traced ? plain.extend(withHashspan()) : plain;
+    let reads = 0;
+    const args = {
+      hash: HASH,
+      get onReplaced() {
+        reads++;
+        return () => {};
+      },
+    };
+    await reader.waitForTransactionReceipt(args as never);
+    return reads;
+  };
+  expect(await run(true)).toBe(await run(false));
 });
