@@ -1,6 +1,6 @@
 import { createTxTracker } from '@hashspan/core';
 import { withHashspan as withViemHashspan } from '@hashspan/viem';
-import { diag, SpanStatusCode } from '@opentelemetry/api';
+import { context, diag, SpanStatusCode, trace } from '@opentelemetry/api';
 import { createPublicClient, serializeTransaction } from 'viem';
 import { base, polygon } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -841,5 +841,57 @@ describe('flush() and waits on network-scoped accounts without a reader', () => 
   it('resolves true at once with nothing pending', async () => {
     const { hashspan } = await tracedScopedWait(async () => viemReceipt);
     await expect(hashspan.flush({ timeoutMs: 0 })).resolves.toBe(true);
+  });
+});
+
+describe('the sending call', () => {
+  /** A CDP client whose `evm.sendTransaction` records the span active while it runs. */
+  const recordingCdp = () => {
+    const cdp = fakeCdp();
+    const active: (string | undefined)[] = [];
+    (cdp.evm as unknown as Record<string, unknown>).sendTransaction = async () => {
+      active.push(trace.getActiveSpan()?.spanContext().spanId);
+      return { transactionHash: HASH };
+    };
+    return { cdp, active };
+  };
+  const send = (cdp: ReturnType<typeof fakeCdp>) =>
+    cdp.evm.sendTransaction({
+      address: ACCOUNT,
+      network: 'base',
+      transaction: { to: TO },
+    } as never);
+
+  it('runs in the send span, so the SDK request nests under it, and the confirmation does not', async () => {
+    const { cdp, active } = recordingCdp();
+    const hashspan = withHashspan(cdp, { reader: reader() });
+    const tool = trace.getTracer('test').startSpan('execute_tool transfer');
+    await context.with(trace.setSpan(context.active(), tool), () => send(cdp));
+    tool.end();
+    await hashspan.flush();
+
+    expect(active).toEqual([tracing.spanNamed('send 8453').spanContext().spanId]);
+    expect(tracing.spanNamed('confirm 8453').parentSpanContext?.spanId).toBe(
+      tool.spanContext().spanId,
+    );
+  });
+
+  it("runs in the caller's context with a tracker whose send handle has no context", async () => {
+    const { cdp, active } = recordingCdp();
+    const real = createTxTracker();
+    const tracker = {
+      ...real,
+      startSend: (...args: Parameters<typeof real.startSend>) => {
+        const { end, fail } = real.startSend(...args);
+        return { end, fail };
+      },
+    } as unknown as typeof real;
+    withHashspan(cdp, { tracker });
+    const tool = trace.getTracer('test').startSpan('execute_tool transfer');
+    await context.with(trace.setSpan(context.active(), tool), () => send(cdp));
+    tool.end();
+
+    expect(active).toEqual([tool.spanContext().spanId]);
+    expect(tracing.spanNamed('send 8453').attributes['blockchain.tx.hash']).toBe(HASH);
   });
 });

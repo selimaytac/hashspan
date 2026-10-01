@@ -1,6 +1,6 @@
 # 0015. The send span as the active context of the sending call
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-01
 
 ## Context

@@ -29,6 +29,8 @@ export interface MockOptions {
   advanceBlocks?: boolean;
   /** Blocks contain the mined transaction, as they do on a node that returns a receipt late. */
   blockIncludesTransaction?: boolean;
+  /** Called with each request's method as the request starts, in the context it was made in. */
+  onRequest?: (method: string) => void;
 }
 
 /** EIP-1193 transport answering the handful of methods the adapter's code paths use. */
@@ -61,6 +63,7 @@ export function mockTransport(options: MockOptions = {}) {
     async request({ method, params }: { method: string; params?: unknown }) {
       calls.push(method);
       requests.push({ method, params });
+      options.onRequest?.(method);
       if (options.hangOn?.includes(method)) return new Promise(() => {});
       if (options.failOn?.includes(method)) {
         throw new RpcRequestError({

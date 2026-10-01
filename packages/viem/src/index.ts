@@ -791,7 +791,9 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       }
       let hash: string;
       try {
-        hash = await send();
+        // Only the call runs in the send span's context, so the spans it creates nest under the send span; what
+        // follows runs in the caller's (ADR 0015). The guarded tracker always provides a context.
+        hash = await context.with(handle.context, send);
       } catch (error) {
         handle.fail(error);
         throw error;

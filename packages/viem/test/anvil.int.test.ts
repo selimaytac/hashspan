@@ -1,5 +1,5 @@
 import { createTxTracker } from '@hashspan/core';
-import { SpanStatusCode } from '@opentelemetry/api';
+import { context, SpanStatusCode, trace } from '@opentelemetry/api';
 import { Instance } from 'prool';
 import {
   type Address,
@@ -130,6 +130,27 @@ describe('on Anvil', () => {
       'blockchain.contract.function.name': 'transfer',
       'blockchain.contract.function.selector': '0xa9059cbb',
     });
+  });
+
+  it('sends the transaction while the send span is active, so HTTP spans of the request nest under it', async () => {
+    const active: (string | undefined)[] = [];
+    const transport = http(RPC_URL, {
+      onFetchRequest: async (request) => {
+        const { method } = (await request.clone().json()) as { method: string };
+        if (method === 'eth_sendTransaction')
+          active.push(trace.getActiveSpan()?.spanContext().spanId);
+      },
+    });
+    const wallet = createWalletClient({ account, chain: anvil, transport }).extend(withHashspan());
+    const tool = trace.getTracer('test').startSpan('execute_tool transfer');
+    await context.with(trace.setSpan(context.active(), tool), () =>
+      wallet.sendTransaction({ to: RECIPIENT, value: 1n }),
+    );
+    tool.end();
+
+    const send = tracing.spanNamed('send 31337');
+    expect(active).toEqual([send.spanContext().spanId]);
+    expect(send.parentSpanContext?.spanId).toBe(tool.spanContext().spanId);
   });
 
   it('records writeContract arguments when enabled', async () => {

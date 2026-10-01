@@ -74,6 +74,9 @@ used; a `diag` warning says so.
 
 ## Traced
 
+While a traced call runs, its send span is the active span, so spans of the CDP API request that your HTTP
+instrumentation creates nest under it.
+
 | Call | Recorded on the send span |
 |---|---|
 | `cdp.evm.sendTransaction` | chain id, from, to, value, nonce, function selector (object or serialized transaction) |
