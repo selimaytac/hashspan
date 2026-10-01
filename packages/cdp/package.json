@@ -64,7 +64,7 @@
     "@opentelemetry/sdk-trace-base": "^2.11.0",
     "@opentelemetry/sdk-trace-node": "^2.11.0",
     "prool": "^0.2.16",
-    "viem": "^2.57.0"
+    "viem": "^2.57.2"
   },
   "engines": {
     "node": ">=22.3.0"
