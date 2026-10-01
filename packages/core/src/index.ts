@@ -7,6 +7,7 @@ export type {
   AgentIdentity,
   ConfirmHandle,
   ConfirmInput,
+  EndOptions,
   ErrorMessageMode,
   FailOptions,
   PaymentHandle,
@@ -17,6 +18,7 @@ export type {
   ReplacementReason,
   SendHandle,
   SendInput,
+  SendResult,
   TxTrackerOptions,
   X402PaymentDetails,
 } from './types.js';

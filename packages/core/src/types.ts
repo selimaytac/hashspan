@@ -111,13 +111,32 @@ export interface SendInput {
  * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface SendHandle {
-  /** Ends the send span successfully once the transaction hash is known; `endTime` defaults to now. */
+  /** Ends the send span successfully once the transaction hash is known. */
+  end(result: SendResult, options?: EndOptions): void;
+  /** @deprecated Use `end({ hash }, { endTime })`; removed in 1.0. */
   end(hash: string, endTime?: TimeInput): void;
-  /** Ends the send span with an error (signing, simulation or broadcast failure); `endTime` defaults to now. */
-  fail(error: unknown, endTime?: TimeInput, options?: FailOptions): void;
+  /** Ends the send span with an error (signing, simulation or broadcast failure). */
+  fail(error: unknown, options?: FailOptions): void;
+  /** @deprecated Use `fail(error, { endTime, errorType })`; removed in 1.0. */
+  fail(error: unknown, endTime: TimeInput | undefined, options?: FailOptions): void;
 }
 
-export interface FailOptions {
+/** What a send produced. */
+export interface SendResult {
+  /** Hash of the sent transaction, `0x`-prefixed. */
+  hash: string;
+}
+
+/** Options of every handle method. */
+export interface EndOptions {
+  /**
+   * When the span ends, for adapters that record it after the fact; defaults to now. See
+   * {@link SendInput.startTime}.
+   */
+  endTime?: TimeInput | undefined;
+}
+
+export interface FailOptions extends EndOptions {
   /**
    * `error.type` to record instead of the error's class name, for adapters whose library reports a stable,
    * machine-readable error code (for example a wallet API's error type). Recorded only if it matches
@@ -172,16 +191,22 @@ export interface ReceiptLike {
  */
 export interface ConfirmHandle {
   /** Ends the shared confirm span with the receipt, for every handle of the transaction. */
+  end(receipt: ReceiptLike, options?: EndOptions): void;
+  /** @deprecated Use `end(receipt, { endTime })`; removed in 1.0. */
   end(receipt: ReceiptLike, endTime?: TimeInput): void;
   /**
    * Withdraws this handle because waiting for the receipt timed out. The confirm span ends as `timeout` only if
    * no other handle of the transaction is still waiting.
    */
+  timeout(options?: EndOptions): void;
+  /** @deprecated Use `timeout({ endTime })`; removed in 1.0. */
   timeout(endTime?: TimeInput): void;
   /**
    * Withdraws this handle because retrieving the receipt failed. The confirm span ends as a failure only if no
    * other handle of the transaction is still waiting.
    */
+  fail(error: unknown, options?: EndOptions): void;
+  /** @deprecated Use `fail(error, { endTime })`; removed in 1.0. */
   fail(error: unknown, endTime?: TimeInput): void;
 }
 
@@ -238,8 +263,8 @@ export interface PaymentSettlement {
  * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface PaymentHandle {
-  /** Ends the payment span with its settlement; `endTime` defaults to now. */
-  end(settlement: PaymentSettlement, endTime?: TimeInput): void;
+  /** Ends the payment span with its settlement. */
+  end(settlement: PaymentSettlement, options?: EndOptions): void;
   /** Ends the payment span with an error when the payment could not be made, e.g. signing it failed. */
-  fail(error: unknown, endTime?: TimeInput, options?: FailOptions): void;
+  fail(error: unknown, options?: FailOptions): void;
 }

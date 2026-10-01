@@ -1,6 +1,6 @@
 # 0014. Core API boundary before 1.0
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-01
 
 ## Context
@@ -31,7 +31,9 @@ copies of the core, and a tracker shared between adapters can come from an older
   tracker at runtime, since JavaScript callers can pass anything.
 - **Handle methods take what happened first and an options object second**, e.g. `end({ hash }, { endTime })` and
   `fail(error, { endTime, errorType })`. The error stays a separate first argument, since a thrown value can be any
-  object and could not be told apart from options. The positional forms keep working, deprecated, until 1.0.
+  object and could not be told apart from options. The positional forms keep working, deprecated, until 1.0, and a
+  positional end time wins over `options.endTime`. Adapters keep calling the positional forms until they require a
+  core without them: a tracker from an older core only understands those.
 - **New identifiers arrive as optional fields** on input and result objects, such as a CAIP-2 network next to
   `chainId`. `chainId` stays the EIP-155 chain id, recorded as `blockchain.chain.id`.
 

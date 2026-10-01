@@ -73,6 +73,7 @@ import {
 import type {
   ConfirmHandle,
   ConfirmInput,
+  EndOptions,
   FailOptions,
   PaymentHandle,
   PaymentInput,
@@ -81,6 +82,7 @@ import type {
   ReplacementReason,
   SendHandle,
   SendInput,
+  SendResult,
   TxTrackerOptions,
 } from './types.js';
 import { VERSION } from './version.js';
@@ -191,7 +193,53 @@ function amount(value: unknown): string | undefined {
 }
 
 /** The `error.type` for a failure: an adapter's override when it is a short identifier, else the class name. */
-function reportedErrorType(error: unknown, options: FailOptions | undefined): string {
+/** A finite number, an `HrTime` pair or a `Date`: what the deprecated positional `endTime` argument takes. */
+function isTimeInput(value: unknown): value is TimeInput {
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) {
+    return value.length === 2 && typeof value[0] === 'number' && typeof value[1] === 'number';
+  }
+  return Object.prototype.toString.call(value) === '[object Date]';
+}
+
+/** The options a handle method was called with, read once. */
+interface HandleOptions {
+  endTime?: TimeInput | undefined;
+  errorType?: unknown;
+}
+
+/**
+ * Reads the options of a handle method called as `(what, options?)` or, deprecated, as `(what, endTime?, options?)`
+ * (ADR 0014). A positional end time wins over `options.endTime`. Never throws: an argument of neither form, or an
+ * end time that is not one, is ignored.
+ */
+function handleOptions(second: unknown, third?: unknown): HandleOptions {
+  try {
+    const positional = isTimeInput(second) ? second : undefined;
+    const given = positional !== undefined || second === undefined ? third : (second as unknown);
+    if (
+      given !== undefined &&
+      (typeof given !== 'object' || given === null || isTimeInput(given))
+    ) {
+      diag.debug('hashspan: ignoring a handle argument that is neither options nor an end time');
+      return positional !== undefined ? { endTime: positional } : {};
+    }
+    const options = given as FailOptions | undefined;
+    const endTime: unknown = positional ?? options?.endTime;
+    if (endTime !== undefined && !isTimeInput(endTime)) {
+      diag.debug('hashspan: ignoring an end time that is not a TimeInput');
+    }
+    return {
+      endTime: isTimeInput(endTime) ? endTime : undefined,
+      errorType: options?.errorType,
+    };
+  } catch (error) {
+    diag.debug(`hashspan: could not read handle options (${errorType(error)})`);
+    return {};
+  }
+}
+
+function reportedErrorType(error: unknown, options: HandleOptions | undefined): string {
   const override = options?.errorType;
   if (override === undefined) return errorType(error);
   if (typeof override === 'string' && ERROR_TYPE_OVERRIDE.test(override)) return override;
@@ -389,21 +437,28 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     const finish = finisher(span);
 
     return {
-      end: (hash, endTime) =>
+      end: (result: SendResult | string, second?: EndOptions | TimeInput): void =>
         finish(
           'record transaction hash',
           () => {
+            const hash: unknown = typeof result === 'string' ? result : result?.hash;
+            if (typeof hash !== 'string') {
+              diag.debug('hashspan: ending a send span without a transaction hash');
+              return;
+            }
             links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
             span.setAttributes(redact({ [ATTR_BLOCKCHAIN_TX_HASH]: hash }));
           },
-          endTime,
+          handleOptions(second).endTime,
         ),
-      fail: (error, endTime, options) =>
+      fail: (error: unknown, second?: FailOptions | TimeInput, third?: FailOptions): void => {
+        const options = handleOptions(second, third);
         finish(
           'record send failure',
           () => markError(span, reportedErrorType(error, options), error, errorType(error)),
-          endTime,
-        ),
+          options.endTime,
+        );
+      },
     };
   };
 
@@ -614,7 +669,8 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     };
 
     return {
-      end: (receipt, endTime) => {
+      end: (receipt: ReceiptLike, second?: EndOptions | TimeInput): void => {
+        const { endTime } = handleOptions(second);
         if (done || shared.ended) return;
         done = true;
         shared.active -= 1;
@@ -625,8 +681,14 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
           undefined,
         );
       },
-      timeout: (endTime) => withdraw(() => shared.timeout(endTime)),
-      fail: (error, endTime) => withdraw(() => shared.fail(error, endTime)),
+      timeout: (second?: EndOptions | TimeInput): void => {
+        const { endTime } = handleOptions(second);
+        withdraw(() => shared.timeout(endTime));
+      },
+      fail: (error: unknown, second?: EndOptions | TimeInput): void => {
+        const { endTime } = handleOptions(second);
+        withdraw(() => shared.fail(error, endTime));
+      },
     };
   };
 
@@ -684,14 +746,20 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     };
 
     return {
-      end: (settlement, endTime) =>
-        finish('record payment settlement', () => recordSettlement(settlement), endTime),
-      fail: (error, endTime, options) =>
+      end: (settlement, options) =>
+        finish(
+          'record payment settlement',
+          () => recordSettlement(settlement),
+          handleOptions(options).endTime,
+        ),
+      fail: (error, options) => {
+        const read = handleOptions(options);
         finish(
           'record payment failure',
-          () => markError(span, reportedErrorType(error, options), error, errorType(error)),
-          endTime,
-        ),
+          () => markError(span, reportedErrorType(error, read), error, errorType(error)),
+          read.endTime,
+        );
+      },
     };
   };
 

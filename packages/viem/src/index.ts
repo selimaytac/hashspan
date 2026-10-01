@@ -473,9 +473,9 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     waiting.add(abandon);
     return {
       handle: {
-        end: (receipt, endTime) => settle(() => handle.end(receipt, endTime)),
-        timeout: (endTime) => settle(() => handle.timeout(endTime)),
-        fail: (error, endTime) => settle(() => handle.fail(error, endTime)),
+        end: (...args: unknown[]) => settle(() => Reflect.apply(handle.end, handle, args)),
+        timeout: (...args: unknown[]) => settle(() => Reflect.apply(handle.timeout, handle, args)),
+        fail: (...args: unknown[]) => settle(() => Reflect.apply(handle.fail, handle, args)),
       },
       ended,
       onAbandon: (abandonWith) => {

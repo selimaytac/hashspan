@@ -48,3 +48,31 @@ describe('guardTracker().startPayment', () => {
     }
   });
 });
+
+describe('guardTracker() handles', () => {
+  it('pass every argument form on unchanged', () => {
+    const calls: unknown[][] = [];
+    const record =
+      (name: string) =>
+      (...args: unknown[]) =>
+        void calls.push([name, ...args]);
+    const handle = { end: record('end'), fail: record('fail'), timeout: record('timeout') };
+    const tracker = {
+      startSend: () => handle,
+      startConfirm: () => handle,
+      startPayment: () => handle,
+    } as unknown as TxTracker;
+    const guarded = guardTracker(tracker);
+    const options = { endTime: new Date(0), errorType: 'rejected' };
+    guarded.startSend({ chainId: 1 }).end({ hash: HASH }, options);
+    guarded.startSend({ chainId: 1 }).fail('boom', undefined, options);
+    guarded.startConfirm({ chainId: 1, hash: HASH }).timeout(5);
+    guarded.startPayment(payment).fail('boom', options);
+    expect(calls).toEqual([
+      ['end', { hash: HASH }, options],
+      ['fail', 'boom', undefined, options],
+      ['timeout', 5],
+      ['fail', 'boom', options],
+    ]);
+  });
+});
