@@ -262,7 +262,10 @@ describe('repository docs', () => {
     const expected = [...packages.map(({ dir }) => dir), 'examples', 'docs', 'ci', 'lab'].sort();
     for (const file of ['AGENTS.md', 'CONTRIBUTING.md']) {
       const list = read(file).match(/Scopes:([^.;]+)/)?.[1] ?? '';
-      expect({ file, scopes: [...list.matchAll(/`([a-z]+)`/g)].map((m) => m[1]).sort() }).toEqual({
+      expect({
+        file,
+        scopes: [...list.matchAll(/`([a-z][a-z0-9]*)`/g)].map((m) => m[1]).sort(),
+      }).toEqual({
         file,
         scopes: expected,
       });
@@ -380,6 +383,13 @@ describe('package README options', () => {
     expect(tableOf('packages/viem/README.md')).toEqual(
       optionsOf('packages/viem/src/index.ts', 'WithHashspanOptions'),
     );
+  });
+
+  it('name every option the x402 adapter adds', () => {
+    const readme = read('packages/x402/README.md');
+    const options = optionsOf('packages/x402/src/index.ts', 'WithHashspanX402Options');
+    expect(options.length).toBeGreaterThan(0);
+    expect(options.filter((option) => !readme.includes(`\`${option}\``))).toEqual([]);
   });
 
   it('name every option the cdp adapter adds', () => {

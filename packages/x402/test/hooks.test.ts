@@ -1,0 +1,172 @@
+import { createTxTracker, type TxTracker } from '@hashspan/core';
+import { diag } from '@opentelemetry/api';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { withHashspan } from '../src/index.js';
+import { HASH, PAYER, paymentRequired } from './fake-x402.js';
+import { setupTracing, type TestTracing } from './tracing.js';
+
+type Hook = (ctx: unknown) => unknown;
+
+/** Stands in for an x402Client: it keeps the hooks registered on it, for the test to call. */
+function capturingClient() {
+  const hooks: Record<string, Hook> = {};
+  const register = (name: string) =>
+    function (this: unknown, hook: Hook) {
+      hooks[name] = hook;
+      return this;
+    };
+  const client = {
+    onBeforePaymentCreation: register('before'),
+    onAfterPaymentCreation: register('after'),
+    onPaymentCreationFailure: register('failure'),
+    onPaymentResponse: register('response'),
+  };
+  /** Runs one payment through the hooks, as the SDK would; returns its contexts. */
+  const pay = (
+    required = paymentRequired(),
+    settleResponse: unknown = { success: true, transaction: HASH },
+  ) => {
+    const selectedRequirements = required.accepts[0];
+    const paymentPayload = { x402Version: 2, payload: { authorization: { from: PAYER } } };
+    expect(hooks.before?.({ paymentRequired: required, selectedRequirements })).toBeUndefined();
+    expect(
+      hooks.after?.({ paymentRequired: required, selectedRequirements, paymentPayload }),
+    ).toBeUndefined();
+    const respond = () =>
+      hooks.response?.({ paymentPayload, requirements: selectedRequirements, settleResponse });
+    return { selectedRequirements, paymentPayload, respond };
+  };
+  return { client, hooks, pay };
+}
+
+let tracing: TestTracing;
+beforeEach(() => {
+  tracing = setupTracing();
+});
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await tracing.teardown();
+});
+
+describe('payments that are not traced', () => {
+  it('passes x402 v1 and non-EVM payments through, with one warning each', () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const { client, pay } = capturingClient();
+    withHashspan(client);
+    const v1 = { ...paymentRequired(), x402Version: 1 };
+    const solana = paymentRequired({ network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' });
+    const url = paymentRequired({
+      network: 'https://rpc.example.com/?key=secret' as `${string}:${string}`,
+    });
+    for (const required of [v1, v1, solana, solana, url]) pay(required).respond();
+    expect(tracing.spans()).toEqual([]);
+    expect(warn.mock.calls.map(([message]) => message)).toEqual([
+      'hashspan: not tracing x402 payments of version 1',
+      'hashspan: not tracing x402 payments on the network "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"',
+      'hashspan: not tracing x402 payments on an unknown network',
+    ]);
+  });
+
+  it('ignores hook contexts it does not understand', () => {
+    const { client, hooks } = capturingClient();
+    withHashspan(client);
+    const getter = {
+      get selectedRequirements(): never {
+        throw new Error('getter ran');
+      },
+    };
+    for (const ctx of [undefined, null, 42, {}, getter, { selectedRequirements: 'x' }]) {
+      for (const hook of Object.values(hooks)) expect(hook(ctx)).toBeUndefined();
+    }
+    expect(tracing.spans()).toEqual([]);
+  });
+});
+
+describe('open payment spans', () => {
+  it('end the oldest as timeout when too many are open', () => {
+    const { client, pay } = capturingClient();
+    withHashspan(client);
+    const payments = Array.from({ length: 1001 }, () => pay());
+    expect(tracing.spans()).toHaveLength(1);
+    expect(tracing.spans()[0]?.attributes['error.type']).toBe('timeout');
+    payments[0]?.respond();
+    payments[1]?.respond();
+    expect(tracing.spans()).toHaveLength(2);
+    expect(tracing.spans()[1]?.attributes['blockchain.payment.status']).toBe('settled');
+  });
+});
+
+describe('confirmation through the reader', () => {
+  it('is asked for the chain of a settled or pending payment only', () => {
+    const reader = vi.fn(() => undefined);
+    const { client, pay } = capturingClient();
+    withHashspan(client, { reader });
+    pay().respond();
+    pay(paymentRequired(), {
+      success: false,
+      errorReason: 'settlement_pending',
+      transaction: HASH,
+    }).respond();
+    pay(paymentRequired(), {
+      success: false,
+      errorReason: 'invalid_signature',
+      transaction: HASH,
+    }).respond();
+    pay(paymentRequired(), { success: true, transaction: 'not a hash' }).respond();
+    expect(reader.mock.calls).toEqual([[84532], [84532]]);
+  });
+
+  it('is not asked when the settlement is on another network', () => {
+    vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const reader = vi.fn(() => undefined);
+    const { client, pay } = capturingClient();
+    withHashspan(client, { reader });
+    pay(paymentRequired(), { success: true, transaction: HASH, network: 'eip155:1' }).respond();
+    expect(reader).not.toHaveBeenCalled();
+    expect(tracing.spans()[0]?.attributes['blockchain.payment.status']).toBe('settled');
+  });
+
+  it('never breaks the payment when it throws or is on another chain', () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    for (const reader of [
+      () => {
+        throw new Error('no client');
+      },
+      { chain: { id: 1 } } as never,
+    ]) {
+      const { client, pay } = capturingClient();
+      withHashspan(client, { reader });
+      expect(() => pay().respond()).not.toThrow();
+    }
+    expect(tracing.spans()).toHaveLength(2);
+  });
+});
+
+describe('clients and trackers it cannot trace with', () => {
+  it('registers nothing on a client without the payment hooks', async () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const httpClient = { onPaymentRequired: vi.fn() };
+    const hashspan = withHashspan(httpClient);
+    expect(httpClient.onPaymentRequired).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('pass the x402Client'));
+    expect(await hashspan.flush({ timeoutMs: 10 })).toBe(true);
+  });
+
+  it('registers nothing with a tracker from a core without startPayment', () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const { startSend, startConfirm } = createTxTracker();
+    const { client, hooks } = capturingClient();
+    withHashspan(client, { tracker: { startSend, startConfirm } as unknown as TxTracker });
+    expect(hooks).toEqual({});
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('no startPayment'));
+  });
+
+  it('traces a frozen client, without marking it', () => {
+    vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const { client, pay } = capturingClient();
+    withHashspan(Object.freeze(client));
+    pay().respond();
+    expect(tracing.spans()).toHaveLength(1);
+  });
+});
