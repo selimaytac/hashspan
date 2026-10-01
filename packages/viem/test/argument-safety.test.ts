@@ -1,4 +1,10 @@
-import { createPublicClient, createWalletClient, encodeFunctionData, parseAbi } from 'viem';
+import {
+  createPublicClient,
+  createWalletClient,
+  encodeFunctionData,
+  parseAbi,
+  toFunctionSelector,
+} from 'viem';
 import { base } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
@@ -204,4 +210,59 @@ describe('wait options the adapter forwards', () => {
       Object.assign(Object.create({ onReplaced }), { hash: HASH, retryDelay: 1 }),
     );
   });
+});
+
+it('runs no getter inside the ABI: writeContract sends the same as without tracing', async () => {
+  const run = async (traced: boolean) => {
+    const mock = mockTransport();
+    const client = createWalletClient({ account: FROM, chain: base, transport: mock.transport });
+    const wallet = traced ? client.extend(withHashspan()) : client;
+    let reads = 0;
+    // An ABI built at runtime whose `inputs` getter changes on every read.
+    const pay = {
+      type: 'function',
+      name: 'pay',
+      stateMutability: 'nonpayable',
+      outputs: [],
+      get inputs() {
+        reads++;
+        return [{ name: 'amount', type: reads % 2 === 1 ? 'uint256' : 'uint8' }];
+      },
+    };
+    await wallet.writeContract({
+      address: TO,
+      abi: [pay] as never,
+      functionName: 'pay',
+      args: [2n] as never,
+    });
+    const sent = mock.requests.find((r) => r.method === 'eth_sendTransaction')?.params;
+    return { reads, data: (sent as [{ data: string }] | undefined)?.[0].data };
+  };
+  const plain = await run(false);
+  expect(await run(true)).toEqual(plain);
+});
+
+it('records the selector of overloads and nested tuples from its copy of the ABI', async () => {
+  const abi = parseAbi([
+    'struct Leg { address to; uint256 amount; }',
+    'struct Meta { address payer; uint64 nonce; }',
+    'struct Header { uint8 kind; Meta meta; }',
+    'struct Batch { Leg[] legs; Header header; }',
+    'function settle(Batch batch)',
+    'function settle(Batch batch, uint256 deadline)',
+  ]);
+  const batch = {
+    legs: [{ to: TO, amount: 1n }],
+    header: { kind: 1, meta: { payer: FROM, nonce: 7n } },
+  };
+  const wallet = createWalletClient({
+    account: FROM,
+    chain: base,
+    transport: mockTransport().transport,
+  }).extend(withHashspan());
+  await wallet.writeContract({ address: TO, abi, functionName: 'settle', args: [batch, 9n] });
+  const [, withDeadline] = abi.filter((item) => item.type === 'function');
+  expect(tracing.spanNamed('send 8453').attributes['blockchain.contract.function.selector']).toBe(
+    toFunctionSelector(withDeadline as never),
+  );
 });
