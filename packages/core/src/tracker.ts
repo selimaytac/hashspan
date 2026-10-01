@@ -19,6 +19,12 @@ import {
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR,
   ATTR_BLOCKCHAIN_OPERATION_NAME,
+  ATTR_BLOCKCHAIN_PAYMENT_AMOUNT,
+  ATTR_BLOCKCHAIN_PAYMENT_ASSET,
+  ATTR_BLOCKCHAIN_PAYMENT_PAYER,
+  ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL,
+  ATTR_BLOCKCHAIN_PAYMENT_RECIPIENT,
+  ATTR_BLOCKCHAIN_PAYMENT_STATUS,
   ATTR_BLOCKCHAIN_SYSTEM,
   ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE,
   ATTR_BLOCKCHAIN_TX_FEE,
@@ -34,8 +40,14 @@ import {
   ATTR_BLOCKCHAIN_TX_TO,
   ATTR_BLOCKCHAIN_TX_VALUE,
   ATTR_ERROR_TYPE,
+  ATTR_X402_RESOURCE,
+  ATTR_X402_SCHEME,
   BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
+  BLOCKCHAIN_OPERATION_NAME_VALUE_PAYMENT,
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
+  BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED,
+  BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
+  BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
   BLOCKCHAIN_SYSTEM_VALUE_EVM,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPLACED,
@@ -55,12 +67,16 @@ import {
   resolveAddressFormatter,
   resolveErrorMessageMode,
   sanitizeErrorMessage,
+  sanitizeResource,
   serializeFunctionArguments,
 } from './privacy.js';
 import type {
   ConfirmHandle,
   ConfirmInput,
   FailOptions,
+  PaymentHandle,
+  PaymentInput,
+  PaymentSettlement,
   ReceiptLike,
   ReplacementReason,
   SendHandle,
@@ -88,11 +104,21 @@ const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
   ATTR_BLOCKCHAIN_TX_STATUS,
   ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH,
   ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON,
+  ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL,
+  ATTR_BLOCKCHAIN_PAYMENT_STATUS,
   ATTR_ERROR_TYPE,
   ATTR_EXCEPTION_TYPE,
 ]);
 
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
+const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+/** A non-negative integer that fits in 256 bits. */
+const AMOUNT = /^(0|[1-9][0-9]{0,77})$/;
+const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
+  BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
+  BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
+  BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED,
+]);
 const REPLACEMENT_REASONS: ReadonlySet<string> = new Set([
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPRICED,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
@@ -112,9 +138,16 @@ export interface TxTracker {
    * transaction that recently got a receipt. Every returned handle must be ended.
    */
   startConfirm(input: ConfirmInput, parent?: Context): ConfirmHandle;
+  /**
+   * Starts a `payment` span as a child of `parent` (default: the active context), for a payment that another party
+   * settles on chain (docs/adr/0013). Call `end(settlement)` with the settlement, or `fail(error)`. A settlement
+   * with a hash links the transaction's confirm span to this span, as a send span would.
+   */
+  startPayment(input: PaymentInput, parent?: Context): PaymentHandle;
 }
 
 const NOOP_SEND: SendHandle = { end: () => {}, fail: () => {} };
+const NOOP_PAYMENT: PaymentHandle = { end: () => {}, fail: () => {} };
 const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
 
 /** Runs `fn`, logging instead of throwing: instrumentation must never break the caller. */
@@ -138,6 +171,17 @@ function errorType(error: unknown): string {
 }
 
 const ERROR_TYPE_OVERRIDE = /^[A-Za-z0-9_.-]{1,64}$/;
+
+/** `value` if it is a short identifier, the only kind of free text recorded from a remote party. */
+function identifier(value: unknown): string | undefined {
+  return typeof value === 'string' && ERROR_TYPE_OVERRIDE.test(value) ? value : undefined;
+}
+
+/** A decimal amount, or undefined when `value` is not a non-negative integer. */
+function amount(value: unknown): string | undefined {
+  const text = typeof value === 'bigint' ? value.toString() : value;
+  return typeof text === 'string' && AMOUNT.test(text) ? text : undefined;
+}
 
 /** The `error.type` for a failure: an adapter's override when it is a short identifier, else the class name. */
 function reportedErrorType(error: unknown, options: FailOptions | undefined): string {
@@ -168,9 +212,10 @@ interface ConfirmOrigin {
 }
 
 /**
- * Creates a tracker that records transactions as `send` and `confirm` spans with `@opentelemetry/api`
- * (docs/semconv.md). It makes no network calls; the caller passes hashes and receipts. Its methods and handles
- * never throw: failures are logged via `diag`, and a method that fails returns a handle that records nothing.
+ * Creates a tracker that records transactions as `send` and `confirm` spans, and payments as `payment` spans, with
+ * `@opentelemetry/api` (docs/semconv.md). It makes no network calls; the caller passes hashes and receipts. Its
+ * methods and handles never throw: failures are logged via `diag`, and a method that fails returns a handle that
+ * records nothing.
  */
 export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
   const links = new LinkStore({
@@ -283,6 +328,11 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     if (address === undefined) return;
     const formatted = formatAddress(address);
     if (formatted !== undefined) attributes[key] = formatted;
+  };
+
+  /** Records `address` only if it is one: payment addresses come from remote parties. */
+  const setPaymentAddress = (attributes: Attributes, key: string, address: unknown): void => {
+    if (typeof address === 'string' && ADDRESS.test(address)) setAddress(attributes, key, address);
   };
 
   const baseAttributes = (chainId: number, operation: string, ctx: Context): Attributes => ({
@@ -566,10 +616,77 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     };
   };
 
+  const startPayment = (input: PaymentInput, parentCtx?: Context): PaymentHandle => {
+    const parent = parentCtx ?? context.active();
+    const attributes = baseAttributes(
+      input.chainId,
+      BLOCKCHAIN_OPERATION_NAME_VALUE_PAYMENT,
+      parent,
+    );
+    const protocol = identifier(input.protocol);
+    if (protocol !== undefined) attributes[ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL] = protocol;
+    setPaymentAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_PAYER, input.payer);
+    setPaymentAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_RECIPIENT, input.recipient);
+    setPaymentAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_ASSET, input.asset);
+    const paid = amount(input.amount);
+    if (paid !== undefined) attributes[ATTR_BLOCKCHAIN_PAYMENT_AMOUNT] = paid;
+    const scheme = identifier(input.x402?.scheme);
+    if (scheme !== undefined) attributes[ATTR_X402_SCHEME] = scheme;
+    const resource = input.x402?.resource;
+    if (typeof resource === 'string' && resource !== '') {
+      attributes[ATTR_X402_RESOURCE] = formatAddressesIn(sanitizeResource(resource), formatAddress);
+    }
+
+    const span = getTracer().startSpan(
+      `payment ${input.chainId}`,
+      {
+        kind: SpanKind.CLIENT,
+        attributes: redact(attributes),
+        ...(input.startTime !== undefined ? { startTime: input.startTime } : {}),
+      },
+      parent,
+    );
+    const finish = finisher(span);
+
+    const recordSettlement = (settlement: PaymentSettlement): void => {
+      const status = settlement.status;
+      if (!PAYMENT_STATUSES.has(status)) {
+        diag.debug('hashspan: ignoring a payment settlement with an unknown status');
+        return;
+      }
+      const settled: Attributes = { [ATTR_BLOCKCHAIN_PAYMENT_STATUS]: status };
+      const hash: unknown = settlement.hash;
+      if (typeof hash === 'string' && TX_HASH.test(hash)) {
+        links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
+        settled[ATTR_BLOCKCHAIN_TX_HASH] = hash;
+      }
+      setPaymentAddress(settled, ATTR_BLOCKCHAIN_PAYMENT_PAYER, settlement.payer);
+      const settledAmount = amount(settlement.amount);
+      if (settledAmount !== undefined) settled[ATTR_BLOCKCHAIN_PAYMENT_AMOUNT] = settledAmount;
+      span.setAttributes(redact(settled));
+      if (status === BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED) {
+        markError(span, identifier(settlement.errorReason) ?? ERROR_TYPE_VALUE_OTHER);
+      }
+    };
+
+    return {
+      end: (settlement, endTime) =>
+        finish('record payment settlement', () => recordSettlement(settlement), endTime),
+      fail: (error, endTime, options) =>
+        finish(
+          'record payment failure',
+          () => markError(span, reportedErrorType(error, options), error, errorType(error)),
+          endTime,
+        ),
+    };
+  };
+
   return {
     startSend: (input, parent) =>
       safely('start send span', () => startSend(input, parent), NOOP_SEND),
     startConfirm: (input, parent) =>
       safely('start confirm span', () => startConfirm(input, parent), NOOP_CONFIRM),
+    startPayment: (input, parent) =>
+      safely('start payment span', () => startPayment(input, parent), NOOP_PAYMENT),
   };
 }

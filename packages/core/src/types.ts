@@ -63,8 +63,9 @@ export interface TxTrackerOptions {
    * Runs last on every attribute set, including exception event attributes, and returns the attributes to record.
    * If it throws or returns something other than an attributes object, the tracker fails closed and records only
    * `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`,
-   * `blockchain.tx.status`, `blockchain.tx.replacement.hash`, `blockchain.tx.replacement.reason`, `error.type` and
-   * `exception.type`, and logs the failure via `diag`.
+   * `blockchain.tx.status`, `blockchain.tx.replacement.hash`, `blockchain.tx.replacement.reason`,
+   * `blockchain.payment.protocol`, `blockchain.payment.status`, `error.type` and `exception.type`, and logs the
+   * failure via `diag`.
    */
   redact?: ((attributes: Attributes) => Attributes) | undefined;
   /** How long a sent transaction can be linked from its confirmation. Default: 10 minutes. */
@@ -168,4 +169,58 @@ export interface ConfirmHandle {
    * other handle of the transaction is still waiting.
    */
   fail(error: unknown, endTime?: TimeInput): void;
+}
+
+/**
+ * A payment the agent authorizes and another party settles on chain, e.g. an x402 facilitator (docs/adr/0013).
+ * Values often come from a remote server: addresses, amounts and identifiers that are malformed are not recorded.
+ */
+export interface PaymentInput {
+  /** EIP-155 chain id of the network the payment settles on. */
+  chainId: number;
+  /** Payment protocol, e.g. `x402`; recorded only if it is a short identifier. */
+  protocol: string;
+  /** Address that pays, recorded per the address mode. */
+  payer?: string | undefined;
+  /** Address that is paid, recorded per the address mode. */
+  recipient?: string | undefined;
+  /** Contract address of the token paid with, recorded per the address mode. */
+  asset?: string | undefined;
+  /** Amount in the asset's smallest unit. */
+  amount?: bigint | string | undefined;
+  /** Fields of x402 payments. */
+  x402?: X402PaymentDetails | undefined;
+  /** When the payment started, for adapters that record it after the fact; see {@link SendInput.startTime}. */
+  startTime?: TimeInput | undefined;
+}
+
+export interface X402PaymentDetails {
+  /** Payment scheme, e.g. `exact`; recorded only if it is a short identifier. */
+  scheme?: string | undefined;
+  /** URL or name of the resource paid for. Its query string, fragment and user info are never recorded. */
+  resource?: string | undefined;
+}
+
+/** How a payment's settlement ended: `pending` means the transaction is known but its receipt was not seen. */
+export type PaymentStatus = 'settled' | 'pending' | 'failed';
+
+/** The settlement of a payment, as reported by the party that settled it. */
+export interface PaymentSettlement {
+  status: PaymentStatus;
+  /** Hash of the settling transaction; with it, a confirm span for this hash links to the payment span. */
+  hash?: string | undefined;
+  /** Address that paid, when the settlement reports it; recorded instead of the input's. */
+  payer?: string | undefined;
+  /** Amount settled, when the settlement reports it; recorded instead of the input's. */
+  amount?: bigint | string | undefined;
+  /** Why a `failed` settlement failed, recorded as `error.type` if it is a short identifier, else `_OTHER`. */
+  errorReason?: string | undefined;
+}
+
+/** Ends a payment span. Only the first call counts; methods never throw. */
+export interface PaymentHandle {
+  /** Ends the payment span with its settlement; `endTime` defaults to now. */
+  end(settlement: PaymentSettlement, endTime?: TimeInput): void;
+  /** Ends the payment span with an error when the payment could not be made, e.g. signing it failed. */
+  fail(error: unknown, endTime?: TimeInput, options?: FailOptions): void;
 }
