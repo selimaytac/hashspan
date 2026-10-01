@@ -655,6 +655,11 @@ describe("a network-scoped account's waitForTransactionReceipt", () => {
 
 /** A network-scoped account on Base whose SDK wait is `wait`, traced by the adapter. */
 async function scopedWithWait(wait: Method): Promise<ScopedAccount> {
+  return (await tracedScopedWait(wait)).scoped;
+}
+
+/** Like {@link scopedWithWait}, with the handle `withHashspan()` returned. */
+async function tracedScopedWait(wait: Method) {
   const cdp = fakeCdp();
   cdp.evm.createAccount = async () => ({
     address: ACCOUNT,
@@ -664,11 +669,11 @@ async function scopedWithWait(wait: Method): Promise<ScopedAccount> {
       waitForTransactionReceipt: wait,
     }),
   });
-  withHashspan(cdp);
+  const hashspan = withHashspan(cdp);
   const account = (await cdp.evm.createAccount()) as unknown as {
     useNetwork: (n: string) => Promise<ScopedAccount>;
   };
-  return account.useNetwork('base');
+  return { scoped: await account.useNetwork('base'), hashspan };
 }
 
 describe('call arguments behind getters', () => {
@@ -760,5 +765,81 @@ describe('call arguments behind getters', () => {
     const quote = (await cdp.evm.createSwapQuote(options)) as { execute: () => Promise<unknown> };
     await quote.execute();
     expect(tracing.spans()).toHaveLength(0);
+  });
+});
+
+describe('flush() and waits on network-scoped accounts without a reader', () => {
+  /** A wait that settles only when the test says so. */
+  const heldWait = () => {
+    const control: { resolve: (value: unknown) => void } = { resolve: () => {} };
+    const wait: Method = () =>
+      new Promise((resolve) => {
+        control.resolve = resolve;
+      });
+    return { wait, control };
+  };
+
+  it('waits for the confirm span of a wait still running', async () => {
+    const { wait, control } = heldWait();
+    const { scoped, hashspan } = await tracedScopedWait(wait);
+    const call = scoped.waitForTransactionReceipt({ hash: HASH });
+    let flushed: boolean | undefined;
+    const flushing = hashspan.flush().then((done) => {
+      flushed = done;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(flushed).toBeUndefined();
+
+    control.resolve(viemReceipt);
+    await flushing;
+    await expect(call).resolves.toBe(viemReceipt);
+    expect(flushed).toBe(true);
+    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.status']).toBe('success');
+  });
+
+  it('ends a confirm span it cannot wait for as a timeout, and returns false', async () => {
+    const { wait, control } = heldWait();
+    const { scoped, hashspan } = await tracedScopedWait(wait);
+    const call = scoped.waitForTransactionReceipt({ hash: HASH });
+    await expect(hashspan.flush({ timeoutMs: 20 })).resolves.toBe(false);
+    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.status']).toBe('timeout');
+
+    // The user's wait is not affected, and a late receipt does not end the span again.
+    control.resolve(viemReceipt);
+    await expect(call).resolves.toBe(viemReceipt);
+    expect(tracing.spans().filter((s) => s.name === 'confirm 8453')).toHaveLength(1);
+    expect(tracing.spanNamed('confirm 8453').attributes['blockchain.tx.status']).toBe('timeout');
+  });
+
+  it('ends a handle once, even with a tracker that does not ignore repeated calls', async () => {
+    const { wait, control } = heldWait();
+    const handle = { end: vi.fn(), timeout: vi.fn(), fail: vi.fn() };
+    const tracker = createTxTracker();
+    tracker.startConfirm = () => handle;
+    const cdp = fakeCdp();
+    cdp.evm.createAccount = async () => ({
+      address: ACCOUNT,
+      useNetwork: async (network: string) => ({
+        address: ACCOUNT,
+        network,
+        waitForTransactionReceipt: wait,
+      }),
+    });
+    const hashspan = withHashspan(cdp, { tracker });
+    const account = (await cdp.evm.createAccount()) as unknown as {
+      useNetwork: (n: string) => Promise<ScopedAccount>;
+    };
+    const call = (await account.useNetwork('base')).waitForTransactionReceipt({ hash: HASH });
+    await hashspan.flush({ timeoutMs: 20 });
+    control.resolve(viemReceipt);
+    await call;
+    await hashspan.flush();
+    expect(handle.timeout).toHaveBeenCalledTimes(1);
+    expect(handle.end).not.toHaveBeenCalled();
+  });
+
+  it('resolves true at once with nothing pending', async () => {
+    const { hashspan } = await tracedScopedWait(async () => viemReceipt);
+    await expect(hashspan.flush({ timeoutMs: 0 })).resolves.toBe(true);
   });
 });

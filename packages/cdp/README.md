@@ -42,6 +42,10 @@ run in the background through it and never delay your call. Without a reader, on
 adapter never picks an RPC endpoint itself. The exception is `waitForTransactionReceipt` on a network-scoped
 account, which records a confirm span from the receipt it returns, without a revert reason.
 
+`flush({ timeoutMs })` (default 10 000 ms) waits for every confirm span the adapter still has open, from the reader or
+from such a wait, and ends what is left as `timeout` if it cannot wait longer. Call it before a short-lived process
+exits.
+
 `withHashspan(cdp, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.3.1/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem`, `tracker`, `reader`,
 and `confirmTimeoutMs` (default 120 000 ms). Call it once per client: a second call returns the first handle, ignores

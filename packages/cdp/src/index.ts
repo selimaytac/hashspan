@@ -39,6 +39,13 @@ interface AccountLike {
   [key: string]: unknown;
 }
 const WRAPPED = Symbol.for('hashspan.cdp.wrapped');
+// The same default as @hashspan/viem's flush().
+const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
+// Timers without Node.js or DOM types, which src/ is type-checked without.
+const timers = globalThis as unknown as {
+  setTimeout(callback: () => void, ms: number): unknown;
+  clearTimeout(timer: unknown): void;
+};
 const TRANSFER_SELECTOR = '0xa9059cbb';
 // Unknown network values are named in warnings only when they look like a network name, never an RPC URL.
 const NETWORK_NAME = /^[a-z0-9-]{1,32}$/;
@@ -159,6 +166,27 @@ export function withHashspan(
     return undefined;
   };
 
+  // Work this adapter runs itself, outside @hashspan/viem: confirm spans of network-scoped waits without a reader.
+  const pending = new Set<Promise<void>>();
+  const track = (work: Promise<void>): void => {
+    pending.add(work);
+    void work.finally(() => pending.delete(work));
+  };
+  /** Ends a tracked confirm span that is still open as `timeout`, for `flush()` to call when it gives up. */
+  const waiting = new Set<() => void>();
+
+  const flushOwn = async (timeoutMs: number): Promise<boolean> => {
+    const settled = await new Promise<boolean>((resolve) => {
+      const timer = timers.setTimeout(() => resolve(false), timeoutMs);
+      void Promise.all([...pending]).then(() => {
+        timers.clearTimeout(timer);
+        resolve(true);
+      });
+    });
+    if (!settled) for (const abandon of [...waiting]) abandon();
+    return settled;
+  };
+
   const readerFor = (chainId: number): ViemClientLike | undefined => {
     try {
       const client = typeof reader === 'function' ? reader(chainId) : reader;
@@ -221,7 +249,7 @@ export function withHashspan(
    * With a reader, the background confirmation records the receipt with its revert reason, so the wait is passed on
    * untraced. The result and errors are passed on unchanged.
    */
-  const confirmed = async (
+  const confirmed = (
     chainId: number,
     options: unknown,
     wait: () => Promise<unknown>,
@@ -234,29 +262,51 @@ export function withHashspan(
     } catch (error) {
       diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
     }
-    let result: unknown;
-    try {
-      result = await wait();
-    } catch (error) {
+    const call = wait();
+    if (handle) track(recordWait(handle, call));
+    return call;
+  };
+
+  /**
+   * Ends `handle` from the outcome of the user's wait; never rejects. It is tracked, so `flush()` waits for it and
+   * ends it as `timeout` if it cannot wait longer (docs/adr/0010).
+   */
+  const recordWait = (
+    handle: ReturnType<TxTracker['startConfirm']>,
+    call: Promise<unknown>,
+  ): Promise<void> => {
+    let ended = false;
+    const end = (record: () => void, what: string): void => {
+      if (ended) return;
+      ended = true;
+      waiting.delete(abandon);
       try {
-        if (error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError') {
-          handle?.timeout();
-        } else {
-          handle?.fail(error);
-        }
-      } catch (thrown) {
-        diag.error(`hashspan: failed to record confirmation failure (${errorName(thrown)})`);
+        record();
+      } catch (error) {
+        diag.error(`hashspan: failed to record ${what} (${errorName(error)})`);
       }
-      throw error;
-    }
-    try {
-      const receipt = receiptOf(result);
-      if (receipt) handle?.end(receipt);
-      else handle?.fail(new TypeError('not a transaction receipt'));
-    } catch (error) {
-      diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
-    }
-    return result;
+    };
+    const abandon = (): void => end(() => handle.timeout(), 'confirmation timeout');
+    waiting.add(abandon);
+    return call.then(
+      (result) => {
+        const receipt = receiptOf(result);
+        end(
+          () =>
+            receipt ? handle.end(receipt) : handle.fail(new TypeError('not a transaction receipt')),
+          'receipt',
+        );
+      },
+      (error: unknown) => {
+        end(
+          () =>
+            error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError'
+              ? handle.timeout()
+              : handle.fail(error),
+          'confirmation failure',
+        );
+      },
+    );
   };
 
   /** Replaces `target[name]` with `wrap(original)`, calling the original with `target` as `this`. */
@@ -398,7 +448,16 @@ export function withHashspan(
     return value;
   };
 
-  const handle: HashspanCdp = { flush: (flushOptions) => viem.flush(flushOptions) };
+  const handle: HashspanCdp = {
+    flush: async (flushOptions) => {
+      const timeoutMs = flushOptions?.timeoutMs ?? DEFAULT_FLUSH_TIMEOUT_MS;
+      const [viemDone, ownDone] = await Promise.all([
+        viem.flush({ timeoutMs }),
+        flushOwn(timeoutMs),
+      ]);
+      return viemDone && ownDone;
+    },
+  };
   const evm = cdp.evm as Record<string, unknown> & { [WRAPPED]?: HashspanCdp };
   const existing = evm[WRAPPED];
   if (existing) {
