@@ -34,7 +34,9 @@ make demo     # starts a local chain, runs the agent, stops the chain
 (such as a running `make anvil`).
 
 Open Jaeger, pick the service `treasury-agent` and open the trace. To print spans instead, run
-`OTEL_TRACES_EXPORTER=console make demo`.
+`OTEL_TRACES_EXPORTER=console make demo`. The setup reads the standard OpenTelemetry variables:
+`OTEL_SERVICE_NAME=my-agent make demo` files the trace under `my-agent`, and `OTEL_EXPORTER_OTLP_ENDPOINT` sends it
+to another backend.
 
 ## How it is wired
 
