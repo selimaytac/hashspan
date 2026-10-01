@@ -57,7 +57,8 @@ const { transactionHash } = await walletApi.send(tx); // not traced by hashspan
 hashspan.watch(reader, { hash: transactionHash });
 ```
 
-Options: `chainId` (defaults to the client's chain; without either, nothing is recorded), `timeoutMs` (default
+Options: `chainId` (defaults to the client's chain; without either, or when it contradicts the client's chain,
+nothing is recorded and a `diag` message says why), `timeoutMs` (default
 120 000 ms) and `abi`, to decode custom errors in the revert reason. `watch()` never throws or waits; `flush()` awaits
 it.
 

@@ -183,7 +183,10 @@ export interface HashspanExtension {
 export interface WatchOptions {
   /** Transaction hash. */
   hash: string;
-  /** EIP-155 chain id; defaults to the client's chain. Without either, nothing is recorded. */
+  /**
+   * EIP-155 chain id; defaults to the client's chain. Without either, nothing is recorded; when it differs from the
+   * client's chain, nothing is recorded either and a `diag` warning is logged.
+   */
   chainId?: number | undefined;
   /** How long to poll for the receipt before the confirm span ends as `timeout`. Default: 120 000 ms. */
   timeoutMs?: number | undefined;
@@ -630,6 +633,14 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       const chainId = options.chainId ?? client.chain?.id;
       if (chainId === undefined) {
         diag.debug('hashspan: watch() needs a chain id or a client with a chain; not recording it');
+        return;
+      }
+      // Polling another chain would only end in a timeout, recorded for the wrong chain.
+      const clientChainId = client.chain?.id;
+      if (clientChainId !== undefined && clientChainId !== chainId) {
+        diag.warn(
+          `hashspan: watch() got chain ${chainId} and a client on chain ${clientChainId}; not recording it`,
+        );
         return;
       }
       if (options.abi) abis.set(confirmKey(chainId, options.hash), options.abi);
