@@ -50,8 +50,9 @@ export function testClient(
         },
       },
     ],
+    // An assertion, not a checked literal: SDKs before spend controls (2.13, the peer range's floor) lack the option.
     spendControls: false,
-  });
+  } as Parameters<typeof x402Client.fromConfig>[0]);
 }
 
 /**
