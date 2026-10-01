@@ -20,8 +20,9 @@ import { errorName, guardTracker, NOOP_SEND } from './safe-tracker.js';
 
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
-   * Tracker to report to. Defaults to one tracker per `withHashspan()` call, so reuse the same
-   * `withHashspan()` result for a wallet client and a public client to link sends to confirmations.
+   * Tracker from `createTxTracker()` to report to, to share one between adapters. Defaults to one tracker per
+   * `withHashspan()` call, so reuse the same `withHashspan()` result for a wallet client and a public client to link
+   * sends to confirmations.
    */
   tracker?: TxTracker | undefined;
   /**

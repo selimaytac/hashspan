@@ -63,6 +63,8 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
   add a changeset (`pnpm changeset`) and note it in CHANGELOG.md.
 - Changesets describe released behaviour: a follow-up change to a feature that has not been published yet updates
   that feature's changeset instead of adding a new one.
+- `TxTracker` and its handles are produced by `createTxTracker()` only; adding members to them is a minor change.
+  Adapters detect members newer than the oldest core they accept (ADR 0014).
 - Instrumentation must never throw into or alter the result of the user's call; failures are swallowed and logged
   via `diag`. Adapters read call arguments only from own data properties, so no getter of the user's runs.
 - Only `@opentelemetry/api` and the instrumented library may be peer dependencies of published packages; an adapter
