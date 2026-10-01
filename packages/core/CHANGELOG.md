@@ -1,5 +1,19 @@
 # @hashspan/core
 
+## 0.5.0
+
+### Minor Changes
+
+- [#127](https://github.com/selimaytac/hashspan/pull/127) [`2c2ddb6`](https://github.com/selimaytac/hashspan/commit/2c2ddb61321580b0dcca205faef5e9a6a15ca43b) Thanks [@selimaytac](https://github.com/selimaytac)! - Add `blockchain.payment.settled_amount`: the amount the settling party reports it settled, recorded as reported next
+  to `blockchain.payment.amount`, which keeps the amount the payer knew. With x402's `upto` scheme, it shows what was
+  actually charged when that is less than the authorized maximum.
+
+- [#120](https://github.com/selimaytac/hashspan/pull/120) [`7ca4af6`](https://github.com/selimaytac/hashspan/commit/7ca4af6541f09ede2e328cd15eaee2e530a6a48c) Thanks [@selimaytac](https://github.com/selimaytac)! - A confirm span that gave up waiting, on its own timeout or in `flush()`, no longer records `blockchain.tx.status`
+  `timeout`, as announced in 0.4.0 (ADR 0016). It keeps error status and `error.type` `timeout`; query that instead.
+  `blockchain.tx.status` now comes only from chain data (`success`, `reverted`, `replaced`), and the semantic
+  conventions schema version is `0.2.0-dev`. The deprecated constant `BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT` stays
+  exported until 1.0.
+
 ## 0.4.0
 
 ### Minor Changes

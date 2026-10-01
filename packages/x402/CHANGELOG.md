@@ -1,5 +1,13 @@
 # @hashspan/x402
 
+## 0.5.0
+
+### Patch Changes
+
+- Updated dependencies [[`2c2ddb6`](https://github.com/selimaytac/hashspan/commit/2c2ddb61321580b0dcca205faef5e9a6a15ca43b), [`7ca4af6`](https://github.com/selimaytac/hashspan/commit/7ca4af6541f09ede2e328cd15eaee2e530a6a48c)]:
+  - @hashspan/core@0.5.0
+  - @hashspan/viem@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes

@@ -24,7 +24,7 @@ export interface WithHashspanX402Options extends Omit<ViemOptions, 'confirm'> {
   /**
    * Replay reverted settlements to record their revert reason, as in `@hashspan/viem`. Default: false: the server you
    * pay chooses the settling transaction, and with it the contract whose revert text would be recorded. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.4.0/docs/adr/0013-x402-payments.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.5.0/docs/adr/0013-x402-payments.md.
    */
   decodeRevertReason?: ViemOptions['decodeRevertReason'];
 }
@@ -36,7 +36,7 @@ export interface HashspanX402 {
    * confirmations through the reader), so their spans are ended before the OpenTelemetry SDK shuts down. Resolves
    * true when all of it finished, false on timeout (default 10 000 ms), ending payment spans still open as `timeout`;
    * never rejects. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.4.0/docs/adr/0010-flush-before-shutdown.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.5.0/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
 }
@@ -151,7 +151,7 @@ interface OpenPayment {
 
 /**
  * Traces the payments an x402 client makes, as `payment` spans
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.4.0/docs/adr/0013-x402-payments.md). It registers hooks on the
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.5.0/docs/adr/0013-x402-payments.md). It registers hooks on the
  * `x402Client` (from `@x402/core/client`) that `@x402/fetch`, `@x402/axios` and `@x402/mcp` pay through, so pass
  * that client, not an `x402HTTPClient`. Call it once per client, right after creating it and before registering
  * hooks of your own, which could otherwise keep hashspan from seeing an outcome: a second call returns the first
