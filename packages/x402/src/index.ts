@@ -21,6 +21,12 @@ export interface WithHashspanX402Options extends Omit<ViemOptions, 'confirm'> {
   reader?: ViemClientLike | ((chainId: number) => ViemClientLike | undefined) | undefined;
   /** How long to poll for the receipt of a settlement before the confirm span ends as `timeout`. Default: 120 000 ms. */
   confirmTimeoutMs?: number | undefined;
+  /**
+   * Replay reverted settlements to record their revert reason, as in `@hashspan/viem`. Default: false: the server you
+   * pay chooses the settling transaction, and with it the contract whose revert text would be recorded. See
+   * https://github.com/selimaytac/hashspan/blob/main/docs/adr/0013-x402-payments.md.
+   */
+  decodeRevertReason?: ViemOptions['decodeRevertReason'];
 }
 
 /** Returned by {@link withHashspan}; the x402 client itself gets hooks, nothing is replaced. */
