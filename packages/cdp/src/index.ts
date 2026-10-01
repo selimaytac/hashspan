@@ -31,7 +31,8 @@ export interface HashspanCdp {
 // Structural views of the CDP SDK objects, so that the adapter does not depend on its internal types.
 type AnyFn = (...args: never[]) => Promise<unknown>;
 interface CdpClientLike {
-  evm: Record<string, unknown>;
+  // `object`, not a record type: the SDK's `EvmClient` class has no index signature.
+  evm: object;
 }
 interface AccountLike {
   address?: unknown;

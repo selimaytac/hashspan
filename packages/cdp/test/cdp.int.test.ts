@@ -67,7 +67,7 @@ const client = async (options: { reader?: boolean } = {}) => {
   });
   return {
     cdp,
-    hashspan: withHashspan(cdp as never, options.reader === false ? {} : { reader }),
+    hashspan: withHashspan(cdp, options.reader === false ? {} : { reader }),
   };
 };
 
