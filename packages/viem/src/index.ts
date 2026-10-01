@@ -38,6 +38,7 @@ export interface WithHashspanOptions extends TxTrackerOptions {
 }
 
 export interface BackgroundConfirmOptions {
+  /** Confirm every transaction sent through the extended clients, whether or not the caller waits for it. */
   mode: 'background';
   /** How long to poll for a receipt before ending the confirm span as `timeout`. Default: 120 000 ms. */
   timeoutMs?: number | undefined;
