@@ -17,7 +17,7 @@
     "test:integration": "vitest run --project integration --passWithNoTests",
     "test:all": "vitest run",
     "changeset": "changeset",
-    "release": "pnpm build && changeset publish",
+    "release": "pnpm build && node scripts/publish-in-order.mjs",
     "version-packages": "changeset version && node scripts/sync-version.mjs && pnpm install --lockfile-only",
     "demo": "pnpm build && pnpm --filter @hashspan/example-ai-sdk-agent start",
     "check:packages": "pnpm build && pnpm -r --filter \"./packages/*\" exec publint --strict && pnpm -r --filter \"./packages/*\" exec attw --pack . --profile node16",
