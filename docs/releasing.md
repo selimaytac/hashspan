@@ -17,7 +17,16 @@ together.
 4. Run the **Release** workflow again. With no changesets left, it runs the checks, then waits for a maintainer to
    approve the `npm` environment deployment (Actions run page, Review deployments). Once approved, it publishes the new
    versions to npm, pushes the git tags and creates the GitHub releases.
+
+   `pnpm release` runs `scripts/publish-in-order.mjs`: it publishes one dependency layer at a time (core, then viem,
+   then the adapters built on both) and waits until a layer's versions are visible on the registry before publishing
+   what requires them, since npm can make versions visible minutes after accepting them, in any order. It then
+   installs every published version into an empty project and imports it; if that fails, the job fails.
 5. Check the result: `npm view @hashspan/core` shows the version, and the npm page shows the provenance badge.
+
+To try the publish script without npm, run it against a local registry such as Verdaccio, in a clone with the
+versions raised and `publishConfig.provenance` set to `false` (provenance needs CI): set `npm_config_registry` and a
+token for it, and `CHANGESETS_OUTPUT` to a file, which then lists one `git-tag` event per published package.
 
 `pnpm version-packages` also pins the repository links in each package README and in the doc comments of its
 `src/` to that package's new release tag (`scripts/sync-version.mjs`), so the README on npm and the TSDoc in its type

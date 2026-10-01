@@ -55,7 +55,8 @@ Run lint, typecheck and tests before proposing a change.
     `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break
 - `docker/`, `scripts/`, `Makefile` → local lab; `scripts/demo.sh` (behind `make demo`) starts a fresh Anvil or
   fails, waiting for Anvil's own "Listening on" line rather than probing the port, and is tested from
-  `examples/ai-sdk-agent/test/demo-script.test.ts`
+  `examples/ai-sdk-agent/test/demo-script.test.ts`; `scripts/publish-in-order.mjs` (behind `pnpm release`) publishes
+  one dependency layer at a time and waits for the registry between layers (see docs/releasing.md)
 See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and the ADR index,
 [docs/adr/README.md](docs/adr/README.md), with each decision in one line.
 
