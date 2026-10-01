@@ -34,7 +34,8 @@ make demo     # starts a local chain, runs the agent, stops the chain
 (such as a running `make anvil`).
 
 Open Jaeger, pick the service `treasury-agent` and open the trace. To print spans instead, run
-`OTEL_TRACES_EXPORTER=console make demo`.
+`OTEL_TRACES_EXPORTER=console make demo`. `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` change the service name
+and resource attributes, as backend guides expect.
 
 ## How it is wired
 
