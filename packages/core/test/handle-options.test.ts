@@ -126,6 +126,14 @@ describe('handle arguments of neither form', () => {
     expect(tracing.spans()).toHaveLength(5);
   });
 
+  it('do not hand an invalid end time to the SDK', () => {
+    const debug = vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    createTxTracker()
+      .startSend(late)
+      .end({ hash: HASH }, { endTime: 'soon' } as unknown as EndOptions);
+    expect(debug).toHaveBeenCalledWith('hashspan: ignoring an end time that is not a TimeInput');
+  });
+
   it('never run into a throwing getter', () => {
     vi.spyOn(diag, 'debug').mockImplementation(() => {});
     const throwing = {
