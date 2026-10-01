@@ -102,6 +102,18 @@ describe('payment span', () => {
     const span = tracing.spanNamed(PAYMENT_SPAN);
     expect(span.attributes['blockchain.payment.payer']).toBe(PAYER);
     expect(span.attributes['blockchain.payment.amount']).toBe('10000');
+    // What was settled is still recorded, on its own, as the settling party reported it.
+    expect(span.attributes['blockchain.payment.settled_amount']).toBe('9000');
+  });
+
+  it('records no settled amount when the settlement reports none or a malformed one', () => {
+    const tracker = createTxTracker();
+    tracker.startPayment(payment).end({ status: 'settled', hash: HASH });
+    tracker.startPayment(payment).end({ status: 'settled', hash: HASH, amount: '-5' });
+    expect(tracing.spans().map((s) => s.attributes['blockchain.payment.settled_amount'])).toEqual([
+      undefined,
+      undefined,
+    ]);
   });
 
   it('records the payer and amount of the settlement only where the input had none', () => {
