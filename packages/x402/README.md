@@ -52,9 +52,14 @@ the order they were registered, and stops at the first that recovers a failed pa
 registered earlier can keep hashspan from seeing the outcome, which then ends as `timeout`.
 
 `withHashspan(client, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/main/packages/core#options)
-(address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem`, `tracker`, `reader`
-(a viem public client, or a function returning one for a chain id) and `confirmTimeoutMs` (default 120 000 ms).
-Without a reader, only payment spans are recorded. Give it the same `tracker` as `@hashspan/viem` or `@hashspan/cdp`
+(address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem` but off by default,
+`tracker`, `reader` (a viem public client, or a function returning one for a chain id) and `confirmTimeoutMs` (default
+120 000 ms). Without a reader, only payment spans are recorded.
+
+The settlement and its transaction hash come from the server you pay. The confirm span shows that the reported
+transaction exists and how it ended; it does not check that the transaction is your payment. For the same reason,
+the revert reason of a reverted settlement, which would be text from a contract the server chooses, is only recorded
+with `decodeRevertReason: true`. Give it the same `tracker` as `@hashspan/viem` or `@hashspan/cdp`
 to share one tracker between adapters.
 
 `flush({ timeoutMs })` (default 10 000 ms) waits for payments still waiting for their response, then for

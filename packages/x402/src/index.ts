@@ -156,7 +156,13 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
   const { reader, confirmTimeoutMs, tracker: providedTracker, ...rest } = options;
   const tracker: TxTracker = providedTracker ?? createTxTracker(rest);
   // Confirmations reuse the viem adapter's receipt handling, on the same tracker.
-  const viem = withViemHashspan({ ...rest, tracker });
+  // The server chooses the settling transaction, and with it the contract whose revert text would be recorded: revert
+  // reasons are replayed only when asked for (docs/adr/0013-x402-payments.md).
+  const viem = withViemHashspan({
+    ...rest,
+    decodeRevertReason: rest.decodeRevertReason ?? false,
+    tracker,
+  });
 
   const starts = new WeakMap<object, Start>();
   // Insertion order is age, for MAX_OPEN_PAYMENTS.
@@ -423,7 +429,7 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
   }
   if (HOOKS.some((name) => typeof target[name] !== 'function')) {
     diag.warn(
-      'hashspan: not tracing x402 payments: pass the x402Client (with onPaymentResponse, @x402/core 2.12 or later), not an x402HTTPClient',
+      'hashspan: not tracing x402 payments: pass the x402Client (with onPaymentResponse, @x402/core 2.13 or later), not an x402HTTPClient',
     );
     return noop;
   }
