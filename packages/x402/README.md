@@ -42,7 +42,14 @@ await hashspan.flush();
 ```
 
 Pass the `x402Client` itself: `@x402/fetch`, `@x402/axios` and `@x402/mcp` all pay through it, so one call covers
-them. The adapter only registers hooks; it replaces no method, and its hooks never throw and never change a payment.
+them. Helpers that build their own client from a config, such as `wrapFetchWithPaymentFromConfig`, hide it: create
+it with `x402Client.fromConfig(config)` and pass it to both instead. An `x402MCPClient` exposes its client as
+`paymentClient`. The adapter only registers hooks; it replaces no method, and its hooks never throw and never change
+a payment.
+
+Call `withHashspan` right after creating the client, before registering hooks of your own: the client runs hooks in
+the order they were registered, and stops at the first that recovers a failed payment or a response, so a hook
+registered earlier can keep hashspan from seeing the outcome, which then ends as `timeout`.
 
 `withHashspan(client, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/main/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem`, `tracker`, `reader`

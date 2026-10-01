@@ -147,8 +147,9 @@ interface OpenPayment {
  * Traces the payments an x402 client makes, as `payment` spans
  * (https://github.com/selimaytac/hashspan/blob/main/docs/adr/0013-x402-payments.md). It registers hooks on the
  * `x402Client` (from `@x402/core/client`) that `@x402/fetch`, `@x402/axios` and `@x402/mcp` pay through, so pass
- * that client, not an `x402HTTPClient`. Call it once per client: a second call returns the first handle, ignores its
- * options and logs a `diag` warning. Its hooks never throw and never change a payment. x402 v2 payments on `eip155`
+ * that client, not an `x402HTTPClient`. Call it once per client, right after creating it and before registering
+ * hooks of your own, which could otherwise keep hashspan from seeing an outcome: a second call returns the first
+ * handle, ignores its options and logs a `diag` warning. Its hooks never throw and never change a payment. x402 v2 payments on `eip155`
  * networks are traced; others are made untraced, with a warning.
  */
 export function withHashspan(client: object, options: WithHashspanX402Options = {}): HashspanX402 {

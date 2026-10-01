@@ -25,9 +25,10 @@ function capturingClient() {
   const pay = (
     required = paymentRequired(),
     settleResponse: unknown = { success: true, transaction: HASH },
+    signed: unknown = { authorization: { from: PAYER } },
   ) => {
     const selectedRequirements = required.accepts[0];
-    const paymentPayload = { x402Version: 2, payload: { authorization: { from: PAYER } } };
+    const paymentPayload = { x402Version: 2, payload: signed };
     expect(hooks.before?.({ paymentRequired: required, selectedRequirements })).toBeUndefined();
     expect(
       hooks.after?.({ paymentRequired: required, selectedRequirements, paymentPayload }),
@@ -79,6 +80,26 @@ describe('payments that are not traced', () => {
       for (const hook of Object.values(hooks)) expect(hook(ctx)).toBeUndefined();
     }
     expect(tracing.spans()).toEqual([]);
+  });
+});
+
+describe('the payer', () => {
+  it('is read from an EIP-3009 or a Permit2 authorization', () => {
+    const { client, pay } = capturingClient();
+    withHashspan(client);
+    const permit2Payer = '0x4444444444444444444444444444444444444444';
+    pay(paymentRequired(), { success: true }).respond();
+    pay(
+      paymentRequired(),
+      { success: true },
+      { permit2Authorization: { from: permit2Payer } },
+    ).respond();
+    pay(paymentRequired(), { success: true }, { signature: '0x' }).respond();
+    expect(tracing.spans().map((s) => s.attributes['blockchain.payment.payer'])).toEqual([
+      PAYER,
+      permit2Payer,
+      undefined,
+    ]);
   });
 });
 
