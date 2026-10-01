@@ -167,6 +167,11 @@ interface ConfirmOrigin {
   links: Link[];
 }
 
+/**
+ * Creates a tracker that records transactions as `send` and `confirm` spans with `@opentelemetry/api`
+ * (docs/semconv.md). It makes no network calls; the caller passes hashes and receipts. Its methods and handles
+ * never throw: failures are logged via `diag`, and a method that fails returns a handle that records nothing.
+ */
 export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
   const links = new LinkStore({
     ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,

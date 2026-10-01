@@ -12,6 +12,7 @@ export type AddressMode = 'raw' | 'hashed' | 'off';
 export type ErrorMessageMode = 'off' | 'sanitized' | 'raw';
 
 export interface AddressOptions {
+  /** How addresses are recorded; `hash` applies to `hashed` mode only. */
   mode: AddressMode;
   /**
    * Custom hash for `hashed` mode; receives the lower-cased address.
@@ -20,9 +21,14 @@ export interface AddressOptions {
   hash?: ((address: string) => string) | undefined;
 }
 
-/** Static agent identity, used when the active context carries none in its baggage. */
+/**
+ * Static agent identity, recorded on every span of the tracker. A field set here wins over the same Baggage entry;
+ * see {@link TxTrackerOptions.agent}. Unlike Baggage, it is never propagated to other services.
+ */
 export interface AgentIdentity {
+  /** Recorded as `gen_ai.agent.id`. */
   id?: string | undefined;
+  /** Recorded as `gen_ai.agent.name`. */
   name?: string | undefined;
 }
 
@@ -54,8 +60,11 @@ export interface TxTrackerOptions {
    */
   agentFromBaggage?: boolean | undefined;
   /**
-   * Runs last on every attribute set and returns the attributes to record.
-   * If it throws, only non-sensitive identifiers (system, chain id, operation, hash) are recorded.
+   * Runs last on every attribute set, including exception event attributes, and returns the attributes to record.
+   * If it throws or returns something other than an attributes object, the tracker fails closed and records only
+   * `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`,
+   * `blockchain.tx.status`, `blockchain.tx.replacement.hash`, `blockchain.tx.replacement.reason`, `error.type` and
+   * `exception.type`, and logs the failure via `diag`.
    */
   redact?: ((attributes: Attributes) => Attributes) | undefined;
   /** How long a sent transaction can be linked from its confirmation. Default: 10 minutes. */
@@ -67,11 +76,15 @@ export interface TxTrackerOptions {
 export interface SendInput {
   /** EIP-155 chain id. */
   chainId: number;
+  /** Sender address, recorded as `blockchain.tx.from` per the address mode. */
   from?: string | undefined;
+  /** Recipient or contract address, recorded as `blockchain.tx.to` per the address mode. */
   to?: string | undefined;
   /** Value in wei. */
   value?: bigint | undefined;
+  /** Sender nonce, when known before the send; omit it when the library or wallet fills it in. */
   nonce?: number | undefined;
+  /** Name of the called contract function, when an ABI is known, e.g. `transfer`. */
   functionName?: string | undefined;
   /** 4-byte function selector, e.g. `0xa9059cbb`. */
   functionSelector?: string | undefined;
@@ -84,6 +97,7 @@ export interface SendInput {
   startTime?: TimeInput | undefined;
 }
 
+/** Ends a send span. Only the first call counts; methods never throw. */
 export interface SendHandle {
   /** Ends the send span successfully once the transaction hash is known; `endTime` defaults to now. */
   end(hash: string, endTime?: TimeInput): void;
@@ -102,7 +116,9 @@ export interface FailOptions {
 }
 
 export interface ConfirmInput {
+  /** EIP-155 chain id; with `hash`, it identifies the transaction and its confirm span. */
   chainId: number;
+  /** Hash of the transaction awaited, `0x`-prefixed. */
   hash: string;
   /** When the wait started, for adapters that record it after the fact; see {@link SendInput.startTime}. */
   startTime?: TimeInput | undefined;
@@ -113,6 +129,7 @@ export type ReplacementReason = 'repriced' | 'cancelled' | 'replaced';
 
 /** Library-agnostic view of a transaction receipt. Adapters normalise their client's receipt into this. */
 export interface ReceiptLike {
+  /** `reverted` ends the confirm span with an error status and `error.type` `reverted`. */
   status: 'success' | 'reverted';
   blockNumber: bigint | number;
   gasUsed: bigint | number;
@@ -120,6 +137,10 @@ export interface ReceiptLike {
   effectiveGasPrice?: bigint | undefined;
   /** L1 data fee in wei on OP-stack chains. */
   l1Fee?: bigint | null | undefined;
+  /**
+   * Decoded revert reason, recorded as `blockchain.tx.revert.reason` with addresses per the address mode, e.g.
+   * `Error(string)`'s message, `Panic(0x11)` or `InsufficientBalance(1, 2)`.
+   */
   revertReason?: string | undefined;
   /**
    * Hash of the mined transaction. When it differs from the awaited hash, the awaited transaction was replaced:
@@ -130,6 +151,10 @@ export interface ReceiptLike {
   replacementReason?: ReplacementReason | undefined;
 }
 
+/**
+ * One wait for a transaction's receipt, joined to the transaction's shared confirm span. Only the first call counts;
+ * methods never throw.
+ */
 export interface ConfirmHandle {
   /** Ends the shared confirm span with the receipt, for every handle of the transaction. */
   end(receipt: ReceiptLike, endTime?: TimeInput): void;
