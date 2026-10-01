@@ -8,6 +8,9 @@ Transaction lifecycle tracing for the on-chain actions of AI agents, built on Op
 - **`confirm {chainId}`**: waiting for the receipt: status, block, gas, fees (including the OP-stack L1 fee) and
   revert reason. It carries a span link to its `send` span.
 
+Payments that another party settles on chain, such as x402 payments, become a **`payment {chainId}`** span instead
+of a `send` span.
+
 The core is library-agnostic and read-only: it never signs, sends or fetches anything. Adapters such as
 [`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/core@0.3.0/packages/viem) call it for you. Use the core directly to instrument any other send path.
 

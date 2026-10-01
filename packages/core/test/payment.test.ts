@@ -191,6 +191,20 @@ describe('payment privacy', () => {
     ]);
   });
 
+  it('records addresses in the resource per the address mode', () => {
+    const resource = `https://api.example.com/balance/${PAYER}`;
+    createTxTracker({ address: 'off' })
+      .startPayment({ ...payment, x402: { resource } })
+      .end({ status: 'settled' });
+    createTxTracker({ address: { mode: 'hashed', hash: () => 'h' } })
+      .startPayment({ ...payment, x402: { resource } })
+      .end({ status: 'settled' });
+    expect(tracing.spans().map((s) => s.attributes['x402.resource'])).toEqual([
+      'https://api.example.com/balance/<address>',
+      'https://api.example.com/balance/h',
+    ]);
+  });
+
   it('records addresses per the address mode', () => {
     createTxTracker({ address: 'off' })
       .startPayment(payment)

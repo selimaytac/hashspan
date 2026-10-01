@@ -634,7 +634,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     if (scheme !== undefined) attributes[ATTR_X402_SCHEME] = scheme;
     const resource = input.x402?.resource;
     if (typeof resource === 'string' && resource !== '') {
-      attributes[ATTR_X402_RESOURCE] = sanitizeResource(resource);
+      attributes[ATTR_X402_RESOURCE] = formatAddressesIn(sanitizeResource(resource), formatAddress);
     }
 
     const span = getTracer().startSpan(

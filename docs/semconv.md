@@ -116,7 +116,7 @@ recorded.
 Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md). Neither `hashed` nor
 `off` hides the parties of a transaction: `blockchain.tx.hash` is always recorded and resolves to them on chain.
 The address mode also applies to addresses inside `blockchain.tx.revert.reason`,
-`blockchain.contract.function.arguments`, `error.type` and sanitized error messages (`<address>` in `off` mode).
+`blockchain.contract.function.arguments`, `x402.resource`, `error.type` and sanitized error messages (`<address>` in `off` mode).
 In `hashed` and `off` mode, hex values longer than an address are recorded as `<hex>` in those attributes, because a
 padded `bytes32` or ABI-encoded `bytes` value can embed an address. The redaction hook also runs on `error.type` and on `exception` event
 attributes; if it throws, only `exception.type` is kept on the event.
