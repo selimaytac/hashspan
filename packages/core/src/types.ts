@@ -270,7 +270,10 @@ export interface PaymentSettlement {
   hash?: string | undefined;
   /** Address that paid, when the settlement reports it; recorded instead of the input's. */
   payer?: string | undefined;
-  /** Amount settled, when the settlement reports it; recorded instead of the input's. */
+  /**
+   * Amount settled, when the settlement reports it, recorded as `blockchain.payment.settled_amount`; also as
+   * `blockchain.payment.amount` when the input had none.
+   */
   amount?: bigint | string | undefined;
   /** Why a `failed` settlement failed, recorded as `error.type` if it is a short identifier, else `_OTHER`. */
   errorReason?: string | undefined;

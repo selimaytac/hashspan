@@ -41,6 +41,8 @@ export const ATTR_BLOCKCHAIN_PAYMENT_RECIPIENT = 'blockchain.payment.recipient' 
 export const ATTR_BLOCKCHAIN_PAYMENT_ASSET = 'blockchain.payment.asset' as const;
 export const ATTR_BLOCKCHAIN_PAYMENT_AMOUNT = 'blockchain.payment.amount' as const;
 export const ATTR_BLOCKCHAIN_PAYMENT_STATUS = 'blockchain.payment.status' as const;
+/** The amount the settling party reports it settled, e.g. less than the authorized maximum with x402 `upto`. */
+export const ATTR_BLOCKCHAIN_PAYMENT_SETTLED_AMOUNT = 'blockchain.payment.settled_amount' as const;
 /** x402's own payment fields. */
 export const ATTR_X402_SCHEME = 'x402.scheme' as const;
 export const ATTR_X402_RESOURCE = 'x402.resource' as const;

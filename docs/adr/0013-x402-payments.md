@@ -62,7 +62,8 @@ and paid MCP tools. Relevant facts, from the v2 JavaScript SDK (`@x402/core`, `@
   The settlement comes from the server and its facilitator, which the payer does not control. It never replaces
   what the payer knew itself: the payer and amount it reports are recorded only where the requirements and the
   payload had none, and its transaction hash links to the payment span only when the tracker links that hash to
-  nothing yet, such as to one of its own sends.
+  nothing yet, such as to one of its own sends. The amount it reports is also recorded on its own, as the settled
+  amount, since a scheme such as `upto` can settle less than the payer authorized.
 
   Creating the payment failing, for example signing it, ends the span as an error with no hash. Refusals by
   policies and spend controls happen before any hook and are not recorded. If a failure hook registered after
