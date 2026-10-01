@@ -30,7 +30,7 @@ const tracker = createTxTracker({ agent: { name: 'treasury-bot' } });
 
 // Inside your tool, where the agent framework's span is active:
 const send = tracker.startSend({ chainId: 8453, from, to, value, functionName: 'transfer' });
-let hash;
+let hash: string;
 try {
   hash = await sendSomehow();
   send.end(hash);
