@@ -716,6 +716,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     const protocol = identifier(input.protocol);
     if (protocol !== undefined) attributes[ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL] = protocol;
     setPaymentAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_PAYER, input.payer);
+    const knownPayer = typeof input.payer === 'string' && ADDRESS.test(input.payer);
     setPaymentAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_RECIPIENT, input.recipient);
     setPaymentAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_ASSET, input.asset);
     const paid = amount(input.amount);
@@ -744,14 +745,19 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
         diag.debug('hashspan: ignoring a payment settlement with an unknown status');
         return;
       }
+      // The settlement comes from the settling party, which the payer does not control: it never replaces what the
+      // payer knew itself (docs/adr/0013-x402-payments.md).
       const settled: Attributes = { [ATTR_BLOCKCHAIN_PAYMENT_STATUS]: status };
       const hash: unknown = settlement.hash;
       if (typeof hash === 'string' && TX_HASH.test(hash)) {
-        links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
+        // A hash this tracker already links, such as one of its own sends, keeps that link.
+        if (!links.get(input.chainId, hash)) {
+          links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
+        }
         settled[ATTR_BLOCKCHAIN_TX_HASH] = hash;
       }
-      setPaymentAddress(settled, ATTR_BLOCKCHAIN_PAYMENT_PAYER, settlement.payer);
-      const settledAmount = amount(settlement.amount);
+      if (!knownPayer) setPaymentAddress(settled, ATTR_BLOCKCHAIN_PAYMENT_PAYER, settlement.payer);
+      const settledAmount = paid === undefined ? amount(settlement.amount) : undefined;
       if (settledAmount !== undefined) settled[ATTR_BLOCKCHAIN_PAYMENT_AMOUNT] = settledAmount;
       span.setAttributes(redact(settled));
       if (status === BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED) {
