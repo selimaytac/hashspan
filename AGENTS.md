@@ -31,8 +31,8 @@ Run lint, typecheck and tests before proposing a change.
     `waitForTransactionReceipt`; it calls the base client's actions, so internal viem calls are not traced twice.
     State shared by every client extended with one `withHashspan()` result (tracker, ABIs, revert reasons) lives in
     that call's closure; confirm deduplication lives in the tracker (ADR 0007); background confirmation must
-    never delay or fail the user's call, and nothing the telemetry needs is awaited before the call it traces (ADR 0009).
-    Work that outlives a traced call must be passed to `track()`, so `flush()` can await it (ADR 0010)
+    never delay or fail the user's call, and nothing the telemetry needs is awaited before the call it traces
+    (ADR 0009). Work that outlives a traced call must be passed to `track()`, so `flush()` can await it (ADR 0010)
   - `src/revert-reason.ts` replays reverted transactions and decodes the revert data (ADR 0005)
   - `test/mock-transport.ts` EIP-1193 mock for unit tests; `test/*.int.test.ts` run against Anvil via prool
 - `packages/cdp` → capture adapter for the Coinbase CDP SDK (ADR 0012)
@@ -45,7 +45,8 @@ Run lint, typecheck and tests before proposing a change.
   - `ai-sdk-agent`: AI SDK agent with a scripted model (no API key), run by `make demo`; its
     `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break
 - `docker/`, `scripts/`, `Makefile` → local lab; `scripts/demo.sh` (behind `make demo`) starts a fresh Anvil or
-  fails, waiting for Anvil's own "Listening on" line rather than probing the port, and is tested from `examples/ai-sdk-agent/test/demo-script.test.ts`
+  fails, waiting for Anvil's own "Listening on" line rather than probing the port, and is tested from
+  `examples/ai-sdk-agent/test/demo-script.test.ts`
 See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and the ADR index,
 [docs/adr/README.md](docs/adr/README.md), with each decision in one line.
 
@@ -69,8 +70,9 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 - Package versions live in `package.json`; `src/version.ts` is synced by `pnpm version-packages`; don't edit it.
 - Docs are checked by `packages/core/test/docs.test.ts` (links and anchors, ADR index, package table, scopes, Node
   versions, code examples) and `semconv-doc.test.ts`. Each `ts` block in a README is the `#region readme` of a file
-  in `packages/*/test/readme/`, compiled by `pnpm typecheck`; change both together. State each fact in one place and link to it. Package READMEs ship to npm
-  alone: link to the repository by absolute URL on the package's release tag (see docs/releasing.md).
+  in `packages/*/test/readme/`, compiled by `pnpm typecheck`; change both together. State each fact in one place
+  and link to it. Package READMEs ship to npm alone: link to the repository by absolute URL on the package's
+  release tag (see docs/releasing.md).
 - Significant design changes get a short ADR in `docs/adr/NNNN-title.md` (see `0000-template.md`) and a row in
   `docs/adr/README.md`. New ADRs start as `proposed` and move to `accepted` only after the implementation was
   compared with them.
