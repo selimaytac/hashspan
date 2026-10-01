@@ -67,7 +67,7 @@ confirmations through the reader, and ends what is left as `timeout`. Call it be
 | Settled | `blockchain.payment.status` `settled` and the transaction hash |
 | Settlement pending (`settlement_pending`) | `pending` and the hash; the confirm span resolves it |
 | Settlement failed | `failed`, error status, the facilitator's `errorReason` as `error.type` |
-| Response without a settlement (e.g. the API answered 500) | error status, `error.type` `no_settlement` |
+| Response without a settlement: the facilitator refused the payment before settling it (e.g. the payer's balance is too low), or the API failed (e.g. answered 500) | error status, `error.type` `no_settlement` |
 | No response: the paid request failed on the network, `@x402/axios` got a status other than 2xx or 402, or no response came before the authorization expired | error status, `error.type` `timeout`, once the requirements' `maxTimeoutSeconds` plus 30 s passed, or on `flush()` |
 | Creating the payment failed (e.g. signing) | error status, the error's class name as `error.type` |
 
