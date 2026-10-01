@@ -140,8 +140,10 @@ export interface TxTracker {
   startConfirm(input: ConfirmInput, parent?: Context): ConfirmHandle;
   /**
    * Starts a `payment` span as a child of `parent` (default: the active context), for a payment that another party
-   * settles on chain (docs/adr/0013). Call `end(settlement)` with the settlement, or `fail(error)`. A settlement
-   * with a hash links the transaction's confirm span to this span, as a send span would.
+   * settles on chain
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0013-x402-payments.md). Call
+   * `end(settlement)` with the settlement, or `fail(error)`. A settlement with a hash links the transaction's confirm
+   * span to this span, as a send span would.
    */
   startPayment(input: PaymentInput, parent?: Context): PaymentHandle;
 }
@@ -194,7 +196,10 @@ function reportedErrorType(error: unknown, options: FailOptions | undefined): st
 
 /** The confirm span of one transaction and how to end it; shared by all its handles. */
 interface ConfirmSpan extends SharedConfirm {
-  /** What a confirm span of a replacing transaction inherits from this one (docs/adr/0008). */
+  /**
+   * What a confirm span of a replacing transaction inherits from this one
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0008-replaced-transactions.md).
+   */
   origin: ConfirmOrigin;
   receipt(receipt: ReceiptLike, endTime?: TimeInput): void;
   timeout(endTime?: TimeInput): void;
@@ -213,9 +218,9 @@ interface ConfirmOrigin {
 
 /**
  * Creates a tracker that records transactions as `send` and `confirm` spans, and payments as `payment` spans, with
- * `@opentelemetry/api` (docs/semconv.md). It makes no network calls; the caller passes hashes and receipts. Its
- * methods and handles never throw: failures are logged via `diag`, and a method that fails returns a handle that
- * records nothing.
+ * `@opentelemetry/api` (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/semconv.md). It makes
+ * no network calls; the caller passes hashes and receipts. Its methods and handles never throw: failures are logged
+ * via `diag`, and a method that fails returns a handle that records nothing.
  */
 export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
   const links = new LinkStore({
@@ -267,8 +272,9 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
   };
 
   /**
-   * Exception event attributes for `error`, per the error message mode. The error object itself is never handed
-   * to the SDK: its message and stack can carry addresses and calldata (docs/adr/0006-error-privacy.md).
+   * Exception event attributes for `error`, per the error message mode. The error object itself is never handed to
+   * the SDK: its message and stack can carry addresses and calldata
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0006-error-privacy.md).
    */
   const exceptionAttributes = (type: string, error: unknown): Attributes => {
     const attributes: Attributes = { [ATTR_EXCEPTION_TYPE]: type };
@@ -537,7 +543,10 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     confirm.receipt(mined, endTime);
   };
 
-  /** Ends `shared` with `receipt`, attributing it to the transaction that was mined (docs/adr/0008). */
+  /**
+   * Ends `shared` with `receipt`, attributing it to the transaction that was mined
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0008-replaced-transactions.md).
+   */
   const endWithReceipt = (
     chainId: number,
     hash: string,

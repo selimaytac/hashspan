@@ -73,8 +73,8 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 - Docs are checked by `packages/core/test/docs.test.ts` (links and anchors, ADR index, package table, scopes, Node
   versions, code examples) and `semconv-doc.test.ts`. Each `ts` block in a README is the `#region readme` of a file
   in `packages/*/test/readme/`, compiled by `pnpm typecheck`; change both together. State each fact in one place
-  and link to it. Package READMEs ship to npm alone: link to the repository by absolute URL on the package's
-  release tag (see docs/releasing.md).
+  and link to it. Package READMEs and `/** */` comments ship to npm alone: link to the docs by absolute URL on the
+  package's release tag (see docs/releasing.md); `//` comments may use repository paths.
 - Significant design changes get a short ADR in `docs/adr/NNNN-title.md` (see `0000-template.md`) and a row in
   `docs/adr/README.md`. New ADRs start as `proposed` and move to `accepted` only after the implementation was
   compared with them.

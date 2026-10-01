@@ -1,8 +1,8 @@
 /**
  * Attribute keys emitted by hashspan.
  *
- * Stability: development. See docs/semconv.md for definitions and value types.
- * These names are a public contract: changes follow the deprecation policy in AGENTS.md.
+ * Stability: development. See https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/semconv.md for
+ * definitions and value types. These names are a public contract: changes follow the deprecation policy in AGENTS.md.
  */
 export const ATTR_BLOCKCHAIN_SYSTEM = 'blockchain.system' as const;
 export const ATTR_BLOCKCHAIN_CHAIN_ID = 'blockchain.chain.id' as const;
@@ -24,11 +24,17 @@ export const ATTR_BLOCKCHAIN_BLOCK_NUMBER = 'blockchain.block.number' as const;
 export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME = 'blockchain.contract.function.name' as const;
 export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR =
   'blockchain.contract.function.selector' as const;
-/** Opt-in: decoded call arguments as a JSON array. See docs/adr/0004-privacy-defaults.md. */
+/**
+ * Opt-in: decoded call arguments as a JSON array. See
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0004-privacy-defaults.md.
+ */
 export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS =
   'blockchain.contract.function.arguments' as const;
 
-/** Payments settled on chain by a party other than the agent, e.g. an x402 facilitator. See docs/adr/0013. */
+/**
+ * Payments settled on chain by a party other than the agent, e.g. an x402 facilitator. See
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0013-x402-payments.md.
+ */
 export const ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL = 'blockchain.payment.protocol' as const;
 export const ATTR_BLOCKCHAIN_PAYMENT_PAYER = 'blockchain.payment.payer' as const;
 export const ATTR_BLOCKCHAIN_PAYMENT_RECIPIENT = 'blockchain.payment.recipient' as const;
