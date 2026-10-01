@@ -1,6 +1,9 @@
 import { createTxTracker, type TxTracker } from '@hashspan/core';
 import { diag } from '@opentelemetry/api';
+import { createPublicClient, encodeErrorResult, parseAbi } from 'viem';
+import { baseSepolia } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockTransport, HASH as RECEIPT_HASH } from '../../viem/test/mock-transport.js';
 import { withHashspan } from '../src/index.js';
 import { HASH, PAYER, paymentRequired } from './fake-x402.js';
 import { setupTracing, type TestTracing } from './tracing.js';
@@ -118,6 +121,45 @@ describe('open payment spans', () => {
 });
 
 describe('confirmation through the reader', () => {
+  /** A reader whose node reports the settling transaction as reverted with an `Error(string)` message. */
+  const revertingReader = () => {
+    const mock = mockTransport({
+      chainIdHex: '0x14a34',
+      receipt: { status: '0x0' },
+      callRevertData: encodeErrorResult({
+        abi: parseAbi(['error Error(string)']),
+        errorName: 'Error',
+        args: ['text chosen by the contract'],
+      }),
+    });
+    return { mock, reader: createPublicClient({ chain: baseSepolia, transport: mock.transport }) };
+  };
+
+  it('does not replay a reverted settlement for its revert reason by default', async () => {
+    // The server chooses the settling transaction, and with it the contract whose revert text would be recorded.
+    const { mock, reader } = revertingReader();
+    const { client, pay } = capturingClient();
+    const hashspan = withHashspan(client, { reader });
+    pay(paymentRequired(), { success: true, transaction: RECEIPT_HASH }).respond();
+    expect(await hashspan.flush()).toBe(true);
+
+    const confirm = tracing.spanNamed('confirm 84532');
+    expect(confirm.attributes['blockchain.tx.status']).toBe('reverted');
+    expect(confirm.attributes['blockchain.tx.revert.reason']).toBeUndefined();
+    expect(mock.calls).not.toContain('eth_call');
+  });
+
+  it('replays a reverted settlement when decodeRevertReason is set', async () => {
+    const { reader } = revertingReader();
+    const { client, pay } = capturingClient();
+    const hashspan = withHashspan(client, { reader, decodeRevertReason: true });
+    pay(paymentRequired(), { success: true, transaction: RECEIPT_HASH }).respond();
+    expect(await hashspan.flush()).toBe(true);
+    expect(tracing.spanNamed('confirm 84532').attributes['blockchain.tx.revert.reason']).toBe(
+      'text chosen by the contract',
+    );
+  });
+
   it('is asked for the chain of a settled or pending payment only', () => {
     const reader = vi.fn(() => undefined);
     const { client, pay } = capturingClient();
