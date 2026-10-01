@@ -319,23 +319,28 @@ function dataOnly(value: unknown, depth = 0): unknown {
   return copy;
 }
 
-/**
- * A copy of `target` with `key` set to `value`: like `{ ...target, [key]: value }`, but accessors are copied as
- * accessors instead of being read.
- */
-function withOwnProperty<T extends object>(target: T, key: string, value: unknown): T {
-  const copy = {} as T;
-  for (const property of Reflect.ownKeys(target)) {
-    const descriptor = Object.getOwnPropertyDescriptor(target, property);
-    if (descriptor?.enumerable) Object.defineProperty(copy, property, descriptor);
+/** The descriptor of `key` on `target` or the first prototype that has it; reading it runs no getter. */
+function descriptorOf(target: object, key: string): PropertyDescriptor | undefined {
+  for (
+    let object: object | null = target;
+    object !== null;
+    object = Object.getPrototypeOf(object)
+  ) {
+    const descriptor = Object.getOwnPropertyDescriptor(object, key);
+    if (descriptor) return descriptor;
   }
-  Object.defineProperty(copy, key, {
-    value,
-    enumerable: true,
-    writable: true,
-    configurable: true,
-  });
-  return copy;
+  return undefined;
+}
+
+/**
+ * `target` with `key` shadowed by `value`, and every other property, own or inherited, data or accessor, read
+ * through to `target`: an object whose prototype is `target`. Unlike a copy, this works for frozen objects and
+ * keeps inherited properties and the number of times a getter runs.
+ */
+function shadowing<T extends object>(target: T, key: string, value: unknown): T {
+  return Object.create(target, {
+    [key]: { value, enumerable: true, writable: true, configurable: true },
+  }) as T;
 }
 
 function addressOf(account: unknown): string | undefined {
@@ -864,8 +869,10 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
 
       actions.waitForTransactionReceipt = async (args: WaitArgs) => {
         const hash = own(args, 'hash');
-        const onReplaced = Object.getOwnPropertyDescriptor(args ?? {}, 'onReplaced');
-        // A hash or callback behind an accessor is passed on untouched and not traced, so no getter runs.
+        // viem reads the callback through the prototype chain as well.
+        const onReplaced =
+          args !== null && typeof args === 'object' ? descriptorOf(args, 'onReplaced') : undefined;
+        // An inherited hash, or a hash or callback behind an accessor, is passed on untouched and not traced.
         if (typeof hash !== 'string' || (onReplaced !== undefined && !('value' in onReplaced))) {
           return waitForTransactionReceipt(args);
         }
@@ -885,7 +892,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         // Always wrapped, so that a replacement is attributed however the span is recorded (docs/adr/0008).
         const capture: ReplacementCapture = {};
         const wait = waitForTransactionReceipt(
-          withOwnProperty(args, 'onReplaced', capturing(capture, onReplaced?.value)),
+          shadowing(args, 'onReplaced', capturing(capture, onReplaced?.value)),
         ) as Promise<ViemReceipt>;
         if (handle && chainId !== undefined) {
           track(recordConfirmation(chainId, hash, handle, wait, capture, client));
