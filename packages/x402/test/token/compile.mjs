@@ -1,6 +1,6 @@
 // Compiles TestUsd.sol into test-usd.ts, which the x402 settlement tests deploy on Anvil. Run it after changing the
-// contract: `node packages/x402/test/token/compile.mjs && pnpm format`. It runs solc-js (MIT) through npx, so the compiler is not a
-// dependency of the repository.
+// contract: `node packages/x402/test/token/compile.mjs && pnpm format`. It runs solc-js (MIT) through npx, so the
+// compiler is not a dependency of the repository.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
