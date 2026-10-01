@@ -37,7 +37,7 @@ Not tied to a version: an item ships with the first release after its pull reque
 - [ ] viem transport wrapper: JSON-RPC spans
 - [ ] viem `deployContract`, `sendRawTransaction`, `sendCalls`
 - [ ] CDP smart account user operations (ERC-4337)
-- [ ] x402 adapter (payment signing → facilitator settlement, [ADR 0013](adr/0013-x402-payments.md), proposed)
+- [x] x402 adapter (payment signing → facilitator settlement, [ADR 0013](adr/0013-x402-payments.md))
 - [ ] Metrics: transaction fee and confirmation latency histograms
 
 ## Later
