@@ -1,6 +1,7 @@
 // Runs after `changeset version`. For each package it writes the version into src/version.ts, pins the repository
-// links in its README.md to the git tag of that version, so the README on npm links to the docs of the release it
-// came with, and updates the package's status in the package table of the root README.md.
+// links in its README.md and in its source comments to the git tag of that version, so the README on npm and the
+// TSDoc in its type declarations link to the docs of the release they came with, and updates the package's status
+// in the package table of the root README.md.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -16,9 +17,15 @@ for (const dir of readdirSync(join(repo, 'packages'))) {
   // Never released: there is no tag to link to yet.
   const released = version !== '0.0.0';
   const ref = released ? `${name}@${version}` : 'main';
-  update(join('packages', dir, 'README.md'), (source) =>
-    source.replace(repoLink, (_, kind) => `https://github.com/selimaytac/hashspan/${kind}/${ref}/`),
-  );
+  const pin = (source) =>
+    source.replace(repoLink, (_, kind) => `https://github.com/selimaytac/hashspan/${kind}/${ref}/`);
+  update(join('packages', dir, 'README.md'), pin);
+  const src = join(repo, 'packages', dir, 'src');
+  if (existsSync(src)) {
+    for (const file of readdirSync(src, { recursive: true })) {
+      if (String(file).endsWith('.ts')) update(join('packages', dir, 'src', String(file)), pin);
+    }
+  }
   update(join('packages', dir, 'src', 'version.ts'), (source) =>
     source.replace(/VERSION: string = '[^']*'/, `VERSION: string = '${version}'`),
   );

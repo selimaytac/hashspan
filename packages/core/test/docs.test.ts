@@ -144,6 +144,57 @@ describe('package READMEs', () => {
   }
 });
 
+describe('TSDoc links', () => {
+  // Doc comments ship in the packages' type declarations, where a repository path is not a link: they link to the
+  // docs by absolute URL, pinned to the package's release by scripts/sync-version.mjs. `//` comments are not shipped.
+  for (const pkg of packages) {
+    const src = `packages/${pkg.dir}/src`;
+    const comments = readdirSync(join(root, src), { recursive: true })
+      .map(String)
+      .filter((file) => file.endsWith('.ts'))
+      .flatMap((file) =>
+        [...read(`${src}/${file}`).matchAll(/\/\*\*[\s\S]*?\*\//g)].map((m) => ({
+          file: `${src}/${file}`,
+          text: m[0],
+        })),
+      );
+    const urls = comments.flatMap(({ file, text }) =>
+      [...text.matchAll(/https:\/\/github\.com\/selimaytac\/hashspan\/[^\s)`]*[^\s).,`]/g)].map(
+        (m) => ({
+          file,
+          url: m[0],
+        }),
+      ),
+    );
+
+    it(`${pkg.name} names no repository path where a link belongs`, () => {
+      const paths = comments.flatMap(({ file, text }) =>
+        [...text.matchAll(/(?<![/\w.-])docs\/[\w./-]+/g)].map((m) => `${file}: ${m[0]}`),
+      );
+      expect(
+        paths,
+        'write the reference as https://github.com/selimaytac/hashspan/blob/main/<path>',
+      ).toEqual([]);
+    });
+
+    it(`${pkg.name} links to files of the repository, pinned to its release`, () => {
+      const ref = pkg.version === '0.0.0' ? 'main' : `${pkg.name}@${pkg.version}`;
+      const wrong = urls
+        .map(({ file, url }) => ({ file, url, problem: brokenLink(file, url) }))
+        .filter(({ url, problem }) => problem !== undefined || repoLink.exec(url)?.[1] !== ref);
+      expect(
+        wrong,
+        'run `node scripts/sync-version.mjs` to pin the links to the release tag',
+      ).toEqual([]);
+    });
+  }
+
+  it('finds the links it checks', () => {
+    const shipped = read('packages/viem/src/index.ts');
+    expect(shipped).toMatch(/\/\*\*[^/]*https:\/\/github\.com\/selimaytac\/hashspan\/blob\//);
+  });
+});
+
 describe('docs/adr/README.md', () => {
   const index = read('docs/adr/README.md');
   const rows = [

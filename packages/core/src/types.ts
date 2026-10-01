@@ -1,10 +1,14 @@
 import type { Attributes, TimeInput, TracerProvider } from '@opentelemetry/api';
 
-/** How wallet addresses are recorded. See docs/adr/0004-privacy-defaults.md. */
+/**
+ * How wallet addresses are recorded. See
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0004-privacy-defaults.md.
+ */
 export type AddressMode = 'raw' | 'hashed' | 'off';
 
 /**
- * How error messages are recorded on exception events and span status. See docs/adr/0006-error-privacy.md.
+ * How error messages are recorded on exception events and span status. See
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0006-error-privacy.md.
  * - `off`: error type only
  * - `sanitized`: first line, addresses per address mode, other long hex data removed
  * - `raw`: full message and stack trace, as thrown
@@ -50,7 +54,8 @@ export interface TxTrackerOptions {
   recordFunctionArguments?: boolean | undefined;
   /**
    * Agent identity. A field set here always wins; fields left unset are taken from the Baggage entries
-   * `gen_ai.agent.id` / `gen_ai.agent.name` unless `agentFromBaggage` is false (docs/adr/0011).
+   * `gen_ai.agent.id` / `gen_ai.agent.name` unless `agentFromBaggage` is false
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0011-agent-identity-precedence.md).
    */
   agent?: AgentIdentity | undefined;
   /**
@@ -91,8 +96,10 @@ export interface SendInput {
   /** Decoded call arguments; recorded only with the `recordFunctionArguments` tracker option. */
   functionArguments?: readonly unknown[] | undefined;
   /**
-   * When the send started, for adapters that record it after the fact (docs/adr/0009). Omit it otherwise: with an
-   * explicit start time, the SDK measures the span by the wall clock, so pass the end time to the handle too.
+   * When the send started, for adapters that record it after the fact
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0009-telemetry-off-the-call-path.md).
+   * Omit it otherwise: with an explicit start time, the SDK measures the span by the wall clock, so pass the end time
+   * to the handle too.
    */
   startTime?: TimeInput | undefined;
 }
@@ -143,8 +150,9 @@ export interface ReceiptLike {
    */
   revertReason?: string | undefined;
   /**
-   * Hash of the mined transaction. When it differs from the awaited hash, the awaited transaction was replaced:
-   * its confirm span ends as `replaced` and the receipt is recorded for this hash (docs/adr/0008).
+   * Hash of the mined transaction. When it differs from the awaited hash, the awaited transaction was replaced: its
+   * confirm span ends as `replaced` and the receipt is recorded for this hash
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.3.0/docs/adr/0008-replaced-transactions.md).
    */
   transactionHash?: string | undefined;
   /** Replacement reason reported by the library, when {@link transactionHash} differs from the awaited hash. */
