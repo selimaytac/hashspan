@@ -55,6 +55,8 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 - Commits: Conventional Commits `<type>(<scope>): <description>`, subject ≤ 72 chars. Scopes: `core`, `viem`, `cdp`,
   `examples`, `docs`, `ci`, `lab`.
 - Small, focused PRs; one concern per PR; update tests and docs with the change.
+- Pick open issues by their priority label, `priority: P0` first: a P0 comes before work in progress
+  ([CONTRIBUTING.md](CONTRIBUTING.md#priority-labels)). Link the issue in the PR (`Closes #123`).
 - Tests first: every behaviour change comes with a unit test; anything touching RPC or receipts also gets an Anvil
   integration test. Tests never depend on a public network.
 - Public API, span names and attribute names (docs/semconv.md) are stable contracts: deprecate before removing;
