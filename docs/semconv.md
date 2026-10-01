@@ -29,6 +29,9 @@ as an x402 facilitator: the agent signs, but does not send, the settling transac
 transaction hash makes the payment span the one a confirm span for that hash links to, and whose parent it takes
 for confirmation in the background, as a `send` span would.
 
+`blockchain.payment.status` is recorded only from the settlement the settling party reported; when the client never
+learned it, the payment span has none and `error.type` says why.
+
 **One confirm span per transaction and tracker.** Concurrent waits for the same transaction share one confirm span;
 its parent is determined by the first wait. A receipt from any wait ends it; a timeout or failure ends it only when
 it is the last wait still running, with that wait's outcome. After a receipt, further waits within the link TTL add
@@ -49,7 +52,9 @@ no span; after a timeout or failure, a retry gets a new span. See [ADR 0007](adr
 | Payment settled | payment | unset | none | none; `blockchain.payment.status` is `settled` |
 | Payment settlement pending: transaction known, receipt not seen | payment | unset | none | none; `blockchain.payment.status` is `pending` |
 | Payment settlement failed | payment | error | the settling party's reason if it is a short identifier (see below), else `_OTHER` | none; `blockchain.payment.status` is `failed` |
-| Creating the payment failed (e.g. signing, or a spending policy refused it) | payment | error | as for a failed send | none |
+| Creating the payment failed (e.g. signing it) | payment | error | as for a failed send | none |
+| Payment response without a settlement | payment | error | `no_settlement` (x402 adapter) | none |
+| Payment outcome never learned (no response before its authorization expired, or flush gave up) | payment | error | `timeout` | none |
 
 An adapter whose library reports a stable, machine-readable error code records it as `error.type` of a failed send,
 if it is a short identifier (`[A-Za-z0-9_.-]`, at most 64 characters); `exception.type` stays the class name. The CDP

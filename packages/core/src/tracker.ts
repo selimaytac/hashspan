@@ -116,6 +116,8 @@ const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 /** A non-negative integer that fits in 256 bits. */
 const AMOUNT = /^(0|[1-9][0-9]{0,77})$/;
+/** `error.type` of a payment whose outcome was never learned, as for a confirmation that timed out. */
+const PAYMENT_TIMEOUT = 'timeout';
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
@@ -156,7 +158,7 @@ export interface TxTracker {
 }
 
 const NOOP_SEND: SendHandle = { end: () => {}, fail: () => {} };
-const NOOP_PAYMENT: PaymentHandle = { end: () => {}, fail: () => {} };
+const NOOP_PAYMENT: PaymentHandle = { end: () => {}, fail: () => {}, timeout: () => {} };
 const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
 
 /** Runs `fn`, logging instead of throwing: instrumentation must never break the caller. */
@@ -760,6 +762,12 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
           read.endTime,
         );
       },
+      timeout: (options) =>
+        finish(
+          'record payment timeout',
+          () => markError(span, PAYMENT_TIMEOUT),
+          handleOptions(options).endTime,
+        ),
     };
   };
 
