@@ -115,11 +115,33 @@ describe('payment span', () => {
     expect(span.events[0]?.attributes?.['exception.type']).toBe('SpendLimitError');
   });
 
+  it('ends as timeout without a status when the outcome was never learned', () => {
+    const end = new Date(Date.now() + 1_000);
+    createTxTracker()
+      .startPayment({ ...payment, startTime: new Date() })
+      .timeout({ endTime: end });
+    const span = tracing.spanNamed(PAYMENT_SPAN);
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.attributes['error.type']).toBe('timeout');
+    expect(span.attributes['blockchain.payment.status']).toBeUndefined();
+    expect(span.events).toEqual([]);
+    expect(span.endTime[0]).toBe(Math.floor(end.getTime() / 1000));
+  });
+
+  it('records an outcome that is not an exception without an exception event', () => {
+    createTxTracker().startPayment(payment).fail(undefined, { errorType: 'no_settlement' });
+    const span = tracing.spanNamed(PAYMENT_SPAN);
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.attributes['error.type']).toBe('no_settlement');
+    expect(span.events).toEqual([]);
+  });
+
   it('ignores repeated end/fail calls', () => {
     const handle = createTxTracker().startPayment(payment);
     handle.end({ status: 'settled', hash: HASH });
     handle.fail(new Error('late'));
     handle.end({ status: 'failed' });
+    handle.timeout();
     expect(tracing.spans()).toHaveLength(1);
     expect(tracing.spans()[0]?.status.code).toBe(SpanStatusCode.UNSET);
   });
@@ -278,6 +300,7 @@ describe('payment never breaks the caller', () => {
     const handle = tracker.startPayment(null as unknown as PaymentInput);
     expect(() => handle.end({ status: 'settled' })).not.toThrow();
     expect(() => handle.fail(new Error('x'))).not.toThrow();
+    expect(() => handle.timeout()).not.toThrow();
     expect(tracing.spans()).toEqual([]);
   });
 

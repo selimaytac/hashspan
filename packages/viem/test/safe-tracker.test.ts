@@ -68,11 +68,13 @@ describe('guardTracker() handles', () => {
     guarded.startSend({ chainId: 1 }).fail('boom', undefined, options);
     guarded.startConfirm({ chainId: 1, hash: HASH }).timeout(5);
     guarded.startPayment(payment).fail('boom', options);
+    guarded.startPayment(payment).timeout(options);
     expect(calls).toEqual([
       ['end', { hash: HASH }, options],
       ['fail', 'boom', undefined, options],
       ['timeout', 5],
       ['fail', 'boom', options],
+      ['timeout', options],
     ]);
   });
 });

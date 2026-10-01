@@ -265,6 +265,15 @@ export interface PaymentSettlement {
 export interface PaymentHandle {
   /** Ends the payment span with its settlement. */
   end(settlement: PaymentSettlement, options?: EndOptions): void;
-  /** Ends the payment span with an error when the payment could not be made, e.g. signing it failed. */
+  /**
+   * Ends the payment span with an error when the payment could not be made, e.g. signing it failed. Called without
+   * an error, as `fail(undefined, { errorType })`, it records no exception event: for outcomes that are not
+   * exceptions, such as a response without a settlement (`no_settlement`).
+   */
   fail(error: unknown, options?: FailOptions): void;
+  /**
+   * Ends the payment span with `error.type` `timeout` and no `blockchain.payment.status`, when its outcome was never
+   * learned, e.g. no response arrived before the authorization expired.
+   */
+  timeout(options?: EndOptions): void;
 }

@@ -3,7 +3,7 @@ import { diag } from '@opentelemetry/api';
 
 export const NOOP_SEND: SendHandle = { end: () => {}, fail: () => {} };
 const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
-const NOOP_PAYMENT: PaymentHandle = { end: () => {}, fail: () => {} };
+const NOOP_PAYMENT: PaymentHandle = { end: () => {}, fail: () => {}, timeout: () => {} };
 
 /**
  * What `diag` logs for an error: its name only. viem errors carry request arguments and RPC URLs, which may
@@ -82,6 +82,7 @@ export function guardTracker(tracker: TxTracker): TxTracker {
       return {
         end: (...args: unknown[]) => call(handle, 'end', 'record payment settlement', ...args),
         fail: (...args: unknown[]) => call(handle, 'fail', 'record payment failure', ...args),
+        timeout: (...args: unknown[]) => call(handle, 'timeout', 'record payment timeout', ...args),
       };
     },
   };
