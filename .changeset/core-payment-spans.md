@@ -9,4 +9,4 @@ report never replaces what the payer knew: its payer and amount fill only fields
 does not take over a link the tracker already has. A payment whose
 outcome was never learned ends with `timeout()`: `error.type` `timeout` and no `blockchain.payment.status`. The
 `paymentResource` option sets how much of the paid resource's URL `x402.resource` records: `origin` (default), `path`
-or `off`.
+or `off`, at most 512 characters.
