@@ -24,7 +24,12 @@ export interface WithHashspanCdpOptions extends Omit<ViemOptions, 'confirm'> {
 
 /** Returned by {@link withHashspan}; the CDP client itself is wrapped in place. */
 export interface HashspanCdp {
-  /** Waits for pending confirmations before the OpenTelemetry SDK shuts down; see docs/adr/0010. */
+  /**
+   * Waits for tracing work still running after traced calls returned (background confirmations through the reader
+   * and waits of network-scoped accounts), so their spans are ended before the OpenTelemetry SDK shuts down.
+   * Resolves true when all of it finished, false on timeout (default 10 000 ms), ending confirm spans still open as
+   * `timeout`; never rejects. See docs/adr/0010-flush-before-shutdown.md.
+   */
   flush(options?: FlushOptions): Promise<boolean>;
 }
 
@@ -139,7 +144,9 @@ function describeTransaction(transaction: unknown): Omit<SendInput, 'chainId'> {
 /**
  * Traces transactions sent by a Coinbase CDP client's EVM server accounts with `@hashspan/core`
  * (docs/adr/0012-cdp-adapter.md). It wraps the client in place: `cdp.evm.sendTransaction`, the account factories and
- * the send methods of every account they return. Call it once, right after creating the client.
+ * the send methods of every account they return. Call it once, right after creating the client: a second call on
+ * the same client returns the first handle, ignores its options and logs a `diag` warning. Never throws into the
+ * traced calls; transactions on networks it cannot map to a chain id are sent untraced, with a warning.
  */
 export function withHashspan(
   cdp: CdpClientLike,
