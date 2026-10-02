@@ -75,6 +75,57 @@ is AgentKit's own behaviour and independent of hashspan. In 0.10.4, a failed ana
 firewall blocks the endpoint, ends the Node.js process
 ([coinbase/agentkit#1531](https://github.com/coinbase/agentkit/issues/1531)).
 
+## GOAT SDK
+
+Checked with `@goat-sdk/wallet-viem` 0.3.0. GOAT sends with methods of the wallet client you pass to `viem()`, and
+waits for receipts on a client it derives from it, so the setup needs background confirmation:
+
+```ts
+// GOAT waits for receipts on a client it derives from this one: background confirmation records them.
+const hashspan = withHashspan({ confirm: { mode: 'background' } });
+const wallet = viem(createWalletClient({ account, chain, transport: http() }).extend(hashspan));
+```
+
+Pass `wallet` to GOAT as usual, for example `getOnChainTools({ wallet })`. A transaction sent through it then records a
+`send` and a `confirm` span; this was run against Anvil. `@goat-sdk/wallet-viem` pins its own viem version, so the
+wallet client must be created with a viem that GOAT accepts.
+
+## Agent frameworks
+
+hashspan's spans are children of the OpenTelemetry span that is active when the transaction is sent. Whether a
+framework's tool-call span is that span depends on its instrumentation:
+
+- **Mastra:** with its OpenTelemetry bridge (`OtelBridge` from `@mastra/otel-bridge`, set as `bridge` in an
+  `Observability` config of `@mastra/observability`) and a registered tracer provider and context manager (the
+  OpenTelemetry Node SDK registers both), each tool runs inside its tool span. Checked with `@mastra/core` 1.74.0 and
+  `@mastra/otel-bridge` 1.5.13, running an agent against Anvil: the trace reads `invoke_agent`, then
+  `execute_tool pay_vendor`, then `send` and `confirm`. Without Mastra observability, the send and confirm spans
+  start traces of their own. Mastra marks the bridge as experimental.
+- **LangChain JS and the OpenAI Agents SDK:** OpenInference's instrumentations
+  (`@arizeai/openinference-instrumentation-langchain` 4.1.4, `@arizeai/openinference-instrumentation-openai-agents`
+  0.3.2) record tool spans but do not make them active, so hashspan's spans attach to whatever span was active
+  before the agent ran. To group a tool's transactions, run the tool's function in an active span of your own:
+
+```ts
+const tracer = trace.getTracer('treasury-agent');
+
+// The tool's function: its send and confirm spans become children of `pay_vendor`.
+async function payVendor(): Promise<`0x${string}`> {
+  return tracer.startActiveSpan('pay_vendor', async (span) => {
+    try {
+      const hash = await wallet.sendTransaction({ to, value });
+      await wallet.waitForTransactionReceipt({ hash });
+      return hash;
+    } finally {
+      span.end();
+    }
+  });
+}
+```
+
+- **ElizaOS:** `@elizaos/plugin-evm` 1.0.13 creates a new wallet client from the `EVM_PRIVATE_KEY` setting for each
+  action and offers no way to pass a client of your own, so its transactions are not traced today.
+
 ## Wallet services
 
 - **Services that provide a viem account**, such as Privy's server wallets through `createViemAccount` or Turnkey's
