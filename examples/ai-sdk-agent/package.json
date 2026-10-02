@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "tsx src/main.ts",
+    "start:base-sepolia": "tsx src/main.ts base-sepolia",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

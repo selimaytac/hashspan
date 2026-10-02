@@ -1,9 +1,9 @@
 COMPOSE := docker compose -f docker/compose.yaml
 
-.PHONY: help tools anvil demo lab-up lab-pause lab-status lab-logs lab-nuke clean
+.PHONY: help tools anvil demo demo-base-sepolia lab-up lab-pause lab-status lab-logs lab-nuke clean
 
 help: ## Show available targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-12s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-18s %s\n", $$1, $$2}'
 
 tools: ## Install pinned Anvil into ./.tools/bin (project-local)
 	./scripts/install-anvil.sh
@@ -13,6 +13,9 @@ anvil: tools ## Run a local chain on 127.0.0.1:8545 (foreground)
 
 demo: tools ## Run the example agent against a fresh local chain; traces go to Jaeger (make lab-up)
 	@./scripts/demo.sh
+
+demo-base-sepolia: ## Run the example agent on Base Sepolia (needs BASE_SEPOLIA_PRIVATE_KEY, see the example README)
+	@pnpm demo:base-sepolia
 
 lab-up: ## Start Jaeger (UI: http://localhost:16686, OTLP: localhost:4317/4318)
 	$(COMPOSE) up -d
