@@ -73,6 +73,19 @@ describe('a settlement confirmed through the reader', () => {
     expect(confirm.attributes['blockchain.tx.fee']).toBeDefined();
   });
 
+  it('is recorded as not carrying the payment when the reported transaction is another one', async () => {
+    // An EIP-3009 payload, so the receipt is checked; the paid API reports a plain transfer instead.
+    const client = testClient(async () => ({
+      authorization: { from: facilitator, nonce: `0x${'5a'.repeat(32)}` },
+    }));
+    const hashspan = withHashspan(client, { reader });
+    await wrapFetchWithPayment(settlingApi(), client)('https://api.example.com/weather');
+    expect(await hashspan.flush()).toBe(true);
+    const payment = tracing.spanNamed(`payment ${baseSepolia.id}`);
+    expect(payment.attributes['blockchain.payment.verified']).toBe(false);
+    expect(payment.attributes['blockchain.payment.status']).toBe('settled');
+  });
+
   it('is awaited by a flush that started before the response arrived', async () => {
     const client = testClient();
     const hashspan = withHashspan(client, { reader });

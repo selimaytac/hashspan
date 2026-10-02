@@ -57,10 +57,15 @@ registered earlier can keep hashspan from seeing the outcome, which then ends as
 120 000 ms). Without a reader, only payment spans are recorded. Give it the same `tracker` as `@hashspan/viem` or
 `@hashspan/cdp` to share one tracker between adapters.
 
-The settlement and its transaction hash come from the server you pay. The confirm span shows that the reported
-transaction exists and how it ended; it does not check that the transaction is your payment. For the same reason,
-the revert reason of a reverted settlement, which would be text from a contract the server chooses, is only recorded
-with `decodeRevertReason: true`.
+The settlement and its transaction hash come from the server you pay. With a reader, the payment span records
+`blockchain.payment.verified`: `true` when the reported transaction's receipt carries your payment, `false` when it
+does not. For an `exact` payment authorized with EIP-3009, that means the token emitted `AuthorizationUsed` with your
+nonce and `Transfer` from you to `payTo` of exactly the amount, all checked from your own payment, not from the
+settlement. The attribute is absent when no check was possible: no reader, no receipt, a reverted one, or another
+scheme or authorization method (Permit2 and `upto` come later). With a reader, the payment span is exported once
+the receipt is checked; its end time stays when the response came. The revert reason of a reverted settlement, which
+would be text from a contract the server chooses, is only recorded with `decodeRevertReason: true`. See
+[ADR 0017](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.5.0/docs/adr/0017-x402-payment-verification.md).
 
 `flush({ timeoutMs })` (default 10 000 ms) waits for payments still waiting for their response, then for
 confirmations through the reader, and ends what is left as `timeout`. Call it before a short-lived process exits.
