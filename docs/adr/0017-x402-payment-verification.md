@@ -44,8 +44,8 @@ is not this payment's, such as the confirm span of a transaction the agent sent 
   `Transfer(from, to, value)` with the payer, the recipient and exactly the amount. Logs are decoded with a fixed
   event ABI owned by the adapter; logs that do not decode are skipped. Every input comes from the payer's own payload
   and requirements, none from the settlement.
-- **Later:** Permit2 and `upto`, which can only check the transfer, get a check with a real Permit2 settlement test.
-  `batch-settlement` gets none.
+- **Then:** Permit2 and `upto`, which can only check the transfer, get a check with a real Permit2 settlement test
+  (see *Amendment: Permit2 and `upto`*). `batch-settlement` gets none.
 
 ## Consequences
 
@@ -54,3 +54,52 @@ is not this payment's, such as the confirm span of a transaction the agent sent 
 - With a reader, payment spans are exported after the confirmation, which `confirmTimeoutMs` and `flush()` bound.
 - A token that does not emit `AuthorizationUsed` makes every check `false`; the EIP-3009 standard defines the event,
   and a test against the real USDC on a testnet should confirm it before the check is relied on.
+
+## Amendment: Permit2 and `upto`
+
+- Date: 2026-10-02
+
+### Context
+
+With `extra.assetTransferMethod: 'permit2'`, the payer signs a Permit2 `PermitWitnessTransferFrom` (the payload's
+`permit2Authorization`: `from`, `permitted.token` and `permitted.amount`, `spender`, `nonce`, `deadline` and a
+`witness` with the recipient `to`) for an x402 proxy as spender. The facilitator calls the proxy, which has Permit2
+transfer the tokens. A real settlement receipt (SDK 2.28, checked on Anvil with the contracts copied from Base
+Sepolia) has the token's `Transfer(payer, payTo, value)` and then the proxy's `Settled()`, or, with EIP-2612 gas
+sponsoring, `Approval`, `Transfer` and `SettledWithPermit()`. Permit2 emits nothing, and no log carries the nonce.
+
+`upto` is Permit2 only, through its own proxy. Its witness also names the `facilitator`, the only sender the proxy
+accepts. The server settles any amount up to `permitted.amount`, chosen at settlement time; the settlement reports it
+as `amount`.
+
+### Decision
+
+- **`exact` with Permit2:** the check applies when the scheme is `exact` and the payload has `permit2Authorization`.
+  Its inputs come from the payer's own payload and requirements: the asset (`requirements.asset`, which must equal
+  `permitted.token`), the payer (`from`), the recipient (`requirements.payTo`, which must equal `witness.to`), the
+  amount (`requirements.amount`, which must equal `permitted.amount`) and the proxy (`spender`). A mismatch or a
+  malformed value means no check. The receipt carries the payment when the transaction was sent to the proxy, the
+  proxy emitted `Settled()` or `SettledWithPermit()`, and the asset emitted `Transfer` from the payer to the recipient
+  of exactly the amount.
+- **`upto`:** the same inputs, with the maximum (`permitted.amount`) for the amount and the facilitator
+  (`witness.facilitator`, which must be an address). The receipt carries the payment when the transaction was sent by
+  the facilitator to the proxy, the proxy emitted one of its events, and the asset emitted `Transfer` from the payer to
+  the recipient of more than nothing, at most the maximum and, when the settlement reported an amount, exactly that
+  amount. A settlement of nothing reports no transaction and gets no verdict.
+- As for EIP-3009, addresses are compared without case, logs are decoded with fixed event ABIs owned by the adapter,
+  logs that do not decode are skipped, and a reverted receipt gets no verdict.
+- **Reuse of a transaction:** no log identifies the payment, so a server could report the transaction of an identical
+  earlier payment (same payer, recipient, asset and amount). Each `withHashspan()` remembers the last 1000 settlement
+  transactions it verified as `true` for a Permit2 or `upto` payment, by chain and hash; a later payment reporting one
+  of them gets `false`. When two open payments report the same transaction, the one whose receipt is checked first
+  gets `true`.
+
+### Consequences
+
+- The reuse check is per `withHashspan()` and in memory: a payment reporting a transaction verified by another
+  process, by another `withHashspan()`, before a restart or more than 1000 verified transactions ago still gets
+  `true` when the transaction moves the same amount between the same parties.
+- A facilitator that settles through another contract, such as a batching or multicall contract, sends a transaction
+  whose `to` is not the proxy: its genuine settlements get `false`. The SDK's facilitators call the proxy directly.
+- The settlement test runs the deployed Permit2 and proxies on Anvil, from code copied from Base Sepolia
+  (`packages/x402/test/permit2/`), so a change of those contracts needs the copies refreshed by hand.
