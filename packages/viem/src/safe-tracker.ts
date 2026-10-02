@@ -58,7 +58,7 @@ function call<H>(handle: H, method: keyof H, what: string, ...args: unknown[]): 
  * Wraps `tracker` so that no call into it, or into the handles it returns, can throw into the instrumented call. A
  * tracker can come from an older copy of `@hashspan/core` than this package was built with, so members added later
  * are detected and record nothing when missing. JavaScript callers can pass anything. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.6.0/docs/adr/0014-core-api-boundary.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.7.0/docs/adr/0014-core-api-boundary.md.
  */
 export function guardTracker(tracker: TxTracker): TxTracker {
   return {

@@ -1,5 +1,23 @@
 # @hashspan/x402
 
+## 0.7.0
+
+### Minor Changes
+
+- [#149](https://github.com/selimaytac/hashspan/pull/149) [`c36b3a3`](https://github.com/selimaytac/hashspan/commit/c36b3a35d9191e2f0ed0193904f9fc474922558f) Thanks [@selimaytac](https://github.com/selimaytac)! - With a reader, `blockchain.payment.verified` is also recorded for Permit2 payments (ADR 0017): for an `exact`
+  payment, `true` when the settlement transaction was sent to the x402 proxy the payer authorized, the proxy emitted its
+  settlement event and the token emitted `Transfer` from the payer to `payTo` of exactly the amount; for `upto`, when
+  the transaction was also sent by the facilitator the authorization names, and the transfer is of more than nothing, at
+  most the authorized maximum and, when the settlement reports an amount, exactly that amount. Since no log carries the
+  payment's nonce, a settlement transaction already verified for an earlier Permit2 payment of the same `withHashspan()`
+  (among the last 1000) is `false` for a later one.
+
+### Patch Changes
+
+- Updated dependencies [[`3fbc570`](https://github.com/selimaytac/hashspan/commit/3fbc57094efd99dd218aadb5e1d72f15bbbd4d8c), [`d1be4f8`](https://github.com/selimaytac/hashspan/commit/d1be4f8ec2deddb0060dc69d7de0b906ec4c3dcd), [`a777da8`](https://github.com/selimaytac/hashspan/commit/a777da8ecfe81d9e8221037271dcee07642d4023)]:
+  - @hashspan/core@0.7.0
+  - @hashspan/viem@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes

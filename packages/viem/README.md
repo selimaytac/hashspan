@@ -2,7 +2,7 @@
 
 Trace the transactions your AI agents send with [viem](https://viem.sh), using OpenTelemetry.
 
-A viem client extension that reports to [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.6.0/packages/core): each transaction becomes a
+A viem client extension that reports to [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.7.0/packages/core): each transaction becomes a
 `send {chainId}` span inside your agent's trace, and each receipt wait a linked `confirm {chainId}` span with status,
 gas and fees.
 
@@ -34,7 +34,7 @@ await reader.waitForTransactionReceipt({ hash }); // confirm span, linked to the
 Reuse the same `withHashspan()` result for every client of one agent: the clients then share one tracker, so
 confirmations are linked to their sends even when they happen on a different client.
 
-`withHashspan(options)` accepts all [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.6.0/packages/core#options) (address mode, error messages,
+`withHashspan(options)` accepts all [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.7.0/packages/core#options) (address mode, error messages,
 agent identity, redaction hook) plus:
 
 | Option | Default | Description |
@@ -153,7 +153,7 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
 - At most `maxBackgroundConfirmations` (default 256) background confirmations, including those of `watch()`, poll at
   once. A transaction sent while that many are polling gets no background confirm span, and a `diag` warning is
   logged; `0` turns background confirmation off. Your own waits are not counted. See
-  [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.6.0/docs/adr/0018-background-confirmation-limit.md).
+  [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.7.0/docs/adr/0018-background-confirmation-limit.md).
 - In serverless runtimes that freeze after the response, background confirmations may not complete.
 
 ## JSON-RPC requests
@@ -182,7 +182,7 @@ const wallet = createWalletClient({
   or the error's class name, never the message.
 - `methods` chooses which methods get a span (default: all); the example leaves out receipt polling.
   `tracerProvider` replaces the global tracer provider.
-- See [ADR 0019](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.6.0/docs/adr/0019-json-rpc-spans.md).
+- See [ADR 0019](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.7.0/docs/adr/0019-json-rpc-spans.md).
 
 ## Traced actions
 
