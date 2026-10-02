@@ -972,6 +972,46 @@ describe('results that cannot be wrapped', () => {
     expect(sends()).toHaveLength(1);
   });
 
+  it('a non-extensible account is traced but cannot be marked', async () => {
+    const cdp = fakeCdp();
+    const account = Object.preventExtensions(fakeAccount());
+    cdp.evm.getAccount = async () => account;
+    withHashspan(cdp);
+
+    const traced = (await cdp.evm.getAccount()) as unknown as TracedAccount;
+    expect(WRAPPED in traced).toBe(false);
+    await traced.sendTransaction({ network: 'base' });
+    expect(sends()).toHaveLength(1);
+  });
+
+  it('results that throw when inspected are returned unchanged', async () => {
+    const cdp = fakeCdp();
+    const throwing = {
+      get: () => {
+        throw new Error('trap');
+      },
+    };
+    const account = new Proxy(fakeAccount(), {
+      get: (target, key) => (key === WRAPPED ? throwing.get() : Reflect.get(target, key)),
+    });
+    const scoped = new Proxy({}, { getOwnPropertyDescriptor: throwing.get });
+    const listed = Object.defineProperty({}, 'accounts', { get: throwing.get });
+    cdp.evm.getAccount = async () => account;
+    cdp.evm.listAccounts = async () => listed;
+    const plain = fakeAccount();
+    plain.useNetwork = async () => scoped;
+    cdp.evm.createAccount = async () => plain;
+    withHashspan(cdp);
+
+    await expect(cdp.evm.getAccount()).resolves.toBe(account);
+    await expect(cdp.evm.listAccounts()).resolves.toBe(listed);
+    const traced = (await cdp.evm.createAccount()) as unknown as TracedAccount;
+    await expect(traced.useNetwork('base')).resolves.toBe(scoped);
+    await expect(cdp.evm.createSwapQuote(trappedOptions())).resolves.toMatchObject({
+      liquidityAvailable: true,
+    });
+  });
+
   it.each(['sendTransaction', 'transfer', 'swap'] as const)(
     '%s with options that throw on read calls the SDK once, untraced',
     async (method) => {
