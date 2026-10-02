@@ -81,7 +81,8 @@ after its method (`_OTHER` for a name that is not a method), following the OpenT
 [JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/rpc/json-rpc.md):
 `rpc.system.name = "jsonrpc"`, `rpc.method`, `jsonrpc.protocol.version`, `server.address` and `server.port`, plus
 `blockchain.chain.id`; on failure, `error.type` and, for a JSON-RPC error, `rpc.response.status_code`. Parameters,
-results, the URL path and error messages are not recorded. Its parent is the active span, such as a `send` span
+results, the URL path and error messages are not recorded; the host is recorded as it is, and these spans do not
+pass through the redaction hook. Its parent is the active span, such as a `send` span
 ([ADR 0019](adr/0019-json-rpc-spans.md)).
 
 ## Attributes
@@ -146,8 +147,8 @@ Bucket boundaries are given as advice: 0.05 s to 300 s for durations, and one bu
 `blockchain.tx.from`, `blockchain.tx.to` and the `blockchain.payment.*` addresses follow the address mode: `raw`
 (default), `hashed` (`sha256:` + first 32 hex characters of SHA-256 of the lower-cased address, or a custom
 function) or `off`.
-A redaction hook runs last on every attribute set; if it throws, only `blockchain.system`, `blockchain.chain.id`,
-`blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
+A redaction hook runs last on every attribute set of the tracker's spans, not on metrics or JSON-RPC spans; if it
+throws, only `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
 `blockchain.tx.replacement.reason`, `blockchain.payment.protocol`, `blockchain.payment.status`,
 `blockchain.payment.verified` and `error.type` are recorded.
 Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md). Neither `hashed` nor
