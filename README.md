@@ -98,7 +98,7 @@ make lab-nuke    # remove containers, images, tools and build output
 ## Documentation
 
 - Website: [hashspan.dev](https://hashspan.dev)
-- [Architecture](docs/architecture.md) · [Semantic conventions](docs/semconv.md) · [ADRs](docs/adr/) · [Roadmap](docs/roadmap.md)
+- [Architecture](docs/architecture.md) · [Semantic conventions](docs/semconv.md) · [Tracing backends](docs/backends.md) · [ADRs](docs/adr/) · [Roadmap](docs/roadmap.md)
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Releasing](docs/releasing.md)
 
 ## Contributing
