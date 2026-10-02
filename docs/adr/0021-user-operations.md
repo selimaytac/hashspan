@@ -77,6 +77,22 @@ What the SDKs give (viem 2.57, `@coinbase/cdp-sdk` 1.57):
   those of transactions. The outcome from chain data is `blockchain.user_operation.success`.
 - **viem.** Background confirmation and `watch()` stay for transactions; a user operation gets a confirm span from
   `waitForUserOperationReceipt`.
+- **CDP.** The smart account factories (`createSmartAccount`, `getSmartAccount`, `getOrCreateSmartAccount`,
+  `updateSmartAccount`) and their accounts are wrapped like server accounts; `listSmartAccounts` returns records
+  without methods. Every entry point that sends calls the SDK's `sendUserOperation` function or the CDP API
+  directly, so each is wrapped and traced once: on smart accounts `sendUserOperation`, `transfer`, `swap`,
+  `useSpendPermission` and quote `execute()`, on `cdp.evm` `sendUserOperation`, `prepareAndSendUserOperation`,
+  `createSpendPermission` and `revokeSpendPermission`; a network-scoped smart account's `useSpendPermission` calls
+  the account's. The call count is recorded only for a `calls` array. The confirm span comes only from
+  `waitForUserOperation`: CDP's result names neither the chain nor the sender, so the adapter remembers both for
+  the operations it saw sent (a bounded map) and leaves a wait for another operation untraced, except on a
+  network-scoped account. `complete` records the bundle transaction's hash and no success flag, since a mined
+  bundle does not tell whether the operation reverted; with a reader, the adapter polls `eth_getTransactionReceipt`
+  of the bundle through the reader's `request` (not a wrapped action, so a reader extended by `@hashspan/viem`
+  records no transaction confirm span for the bundle) and takes the last `UserOperationEvent` whose `userOpHash`
+  and `sender` topics match; the span ends when the wait did. `failed` ends with `error.type` `failed`, the SDK's
+  `TimeoutError` as `timeout`. Without a wait, only the send span is recorded. Revert reasons
+  (`UserOperationRevertReason`) are not decoded yet.
 - **Tests.** The Anvil test does not use the canonical EntryPoint or an external bundler: the common bundlers (Alto
   is GPL-3.0-or-later) and the EntryPoint package (`@account-abstraction/contracts` depends on
   `@uniswap/v3-periphery`, GPL-2.0-or-later) fail the license check, which covers dev dependencies too. A stand-in

@@ -1,4 +1,12 @@
-import { createTxTracker, type ReceiptLike, type SendInput, type TxTracker } from '@hashspan/core';
+import {
+  createTxTracker,
+  type ReceiptLike,
+  type SendInput,
+  type TxTracker,
+  type UserOperationConfirmHandle,
+  type UserOperationInput,
+  type UserOperationReceiptLike,
+} from '@hashspan/core';
 import {
   type FlushOptions,
   type ViemClientLike,
@@ -8,6 +16,8 @@ import {
 import { type Context, context, diag } from '@opentelemetry/api';
 import { parseTransaction } from 'viem';
 import { CDP_API_SEND_CHAIN_IDS, chainIdOf } from './networks.js';
+import { own } from './own.js';
+import { SentUserOperations, userOperationReceiptFromBundle } from './user-operation.js';
 
 export { CDP_NETWORK_CHAIN_IDS } from './networks.js';
 
@@ -63,22 +73,22 @@ const ACCOUNT_FACTORIES = [
   'importAccount',
   'updateAccount',
 ] as const;
+// `listSmartAccounts` is not among them: it returns plain records without methods.
+const SMART_ACCOUNT_FACTORIES = [
+  'createSmartAccount',
+  'getSmartAccount',
+  'getOrCreateSmartAccount',
+  'updateSmartAccount',
+] as const;
+// The user operations whose chain and sender are remembered for later waits.
+const MAX_SENT_USER_OPERATIONS = 4096;
+// The same default as the confirmations through the reader (`confirmTimeoutMs`).
+const DEFAULT_CONFIRM_TIMEOUT_MS = 120_000;
+// How often the reader is asked for a bundle receipt when it has no polling interval of its own.
+const DEFAULT_POLLING_INTERVAL_MS = 1000;
 
 function errorName(error: unknown): string {
   return error instanceof Error && error.name ? error.name : 'unknown error';
-}
-
-/**
- * The value of `target`'s own data property `key`, or undefined for an accessor, an inherited or a missing
- * property. Telemetry reads the user's arguments only this way, so it never runs a getter: a getter with side
- * effects, or one that returns a different value per read, would otherwise change what the call sends. A Proxy's
- * `getOwnPropertyDescriptor` trap still runs.
- */
-function own(target: unknown, key: string): unknown {
-  if (target === null || (typeof target !== 'object' && typeof target !== 'function'))
-    return undefined;
-  const descriptor = Object.getOwnPropertyDescriptor(target, key);
-  return descriptor && 'value' in descriptor ? descriptor.value : undefined;
 }
 
 /**
@@ -360,6 +370,234 @@ export function withHashspan(
     );
   };
 
+  const sentUserOperations = new SentUserOperations(MAX_SENT_USER_OPERATIONS);
+  let warnedOldTracker = false;
+  /** Whether the tracker records user operations; one from a core before 0.8 does not (ADR 0014). */
+  const tracesUserOperations = (): boolean => {
+    let able = false;
+    try {
+      able =
+        typeof tracker.startUserOperationSend === 'function' &&
+        typeof tracker.startUserOperationConfirm === 'function';
+    } catch (error) {
+      diag.debug(`hashspan: could not inspect the tracker (${errorName(error)})`);
+    }
+    if (!able && !warnedOldTracker) {
+      warnedOldTracker = true;
+      diag.warn(
+        'hashspan: not tracing user operations: the tracker has no startUserOperationSend; use createTxTracker() from @hashspan/core 0.8 or later',
+      );
+    }
+    return able;
+  };
+
+  /**
+   * Runs `send`, which hands a user operation to CDP, inside a user operation send span when the chain id is known;
+   * the result and errors are passed on unchanged. If reading the call's options throws, the call is made untraced.
+   */
+  const tracedUserOperation = async (
+    chainIdOf: () => number | undefined,
+    describe: () => Omit<UserOperationInput, 'chainId'>,
+    send: () => Promise<unknown>,
+  ): Promise<unknown> => {
+    let chainId: number | undefined;
+    try {
+      chainId = chainIdOf();
+    } catch (error) {
+      diag.error(
+        `hashspan: failed to read the call options; call not traced (${errorName(error)})`,
+      );
+      return send();
+    }
+    if (chainId === undefined) {
+      diag.debug('hashspan: no known CDP network in the call; not tracing it');
+      return send();
+    }
+    if (!tracesUserOperations()) return send();
+    let input: Omit<UserOperationInput, 'chainId'> = {};
+    let handle: ReturnType<TxTracker['startUserOperationSend']> | undefined;
+    try {
+      input = describe();
+      handle = tracker.startUserOperationSend({ ...input, chainId });
+    } catch (error) {
+      diag.error(`hashspan: failed to start send span (${errorName(error)})`);
+    }
+    let result: unknown;
+    try {
+      // As for transactions, only the call runs in the send span's context (ADR 0015).
+      result = await context.with(sendContextOf(handle), send);
+    } catch (error) {
+      try {
+        handle?.fail(error, { errorType: cdpErrorType(error) });
+      } catch (thrown) {
+        diag.error(`hashspan: failed to record send failure (${errorName(thrown)})`);
+      }
+      throw error;
+    }
+    try {
+      const userOpHash = own(result, 'userOpHash');
+      if (typeof userOpHash === 'string') {
+        handle?.end({ userOpHash });
+        const sender = input.sender ?? stringOrUndefined(own(result, 'smartAccountAddress'));
+        sentUserOperations.add(userOpHash, chainId, sender);
+      } else {
+        handle?.fail(new TypeError('no userOpHash in the CDP result'));
+      }
+    } catch (error) {
+      diag.error(`hashspan: failed to record send span (${errorName(error)})`);
+    }
+    return result;
+  };
+
+  /**
+   * Runs a `waitForUserOperation` inside the user operation's confirm span. The wait names no network: the chain is
+   * `chainId` for a network-scoped account, else the one the operation was sent on through this client; a wait for
+   * an operation sent elsewhere is passed on untraced. The result and errors are passed on unchanged.
+   */
+  const confirmedUserOperation = (
+    chainId: number | undefined,
+    smartAccountAddress: () => unknown,
+    options: unknown,
+    wait: () => Promise<unknown>,
+  ): Promise<unknown> => {
+    let userOpHash: unknown;
+    let chain: number | undefined;
+    let sender: string | undefined;
+    try {
+      userOpHash = own(options, 'userOpHash');
+      const sent = typeof userOpHash === 'string' ? sentUserOperations.get(userOpHash) : undefined;
+      chain = chainId ?? sent?.chainId;
+      sender = stringOrUndefined(smartAccountAddress()) ?? sent?.sender;
+    } catch (error) {
+      diag.error(
+        `hashspan: failed to read the call options; call not traced (${errorName(error)})`,
+      );
+      return wait();
+    }
+    if (typeof userOpHash !== 'string') return wait();
+    if (chain === undefined) {
+      diag.debug('hashspan: a user operation sent elsewhere; not tracing its wait');
+      return wait();
+    }
+    if (!tracesUserOperations()) return wait();
+    let handle: UserOperationConfirmHandle | undefined;
+    try {
+      handle = tracker.startUserOperationConfirm({ chainId: chain, userOpHash });
+    } catch (error) {
+      diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
+    }
+    const call = wait();
+    if (handle) track(recordUserOperationWait(handle, call, chain, userOpHash, sender));
+    return call;
+  };
+
+  /**
+   * Ends `handle` from the outcome of the user's `waitForUserOperation`; never rejects. CDP reports `complete` with
+   * the bundle transaction's hash, or `failed` without a reason. With a reader, the bundle receipt's
+   * `UserOperationEvent` adds the operation's success, gas and paymaster; the span still ends when the wait did. It
+   * is tracked, so `flush()` waits for it; if `flush()` gives up, a completed operation ends with what is known, and
+   * one still awaited as `timeout`.
+   */
+  const recordUserOperationWait = (
+    handle: UserOperationConfirmHandle,
+    call: Promise<unknown>,
+    chainId: number,
+    userOpHash: string,
+    sender: string | undefined,
+  ): Promise<void> => {
+    let ended = false;
+    let completed: { receipt: UserOperationReceiptLike; endTime: Date } | undefined;
+    const end = (record: () => void, what: string): void => {
+      if (ended) return;
+      ended = true;
+      waiting.delete(abandon);
+      try {
+        record();
+      } catch (error) {
+        diag.error(`hashspan: failed to record ${what} (${errorName(error)})`);
+      }
+    };
+    const abandon = (): void =>
+      end(
+        () =>
+          completed
+            ? handle.end(completed.receipt, { endTime: completed.endTime })
+            : handle.timeout(),
+        'user operation confirmation',
+      );
+    waiting.add(abandon);
+    const outcome = async (result: unknown): Promise<void> => {
+      const endTime = new Date();
+      const status = own(result, 'status');
+      if (status === 'failed') {
+        end(() => handle.fail(undefined, { errorType: 'failed', endTime }), 'failed operation');
+        return;
+      }
+      const transactionHash = own(result, 'transactionHash');
+      if (status !== 'complete' || typeof transactionHash !== 'string') {
+        end(
+          () => handle.fail(new TypeError('not a user operation result'), { endTime }),
+          'user operation result',
+        );
+        return;
+      }
+      // Without a reader, CDP's answer says nothing about whether the operation's calls succeeded.
+      completed = { receipt: { transactionHash }, endTime };
+      const client = isHexString(transactionHash) ? readerFor(chainId) : undefined;
+      if (client) {
+        const raw = await bundleReceipt(client, transactionHash, () => ended);
+        if (raw) completed.receipt = userOperationReceiptFromBundle(raw, userOpHash, sender);
+      }
+      const { receipt } = completed;
+      end(() => handle.end(receipt, { endTime }), 'user operation receipt');
+    };
+    return call.then(
+      (result) =>
+        outcome(result).catch((error: unknown) => {
+          end(() => handle.fail(error), 'user operation receipt');
+        }),
+      (error: unknown) => {
+        end(
+          () =>
+            // The SDK's wait gives up with a TimeoutError; the operation may still complete.
+            error instanceof Error && error.name === 'TimeoutError'
+              ? handle.timeout()
+              : handle.fail(error),
+          'confirmation failure',
+        );
+      },
+    );
+  };
+
+  /**
+   * The node's raw receipt of a bundle transaction, polled through the reader until it is found, `stopped()`, or
+   * `confirmTimeoutMs` passed. It calls the client's `request` directly, so a reader extended by `@hashspan/viem`
+   * records no transaction confirm span for the bundle, whose fee covers every operation in it (ADR 0021).
+   */
+  const bundleReceipt = async (
+    client: ViemClientLike,
+    hash: string,
+    stopped: () => boolean,
+  ): Promise<unknown> => {
+    const polling = own(client, 'pollingInterval');
+    const interval =
+      typeof polling === 'number' && polling > 0 ? polling : DEFAULT_POLLING_INTERVAL_MS;
+    const deadline = Date.now() + (confirmTimeoutMs ?? DEFAULT_CONFIRM_TIMEOUT_MS);
+    for (;;) {
+      try {
+        const raw: unknown = await client.request({
+          method: 'eth_getTransactionReceipt',
+          params: [hash],
+        });
+        if (raw !== null && typeof raw === 'object') return raw;
+      } catch (error) {
+        diag.debug(`hashspan: could not read the bundle receipt (${errorName(error)})`);
+      }
+      if (stopped() || Date.now() + interval > deadline) return undefined;
+      await new Promise<void>((resolve) => timers.setTimeout(resolve, interval));
+    }
+  };
+
   /**
    * Replaces `target[name]` with `wrap(original)`, calling the original with `target` as `this`. Returns false when
    * the method cannot be replaced, for example on a frozen object; a method replaced before is left as it is, so
@@ -542,6 +780,187 @@ export function withHashspan(
     return value;
   };
 
+  /** What the send span of a call with `calls` records: the sender, and the number of calls if they are an own array. */
+  const describeUserOperation = (
+    smartAccount: unknown,
+    calls: unknown,
+  ): Omit<UserOperationInput, 'chainId'> => {
+    const count = Array.isArray(calls) ? own(calls, 'length') : undefined;
+    return {
+      sender: addressOf(smartAccount),
+      callCount: typeof count === 'number' ? count : undefined,
+    };
+  };
+
+  /** Traces `quote.execute()` of a quote created for a smart account, which sends a user operation. */
+  const wrapUserOperationQuote = (value: unknown, smartAccount: unknown): unknown => {
+    if (value === null || typeof value !== 'object') return value;
+    const quote = value as Record<string, unknown>;
+    replace(
+      quote,
+      'execute',
+      (original) =>
+        async (...args: never[]) =>
+          tracedUserOperation(
+            () => chainIdFor(own(quote, 'network')),
+            () => ({ sender: addressOf(smartAccount) }),
+            () => original(...args),
+          ),
+    );
+    return value;
+  };
+
+  /**
+   * Wraps a network-scoped smart account in place; never throws. Its `useSpendPermission` calls the wrapped smart
+   * account's, which traces it; its other send methods call the SDK's functions directly, so they are wrapped here.
+   */
+  const wrapScopedSmartAccount = (scoped: unknown): unknown => {
+    if (scoped === null || typeof scoped !== 'object') return scoped;
+    const account = scoped as AccountLike;
+    let chainId: number | undefined;
+    try {
+      chainId = chainIdFor(own(account, 'network'));
+    } catch (error) {
+      wrapFailed(error);
+    }
+    if (chainId === undefined) return scoped;
+    const id = chainId;
+    replace(account, 'sendUserOperation', (original) => async (...args: never[]) => {
+      const [opts] = args as unknown as [Record<string, unknown> | undefined];
+      return tracedUserOperation(
+        () => id,
+        () => describeUserOperation(account, own(opts, 'calls')),
+        () => original(...args),
+      );
+    });
+    replace(
+      account,
+      'transfer',
+      (original) =>
+        async (...args: never[]) =>
+          tracedUserOperation(
+            () => id,
+            () => ({ sender: addressOf(account) }),
+            () => original(...args),
+          ),
+    );
+    replace(account, 'swap', (original) => async (...args: never[]) => {
+      const [opts] = args as unknown as [Record<string, unknown> | undefined];
+      return tracedUserOperation(
+        // A quote-based swap is sent on the quote's network, as it is passed on unchanged.
+        () => {
+          const quote = own(opts, 'swapQuote');
+          return quote === undefined ? id : chainIdFor(own(quote, 'network'));
+        },
+        () => ({ sender: addressOf(account) }),
+        () => original(...args),
+      );
+    });
+    replace(
+      account,
+      'quoteSwap',
+      (original) =>
+        async (...args: never[]) =>
+          wrapUserOperationQuote(await original(...args), account),
+    );
+    replace(
+      account,
+      'waitForUserOperation',
+      (original) =>
+        async (...args: never[]) =>
+          confirmedUserOperation(
+            id,
+            () => addressOf(account),
+            args[0],
+            () => original(...args),
+          ),
+    );
+    return scoped;
+  };
+
+  /**
+   * Wraps a smart account in place, like {@link wrapAccount}: never throws, and marks the account only once every
+   * method was replaced. Each send method calls the SDK's `sendUserOperation` function directly, not the account's
+   * method, so each is wrapped and traced once.
+   */
+  const wrapSmartAccount = (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object') return value;
+    const account = value as AccountLike & { [WRAPPED]?: true };
+    try {
+      if (account[WRAPPED]) return value;
+    } catch (error) {
+      wrapFailed(error);
+      return value;
+    }
+    const sendOn =
+      (
+        describe: (
+          opts: Record<string, unknown> | undefined,
+        ) => Omit<UserOperationInput, 'chainId'>,
+      ) =>
+      (original: AnyFn) =>
+      async (...args: never[]) => {
+        const [opts] = args as unknown as [Record<string, unknown> | undefined];
+        return tracedUserOperation(
+          () => chainIdFor(own(opts, 'network')),
+          () => describe(opts),
+          () => original(...args),
+        );
+      };
+    const sender = () => ({ sender: addressOf(account) });
+    const replaced = [
+      replace(
+        account,
+        'sendUserOperation',
+        sendOn((opts) => describeUserOperation(account, own(opts, 'calls'))),
+      ),
+      replace(account, 'transfer', sendOn(sender)),
+      replace(account, 'useSpendPermission', sendOn(sender)),
+      replace(account, 'swap', (original) => async (...args: never[]) => {
+        const [opts] = args as unknown as [Record<string, unknown> | undefined];
+        return tracedUserOperation(
+          () => chainIdFor(own(opts, 'network') ?? own(own(opts, 'swapQuote'), 'network')),
+          sender,
+          () => original(...args),
+        );
+      }),
+      replace(
+        account,
+        'quoteSwap',
+        (original) =>
+          async (...args: never[]) =>
+            wrapUserOperationQuote(await original(...args), account),
+      ),
+      replace(
+        account,
+        'waitForUserOperation',
+        (original) =>
+          async (...args: never[]) =>
+            confirmedUserOperation(
+              undefined,
+              () => addressOf(account),
+              args[0],
+              () => original(...args),
+            ),
+      ),
+      replace(
+        account,
+        'useNetwork',
+        (original) =>
+          async (...args: never[]) =>
+            wrapScopedSmartAccount(await original(...args)),
+      ),
+    ];
+    if (replaced.every(Boolean)) {
+      try {
+        Object.defineProperty(account, WRAPPED, { value: true });
+      } catch (error) {
+        wrapFailed(error);
+      }
+    }
+    return value;
+  };
+
   const handle: HashspanCdp = {
     flush: async (flushOptions) => {
       const timeoutMs = flushOptions?.timeoutMs ?? DEFAULT_FLUSH_TIMEOUT_MS;
@@ -583,20 +1002,73 @@ export function withHashspan(
           wrapAccount(await original(...args)),
     );
   }
+  for (const factory of SMART_ACCOUNT_FACTORIES) {
+    replace(
+      evm,
+      factory,
+      (original) =>
+        async (...args: never[]) =>
+          wrapSmartAccount(await original(...args)),
+    );
+  }
   replace(evm, 'createSwapQuote', (original) => async (...args: never[]) => {
     const [opts] = args as unknown as [{ taker?: unknown; smartAccount?: unknown } | undefined];
     const quote = await original(...args);
     try {
-      // A smart account given through a getter still makes a user operation quote: it is left alone too.
       const smartAccount = opts ? Object.getOwnPropertyDescriptor(opts, 'smartAccount') : undefined;
-      const forSmartAccount =
-        smartAccount !== undefined &&
-        (!('value' in smartAccount) || smartAccount.value !== undefined);
-      return forSmartAccount ? quote : wrapQuote(quote, own(opts, 'taker'));
+      if (smartAccount === undefined) return wrapQuote(quote, own(opts, 'taker'));
+      // A smart account given through a getter still makes a user operation quote, which is left untraced: its
+      // sender cannot be read without running the getter.
+      if (!('value' in smartAccount)) return quote;
+      return smartAccount.value === undefined
+        ? wrapQuote(quote, own(opts, 'taker'))
+        : wrapUserOperationQuote(quote, smartAccount.value);
     } catch (error) {
       wrapFailed(error);
       return quote;
     }
+  });
+  // Each calls the SDK's `sendUserOperation` function, or the CDP API, directly: none goes through another.
+  replace(evm, 'sendUserOperation', (original) => async (...args: never[]) => {
+    const [opts] = args as unknown as [Record<string, unknown> | undefined];
+    return tracedUserOperation(
+      () => chainIdFor(own(opts, 'network')),
+      () => describeUserOperation(own(opts, 'smartAccount'), own(opts, 'calls')),
+      () => original(...args),
+    );
+  });
+  replace(evm, 'prepareAndSendUserOperation', (original) => async (...args: never[]) => {
+    const [opts] = args as unknown as [Record<string, unknown> | undefined];
+    return tracedUserOperation(
+      () => chainIdFor(own(opts, 'network')),
+      () => describeUserOperation(own(opts, 'smartAccount'), own(opts, 'calls')),
+      () => original(...args),
+    );
+  });
+  replace(evm, 'createSpendPermission', (original) => async (...args: never[]) => {
+    const [opts] = args as unknown as [Record<string, unknown> | undefined];
+    return tracedUserOperation(
+      () => chainIdFor(own(opts, 'network')),
+      () => ({ sender: addressOf(own(own(opts, 'spendPermission'), 'account')) }),
+      () => original(...args),
+    );
+  });
+  replace(evm, 'revokeSpendPermission', (original) => async (...args: never[]) => {
+    const [opts] = args as unknown as [Record<string, unknown> | undefined];
+    return tracedUserOperation(
+      () => chainIdFor(own(opts, 'network')),
+      () => ({ sender: addressOf(own(opts, 'address')) }),
+      () => original(...args),
+    );
+  });
+  replace(evm, 'waitForUserOperation', (original) => async (...args: never[]) => {
+    const [opts] = args as unknown as [Record<string, unknown> | undefined];
+    return confirmedUserOperation(
+      undefined,
+      () => own(opts, 'smartAccountAddress'),
+      opts,
+      () => original(...args),
+    );
   });
   replace(evm, 'listAccounts', (original) => async (...args: never[]) => {
     const result = (await original(...args)) as { accounts?: unknown[] } | undefined;

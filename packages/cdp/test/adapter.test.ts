@@ -527,16 +527,22 @@ describe('swap quotes', () => {
     expect(tracing.spanNamed('send 1').attributes['blockchain.tx.from']).toBe(ACCOUNT);
   });
 
-  it('leave quotes for smart accounts alone, which send user operations', async () => {
+  it('trace execute() of a quote for a smart account as a user operation, from the smart account', async () => {
     const cdp = fakeCdp();
     withHashspan(cdp);
     const quote = (await cdp.evm.createSwapQuote({
       network: 'base',
       taker: ACCOUNT,
-      smartAccount: {},
+      smartAccount: { address: TO },
     })) as { execute: () => Promise<unknown> };
     await expect(quote.execute()).resolves.toEqual({ userOpHash: HASH });
-    expect(tracing.spans()).toHaveLength(0);
+    const send = tracing.spanNamed('send 8453');
+    expect(send.attributes).toMatchObject({
+      'blockchain.user_operation.hash': HASH,
+      'blockchain.user_operation.sender': TO,
+    });
+    expect(send.attributes['blockchain.tx.hash']).toBeUndefined();
+    expect(send.attributes['blockchain.tx.from']).toBeUndefined();
   });
 });
 

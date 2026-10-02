@@ -65,7 +65,8 @@ agent toolkits. Relevant facts, from the SDK source (1.57):
   only short identifiers; `exception.type` stays the class name.
 - **Retries.** Each call gets its own send span, so a retry with the same `idempotencyKey` records a second one.
 - **Not traced in this step.** Smart account user operations (including swap quotes created for a smart account),
-  which need a new identifier in the core and the schema and get their own ADR; EIP-7702 delegated accounts
+  which need a new identifier in the core and the schema and get their own ADR (superseded by ADR 0021, which
+  traces them); EIP-7702 delegated accounts
   (`toEvmDelegatedAccount` returns a smart account); Solana (`cdp.solana`); `requestFaucet`, which Coinbase sends;
   `signTransaction`, which does not broadcast; and `toAccount()` accounts, which broadcast through the user's viem
   client.
