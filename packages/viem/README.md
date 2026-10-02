@@ -86,11 +86,12 @@ call `flush()` only when the process is shutting down. Long-running services do 
 ## Revert reasons
 
 A receipt only says that a transaction reverted. For reverted transactions the adapter replays the transaction with
-`eth_call` on the previous block's state and records the decoded reason as `blockchain.tx.revert.reason`:
+`eth_call` on the previous block's state (and, if that does not revert, as when the contract was created earlier in
+the same block, once more on its own block) and records the decoded reason as `blockchain.tx.revert.reason`:
 `Error(string)` messages, `Panic` codes, and custom errors when the ABI is known (transactions sent with
 `writeContract`), otherwise the error selector.
 
-- Two extra RPC requests per reverted transaction; none for successful ones.
+- Two extra RPC requests per reverted transaction (three when the second replay is needed); none for successful ones.
 - Best effort: the replay can differ when earlier transactions in the same block changed the state, and providers
   without historical state cannot replay. The reason is then missing.
 - `waitForTransactionReceipt` returns as soon as the receipt is available; the confirm span ends once the reason

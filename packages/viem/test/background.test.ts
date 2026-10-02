@@ -207,7 +207,11 @@ describe('confirmations shared through one tracker', () => {
   });
 
   it('fetches the revert reason once for concurrent waits', async () => {
-    const { transport, calls } = mockTransport({ receipt: { status: '0x0' } });
+    // The replay reverts on the previous block, so one fetch is one eth_call.
+    const { transport, calls } = mockTransport({
+      receipt: { status: '0x0' },
+      callRevertData: '0x08c379a0',
+    });
     const hashspan = withHashspan({ confirm: { mode: 'background' } });
     const wallet = createWalletClient({
       account: FROM,
