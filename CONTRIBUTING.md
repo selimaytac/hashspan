@@ -81,6 +81,9 @@ pnpm test:coverage      # unit + integration tests, with coverage thresholds
 code needs tests. Behaviour changes need a unit test, and anything touching RPC calls or receipts also needs an
 Anvil integration test (`*.int.test.ts`). Tests never use a public network.
 
+Tests of the setups in [docs/integrations.md](docs/integrations.md) live in `integrations/`, a workspace of its own: run `pnpm --dir integrations install` once, then `pnpm test:integrations`. CI runs these tests on pull requests
+that touch `packages/` or `integrations/`.
+
 ## Pull request guidelines
 
 - **One concern per PR**, linked to its issue (`Closes #123`).
