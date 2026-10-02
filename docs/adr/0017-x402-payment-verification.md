@@ -64,9 +64,10 @@ is not this payment's, such as the confirm span of a transaction the agent sent 
 With `extra.assetTransferMethod: 'permit2'`, the payer signs a Permit2 `PermitWitnessTransferFrom` (the payload's
 `permit2Authorization`: `from`, `permitted.token` and `permitted.amount`, `spender`, `nonce`, `deadline` and a
 `witness` with the recipient `to`) for an x402 proxy as spender. The facilitator calls the proxy, which has Permit2
-transfer the tokens. A real settlement receipt (SDK 2.28, checked on Anvil with the contracts copied from Base
-Sepolia) has the token's `Transfer(payer, payTo, value)` and then the proxy's `Settled()`, or, with EIP-2612 gas
-sponsoring, `Approval`, `Transfer` and `SettledWithPermit()`. Permit2 emits nothing, and no log carries the nonce.
+transfer the tokens. A real settlement receipt (SDK 2.28, settled on Anvil with the contracts copied from Base
+Sepolia) has the token's `Transfer(payer, payTo, value)` and then the proxy's `Settled()`. With EIP-2612 gas
+sponsoring, the receipt has the token's `Approval` and `Transfer` and the proxy's `SettledWithPermit()` instead, per
+the proxy's code; that path is not settled in a test. Permit2 emits nothing, and no log carries the nonce.
 
 `upto` is Permit2 only, through its own proxy. Its witness also names the `facilitator`, the only sender the proxy
 accepts. The server settles any amount up to `permitted.amount`, chosen at settlement time; the settlement reports it
