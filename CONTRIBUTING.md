@@ -91,7 +91,9 @@ Anvil integration test (`*.int.test.ts`). Tests never use a public network.
   generated file. Docs, test and CI changes don't need one.
 - **Span and attribute names are a public contract**: changing them needs an update to
   [`docs/semconv.md`](docs/semconv.md) and, if significant, an [ADR](docs/adr/).
-- **New dependencies** need a short justification in the PR description.
+- **New dependencies** need a short justification in the PR description. CI fails on high or critical
+  advisories (`pnpm audit --audit-level high`) and on licenses outside the allowlist in
+  [`scripts/check-licenses.mjs`](scripts/check-licenses.mjs).
 
 The full conventions (architecture, stability rules, what instrumentation may and may not do) are in
 [AGENTS.md](AGENTS.md). Despite the name, it is written for human contributors and AI coding agents alike.

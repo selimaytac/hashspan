@@ -1,0 +1,67 @@
+name: SBOM
+
+# Attaches a CycloneDX SBOM of the lockfile to the GitHub releases of a release commit. It runs after each successful
+# Release run (the releases are created with the workflow's token, which does not trigger `release` events), and by
+# hand for an existing release tag. Every release tagged on that commit gets the same file. See docs/releasing.md.
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: A release tag, such as @hashspan/core@0.6.0; every release on its commit gets the SBOM
+        required: true
+
+permissions: {}
+
+jobs:
+  sbom:
+    name: Attach SBOM to releases
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Select the commit
+        id: commit
+        env:
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            [[ "$TAG" =~ ^@hashspan/[a-z0-9-]+@[0-9A-Za-z.+-]+$ ]] || { echo "not a release tag: $TAG"; exit 1; }
+            echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$SHA" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.commit.outputs.ref }}
+          fetch-tags: true
+          persist-credentials: false
+      # No install: the SBOM lists the lockfile, every platform's packages included, not one node_modules.
+      # Pinned by digest, like the actions by commit SHA: a tag can be moved.
+      - name: Generate SBOM (syft)
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" \
+            anchore/syft:v1.54.0@sha256:0356562f495d432056237fbea5cbc2d4839c9c75cd500784a66de2e7cc95ca7c \
+            scan dir:/repo --source-name hashspan --output cyclonedx-json --quiet \
+            > "$RUNNER_TEMP/sbom.cdx.json"
+      - name: Attach to releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tags="$(git tag --points-at HEAD '@hashspan/*')"
+          if [ -z "$tags" ]; then
+            echo "No release tags on $(git rev-parse HEAD); nothing to attach."
+            exit 0
+          fi
+          for tag in $tags; do
+            gh release upload "$tag" "$RUNNER_TEMP/sbom.cdx.json" --clobber --repo "$GITHUB_REPOSITORY"
+            echo "Attached sbom.cdx.json to $tag"
+          done
