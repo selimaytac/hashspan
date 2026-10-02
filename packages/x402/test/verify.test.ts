@@ -571,6 +571,47 @@ describe('checking the nonce in a Permit2 settlement transaction', () => {
   });
 });
 
+describe('a replaced settlement transaction', () => {
+  // The settlement reports one transaction; the receipt is of the one that was mined (RECEIPT_HASH), as for a
+  // replacement. Each transaction's input settles a payment with its own nonce.
+  const REPORTED = `0x${'ef'.repeat(32)}`;
+  const replaced = (
+    reportedNonce: bigint,
+    minedNonce: bigint,
+    receipt: Record<string, unknown> = receiptOf(permit2Logs()),
+  ) =>
+    recordingReader(receipt, undefined, {
+      transaction: (hash) => ({
+        input: settlementInput({ nonce: hash === REPORTED ? reportedNonce : minedNonce }),
+      }),
+    });
+
+  it('checks the nonce in the input of the mined transaction', async () => {
+    const mined = replaced(PERMIT2_NONCE + 1n, PERMIT2_NONCE);
+    const span = await paid(mined.reader, permit2Signed(), {
+      settlement: { transaction: REPORTED },
+    });
+    expect(span.attributes['blockchain.payment.verified']).toBe(true);
+    tracing.exporter.reset();
+    // The reported transaction carries this payment's nonce; the mined one settled another payment.
+    const other = replaced(PERMIT2_NONCE, PERMIT2_NONCE + 1n);
+    const otherSpan = await paid(other.reader, permit2Signed(), {
+      settlement: { transaction: REPORTED },
+    });
+    expect(otherSpan.attributes['blockchain.payment.verified']).toBe(false);
+  });
+
+  it('records nothing for a receipt without a transaction hash', async () => {
+    const { reader, calls } = replaced(PERMIT2_NONCE, PERMIT2_NONCE, {
+      ...receiptOf(permit2Logs()),
+      transactionHash: 'not a hash',
+    });
+    const span = await paid(reader, permit2Signed(), { settlement: { transaction: REPORTED } });
+    expect(span.attributes['blockchain.payment.verified']).toBeUndefined();
+    expect(calls).not.toContain('eth_getTransactionByHash');
+  });
+});
+
 describe('a settlement transaction reported again', () => {
   it('is false for a later Permit2 payment, in the same client or another one', async () => {
     // The transaction settles the payment with the default nonce; the later payment signed another one.

@@ -10,8 +10,8 @@ export interface MockOptions {
   chainId?: () => string | Promise<string>;
   /** Receipt fields merged into the default successful receipt; `null` means "not mined yet". */
   receipt?: Record<string, unknown> | null;
-  /** Transaction fields merged into the default transaction, such as its `input`. */
-  transaction?: Record<string, unknown>;
+  /** Transaction fields merged into the default transaction, such as its `input`; a function gets the hash asked for. */
+  transaction?: Record<string, unknown> | ((hash: unknown) => Record<string, unknown>);
   sendError?: { code: number; message: string };
   /** Methods that never answer, like an unresponsive provider. */
   hangOn?: string[];
@@ -40,7 +40,7 @@ export function mockTransport(options: MockOptions = {}) {
   const calls: string[] = [];
   const requests: { method: string; params?: unknown }[] = [];
   let block = 0x7b;
-  const transaction = () => ({
+  const transaction = (hash?: unknown) => ({
     hash: HASH,
     from: FROM,
     to: TO,
@@ -60,7 +60,9 @@ export function mockTransport(options: MockOptions = {}) {
     r: `0x${'11'.repeat(32)}`,
     s: `0x${'22'.repeat(32)}`,
     yParity: '0x0',
-    ...options.transaction,
+    ...(typeof options.transaction === 'function'
+      ? options.transaction(hash)
+      : options.transaction),
   });
   const transport = custom({
     async request({ method, params }: { method: string; params?: unknown }) {
@@ -88,7 +90,7 @@ export function mockTransport(options: MockOptions = {}) {
         case 'eth_blockNumber':
           return `0x${(options.advanceBlocks ? block++ : block).toString(16)}`;
         case 'eth_getTransactionByHash':
-          return transaction();
+          return transaction((params as unknown[] | undefined)?.[0]);
         case 'eth_call':
           if (options.callHangs) return new Promise(() => {});
           if (options.callDelayMs)

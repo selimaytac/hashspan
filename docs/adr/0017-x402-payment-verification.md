@@ -114,12 +114,14 @@ nonce is this payment and no other.
 ### Decision
 
 - For an `exact` Permit2 or `upto` payment whose receipt carries it by the rules above, the adapter reads the
-  transaction (`eth_getTransactionByHash`) through the reader and decodes its input with fixed ABIs of the proxies'
-  settlement functions, owned by the adapter (the exact proxy's for `exact`, the upto proxy's for `upto`). The payment
-  is verified when the decoded permit's `nonce` equals the payload's `permit2Authorization.nonce` and its `owner` is
-  the payer.
+  receipt's own transaction (`eth_getTransactionByHash` with the receipt's `transactionHash`, which is the
+  replacement when the reported transaction was replaced, so the receipt and the input are of one transaction)
+  through the reader and decodes its input with fixed ABIs of the proxies' settlement functions, owned by the adapter
+  (the exact proxy's for `exact`, the upto proxy's for `upto`). The payment is verified when the decoded permit's
+  `nonce` equals the payload's `permit2Authorization.nonce` and its `owner` is the payer.
 - Input that does not decode as one of those functions, or with another nonce or owner, is `false`.
-- A transaction that cannot be read within 10 seconds, or a failed request, means no verdict. The payment span stays
+- A receipt without a transaction hash, a transaction that cannot be read within 10 seconds, or a failed request,
+  means no verdict. The payment span stays
   open until then; `flush()` ends it without a verdict if it cannot wait longer.
 - A receipt that does not carry the payment is `false` without reading the transaction.
 - The in-memory list of verified transactions is removed: the nonce check covers other processes, other
