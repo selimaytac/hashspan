@@ -64,12 +64,12 @@ nonce and `Transfer` from you to `payTo` of exactly the amount. For an `exact` p
 transaction was sent to the x402 proxy you authorized, which emitted its settlement event, and the token emitted
 `Transfer` from you to `payTo` of exactly the amount; for `upto`, the transaction was also sent by the facilitator
 your authorization names, and the transfer is of more than nothing, at most your maximum and the amount the
-settlement reports. For both, the reader also fetches the transaction: its input must pass your Permit2 nonce and
-your address as the owner, so the transaction of an earlier payment is `false`, whichever client or process verified
-it. All of it is checked from your own payment, not from the settlement. The attribute is absent when no check was
-possible: no reader, no receipt, a reverted one, a transaction that cannot be read, or another scheme (such as
-`batch-settlement`). With a reader, the payment span is exported once the receipt is checked; its end time stays when
-the response came. The revert reason of a reverted settlement, which would be text from a contract the server
+settlement reports. For both, the reader also fetches the mined transaction: its input must pass your Permit2 nonce
+and your address as the owner, so the transaction of an earlier payment is `false`, whichever client or process
+verified it. All of it is checked from your own payment, not from the settlement. The attribute is absent when no
+check was possible: no reader, no receipt, a reverted one, a transaction that cannot be read, or another scheme (such
+as `batch-settlement`). With a reader, the payment span is exported once the receipt is checked; its end time stays
+when the response came. The revert reason of a reverted settlement, which would be text from a contract the server
 chooses, is only recorded with `decodeRevertReason: true`. See
 [ADR 0017](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.7.0/docs/adr/0017-x402-payment-verification.md).
 

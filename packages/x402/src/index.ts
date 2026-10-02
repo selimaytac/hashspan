@@ -476,21 +476,23 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
     });
 
   /**
-   * The verdict on `receipt` for a payment checked with `check`, settled in the transaction `hash`; undefined when no
-   * check was possible. For Permit2, whose logs carry no nonce, a receipt that carries the payment is checked against
-   * the nonce in the transaction's input, read through `client` (ADR 0017).
+   * The verdict on `receipt` for a payment checked with `check`; undefined when no check was possible. For Permit2,
+   * whose logs carry no nonce, a receipt that carries the payment is checked against the nonce in the input of the
+   * receipt's own transaction, read through `client` (ADR 0017). That is the mined transaction, which is not the
+   * reported one when it was replaced, so the receipt and the input always belong to one transaction.
    */
   const verdictOf = async (
     client: ViemClientLike,
     check: PaymentCheck,
-    hash: string,
     settlement: PaymentSettlement,
     receipt: unknown,
   ): Promise<boolean | undefined> => {
     if (check.method === 'eip3009') return carriesEip3009Payment(receipt, check);
     const carried = carriesPermit2Payment(receipt, check, settlement.amount);
     if (carried !== true) return carried;
-    const input = await inputOf(client, hash);
+    const mined = own(receipt, 'transactionHash');
+    if (typeof mined !== 'string' || !TX_HASH.test(mined)) return undefined;
+    const input = await inputOf(client, mined);
     return input === undefined ? undefined : settlesPermit2Payment(input, check);
   };
 
@@ -748,7 +750,7 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
           end();
           return;
         }
-        void verdictOf(confirmWith, check, hash, settlement, receipt)
+        void verdictOf(confirmWith, check, settlement, receipt)
           .then((verified) => end(verified))
           .catch((error: unknown) => {
             diag.error(`hashspan: failed to check the settlement (${errorName(error)})`);
