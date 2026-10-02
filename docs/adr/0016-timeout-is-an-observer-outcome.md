@@ -33,3 +33,8 @@ party, and a payment whose outcome was never learned has no status and `error.ty
   are recorded during the deprecation.
 - A transaction counted by `blockchain.tx.status` has a known on-chain outcome.
 - Distinguishing a confirm timeout from a flush that gave up is out of scope; both are `timeout`.
+
+## Amendment (2026-10-03): implemented
+
+The value `timeout` of `blockchain.tx.status` is no longer emitted since `@hashspan/core` 0.5.0 (#120), with the
+schema version `0.2.0-dev`; the deprecated constant stays exported until 1.0.

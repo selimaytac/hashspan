@@ -3,8 +3,9 @@
 Releases are cut from `main`, and only from `main`, by the [Release workflow](../.github/workflows/release.yml), using
 [Changesets](https://github.com/changesets/changesets). Packages are published to npm with
 [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/): GitHub Actions authenticates with a short-lived
-OIDC token, npm adds a provenance attestation, and no npm token exists anywhere. `@hashspan/*` packages are versioned
-together.
+OIDC token, npm adds a provenance attestation, and no npm token exists anywhere. `@hashspan/*` packages form a linked
+group (`.changeset/config.json`): the packages released together get one version, while a package without changes
+keeps its own, so versions can differ between packages.
 
 ## Every release
 

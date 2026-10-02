@@ -65,6 +65,7 @@ printed without the key or the RPC URL.
 
 | File | What it shows |
 |---|---|
+| [`src/main.ts`](src/main.ts) | The entry point: starts telemetry before importing the rest, picks the chain (`base-sepolia` or local), prints the results, and shuts telemetry down |
 | [`src/telemetry.ts`](src/telemetry.ts) | A standard OpenTelemetry SDK setup plus the AI SDK's OpenTelemetry integration |
 | [`src/chain.ts`](src/chain.ts) | One `withHashspan()` result shared by the wallet and public client |
 | [`src/base-sepolia.ts`](src/base-sepolia.ts) | The same clients on Base Sepolia, with a private key from the environment |

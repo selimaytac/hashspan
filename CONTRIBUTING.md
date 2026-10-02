@@ -75,6 +75,7 @@ CI runs these checks; running them locally saves a round trip:
 pnpm lint               # Biome; `pnpm format` fixes most findings
 pnpm typecheck
 pnpm test:coverage      # unit + integration tests, with coverage thresholds
+pnpm check:packages     # publint and arethetypeswrong on the built packages
 ```
 
 `pnpm test:coverage` fails if coverage drops below the thresholds in [`vitest.config.ts`](vitest.config.ts), so new

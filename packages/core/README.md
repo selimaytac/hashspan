@@ -68,7 +68,8 @@ stays the class name.
 
 `tracker.startPayment({ chainId, protocol, payer, recipient, asset, amount })` records a payment that another
 party settles on chain, such as an x402 facilitator, as a `payment {chainId}` span; end it with
-`end({ status, hash })` or `fail(error)`. A settlement with a hash links the transaction's confirm span to the payment
+`end({ status, hash })`, `fail(error)` or `timeout()`, and call `link(hash)` to link a settling transaction's confirm
+span before the payment ends. A settlement with a hash links the transaction's confirm span to the payment
 span ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0013-x402-payments.md)).
 
 `tracker.startUserOperationSend({ chainId, sender, entryPoint, callCount })` records a user operation of an ERC-4337
@@ -84,8 +85,8 @@ All of these calls accept an explicit parent `Context` as a second argument. An 
 after it started can record it after the fact: pass `startTime` in the input and `endTime` in the options of the
 handle method, e.g. `send.end({ hash }, { endTime })` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
 the instrumentation are reported through `diag` and never thrown into your code. The positional forms of earlier
-releases, `send.end(hash, endTime)` and `send.fail(error, endTime, { errorType })`, still work and are deprecated
-until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0014-core-api-boundary.md)).
+releases, `send.end(hash, endTime)` and `send.fail(error, endTime, { errorType })`, and those of the confirm handle,
+`end(receipt, endTime)`, `timeout(endTime)` and `fail(error, endTime)`, still work and are deprecated until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0014-core-api-boundary.md)).
 
 ## Options
 
@@ -94,20 +95,22 @@ until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core
 | `tracerProvider` | global provider | Tracer provider to use |
 | `meterProvider` | global provider | Meter provider for the [metrics](#metrics) |
 | `address` | `'raw'` | `'raw'`, `'hashed'`, `'off'`, or `{ mode: 'hashed', hash: (address) => string }` |
-| `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace). `'raw'` can record RPC URLs that include API keys, as some libraries put the request URL in the message; `'sanitized'` keeps only the first line (viem puts the URL on a later line), which is best effort. See [ADR 0006](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0006-error-privacy.md) |
+| `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, at most 256 characters, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace). `'raw'` can record RPC URLs that include API keys, as some libraries put the request URL in the message; `'sanitized'` keeps only the first line (viem puts the URL on a later line), which is best effort. See [ADR 0006](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0006-error-privacy.md) |
 | `paymentResource` | `'origin'` | How much of a paid resource's URL `x402.resource` records: `'origin'` (scheme, host and port; nothing for a resource that is not a URL), `'path'` (also the path, never the query string, fragment or user info) or `'off'`. Paths often carry user or account identifiers. At most 512 characters are recorded |
 | `recordFunctionArguments` | `false` | Record `functionArguments` as a JSON array in `blockchain.contract.function.arguments`: bigints as decimal strings, addresses per `address` mode (longer hex values become `<hex>` in `hashed` and `off` mode), at most 4096 characters. Reads only own enumerable data properties: `toJSON()` and getters are never called, so a `Date` records as `{}`; a Proxy's traps still run |
 | `agent` | none | Agent `{ id, name }`; a field set here always wins, unset fields come from the Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` |
 | `agentFromBaggage` | `true` | Read agent identity fields that `agent` leaves unset from Baggage; set to `false` in services that accept requests from outside their trust boundary |
-| `redact` | none | `(attributes) => attributes`, runs last on every span attribute set, including exception event attributes, but not on [metrics](#metrics); if it throws, only non-sensitive identifiers are kept |
-| `linkTtlMs` | `600000` | How long a sent transaction can be linked from its confirmation |
-| `maxTrackedTransactions` | `10000` | Upper bound on transactions kept for linking |
+| `redact` | none | `(attributes) => attributes`, runs last on every span attribute set, including exception event attributes, but not on [metrics](#metrics); if it throws or returns something other than an attributes object, only non-sensitive identifiers are kept |
+| `linkTtlMs` | `600000` | How long a sent transaction or user operation can be linked from its confirmation, and how long after a receipt further waits for it add no confirm span |
+| `maxTrackedTransactions` | `10000` | Upper bound on transactions, and separately on user operations, kept for linking and confirm deduplication |
 
 ## What is recorded
 
 Chain id, transaction hash, sender/recipient (per `address` mode), value, nonce, function name and selector, and,
 on confirmation, status, block number, gas used, effective gas price, L1 fee, total fee and revert reason. For user operations: their hash,
-smart account, EntryPoint, number of calls, success, gas used, cost, nonce and paymaster. Decoded
+smart account, EntryPoint, number of calls, success, gas used, cost, nonce and paymaster. For payments: payer,
+recipient, asset, amount, settled amount, status and whether the settlement was verified, and for x402 the scheme and
+resource. For a replaced transaction: the replacing hash and the reason. On every span: the agent identity. Decoded
 call arguments are recorded only with `recordFunctionArguments`, and error messages only with `errorMessages`.
 Attribute definitions:
 [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/semconv.md).
@@ -116,8 +119,10 @@ Attribute definitions:
 
 With an OpenTelemetry metrics SDK set up (or `meterProvider`), the tracker records three histograms:
 `blockchain.client.send.duration` and `blockchain.client.confirmation.duration` in seconds, and
-`blockchain.client.fee` in wei. Their attributes are the chain and the outcome only, never an address, hash or
-agent identity; an `error.type` that is neither an error class name nor a lower-case code is recorded as `_OTHER`.
+`blockchain.client.fee` in wei. Their attributes are the system, the chain and the outcome (and, on samples of user
+operations, `blockchain.operation.subject`), never an address, hash or agent identity; an `error.type` that is
+neither an error class name ending in `Error` nor a lower-case code of letters and underscores is recorded as
+`_OTHER`.
 The `redact` hook does not run on metrics: a fee it removes from spans is still recorded by
 `blockchain.client.fee`. To keep a histogram out of your backend, drop it with a View of your metrics SDK (drop
 aggregation). Definitions:

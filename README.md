@@ -29,6 +29,8 @@ decoded custom error.</sub>
 - **No new dashboard.** It's a library that emits standard OpenTelemetry spans. Your existing backend is the UI.
 - **Agent-aware.** Transaction spans nest under your framework's agent/tool spans and carry `gen_ai.agent.id`.
 - **Real cost.** Fees include the L1 data fee on OP-stack chains such as Base.
+- **Metrics too.** Send and confirmation latency and fees are also recorded as histograms, and `traceTransport()` can
+  add a span per JSON-RPC request ([semantic conventions](docs/semconv.md)).
 - **Small footprint.** `@hashspan/core` has one peer dependency, `@opentelemetry/api`; `@hashspan/viem` adds `viem`,
   the library it instruments. It never signs or broadcasts transactions.
 - **Privacy by design.** Calldata arguments and error messages are opt-in, and addresses can be hashed or dropped

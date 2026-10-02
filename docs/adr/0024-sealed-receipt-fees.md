@@ -38,3 +38,10 @@ fee histogram (#179).
 - Adapters that record a receipt they did not get through `@hashspan/viem`'s confirm path (such as `@hashspan/cdp`'s
   wrapped `waitForTransactionReceipt`) need the same check; that is a follow-up.
 - When the node bug is fixed upstream, the wait still applies: a preconfirmation's fee is not final by definition.
+
+## Amendment (2026-10-03): the CDP follow-up is done
+
+`@hashspan/cdp` applies the check to the receipt of its wrapped `waitForTransactionReceipt` (#190): without a reader,
+a receipt with a zero or null block hash is recorded without `effective_gas_price`, `l1_fee` and `fee`, since the
+adapter has no client to read the sealed receipt with; with a reader, the background confirmation records it from the
+sealed receipt, as above.

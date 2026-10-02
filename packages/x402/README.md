@@ -53,9 +53,11 @@ registered earlier can keep hashspan from seeing the outcome, which then ends as
 
 `withHashspan(client, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@0.8.0/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem` but off by default,
-`tracker`, `reader` (a viem public client, or a function returning one for a chain id) and `confirmTimeoutMs` (default
-120 000 ms). Without a reader, only payment spans are recorded. Give it the same `tracker` as `@hashspan/viem` or
-`@hashspan/cdp` to share one tracker between adapters.
+`maxBackgroundConfirmations` as in `@hashspan/viem` (it limits the confirmations through the reader; a payment whose
+confirmation is not started gets no `verified`), `tracker`, `reader` (a viem public client, or a function returning
+one for a chain id) and `confirmTimeoutMs` (default 120 000 ms). Without a reader, only payment spans are recorded.
+Give it the same `tracker` as `@hashspan/viem` or `@hashspan/cdp` to share one tracker between adapters; with
+`tracker`, the core options are not used.
 
 The settlement and its transaction hash come from the server you pay. With a reader, the payment span records
 `blockchain.payment.verified`: `true` when the reported transaction's receipt carries your payment, `false` when it
@@ -63,18 +65,20 @@ does not. For an `exact` payment authorized with EIP-3009, that means the token 
 nonce and `Transfer` from you to `payTo` of exactly the amount. For an `exact` payment authorized with Permit2, the
 transaction was sent to the x402 proxy you authorized, which emitted its settlement event, and the token emitted
 `Transfer` from you to `payTo` of exactly the amount; for `upto`, the transaction was also sent by the facilitator
-your authorization names, and the transfer is of more than nothing, at most your maximum and the amount the
-settlement reports. For both, the reader also fetches the mined transaction: its input must pass your Permit2 nonce
+your authorization names, and the transfer is of more than nothing, at most your maximum and, when the settlement
+reports an amount, exactly that amount. For both, the reader also fetches the mined transaction: its input must pass your Permit2 nonce
 and your address as the owner, so the transaction of an earlier payment is `false`, whichever client or process
 verified it. All of it is checked from your own payment, not from the settlement. The attribute is absent when no
-check was possible: no reader, no receipt, a reverted one, a transaction that cannot be read, or another scheme (such
-as `batch-settlement`). With a reader, the payment span is exported once the receipt is checked; its end time stays
+check was possible, for example: no reader, no receipt, a reverted one, a transaction that cannot be read, a
+settlement on another network, an authorization that does not match the requirements, or another scheme (such as
+`batch-settlement`). With a reader, the payment span is exported once the receipt is checked; its end time stays
 when the response came. The revert reason of a reverted settlement, which would be text from a contract the server
 chooses, is only recorded with `decodeRevertReason: true`. See
 [ADR 0017](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.8.0/docs/adr/0017-x402-payment-verification.md).
 
 `flush({ timeoutMs })` (default 10 000 ms) waits for payments still waiting for their response, then for
-confirmations through the reader, and ends what is left as `timeout`. Call it before a short-lived process exits.
+confirmations through the reader, and ends what is left as `timeout` (a payment already settled and waiting for its
+receipt check ends as settled, without `verified`). Call it before a short-lived process exits.
 
 ## Recorded
 
@@ -84,7 +88,7 @@ confirmations through the reader, and ends what is left as `timeout`. Call it be
 | Settlement pending (`settlement_pending`) | `pending` and the hash; the confirm span resolves it |
 | Settlement failed | `failed`, error status, the facilitator's `errorReason` as `error.type` |
 | Response without a settlement: the facilitator refused the payment before settling it (e.g. the payer's balance is too low), or the API failed (e.g. answered 500) | error status, `error.type` `no_settlement` |
-| No response: the paid request failed on the network, `@x402/axios` got a status other than 2xx or 402, or no response came before the authorization expired | error status, `error.type` `timeout`, once the requirements' `maxTimeoutSeconds` plus 30 s passed, or on `flush()` |
+| No response: the paid request failed on the network, `@x402/axios` got a status other than 2xx or 402, or no response came before the authorization expired | error status, `error.type` `timeout`, once the requirements' `maxTimeoutSeconds` plus 30 s passed (at least 30 s, at most 1 h; 300 s when the requirements give none), when more than 1000 payments are open (the oldest first), or on `flush()` |
 | Creating the payment failed (e.g. signing) | error status, the error's class name as `error.type` |
 
 Every payment span records the payer, recipient (`payTo`), asset, the amount the payer signed for and scheme, and the

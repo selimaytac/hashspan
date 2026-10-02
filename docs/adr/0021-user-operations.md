@@ -58,7 +58,8 @@ What the SDKs give (viem 2.57, `@coinbase/cdp-sdk` 1.57):
 - The semconv statement that every span has `blockchain.tx.hash` no longer holds for user operation send spans.
 - Tests run offline: an EntryPoint deployed on Anvil through the deterministic deployer, and a bundler as an
   external dev-only process (the common bundlers are copyleft; none is a dependency of a published package), plus a
-  mock bundler for failure, revert and timeout paths.
+  mock bundler for failure, revert and timeout paths. The implementation uses a stand-in EntryPoint and an
+  in-process bundler instead; see the implementation notes.
 - The lab validates it on Base Sepolia, where the canonical EntryPoints are deployed and CDP sponsors operations.
 
 ## Implementation notes

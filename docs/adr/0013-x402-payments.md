@@ -103,3 +103,10 @@ and paid MCP tools. Relevant facts, from the v2 JavaScript SDK (`@x402/core`, `@
 - Payments refused before a hook runs, and x402 v1 payments, are invisible to the trace.
 - Schemes that batch or defer settlement (`upto`, `batch-settlement`) may report no per-request hash; their payment
   spans then end without one, and how to trace their later settlement is left open.
+
+## Amendment (2026-10-03): later decisions
+
+- The resource is recorded as the URL's origin by default, with the path only with `paymentResource: 'path'` (see the
+  ADR 0004 amendment).
+- `upto` settles each payment in one transaction with a hash, which is verified as ADR 0017's Permit2 amendment
+  describes; only schemes that batch settlement, such as `batch-settlement`, stay open.
