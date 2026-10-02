@@ -28,5 +28,7 @@ The tracker already sees every send and confirmation, from every adapter, with i
 ## Consequences
 
 - Without a metrics SDK, the global meter provider records nothing and costs no more than a no-op call.
+- A replaced transaction records two confirmation samples, `replaced` for the awaited hash and the mined
+  transaction's outcome for the replacing one; counts of confirmations should leave out `replaced`, as for spans.
 - Payments get no metrics yet; amounts in different assets do not add up in one histogram.
 - The metric names, units and attributes are a contract like span names, under the change policy in docs/semconv.md.
