@@ -604,6 +604,54 @@ describe("a network-scoped account's waitForTransactionReceipt", () => {
     });
   }
 
+  describe('a preconfirmed receipt (ADR 0024)', () => {
+    /** A CDP client whose scoped accounts wait with `receipt`, like the SDK's own client on a flashblocks RPC. */
+    const waitingWith = (receipt: object) => {
+      const cdp = fakeCdp();
+      cdp.evm.createAccount = async () => {
+        const account = fakeAccount();
+        const useNetwork = account.useNetwork as (n: string) => Promise<Record<string, unknown>>;
+        account.useNetwork = async (network: string) => ({
+          ...(await useNetwork(network)),
+          waitForTransactionReceipt: async () => receipt,
+        });
+        return account;
+      };
+      return cdp;
+    };
+    const feeKeys = [
+      'blockchain.tx.fee',
+      'blockchain.tx.l1_fee',
+      'blockchain.tx.effective_gas_price',
+    ];
+
+    it.each([
+      ['a zero block hash', `0x${'00'.repeat(32)}`],
+      ['a null block hash', null],
+    ])('records %s without fees, and returns the receipt unchanged', async (_, blockHash) => {
+      const preconfirmed = { ...viemReceipt, blockHash, l1Fee: 999n };
+      const { scoped } = await scopedOn('base', waitingWith(preconfirmed));
+      await expect(scoped.waitForTransactionReceipt({ hash: HASH })).resolves.toBe(preconfirmed);
+      const confirm = tracing.spanNamed('confirm 8453');
+      expect(confirm.attributes).toMatchObject({
+        'blockchain.tx.status': 'success',
+        'blockchain.block.number': 123,
+        'blockchain.tx.gas.used': 21_000,
+      });
+      for (const key of feeKeys) expect(confirm.attributes[key]).toBeUndefined();
+    });
+
+    it('records the fees of a sealed receipt', async () => {
+      const sealed = { ...viemReceipt, blockHash: `0x${'ab'.repeat(32)}`, l1Fee: 5n };
+      const { scoped } = await scopedOn('base', waitingWith(sealed));
+      await scoped.waitForTransactionReceipt({ hash: HASH });
+      expect(tracing.spanNamed('confirm 8453').attributes).toMatchObject({
+        'blockchain.tx.l1_fee': '5',
+        'blockchain.tx.fee': '42005',
+      });
+    });
+  });
+
   it('accepts the transactionHash form of the options', async () => {
     const { scoped } = await scopedOn('base');
     await scoped.waitForTransactionReceipt({ transactionHash: HASH });
