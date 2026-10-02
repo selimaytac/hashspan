@@ -16,6 +16,9 @@ OpenTelemetry tracing for on-chain transactions sent by AI agents: every transac
 - Typecheck: `pnpm typecheck` (builds the packages first, since adapters type-check against `@hashspan/core` output)
 - Coverage: `pnpm test:coverage` (unit and integration, with thresholds in `vitest.config.ts`; runs in CI)
 - Package checks: `pnpm check:packages` (publint and arethetypeswrong on the built packages; runs in CI)
+- Smoke test: `pnpm smoke:packages` (packs the four packages, installs the tarballs with their peer dependencies into an
+  empty project and checks `require()`, `import` and `hashed` address mode on the current Node.js; CI runs it on the
+  lowest `engines.node`, the latest 22.x and the latest 24.x; needs the npm registry, no chain)
 - Local lab: `make lab-up` (Jaeger), `make anvil` (local chain), `make demo` (example agent), `make lab-pause`,
   `make lab-nuke`
 Run lint, typecheck and tests before proposing a change.
