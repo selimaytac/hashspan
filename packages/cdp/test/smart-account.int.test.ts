@@ -14,11 +14,12 @@ import {
   testAccountCode,
   testEntryPointCode,
 } from '../../viem/test/entry-point/test-entry-point.js';
+import { freePort } from '../../viem/test/free-port.js';
 import { withHashspan } from '../src/index.js';
 import { startMockCdpApi, throwawayCredentials } from './mock-cdp-api.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = 18565;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const SMART_ACCOUNT = '0x00000000000000000000000000000000000A11cE' as const;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;

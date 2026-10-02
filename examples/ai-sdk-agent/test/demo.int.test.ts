@@ -5,8 +5,9 @@ import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { registerTelemetry } from 'ai';
 import { Instance } from 'prool';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { freePort } from '../../../packages/viem/test/free-port.js';
 
-const PORT = 18555;
+const PORT = await freePort();
 const instance = Instance.anvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
   port: PORT,

@@ -7,9 +7,10 @@ import { Instance } from 'prool';
 import { createPublicClient, http, numberToHex, parseEther } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { freePort } from '../../../packages/viem/test/free-port.js';
 
 // A local chain that reports Base Sepolia's chain id stands in for the testnet: tests never leave localhost.
-const PORT = 18556;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const instance = Instance.anvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,

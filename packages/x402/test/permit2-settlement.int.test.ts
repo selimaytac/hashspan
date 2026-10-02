@@ -31,6 +31,7 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { freePort } from '../../viem/test/free-port.js';
 import { withHashspan } from '../src/index.js';
 import {
   EXACT_PROXY_ADDRESS,
@@ -46,7 +47,7 @@ import { setupTracing, type TestTracing } from './tracing.js';
 // Settles real Permit2 payments, `exact` and `upto`, on Anvil through the SDK's own resource server, facilitator
 // and client, all in this process. Permit2 and the x402 proxies run from code copied from Base Sepolia
 // (permit2/contracts.ts), installed at their canonical addresses; nothing leaves localhost.
-const PORT = 18566;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const NETWORK = `eip155:${foundry.id}` as const;
 const PRICE = 10_000n;
