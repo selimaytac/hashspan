@@ -10,6 +10,9 @@ on:
     paths:
       - 'packages/**'
       - 'integrations/**'
+      # The tests compile and run hashspan's sources with the main install.
+      - 'pnpm-lock.yaml'
+      - 'tsconfig.base.json'
       - '.github/workflows/integrations.yml'
   schedule:
     - cron: '41 5 * * 1'

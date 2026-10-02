@@ -46,7 +46,7 @@ Two details of the provider apply with or without hashspan:
 
 - Its public client connects to the `rpcUrl` of its second argument, else to the `RPC_URL` environment variable,
   else to the chain's default RPC; never through the wallet client's transport.
-- AgentKit 0.10.4 depends on viem 2.38.3 exactly. With a newer viem in the application, TypeScript rejects the
+- AgentKit 0.10.4 depends on viem 2.38.3 exactly. With viem 2.57 in the application, TypeScript rejects the
   wallet client in `new ViemWalletProvider(walletClient)`, while the client works at runtime; the test casts it.
 
 ### `CdpEvmWalletProvider`
