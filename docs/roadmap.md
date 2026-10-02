@@ -34,11 +34,11 @@
 
 - [x] x402 adapter (payment signing → facilitator settlement, [ADR 0013](adr/0013-x402-payments.md))
 
-## v0.5: Settled amounts, status from chain data
+## v0.5: Settled amounts
 
 - [x] `blockchain.payment.settled_amount`: what an x402 `upto` payment actually charged
-  ([ADR 0013](adr/0013-x402-payments.md))
-- [x] `timeout` no longer recorded as `blockchain.tx.status` ([ADR 0016](adr/0016-timeout-is-an-observer-outcome.md))
+  ([semantic conventions](semconv.md#attributes))
+- [x] `timeout` no longer recorded as `blockchain.tx.status` (see [Toward 1.0](#toward-10-a-stable-api))
 
 ## v0.6: Verified x402 payments
 
