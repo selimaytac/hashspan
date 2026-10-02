@@ -18,7 +18,7 @@ When a library accepts a viem wallet client, extend the client before you hand i
 
 ## Coinbase AgentKit
 
-Checked with `@coinbase/agentkit` 0.10.4. AgentKit sends through a wallet provider; two of them can be traced
+Checked with `@coinbase/agentkit` 0.10.4. AgentKit sends through a wallet provider; three of them can be traced
 without extra code.
 
 ### `ViemWalletProvider`
@@ -59,16 +59,21 @@ The provider calls `cdp.evm.sendTransaction`, which the wrapper traces. This set
 provider's source, not run: the provider creates its `CdpClient` without options that would let a test point it at
 a local API.
 
+The same setup covers `CdpSmartWalletProvider`, which also has `getClient()` and `getPublicClient()`: it sends ERC-4337
+user operations with `cdp.evm.sendUserOperation` and waits with `cdp.evm.waitForUserOperation`, which the wrapper
+records as user operation spans ([smart accounts](../packages/cdp/README.md#smart-accounts)). This too was checked
+against the provider's source.
+
 ### Other wallet providers
 
-- `CdpSmartWalletProvider` sends ERC-4337 user operations through the CDP SDK; they are traced once
-  `@hashspan/cdp` covers smart accounts ([ADR 0021](adr/0021-user-operations.md)).
 - `PrivyEvmWalletProvider`, `PrivyEvmDelegatedEmbeddedWalletProvider`, `ZeroDevWalletProvider` and the legacy CDP
   providers build their clients internally or send through their own APIs. Record their transactions with
   [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) and the hash the provider returns.
 
-Wallet providers report their initialization to an AgentKit analytics endpoint; this is AgentKit's own behaviour and
-independent of hashspan.
+AgentKit reports each wallet provider's initialization and each action invocation to its analytics endpoint; this
+is AgentKit's own behaviour and independent of hashspan. In 0.10.4, a failed analytics request, for example where a
+firewall blocks the endpoint, ends the Node.js process
+([coinbase/agentkit#1531](https://github.com/coinbase/agentkit/issues/1531)).
 
 ## Wallet services
 
