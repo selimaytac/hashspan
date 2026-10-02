@@ -11,7 +11,7 @@ import {
   withHashspan as withViemHashspan,
 } from '@hashspan/viem';
 import { type Context, context, diag } from '@opentelemetry/api';
-import { decodeEventLog, parseAbi } from 'viem';
+import { decodeEventLog, decodeFunctionData, parseAbi } from 'viem';
 
 export interface WithHashspanX402Options extends Omit<ViemOptions, 'confirm'> {
   /**
@@ -76,8 +76,26 @@ const PROXY_EVENTS = parseAbi(['event Settled()', 'event SettledWithPermit()']);
 const TRANSFER_EVENT = parseAbi([
   'event Transfer(address indexed from, address indexed to, uint256 value)',
 ]);
-/** How many settlement transactions verified for a Permit2 payment are remembered, to refuse their reuse. */
-const MAX_VERIFIED_HASHES = 1000;
+// The settlement functions of the x402 Permit2 proxies; their Permit2 permit carries the payment's nonce.
+const PERMIT2_STRUCTS = [
+  'struct TokenPermissions { address token; uint256 amount; }',
+  'struct PermitTransferFrom { TokenPermissions permitted; uint256 nonce; uint256 deadline; }',
+  'struct Permit2612 { uint256 value; uint256 deadline; bytes32 r; bytes32 s; uint8 v; }',
+] as const;
+const EXACT_PROXY_FUNCTIONS = parseAbi([
+  ...PERMIT2_STRUCTS,
+  'struct Witness { address to; uint256 validAfter; }',
+  'function settle(PermitTransferFrom permit, address owner, Witness witness, bytes signature)',
+  'function settleWithPermit(Permit2612 permit2612, PermitTransferFrom permit, address owner, Witness witness, bytes signature)',
+]);
+const UPTO_PROXY_FUNCTIONS = parseAbi([
+  ...PERMIT2_STRUCTS,
+  'struct Witness { address to; address facilitator; uint256 validAfter; }',
+  'function settle(PermitTransferFrom permit, uint256 amount, address owner, Witness witness, bytes signature)',
+  'function settleWithPermit(Permit2612 permit2612, PermitTransferFrom permit, uint256 amount, address owner, Witness witness, bytes signature)',
+]);
+/** How long to wait for the settlement transaction of a Permit2 payment, to read its nonce. */
+const TRANSACTION_TIMEOUT_MS = 10_000;
 const SETTLEMENT_PENDING = 'settlement_pending';
 const NO_SETTLEMENT = 'no_settlement';
 // Timers without Node.js or DOM types, which src/ is type-checked without.
@@ -165,6 +183,8 @@ interface Permit2Check {
   payTo: string;
   /** The x402 proxy the payer authorized to transfer, which the settlement transaction calls. */
   proxy: string;
+  /** The Permit2 nonce the payer signed, which the settlement transaction passes to the proxy. */
+  nonce: bigint;
   amount: bigint;
 }
 
@@ -175,6 +195,7 @@ interface UptoCheck {
   payer: string;
   payTo: string;
   proxy: string;
+  nonce: bigint;
   facilitator: string;
   max: bigint;
 }
@@ -245,17 +266,19 @@ function permit2CheckOf(
   const payTo = addressOf(own(requirements, 'payTo'));
   const proxy = addressOf(own(authorization, 'spender'));
   const amount = amountOf(own(requirements, 'amount'));
+  const nonce = amountOf(own(authorization, 'nonce'));
   if (asset === undefined || payer === undefined || payTo === undefined || proxy === undefined) {
     return undefined;
   }
+  if (nonce === undefined) return undefined;
   if (amount === undefined || amountOf(own(permitted, 'amount')) !== amount) return undefined;
   if (addressOf(own(permitted, 'token')) !== asset || addressOf(own(witness, 'to')) !== payTo) {
     return undefined;
   }
-  if (scheme === 'exact') return { method: 'permit2', asset, payer, payTo, proxy, amount };
+  if (scheme === 'exact') return { method: 'permit2', asset, payer, payTo, proxy, nonce, amount };
   const facilitator = addressOf(own(witness, 'facilitator'));
   if (facilitator === undefined) return undefined;
-  return { method: 'upto', asset, payer, payTo, proxy, facilitator, max: amount };
+  return { method: 'upto', asset, payer, payTo, proxy, nonce, facilitator, max: amount };
 }
 
 /** The check of a payment, or undefined for a scheme or authorization method without one (ADR 0017). */
@@ -359,6 +382,29 @@ function carriesPermit2Payment(
   return settled && transferred;
 }
 
+/**
+ * Whether the input of a settlement transaction settles the Permit2 payment: a call of the proxy's `settle` or
+ * `settleWithPermit` whose permit has the payer's nonce and whose owner is the payer. Permit2 uses a nonce of an owner
+ * once, so a successful settlement with it is this payment and no other. Input that does not decode is false.
+ */
+function settlesPermit2Payment(input: unknown, check: Permit2Check | UptoCheck): boolean {
+  if (typeof input !== 'string' || !/^0x([0-9a-fA-F]{2})*$/.test(input)) return false;
+  let call: { functionName: string; args: readonly unknown[] };
+  try {
+    call = decodeFunctionData({
+      abi: check.method === 'upto' ? UPTO_PROXY_FUNCTIONS : EXACT_PROXY_FUNCTIONS,
+      data: input as `0x${string}`,
+    }) as typeof call;
+  } catch {
+    return false;
+  }
+  // settleWithPermit takes an EIP-2612 permit first; upto takes the amount after the Permit2 permit.
+  const permitAt = call.functionName === 'settleWithPermit' ? 1 : 0;
+  const ownerAt = permitAt + (check.method === 'upto' ? 2 : 1);
+  const permit = call.args[permitAt] as { nonce?: unknown } | undefined;
+  return permit?.nonce === check.nonce && lower(call.args[ownerAt]) === check.payer;
+}
+
 /** A payment between `onBeforePaymentCreation` and `onAfterPaymentCreation`. */
 interface Start {
   startTime: Date;
@@ -408,29 +454,44 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
   // The open payment of a requirements object, for a creation failure reported after hashspan's after-hook ran.
   const byRequirements = new WeakMap<object, OpenPayment>();
 
-  // Settlement transactions verified for a Permit2 payment: no log carries the payment's nonce, so a server could
-  // report the transaction of an identical earlier payment; a hash verified once is refused afterwards (ADR 0017).
-  // Insertion order is age, for MAX_VERIFIED_HASHES.
-  const verifiedHashes = new Set<string>();
-  /** The verdict on `receipt` for `payment`, settled in the transaction `hash`. */
-  const verdictOf = (
-    payment: OpenPayment,
+  /** The input of the transaction `hash`, read through `client`, or undefined when it cannot be read in time. */
+  const inputOf = (client: ViemClientLike, hash: string): Promise<unknown> =>
+    new Promise((resolve) => {
+      const done = (input: unknown): void => {
+        timers.clearTimeout(timer);
+        resolve(input);
+      };
+      const timer = timers.setTimeout(() => done(undefined), TRANSACTION_TIMEOUT_MS);
+      // The timer must not keep a process alive that is otherwise done.
+      (timer as { unref?: () => void } | undefined)?.unref?.();
+      Promise.resolve()
+        .then(() => client.request({ method: 'eth_getTransactionByHash', params: [hash] }))
+        .then(
+          (transaction: unknown) => done(own(transaction, 'input')),
+          (error: unknown) => {
+            diag.debug(`hashspan: could not read the settlement transaction (${errorName(error)})`);
+            done(undefined);
+          },
+        );
+    });
+
+  /**
+   * The verdict on `receipt` for a payment checked with `check`, settled in the transaction `hash`; undefined when no
+   * check was possible. For Permit2, whose logs carry no nonce, a receipt that carries the payment is checked against
+   * the nonce in the transaction's input, read through `client` (ADR 0017).
+   */
+  const verdictOf = async (
+    client: ViemClientLike,
     check: PaymentCheck,
     hash: string,
     settlement: PaymentSettlement,
     receipt: unknown,
-  ): boolean | undefined => {
+  ): Promise<boolean | undefined> => {
     if (check.method === 'eip3009') return carriesEip3009Payment(receipt, check);
     const carried = carriesPermit2Payment(receipt, check, settlement.amount);
     if (carried !== true) return carried;
-    const key = `${payment.chainId}:${hash.toLowerCase()}`;
-    if (verifiedHashes.has(key)) return false;
-    verifiedHashes.add(key);
-    if (verifiedHashes.size > MAX_VERIFIED_HASHES) {
-      const oldest = verifiedHashes.values().next().value;
-      if (oldest !== undefined) verifiedHashes.delete(oldest);
-    }
-    return true;
+    const input = await inputOf(client, hash);
+    return input === undefined ? undefined : settlesPermit2Payment(input, check);
   };
 
   const warned = new Set<string>();
@@ -682,10 +743,18 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
       hash,
       chainId: payment.chainId,
       timeoutMs: confirmTimeoutMs,
-      onReceipt: (receipt) =>
-        end(
-          receipt === undefined ? undefined : verdictOf(payment, check, hash, settlement, receipt),
-        ),
+      onReceipt: (receipt) => {
+        if (receipt === undefined) {
+          end();
+          return;
+        }
+        void verdictOf(confirmWith, check, hash, settlement, receipt)
+          .then((verified) => end(verified))
+          .catch((error: unknown) => {
+            diag.error(`hashspan: failed to check the settlement (${errorName(error)})`);
+            end();
+          });
+      },
     });
   });
 

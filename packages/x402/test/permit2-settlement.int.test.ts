@@ -283,16 +283,22 @@ describe('a Permit2 payment settled by the SDK facilitator', () => {
   });
 
   it('is not verified when the server reports the transaction of an identical earlier payment', async () => {
-    const { client, hashspan } = agentClient('exact');
-    const pay = wrapFetchWithPayment(await paidApi('exact', { replay: true }), client);
-    expect((await pay('http://api.test/weather')).status).toBe(200);
-    expect(await hashspan.flush()).toBe(true);
+    const api = await paidApi('exact', { replay: true });
+    const first = agentClient('exact');
+    expect((await wrapFetchWithPayment(api, first.client)('http://api.test/weather')).status).toBe(
+      200,
+    );
+    expect(await first.hashspan.flush()).toBe(true);
     const balance = await balanceOf(agent.address);
     const firstHash = tracing.spanNamed(PAYMENT_SPAN).attributes['blockchain.tx.hash'];
     tracing.exporter.reset();
 
-    expect((await pay('http://api.test/weather')).status).toBe(200);
-    expect(await hashspan.flush()).toBe(true);
+    // Another client, as after a restart: it has not seen the first payment, the transaction's nonce tells.
+    const second = agentClient('exact');
+    expect((await wrapFetchWithPayment(api, second.client)('http://api.test/weather')).status).toBe(
+      200,
+    );
+    expect(await second.hashspan.flush()).toBe(true);
     // The second payment was never settled: the agent paid nothing more.
     expect(await balanceOf(agent.address)).toBe(balance);
     const payment = tracing.spanNamed(PAYMENT_SPAN);

@@ -10,6 +10,8 @@ export interface MockOptions {
   chainId?: () => string | Promise<string>;
   /** Receipt fields merged into the default successful receipt; `null` means "not mined yet". */
   receipt?: Record<string, unknown> | null;
+  /** Transaction fields merged into the default transaction, such as its `input`. */
+  transaction?: Record<string, unknown>;
   sendError?: { code: number; message: string };
   /** Methods that never answer, like an unresponsive provider. */
   hangOn?: string[];
@@ -58,6 +60,7 @@ export function mockTransport(options: MockOptions = {}) {
     r: `0x${'11'.repeat(32)}`,
     s: `0x${'22'.repeat(32)}`,
     yParity: '0x0',
+    ...options.transaction,
   });
   const transport = custom({
     async request({ method, params }: { method: string; params?: unknown }) {

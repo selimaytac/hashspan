@@ -1,9 +1,11 @@
 import { createTxTracker, type TxTracker } from '@hashspan/core';
 import { diag, SpanStatusCode } from '@opentelemetry/api';
+import { x402ExactPermit2ProxyABI, x402UptoPermit2ProxyABI } from '@x402/evm';
 import {
   createPublicClient,
   encodeAbiParameters,
   encodeEventTopics,
+  encodeFunctionData,
   type Hex,
   parseAbi,
 } from 'viem';
@@ -62,12 +64,25 @@ const transfer = (from: string, to: string, value: bigint, address = ASSET, inde
 /** The logs of a settlement of the default payment: 10000 from the payer to the recipient. */
 const matching = () => [authorizationUsed(PAYER, NONCE), transfer(PAYER, PAY_TO, 10_000n)];
 
-const readerWith = (receipt: Record<string, unknown> | null) =>
-  createPublicClient({
-    chain: baseSepolia,
-    transport: mockTransport({ chainIdHex: '0x14a34', receipt }).transport,
-    pollingInterval: 10,
+/** A reader on Base Sepolia returning `receipt` and, for the transaction, `input`; `calls` lists its requests. */
+const recordingReader = (
+  receipt: Record<string, unknown> | null,
+  input?: Hex,
+  options: Parameters<typeof mockTransport>[0] = {},
+) => {
+  const { transport, calls } = mockTransport({
+    chainIdHex: '0x14a34',
+    receipt,
+    ...(input === undefined ? {} : { transaction: { input } }),
+    ...options,
   });
+  return {
+    reader: createPublicClient({ chain: baseSepolia, transport, pollingInterval: 10 }),
+    calls,
+  };
+};
+const readerWith = (receipt: Record<string, unknown> | null, input?: Hex) =>
+  recordingReader(receipt, input).reader;
 
 /** Stands in for an x402Client: runs one payment through the hooks registered on it, as the SDK would. */
 function capturingClient() {
@@ -258,6 +273,7 @@ function permit2Signed(
     spender?: string;
     to?: string;
     facilitator?: string;
+    nonce?: string;
   } = {},
 ) {
   const {
@@ -266,6 +282,7 @@ function permit2Signed(
     amount = '10000',
     spender = EXACT_PROXY,
     to = PAY_TO,
+    nonce = PERMIT2_NONCE.toString(),
   } = overrides;
   const witness: Record<string, string> = { to, validAfter: '0' };
   if ('facilitator' in overrides && overrides.facilitator !== undefined) {
@@ -277,7 +294,7 @@ function permit2Signed(
       from,
       permitted: { token, amount },
       spender,
-      nonce: '123',
+      nonce,
       deadline: '9999999999',
       witness,
     },
@@ -286,6 +303,61 @@ function permit2Signed(
 const uptoSigned = (overrides: Parameters<typeof permit2Signed>[0] = {}) =>
   permit2Signed({ spender: UPTO_PROXY, facilitator: FACILITATOR, ...overrides });
 const upto = { requirements: { scheme: 'upto' } };
+
+/** The Permit2 nonce of the default authorization: a decimal string in the payload, as the SDK signs it. */
+const PERMIT2_NONCE = 123n;
+const SIGNATURE = `0x${'00'.repeat(65)}` as const;
+const PERMIT2612 = {
+  value: 10_000n,
+  deadline: 9_999_999_999n,
+  r: `0x${'00'.repeat(32)}`,
+  s: `0x${'00'.repeat(32)}`,
+  v: 27,
+} as const;
+/**
+ * The input of a settlement through a proxy, encoded with the SDK's ABIs: `settle` or `settleWithPermit` of the
+ * exact proxy, or of the upto proxy with `amount`.
+ */
+function settlementInput(
+  options: {
+    scheme?: 'exact' | 'upto';
+    functionName?: 'settle' | 'settleWithPermit';
+    nonce?: bigint;
+    owner?: string;
+    amount?: bigint;
+  } = {},
+): Hex {
+  const {
+    scheme = 'exact',
+    functionName = 'settle',
+    nonce = PERMIT2_NONCE,
+    owner = PAYER,
+    amount = 10_000n,
+  } = options;
+  const permit = {
+    permitted: { token: ASSET as Hex, amount: 10_000n },
+    nonce,
+    deadline: 9_999_999_999n,
+  };
+  const withPermit = functionName === 'settleWithPermit' ? [PERMIT2612] : [];
+  if (scheme === 'exact') {
+    const witness = { to: PAY_TO as Hex, validAfter: 0n };
+    return encodeFunctionData({
+      abi: x402ExactPermit2ProxyABI,
+      functionName,
+      args: [...withPermit, permit, owner as Hex, witness, SIGNATURE],
+    } as never);
+  }
+  const witness = { to: PAY_TO as Hex, facilitator: FACILITATOR as Hex, validAfter: 0n };
+  return encodeFunctionData({
+    abi: x402UptoPermit2ProxyABI,
+    functionName,
+    args: [...withPermit, permit, amount, owner as Hex, witness, SIGNATURE],
+  } as never);
+}
+/** A reader for an exact Permit2 settlement: `receipt`, and the transaction input of the default payment. */
+const permit2Reader = (receipt: Record<string, unknown> | null, input = settlementInput()) =>
+  readerWith(receipt, input);
 
 /** A receipt of a transaction sent by `from` to `to` with `logs`. */
 const receiptOf = (logs: unknown[], to = EXACT_PROXY, from = FACILITATOR) => ({
@@ -301,7 +373,7 @@ const permit2Logs = (value = 10_000n, proxy = EXACT_PROXY) => [
 
 describe('checking an exact payment authorized with Permit2', () => {
   it('records true for a transaction to the proxy that settled and transferred the amount', async () => {
-    const span = await paid(readerWith(receiptOf(permit2Logs())), permit2Signed());
+    const span = await paid(permit2Reader(receiptOf(permit2Logs())), permit2Signed());
     expect(span.attributes['blockchain.payment.verified']).toBe(true);
     expect(span.status.code).toBe(SpanStatusCode.UNSET);
   });
@@ -313,7 +385,7 @@ describe('checking an exact payment authorized with Permit2', () => {
       transfer(PAYER, PAY_TO, 10_000n, ASSET, 2),
       proxyLog('SettledWithPermit', EXACT_PROXY, 3),
     ];
-    const span = await paid(readerWith(receiptOf(logs)), permit2Signed());
+    const span = await paid(permit2Reader(receiptOf(logs)), permit2Signed());
     expect(span.attributes['blockchain.payment.verified']).toBe(true);
   });
 
@@ -340,7 +412,7 @@ describe('checking an exact payment authorized with Permit2', () => {
     ['a transaction to another contract', receiptOf(permit2Logs(), OTHER)],
     ['no logs', receiptOf([])],
   ])('records false for a receipt with %s', async (_, receipt) => {
-    const span = await paid(readerWith(receipt), permit2Signed());
+    const span = await paid(permit2Reader(receipt), permit2Signed());
     expect(span.attributes['blockchain.payment.verified']).toBe(false);
     expect(span.attributes['blockchain.payment.status']).toBe('settled');
     expect(span.status.code).toBe(SpanStatusCode.UNSET);
@@ -348,7 +420,7 @@ describe('checking an exact payment authorized with Permit2', () => {
 
   it('records nothing for a reverted receipt', async () => {
     const span = await paid(
-      readerWith({ ...receiptOf(permit2Logs()), status: '0x0' }),
+      permit2Reader({ ...receiptOf(permit2Logs()), status: '0x0' }),
       permit2Signed(),
     );
     expect(span.attributes['blockchain.payment.verified']).toBeUndefined();
@@ -362,14 +434,14 @@ describe('checking an exact payment authorized with Permit2', () => {
     ['a malformed payer', permit2Signed({ from: 'payer' })],
     ['a malformed spender', permit2Signed({ spender: '0x1234' })],
   ])('checks nothing for an authorization of %s than the requirements', async (_, signed) => {
-    const span = await paid(readerWith(receiptOf(permit2Logs())), signed);
+    const span = await paid(permit2Reader(receiptOf(permit2Logs())), signed);
     expect(span.attributes['blockchain.payment.verified']).toBeUndefined();
   });
 
   it('checks nothing for a scheme without a check', async () => {
     // A receipt that would carry the payment as an exact or upto one.
     const receipt = receiptOf(permit2Logs(10_000n, UPTO_PROXY), UPTO_PROXY);
-    const span = await paid(readerWith(receipt), uptoSigned(), {
+    const span = await paid(permit2Reader(receipt), uptoSigned(), {
       requirements: { scheme: 'batch-settlement' },
     });
     expect(span.attributes['blockchain.payment.verified']).toBeUndefined();
@@ -379,20 +451,22 @@ describe('checking an exact payment authorized with Permit2', () => {
 describe('checking an upto payment', () => {
   const uptoReceipt = (value: bigint, from = FACILITATOR) =>
     receiptOf(permit2Logs(value, UPTO_PROXY), UPTO_PROXY, from);
+  const uptoReader = (receipt: Record<string, unknown>) =>
+    readerWith(receipt, settlementInput({ scheme: 'upto' }));
   const reporting = (amount: string | undefined) => ({
     ...upto,
     settlement: amount === undefined ? {} : { amount },
   });
 
   it('records true for a transfer of the reported amount, at most the maximum', async () => {
-    const less = await paid(readerWith(uptoReceipt(4_000n)), uptoSigned(), reporting('4000'));
+    const less = await paid(uptoReader(uptoReceipt(4_000n)), uptoSigned(), reporting('4000'));
     expect(less.attributes['blockchain.payment.verified']).toBe(true);
     expect(less.attributes['blockchain.payment.settled_amount']).toBe('4000');
     tracing.exporter.reset();
-    const all = await paid(readerWith(uptoReceipt(10_000n)), uptoSigned(), reporting('10000'));
+    const all = await paid(uptoReader(uptoReceipt(10_000n)), uptoSigned(), reporting('10000'));
     expect(all.attributes['blockchain.payment.verified']).toBe(true);
     tracing.exporter.reset();
-    const unreported = await paid(readerWith(uptoReceipt(1n)), uptoSigned(), reporting(undefined));
+    const unreported = await paid(uptoReader(uptoReceipt(1n)), uptoSigned(), reporting(undefined));
     expect(unreported.attributes['blockchain.payment.verified']).toBe(true);
   });
 
@@ -404,7 +478,7 @@ describe('checking an upto payment', () => {
     ['another sender than the facilitator', uptoReceipt(4_000n, OTHER), undefined],
     ['a transaction to the exact proxy', receiptOf(permit2Logs(4_000n, UPTO_PROXY)), undefined],
   ])('records false for a receipt with %s', async (_, receipt, amount) => {
-    const span = await paid(readerWith(receipt), uptoSigned(), reporting(amount));
+    const span = await paid(uptoReader(receipt), uptoSigned(), reporting(amount));
     expect(span.attributes['blockchain.payment.verified']).toBe(false);
   });
 
@@ -413,92 +487,112 @@ describe('checking an upto payment', () => {
     ['a malformed facilitator', uptoSigned({ facilitator: 'facilitator' })],
     ['another maximum than the requirements', uptoSigned({ amount: '20000' })],
   ])('checks nothing for an authorization with %s', async (_, signed) => {
-    const span = await paid(readerWith(uptoReceipt(4_000n)), signed, upto);
+    const span = await paid(uptoReader(uptoReceipt(4_000n)), signed, upto);
     expect(span.attributes['blockchain.payment.verified']).toBeUndefined();
   });
 });
 
-describe('a settlement transaction reported again', () => {
-  /** One traced client paying `times` times, each payment reporting the settlement transaction `hash(i)`. */
-  async function payments(
-    receipt: Record<string, unknown>,
-    signed: () => unknown,
-    hashes: string[],
-    options: { requirements?: { scheme: string } } = {},
-  ) {
-    const { client, pay } = capturingClient();
-    const hashspan = withHashspan(client, { reader: readerWith(receipt), confirmTimeoutMs: 200 });
-    const verdicts: unknown[] = [];
-    for (const transaction of hashes) {
-      tracing.exporter.reset();
-      pay(signed(), { ...options, settlement: { transaction } });
-      await hashspan.flush();
-      verdicts.push(tracing.spanNamed(PAYMENT_SPAN).attributes['blockchain.payment.verified']);
-    }
-    return verdicts;
-  }
+describe('checking the nonce in a Permit2 settlement transaction', () => {
+  const uptoReceipt = () => receiptOf(permit2Logs(4_000n, UPTO_PROXY), UPTO_PROXY);
 
-  it('is false for a later Permit2 payment of the same client', async () => {
-    const verdicts = await payments(receiptOf(permit2Logs()), permit2Signed, [
-      RECEIPT_HASH,
-      RECEIPT_HASH.toUpperCase().replace('0X', '0x'),
-    ]);
-    expect(verdicts).toEqual([true, false]);
-    const upTo = await payments(
-      receiptOf(permit2Logs(4_000n, UPTO_PROXY), UPTO_PROXY),
-      uptoSigned,
-      [RECEIPT_HASH, RECEIPT_HASH],
-      upto,
-    );
-    expect(upTo).toEqual([true, false]);
+  it.each([
+    ['exact', 'settle'],
+    ['exact', 'settleWithPermit'],
+    ['upto', 'settle'],
+    ['upto', 'settleWithPermit'],
+  ] as const)(
+    'records true for %s %s with the payer and nonce of the payment',
+    async (scheme, functionName) => {
+      const input = settlementInput({ scheme, functionName, amount: 4_000n });
+      const span =
+        scheme === 'exact'
+          ? await paid(readerWith(receiptOf(permit2Logs()), input), permit2Signed())
+          : await paid(readerWith(uptoReceipt(), input), uptoSigned(), upto);
+      expect(span.attributes['blockchain.payment.verified']).toBe(true);
+    },
+  );
+
+  it.each([
+    ['another nonce', settlementInput({ nonce: PERMIT2_NONCE + 1n })],
+    ['another owner', settlementInput({ owner: OTHER })],
+    [
+      'another nonce, with an EIP-2612 permit',
+      settlementInput({ functionName: 'settleWithPermit', nonce: 1n }),
+    ],
+    ['the input of the upto proxy', settlementInput({ scheme: 'upto' })],
+    ['an ERC-20 transfer', '0xa9059cbb' as Hex],
+    ['no input', '0x' as Hex],
+  ])('records false for a transaction with %s, without an error', async (_, input) => {
+    const span = await paid(readerWith(receiptOf(permit2Logs()), input), permit2Signed());
+    expect(span.attributes['blockchain.payment.verified']).toBe(false);
+    expect(span.attributes['blockchain.payment.status']).toBe('settled');
+    expect(span.status.code).toBe(SpanStatusCode.UNSET);
   });
 
-  it('is checked again by another client, and after a check that failed', async () => {
-    expect(await payments(receiptOf(permit2Logs()), permit2Signed, [RECEIPT_HASH])).toEqual([true]);
+  it('records false for an upto payment settled with the input of the exact proxy', async () => {
+    const span = await paid(readerWith(uptoReceipt(), settlementInput()), uptoSigned(), upto);
+    expect(span.attributes['blockchain.payment.verified']).toBe(false);
+  });
+
+  it('records nothing when the transaction cannot be read', async () => {
+    vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const { reader } = recordingReader(receiptOf(permit2Logs()), settlementInput(), {
+      failOn: ['eth_getTransactionByHash'],
+    });
+    const span = await paid(reader, permit2Signed());
+    expect(span.attributes['blockchain.payment.verified']).toBeUndefined();
+    expect(span.attributes['blockchain.payment.status']).toBe('settled');
+  });
+
+  it('ends the payment without a verdict when flush gives up while the transaction is read', async () => {
+    vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const { reader, calls } = recordingReader(receiptOf(permit2Logs()), settlementInput(), {
+      hangOn: ['eth_getTransactionByHash'],
+    });
     const { client, pay } = capturingClient();
-    const hashspan = withHashspan(client, { reader: readerWith(receiptOf(permit2Logs())) });
-    // An authorization of 9999: the transfer of 10000 is not this payment.
-    pay(permit2Signed({ amount: '9999' }), { requirements: { amount: '9999' } });
-    await hashspan.flush();
+    const hashspan = withHashspan(client, { reader, confirmTimeoutMs: 60_000 });
+    pay(permit2Signed());
+    await vi.waitFor(() => expect(calls).toContain('eth_getTransactionByHash'));
+    expect(await hashspan.flush({ timeoutMs: 50 })).toBe(false);
+    const span = tracing.spanNamed(PAYMENT_SPAN);
+    expect(span.attributes['blockchain.payment.status']).toBe('settled');
+    expect(span.attributes['blockchain.payment.verified']).toBeUndefined();
+  });
+
+  it('reads the transaction only when the receipt carries a Permit2 payment', async () => {
+    const decided = recordingReader(receiptOf(permit2Logs(9_999n)), settlementInput());
+    expect(
+      (await paid(decided.reader, permit2Signed())).attributes['blockchain.payment.verified'],
+    ).toBe(false);
+    tracing.exporter.reset();
+    const eip3009 = recordingReader({ logs: matching() });
+    expect((await paid(eip3009.reader)).attributes['blockchain.payment.verified']).toBe(true);
+    expect([...decided.calls, ...eip3009.calls]).not.toContain('eth_getTransactionByHash');
+  });
+});
+
+describe('a settlement transaction reported again', () => {
+  it('is false for a later Permit2 payment, in the same client or another one', async () => {
+    // The transaction settles the payment with the default nonce; the later payment signed another one.
+    const reader = permit2Reader(receiptOf(permit2Logs()));
+    const later = () => permit2Signed({ nonce: (PERMIT2_NONCE + 1n).toString() });
+    const { client, pay } = capturingClient();
+    const hashspan = withHashspan(client, { reader });
     pay(permit2Signed());
     await hashspan.flush();
+    pay(later());
+    await hashspan.flush();
+    // Another client, as after a restart, knows nothing of the first payment.
+    const other = capturingClient();
+    const otherHashspan = withHashspan(other.client, { reader });
+    other.pay(later());
+    await otherHashspan.flush();
     expect(
       tracing
         .spans()
         .filter((span) => span.name === PAYMENT_SPAN)
         .map((span) => span.attributes['blockchain.payment.verified']),
-    ).toEqual([true, false, true]);
-  });
-
-  it('is remembered for the last 1000 verified transactions', async () => {
-    const { client, pay } = capturingClient();
-    const hashspan = withHashspan(client, {
-      reader: readerWith(receiptOf(permit2Logs())),
-      confirmTimeoutMs: 1000,
-    });
-    const hashOf = (i: number) => `0x${i.toString(16).padStart(64, '0')}`;
-    for (let start = 0; start <= 1000; start += 200) {
-      for (let i = start; i < Math.min(start + 200, 1001); i++) {
-        pay(permit2Signed(), { settlement: { transaction: hashOf(i) } });
-      }
-      await hashspan.flush();
-    }
-    const verified = tracing
-      .spans()
-      .filter((span) => span.name === PAYMENT_SPAN)
-      .map((span) => span.attributes['blockchain.payment.verified']);
-    expect(verified).toHaveLength(1001);
-    expect(verified.every((value) => value === true)).toBe(true);
-    tracing.exporter.reset();
-    // The second transaction is still remembered; the first was forgotten when the 1001st was verified.
-    pay(permit2Signed(), { settlement: { transaction: hashOf(1) } });
-    await hashspan.flush();
-    pay(permit2Signed(), { settlement: { transaction: hashOf(0) } });
-    await hashspan.flush();
-    expect(tracing.spans().map((span) => span.attributes['blockchain.payment.verified'])).toEqual([
-      false,
-      true,
-    ]);
+    ).toEqual([true, false, false]);
   });
 
   it('does not apply to EIP-3009 payments, whose logs carry their nonce', async () => {

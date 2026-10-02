@@ -90,17 +90,45 @@ as `amount`.
 - As for EIP-3009, addresses are compared without case, logs are decoded with fixed event ABIs owned by the adapter,
   logs that do not decode are skipped, and a reverted receipt gets no verdict.
 - **Reuse of a transaction:** no log identifies the payment, so a server could report the transaction of an identical
-  earlier payment (same payer, recipient, asset and amount). Each `withHashspan()` remembers the last 1000 settlement
-  transactions it verified as `true` for a Permit2 or `upto` payment, by chain and hash; a later payment reporting one
-  of them gets `false`. When two open payments report the same transaction, the one whose receipt is checked first
-  gets `true`.
+  earlier payment (same payer, recipient, asset and amount). Superseded by *Amendment: the Permit2 nonce*, which
+  replaces an in-memory list of verified transactions with the nonce in the transaction's input.
 
 ### Consequences
 
-- The reuse check is per `withHashspan()` and in memory: a payment reporting a transaction verified by another
-  process, by another `withHashspan()`, before a restart or more than 1000 verified transactions ago still gets
-  `true` when the transaction moves the same amount between the same parties.
 - A facilitator that settles through another contract, such as a batching or multicall contract, sends a transaction
   whose `to` is not the proxy: its genuine settlements get `false`. The SDK's facilitators call the proxy directly.
 - The settlement test runs the deployed Permit2 and proxies on Anvil, from code copied from Base Sepolia
   (`packages/x402/test/permit2/`), so a change of those contracts needs the copies refreshed by hand.
+
+## Amendment: the Permit2 nonce
+
+- Date: 2026-10-02
+
+### Context
+
+No log of a Permit2 settlement carries the payment's nonce, but the transaction's input does: both x402 proxies take
+the Permit2 permit (`permitted`, `nonce`, `deadline`) and its `owner` as arguments of `settle` and `settleWithPermit`
+(the same in SDK 2.13 and 2.28). Permit2 uses a nonce of an owner once, so a successful settlement with the payer's
+nonce is this payment and no other.
+
+### Decision
+
+- For an `exact` Permit2 or `upto` payment whose receipt carries it by the rules above, the adapter reads the
+  transaction (`eth_getTransactionByHash`) through the reader and decodes its input with fixed ABIs of the proxies'
+  settlement functions, owned by the adapter (the exact proxy's for `exact`, the upto proxy's for `upto`). The payment
+  is verified when the decoded permit's `nonce` equals the payload's `permit2Authorization.nonce` and its `owner` is
+  the payer.
+- Input that does not decode as one of those functions, or with another nonce or owner, is `false`.
+- A transaction that cannot be read within 10 seconds, or a failed request, means no verdict. The payment span stays
+  open until then; `flush()` ends it without a verdict if it cannot wait longer.
+- A receipt that does not carry the payment is `false` without reading the transaction.
+- The in-memory list of verified transactions is removed: the nonce check covers other processes, other
+  `withHashspan()` calls and restarts.
+- A payload whose nonce is not a decimal string means no check, like the other malformed values.
+
+### Consequences
+
+- One more request through the reader per Permit2 settlement that the receipt check accepts, off the call path
+  (ADR 0009).
+- A proxy whose settlement functions change would make genuine settlements `false` until the ABIs are updated; the
+  unit tests encode inputs with the SDK's own proxy ABIs, so the weekly runs against the SDK peer range catch a change.
