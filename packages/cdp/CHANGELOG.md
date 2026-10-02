@@ -1,5 +1,14 @@
 # @hashspan/cdp
 
+## 0.8.1
+
+### Patch Changes
+
+- [#190](https://github.com/selimaytac/hashspan/pull/190) [`6d03146`](https://github.com/selimaytac/hashspan/commit/6d03146800092ce524d67837b42b04d4c9a23e7f) Thanks [@selimaytac](https://github.com/selimaytac)! - A network-scoped account's `waitForTransactionReceipt` without a reader records a flashblocks preconfirmation (a
+  receipt with a zero or null block hash, such as Base RPCs return before the block is sealed) without
+  `blockchain.tx.effective_gas_price`, `l1_fee` and `fee`, as ADR 0024 does for `@hashspan/viem`: its fee can be
+  another transaction's, and without a reader there is no sealed receipt to read. The caller's receipt is unchanged.
+
 ## 0.8.0
 
 ### Minor Changes

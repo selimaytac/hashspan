@@ -6,7 +6,7 @@ the user operations of CDP smart accounts, using OpenTelemetry.
 CDP signs and broadcasts transactions through its API, so no RPC client of yours sees them. This adapter wraps a
 `CdpClient` so that each transaction becomes a `send {chainId}` span inside your agent's trace, and, with a reader,
 a linked `confirm {chainId}` span with status, gas, fees and revert reason, like
-[`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.8.0/packages/viem).
+[`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.8.1/packages/viem).
 
 ## Install
 
@@ -47,7 +47,7 @@ network-scoped account, which records a confirm span from the receipt it returns
 from such a wait, and ends what is left as `timeout` if it cannot wait longer. Call it before a short-lived process
 exits.
 
-`withHashspan(cdp, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.8.0/packages/core#options)
+`withHashspan(cdp, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.8.1/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem`, `tracker`, `reader`,
 and `confirmTimeoutMs` (default 120 000 ms). Call it once per client: a second call returns the first handle, ignores
 its options and logs a `diag` warning.
@@ -91,7 +91,7 @@ await smartAccount.waitForUserOperation({ userOpHash }); // confirm span
 ```
 
 The spans carry `blockchain.user_operation.*` attributes instead of a transaction's sender, nonce and fee
-([semantic conventions](https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.8.0/docs/semconv.md)):
+([semantic conventions](https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.8.1/docs/semconv.md)):
 
 - CDP reports `complete` with the bundle transaction's hash, or `failed` without a reason, which ends the confirm
   span as an error with `error.type` `failed`. A wait that gives up (the SDK's `TimeoutError`) ends it as `timeout`.
