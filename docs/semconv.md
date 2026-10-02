@@ -96,7 +96,7 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.tx.from` | string | send | raw | sender address, subject to address mode |
 | `blockchain.tx.to` | string | send | raw | recipient / contract address, subject to address mode |
 | `blockchain.tx.value` | string | send | on | value in wei, decimal string |
-| `blockchain.tx.nonce` | int | send | on | sender nonce |
+| `blockchain.tx.nonce` | int | send | on | sender nonce, when the sending call passes one (a nonce the wallet or viem picks is not known to the adapter) |
 | `blockchain.contract.function.name` | string | send | on | decoded function name when an ABI is known |
 | `blockchain.contract.function.selector` | string | send | on | 4-byte selector, e.g. `0xa9059cbb` |
 | `blockchain.contract.function.arguments` | string | send | off (opt-in) | decoded call arguments as a JSON array, e.g. `["0x2222...2222","1000000"]`: bigints as decimal strings, addresses per address mode, truncated after 4096 characters. Only own enumerable data properties are serialized; `toJSON()` and getters are never called |

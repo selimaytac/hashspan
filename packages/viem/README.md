@@ -188,7 +188,7 @@ const wallet = createWalletClient({
 
 | Action | Span | Recorded |
 |---|---|---|
-| `sendTransaction` | `send` | chain id, from, to, value, nonce, function selector, hash |
+| `sendTransaction` | `send` | chain id, from, to, value, nonce (when the call passes one), function selector, hash |
 | `writeContract` | `send` | as above, plus the function name, and the call arguments with `recordFunctionArguments: true` |
 | `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack), total fee |
 
