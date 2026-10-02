@@ -42,6 +42,7 @@ agent identity, redaction hook) plus:
 | `tracker` | new tracker | A tracker from `createTxTracker()`, to share one between adapters |
 | `confirm` | none | `{ mode: 'background', timeoutMs? }` confirms every sent transaction without an explicit wait |
 | `decodeRevertReason` | `true` | Replay reverted transactions to record their revert reason; `{ timeoutMs }` bounds the replay (default 10 000 ms) |
+| `maxBackgroundConfirmations` | `256` | Most background confirmations (background mode and `watch()`) polling at once; see [Background confirmation](#background-confirmation) |
 
 ## Transactions sent elsewhere
 
@@ -149,6 +150,10 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
 - Some nodes return a mined transaction before its receipt. viem's `waitForTransactionReceipt` can then fail with
   `TransactionReceiptNotFoundError`; background confirmation and `watch()` wait again until `timeoutMs`. Your own
   waits are passed on unchanged, including that error.
+- At most `maxBackgroundConfirmations` (default 256) background confirmations, including those of `watch()`, poll at
+  once. A transaction sent while that many are polling gets no background confirm span, and a `diag` warning is
+  logged; `0` turns background confirmation off. Your own waits are not counted. See
+  [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.6.0/docs/adr/0018-background-confirmation-limit.md).
 - In serverless runtimes that freeze after the response, background confirmations may not complete.
 
 ## Traced actions
