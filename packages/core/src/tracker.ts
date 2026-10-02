@@ -26,6 +26,7 @@ import {
   ATTR_BLOCKCHAIN_PAYMENT_RECIPIENT,
   ATTR_BLOCKCHAIN_PAYMENT_SETTLED_AMOUNT,
   ATTR_BLOCKCHAIN_PAYMENT_STATUS,
+  ATTR_BLOCKCHAIN_PAYMENT_VERIFIED,
   ATTR_BLOCKCHAIN_SYSTEM,
   ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE,
   ATTR_BLOCKCHAIN_TX_FEE,
@@ -109,6 +110,7 @@ const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
   ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON,
   ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL,
   ATTR_BLOCKCHAIN_PAYMENT_STATUS,
+  ATTR_BLOCKCHAIN_PAYMENT_VERIFIED,
   ATTR_ERROR_TYPE,
   ATTR_EXCEPTION_TYPE,
 ]);
@@ -755,6 +757,8 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
         settled[ATTR_BLOCKCHAIN_PAYMENT_SETTLED_AMOUNT] = settledAmount;
         if (paid === undefined) settled[ATTR_BLOCKCHAIN_PAYMENT_AMOUNT] = settledAmount;
       }
+      const verified: unknown = settlement.verified;
+      if (typeof verified === 'boolean') settled[ATTR_BLOCKCHAIN_PAYMENT_VERIFIED] = verified;
       span.setAttributes(redact(settled));
       if (status === BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED) {
         markError(span, identifier(settlement.errorReason) ?? ERROR_TYPE_VALUE_OTHER);

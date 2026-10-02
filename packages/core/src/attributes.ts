@@ -43,6 +43,12 @@ export const ATTR_BLOCKCHAIN_PAYMENT_AMOUNT = 'blockchain.payment.amount' as con
 export const ATTR_BLOCKCHAIN_PAYMENT_STATUS = 'blockchain.payment.status' as const;
 /** The amount the settling party reports it settled, e.g. less than the authorized maximum with x402 `upto`. */
 export const ATTR_BLOCKCHAIN_PAYMENT_SETTLED_AMOUNT = 'blockchain.payment.settled_amount' as const;
+/**
+ * Whether the settlement transaction's receipt carries the payment, as checked by the adapter; absent when no check
+ * was possible. See
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.5.0/docs/adr/0017-x402-payment-verification.md.
+ */
+export const ATTR_BLOCKCHAIN_PAYMENT_VERIFIED = 'blockchain.payment.verified' as const;
 /** x402's own payment fields. */
 export const ATTR_X402_SCHEME = 'x402.scheme' as const;
 export const ATTR_X402_RESOURCE = 'x402.resource' as const;
