@@ -259,7 +259,7 @@ describe('robustness', () => {
     return {
       startSend: () => ({ context: ROOT_CONTEXT, end: boom, fail: boom }),
       startConfirm: () => ({ end: boom, timeout: boom, fail: boom }),
-      startPayment: () => ({ end: boom, fail: boom, timeout: boom }),
+      startPayment: () => ({ end: boom, fail: boom, timeout: boom, link: boom }),
     };
   };
 

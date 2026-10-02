@@ -166,7 +166,12 @@ const noopSend = (parent: Context): SendHandle => ({
   end: () => {},
   fail: () => {},
 });
-const NOOP_PAYMENT: PaymentHandle = { end: () => {}, fail: () => {}, timeout: () => {} };
+const NOOP_PAYMENT: PaymentHandle = {
+  end: () => {},
+  fail: () => {},
+  timeout: () => {},
+  link: () => {},
+};
 const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
 
 /** Runs `fn`, logging instead of throwing: instrumentation must never break the caller. */
@@ -733,6 +738,16 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     );
     const finish = finisher(span);
 
+    /** Links the confirm span of `hash` to this payment span, unless the tracker already links that hash. */
+    const linkHash = (hash: unknown): hash is string => {
+      if (typeof hash !== 'string' || !TX_HASH.test(hash)) return false;
+      // A hash this tracker already links, such as one of its own sends, keeps that link.
+      if (!links.get(input.chainId, hash)) {
+        links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
+      }
+      return true;
+    };
+
     const recordSettlement = (settlement: PaymentSettlement): void => {
       const status = settlement.status;
       if (!PAYMENT_STATUSES.has(status)) {
@@ -743,11 +758,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       // payer knew itself (docs/adr/0013-x402-payments.md).
       const settled: Attributes = { [ATTR_BLOCKCHAIN_PAYMENT_STATUS]: status };
       const hash: unknown = settlement.hash;
-      if (typeof hash === 'string' && TX_HASH.test(hash)) {
-        // A hash this tracker already links, such as one of its own sends, keeps that link.
-        if (!links.get(input.chainId, hash)) {
-          links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
-        }
+      if (linkHash(hash)) {
         settled[ATTR_BLOCKCHAIN_TX_HASH] = hash;
       }
       if (!knownPayer) setPaymentAddress(settled, ATTR_BLOCKCHAIN_PAYMENT_PAYER, settlement.payer);
@@ -786,6 +797,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
           () => markError(span, OBSERVER_TIMEOUT),
           handleOptions(options).endTime,
         ),
+      link: (hash) => safely('link the payment span', () => void linkHash(hash), undefined),
     };
   };
 
