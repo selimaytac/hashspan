@@ -97,7 +97,8 @@ understood is recorded as such rather than guessed:
   `getTransactionReceipt` today. Batches get no background confirmation and no `watch()`: only a wait the caller
   makes records a batch confirm span.
 - **Chain.** The send span takes the call's `chain`, else the client's. The wait takes the client's chain, else the
-  status's `chainId` once it is known (a late start, as for waits without a chain today).
+  status's `chainId` once it is known (a late start, as for waits without a chain today). Superseded by
+  *Amendment (2026-10-03): the chain of a wait*, which takes the call's `chain` first.
 
 ## Consequences
 
