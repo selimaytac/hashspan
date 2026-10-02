@@ -7,8 +7,10 @@
 
 EIP-5792 lets an app hand a wallet a batch of calls with `wallet_sendCalls`. The wallet returns a batch id, not a
 transaction hash, and reports the outcome later through `wallet_getCallsStatus`: a status code (the spec defines 100
-pending, 200 confirmed, 400 failed off chain without inclusion, 500 reverted, 600 partially reverted), whether the
-batch ran atomically, and the receipts of the transactions that carried it. A wallet may run the calls in one
+pending, 200 confirmed, 400 failed off chain without inclusion, 500 reverted completely, 600 reverted partially),
+whether the batch ran atomically, and the receipts of the transactions that carried it. The spec bounds ids to 4096
+bytes (8194 characters with the leading `0x`), says wallets SHOULD return a batch's status within 24 hours of
+`wallet_sendCalls`, and has error 5720 for a duplicate id. A wallet may run the calls in one
 transaction, in several, or in a user operation whose bundle transaction also carries other operations. Nothing
 traces this today, and ADR 0021 left it to its own decision.
 
@@ -33,10 +35,17 @@ From viem 2.57.2 (source reading, checked where noted):
   `result`. It is thrown inside viem's retry (4 retries, 200 to 1600 ms apart), so a failed batch rejects about 3 s
   after its status was first read. With a custom `status` predicate, a wait can resolve while the batch is pending.
 
-Wallets deviate from the spec (reported in the review of this ADR, from wallet documentation and sources): Porto's
-relay uses shifted codes (300, 400, 500); MetaMask reports a dropped batch as 500; Safe's id is the `safeTxHash` and
-its receipts repeat one transaction per call; Tempo uses a third id format. Parsing is therefore lenient, and what is
-not understood is recorded as such rather than guessed.
+Wallets deviate from the spec. The wallet facts below were reported in the review of this ADR, from wallet
+documentation and sources; the last row was checked on Anvil. Parsing is therefore lenient, and what is not
+understood is recorded as such rather than guessed:
+
+| Wallet | Deviation | What hashspan records |
+|---|---|---|
+| Porto (relay) | shifted codes: 300, 400, 500 | 300 as `error.type` `_OTHER`, 400 as `failed`, 500 as `reverted`; what Porto means by them is not interpreted |
+| MetaMask | a dropped batch is reported as 500 | `blockchain.call_batch.status` `reverted`, although no chain data shows a revert |
+| Safe | the id is the `safeTxHash`; receipts repeat one transaction per call | the id is hex, so it is traced; repeated receipts are recorded once |
+| Tempo | a third id format | traced only if the id is `0x`-prefixed hex; otherwise the send span has no id and the wait is untraced |
+| viem's fallback | a call that failed to send gives status 600 with fewer receipts | `partially_reverted`, although the failed call never reached the chain |
 
 ## Decision
 
@@ -45,9 +54,9 @@ not understood is recorded as such rather than guessed.
   is keyed in a third key space, apart from transactions and user operations, so ADR 0007 holds.
 - **Ids** are traced only when they are `0x`-prefixed hex of at most 8194 characters (the spec's bound); other ids
   leave the send span without an id and the wait untraced. Keys compare case-insensitively, as hashes do. The
-  attribute keeps the first 256 characters. Wallets keep a batch's status for at least 24 hours, but the send link
-  lives for the tracker's link TTL (10 minutes by default): a wait started later records a confirm span without a
-  link to the send span.
+  attribute keeps the first 256 characters. A wallet should answer for a batch for 24 hours, but the send link lives
+  for the tracker's link TTL (10 minutes by default): a wait started later records a confirm span without a link to
+  the send span.
 - **The send span** covers `sendCalls` until the id is returned; ADR 0015 applies. It records the batch id, the
   account as sender, and the number of calls; no `blockchain.tx.hash` and no `blockchain.tx.from` (the transaction's
   sender may be a bundler or relayer). Per-call function names and arguments are not recorded.
@@ -67,9 +76,11 @@ not understood is recorded as such rather than guessed.
   confirmation outcome is `blockchain.call_batch.status` or `error.type` as above; raw status codes never become metric
   attributes. The batch itself records no fee.
 - **Fees.** The batch confirm span records none: EIP-5792 receipts are a subset of transaction receipts, without
-  `l1Fee`, so on OP-stack chains a fee from them would look valid and be too low (ADR 0024), and a receipt can be a
-  bundle transaction shared with others (ADR 0021). A wallet that reports only batch-level receipts gets no fees, by
-  design.
+  `l1Fee`, so on OP-stack chains a fee from them would look valid and be too low, and a receipt can be a bundle
+  transaction shared with others (ADR 0021). A wallet that reports only batch-level receipts gets no fees, by design.
+  The receipts viem builds for a fallback id do carry the node's `l1Fee`, but they can be flashblocks preconfirmations
+  whose `l1Fee` is another transaction's (ADR 0024); fees therefore come only from the transaction path below, where
+  the sealed receipt is checked.
 - **viem's fallback.** The hashes in a fallback id are the account's own transactions. Each is registered as a send
   of the batch and confirmed through the transaction confirmation path, as `watch()` does, whether or not
   background confirmation is enabled: its receipt is read through the client, off the call path, in `track()`, within
