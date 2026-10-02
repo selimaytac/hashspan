@@ -52,7 +52,9 @@ Run lint, typecheck and tests before proposing a change.
     `.github/workflows/x402-sdk.yml` runs the x402 tests weekly against both ends of the SDK peer range
 - `examples/` → runnable agent integrations
   - `ai-sdk-agent`: AI SDK agent with a scripted model (no API key), run by `make demo`; its
-    `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break
+    `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break;
+    `src/base-sepolia.ts` (behind `make demo-base-sepolia`) runs it on the testnet with a key from the environment,
+    tested against an Anvil that reports chain id 84532
 - `docker/`, `scripts/`, `Makefile` → local lab; `scripts/demo.sh` (behind `make demo`) starts a fresh Anvil or
   fails, waiting for Anvil's own "Listening on" line rather than probing the port, and is tested from
   `examples/ai-sdk-agent/test/demo-script.test.ts`; `scripts/publish-in-order.mjs` (behind `pnpm release`) publishes
