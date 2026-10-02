@@ -37,10 +37,11 @@ From viem 2.57.2 (source reading, checked where noted):
   sender may be a bundler or relayer). Per-call function names and arguments are not recorded.
 - **The confirm span** ends with the status the caller's wait returned. It records the status code, whether the
   batch ran atomically, the hashes of the receipts' transactions, and the block number of the last receipt.
-- **Outcomes, from the status code**: 200 is success; 4xx ends with error status and `error.type` `failed` (nothing
+- **Outcomes, from the status code**: 2xx is success; 4xx ends with error status and `error.type` `failed` (nothing
   was included, so no chain data; ADR 0016); 5xx with `reverted`; 6xx with `partially_reverted`. A
-  `BundleFailedError` is mapped from the status it carries. A wait that resolves while the status is pending ends
-  without an outcome, recording the code 100. `WaitForCallsStatusTimeoutError` ends as `timeout`; other errors as a
+  `BundleFailedError` is mapped from the status it carries. A wait that resolves while the status is pending (1xx)
+  ends without an outcome and records no confirmation metric; so does a status without a code or with a code
+  EIP-5792 does not define (such as 3xx). `WaitForCallsStatusTimeoutError` ends as `timeout`; other errors as a
   failure.
 - **Fees** are not recorded on the batch: EIP-5792 receipts need not carry a gas price, and a receipt can be a
   bundle transaction shared with others (as in ADR 0021). The fee histogram records nothing for batches; the send
@@ -48,9 +49,12 @@ From viem 2.57.2 (source reading, checked where noted):
 - **viem's fallback.** The hashes in a fallback id are the account's own transactions. The adapter records each as
   a transaction sent by the batch: its send key links to the batch send span, and it follows the transaction rules
   from there (background confirmation when enabled, the caller's own waits), so its fee is recorded once, on its own
-  confirm span (with ADR 0024). The batch confirm span does not create them. The id format is copied from viem, so
-  a drift test compares it with the installed viem.
-- **Wrapped actions**: `sendCalls`, `waitForCallsStatus`, and `sendCallsSync` as one send span and one confirm span.
+  confirm span (with ADR 0024). The batch confirm span does not create them. The id format is copied from viem;
+  tests run the installed viem's fallback, including a call that fails to send (a zero hash in the id).
+- **Wrapped actions**: `sendCalls`, `waitForCallsStatus`, and `sendCallsSync` as one send span and one confirm span:
+  viem's `sendCallsSync` runs over a copy of the client that carries the wrapped `sendCalls` and
+  `waitForCallsStatus`. An extension applied before `withHashspan()` that replaced `sendCallsSync` itself is then not
+  called; one that replaced `sendCalls` or `waitForCallsStatus` still is, since the wrappers call the client's.
   `getCallsStatus` is not wrapped: `waitForCallsStatus` polls it, and a caller polling it gets no confirm span, as with
   `getTransactionReceipt` today. Batches get no background confirmation and no `watch()`: only a wait the caller
   makes records a batch confirm span.
@@ -59,7 +63,7 @@ From viem 2.57.2 (source reading, checked where noted):
 
 ## Consequences
 
-- New attributes go to docs/semconv.md under its change policy. Proposed names, to be confirmed in review:
+- New attributes go to docs/semconv.md under its change policy. Their names, confirmed in review:
   `blockchain.call_batch.id` (send, confirm; truncated after 256 characters), `.sender` (address mode),
   `.call_count` (send), `.status_code` (int, confirm), `.atomic` (boolean, confirm) and `.transaction_hashes`
   (string array, confirm).
@@ -71,3 +75,5 @@ From viem 2.57.2 (source reading, checked where noted):
   account, and an in-process stand-in wallet that answers `wallet_sendCalls` with one transaction.
 - Wallets that run a batch as a user operation report the bundle transaction's receipt; the batch span then has the
   bundle's hash, and the operation's own cost is not known to the adapter.
+- Older viem releases in the peer range had `sendCalls` only as an experimental extension, with a string id and a
+  status without a code: their batches get send spans and confirm spans without an outcome.
