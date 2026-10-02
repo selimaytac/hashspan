@@ -1,5 +1,21 @@
 # @hashspan/x402
 
+## 0.6.0
+
+### Minor Changes
+
+- [#136](https://github.com/selimaytac/hashspan/pull/136) [`a5e809a`](https://github.com/selimaytac/hashspan/commit/a5e809a9b51765497329b5df59e435a6cb3cb247) Thanks [@selimaytac](https://github.com/selimaytac)! - With a reader, a payment span records `blockchain.payment.verified` (ADR 0017): for an `exact` payment authorized
+  with EIP-3009, `true` when the settlement transaction's receipt carries the token's `AuthorizationUsed` with the
+  payment's nonce and its `Transfer` from the payer to `payTo` of exactly the amount, `false` when it does not, and no
+  attribute when no check was possible. The payment span is then exported once the receipt is checked, with its end
+  time unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`7ba73bb`](https://github.com/selimaytac/hashspan/commit/7ba73bb2e2a87c157c2819d23b66b6266925472a), [`071730f`](https://github.com/selimaytac/hashspan/commit/071730f525c7f9446b5591dd3ba3b72e6bd34780), [`c898941`](https://github.com/selimaytac/hashspan/commit/c898941305240ee1b13513d0f9de14ccf984c47d)]:
+  - @hashspan/core@0.6.0
+  - @hashspan/viem@0.6.0
+
 ## 0.5.0
 
 ### Patch Changes

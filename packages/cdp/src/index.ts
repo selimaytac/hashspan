@@ -29,7 +29,7 @@ export interface HashspanCdp {
    * waits of network-scoped accounts), so their spans are ended before the OpenTelemetry SDK shuts down. Resolves
    * true when all of it finished, false on timeout (default 10 000 ms), ending confirm spans still open as `timeout`;
    * never rejects. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.5.0/docs/adr/0010-flush-before-shutdown.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.6.0/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
 }
@@ -163,7 +163,7 @@ function describeTransaction(transaction: unknown): Omit<SendInput, 'chainId'> {
 
 /**
  * Traces transactions sent by a Coinbase CDP client's EVM server accounts with `@hashspan/core`
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.5.0/docs/adr/0012-cdp-adapter.md). It wraps the client
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.6.0/docs/adr/0012-cdp-adapter.md). It wraps the client
  * in place: `cdp.evm.sendTransaction`, the account factories and the send methods of every account they return. Call
  * it once, right after creating the client: a second call on the same client returns the first handle, ignores its
  * options and logs a `diag` warning. Never throws into the traced calls; transactions on networks it cannot map to a
@@ -320,7 +320,7 @@ export function withHashspan(
   /**
    * Ends `handle` from the outcome of the user's wait; never rejects. It is tracked, so `flush()` waits for it and
    * ends it as `timeout` if it cannot wait longer
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.5.0/docs/adr/0010-flush-before-shutdown.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.6.0/docs/adr/0010-flush-before-shutdown.md).
    */
   const recordWait = (
     handle: ReturnType<TxTracker['startConfirm']>,

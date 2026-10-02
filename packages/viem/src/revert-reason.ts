@@ -37,7 +37,7 @@ function revertDataOf(error: unknown): Hex | undefined {
 /**
  * Replays a mined transaction with `eth_call` on the state of the previous block and returns the decoded revert
  * reason. Best effort: see
- * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.5.0/docs/adr/0005-revert-reason-replay.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.6.0/docs/adr/0005-revert-reason-replay.md.
  */
 export async function fetchRevertReason(
   client: unknown,

@@ -1,5 +1,14 @@
 # @hashspan/core
 
+## 0.6.0
+
+### Minor Changes
+
+- [#132](https://github.com/selimaytac/hashspan/pull/132) [`7ba73bb`](https://github.com/selimaytac/hashspan/commit/7ba73bb2e2a87c157c2819d23b66b6266925472a) Thanks [@selimaytac](https://github.com/selimaytac)! - Add `blockchain.payment.verified` (ADR 0017): `PaymentSettlement.verified` records whether the settlement
+  transaction's receipt carries the payment, as an adapter checked it from the payer's own data. It is not an error,
+  and it is kept when the redaction hook fails. `PaymentHandle.link(hash)` links the settling transaction's
+  confirm span to a payment span that stays open until its receipt is checked.
+
 ## 0.5.0
 
 ### Minor Changes

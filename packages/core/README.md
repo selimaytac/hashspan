@@ -12,7 +12,7 @@ Payments that another party settles on chain, such as x402 payments, become a **
 of a `send` span.
 
 The core is library-agnostic and read-only: it never signs, sends or fetches anything. Adapters such as
-[`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/core@0.5.0/packages/viem) call it for you. Use the core directly to instrument any other send path.
+[`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/core@0.6.0/packages/viem) call it for you. Use the core directly to instrument any other send path.
 
 ## Install
 
@@ -69,14 +69,14 @@ stays the class name.
 `tracker.startPayment({ chainId, protocol, payer, recipient, asset, amount })` records a payment that another
 party settles on chain, such as an x402 facilitator, as a `payment {chainId}` span; end it with
 `end({ status, hash })` or `fail(error)`. A settlement with a hash links the transaction's confirm span to the payment
-span ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.5.0/docs/adr/0013-x402-payments.md)).
+span ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/adr/0013-x402-payments.md)).
 
 All three calls accept an explicit parent `Context` as a second argument. An integration that learns about a call only
 after it started can record it after the fact: pass `startTime` in the input and `endTime` in the options of the
-handle method, e.g. `send.end({ hash }, { endTime })` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.5.0/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
+handle method, e.g. `send.end({ hash }, { endTime })` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
 the instrumentation are reported through `diag` and never thrown into your code. The positional forms of earlier
 releases, `send.end(hash, endTime)` and `send.fail(error, endTime, { errorType })`, still work and are deprecated
-until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.5.0/docs/adr/0014-core-api-boundary.md)).
+until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/adr/0014-core-api-boundary.md)).
 
 ## Options
 
@@ -84,7 +84,7 @@ until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core
 |---|---|---|
 | `tracerProvider` | global provider | Tracer provider to use |
 | `address` | `'raw'` | `'raw'`, `'hashed'`, `'off'`, or `{ mode: 'hashed', hash: (address) => string }` |
-| `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace). `'raw'` can record RPC URLs that include API keys, as some libraries put the request URL in the message; `'sanitized'` keeps only the first line (viem puts the URL on a later line), which is best effort. See [ADR 0006](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.5.0/docs/adr/0006-error-privacy.md) |
+| `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace). `'raw'` can record RPC URLs that include API keys, as some libraries put the request URL in the message; `'sanitized'` keeps only the first line (viem puts the URL on a later line), which is best effort. See [ADR 0006](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/adr/0006-error-privacy.md) |
 | `paymentResource` | `'origin'` | How much of a paid resource's URL `x402.resource` records: `'origin'` (scheme, host and port; nothing for a resource that is not a URL), `'path'` (also the path, never the query string, fragment or user info) or `'off'`. Paths often carry user or account identifiers. At most 512 characters are recorded |
 | `recordFunctionArguments` | `false` | Record `functionArguments` as a JSON array in `blockchain.contract.function.arguments`: bigints as decimal strings, addresses per `address` mode (longer hex values become `<hex>` in `hashed` and `off` mode), at most 4096 characters. Reads only own enumerable data properties: `toJSON()` and getters are never called, so a `Date` records as `{}`; a Proxy's traps still run |
 | `agent` | none | Agent `{ id, name }`; a field set here always wins, unset fields come from the Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` |
@@ -99,7 +99,7 @@ Chain id, transaction hash, sender/recipient (per `address` mode), value, nonce,
 on confirmation, status, block number, gas used, effective gas price, L1 fee, total fee and revert reason. Decoded
 call arguments are recorded only with `recordFunctionArguments`, and error messages only with `errorMessages`.
 Attribute definitions:
-[docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.5.0/docs/semconv.md).
+[docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/semconv.md).
 
 ## Privacy notes
 
@@ -114,7 +114,7 @@ Attribute definitions:
   propagated, or strip the entries before outbound calls.
 - **Inbound Baggage can claim an identity.** A caller can send Baggage entries with any agent id. A field set in the
   `agent` option cannot be overridden that way; to ignore identity from Baggage entirely, set `agentFromBaggage: false`
-  ([ADR 0011](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.5.0/docs/adr/0011-agent-identity-precedence.md)).
+  ([ADR 0011](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/adr/0011-agent-identity-precedence.md)).
 - The redaction hook (`redact`) runs last on every attribute set and on exception attributes; use it for anything
   else your policy forbids.
 - **Your callbacks' errors go to the diagnostic logger.** If a custom `hash` function or the `redact` hook throws,

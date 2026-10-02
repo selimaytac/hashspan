@@ -1,5 +1,21 @@
 # @hashspan/viem
 
+## 0.6.0
+
+### Minor Changes
+
+- [#133](https://github.com/selimaytac/hashspan/pull/133) [`c898941`](https://github.com/selimaytac/hashspan/commit/c898941305240ee1b13513d0f9de14ccf984c47d) Thanks [@selimaytac](https://github.com/selimaytac)! - `watch()` takes an `onReceipt` callback, called once when the watch ends: with the receipt of the mined transaction,
+  logs included, or with `undefined` when no receipt was retrieved. It never affects the confirm span; the x402
+  adapter uses it to check that a settlement transaction carries the payment (ADR 0017).
+
+### Patch Changes
+
+- [#142](https://github.com/selimaytac/hashspan/pull/142) [`071730f`](https://github.com/selimaytac/hashspan/commit/071730f525c7f9446b5591dd3ba3b72e6bd34780) Thanks [@selimaytac](https://github.com/selimaytac)! - A call whose arguments throw when telemetry reads them, such as a Proxy whose `getOwnPropertyDescriptor` or
+  `ownKeys` trap throws, or a revoked Proxy, is now made untraced with its original arguments instead of rejecting.
+  The base action runs once, and its result or error reaches the caller unchanged.
+- Updated dependencies [[`7ba73bb`](https://github.com/selimaytac/hashspan/commit/7ba73bb2e2a87c157c2819d23b66b6266925472a)]:
+  - @hashspan/core@0.6.0
+
 ## 0.5.0
 
 ### Patch Changes
