@@ -265,7 +265,7 @@ const wallet = createWalletClient({
 | `sendUserOperation` | `send` | chain id, smart account, EntryPoint, number of calls, user operation hash; see [Smart accounts](#smart-accounts-erc-4337) |
 | `waitForUserOperationReceipt` | `confirm` | success, gas used, cost, nonce, paymaster, revert reason, bundle transaction hash and block |
 | `sendCalls` | `send` | chain id, account, number of calls, batch id; see [Call batches](#call-batches-eip-5792) |
-| `waitForCallsStatus` | `confirm` | status code, atomicity, transaction hashes, last block |
+| `waitForCallsStatus` | `confirm` | outcome, status code, atomicity, transaction hashes, highest block |
 | `sendCallsSync` | `send` and `confirm` | as `sendCalls` and `waitForCallsStatus` |
 
 While `sendTransaction`, `writeContract`, `sendUserOperation` or `sendCalls` runs, its send span is the active span, so spans that your RPC or HTTP
