@@ -100,9 +100,16 @@ export function traceTransport<TTransport extends Transport>(
       const tracedRequest: AnyRequest = (args, requestOptions) => {
         let span: Span | undefined;
         try {
-          const method = (args as { method?: unknown } | null)?.method;
+          // Read without running a getter of the caller's: a method behind an accessor is sent untraced.
+          const descriptor =
+            args !== null && typeof args === 'object'
+              ? Object.getOwnPropertyDescriptor(args, 'method')
+              : undefined;
+          const method = descriptor && 'value' in descriptor ? descriptor.value : undefined;
           const name = typeof method === 'string' && METHOD.test(method) ? method : '_OTHER';
-          if (!options.methods || options.methods(name)) {
+          if (descriptor && !('value' in descriptor)) {
+            diag.debug('hashspan: the request method is an accessor; not tracing the request');
+          } else if (!options.methods || options.methods(name)) {
             span = tracer.startSpan(name, {
               kind: SpanKind.CLIENT,
               attributes: { ...base, [ATTR_RPC_METHOD]: name },
