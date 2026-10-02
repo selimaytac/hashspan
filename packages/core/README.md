@@ -90,7 +90,7 @@ until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core
 | `recordFunctionArguments` | `false` | Record `functionArguments` as a JSON array in `blockchain.contract.function.arguments`: bigints as decimal strings, addresses per `address` mode (longer hex values become `<hex>` in `hashed` and `off` mode), at most 4096 characters. Reads only own enumerable data properties: `toJSON()` and getters are never called, so a `Date` records as `{}`; a Proxy's traps still run |
 | `agent` | none | Agent `{ id, name }`; a field set here always wins, unset fields come from the Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` |
 | `agentFromBaggage` | `true` | Read agent identity fields that `agent` leaves unset from Baggage; set to `false` in services that accept requests from outside their trust boundary |
-| `redact` | none | `(attributes) => attributes`, runs last on every attribute set, including exception event attributes; if it throws, only non-sensitive identifiers are kept |
+| `redact` | none | `(attributes) => attributes`, runs last on every span attribute set, including exception event attributes, but not on [metrics](#metrics); if it throws, only non-sensitive identifiers are kept |
 | `linkTtlMs` | `600000` | How long a sent transaction can be linked from its confirmation |
 | `maxTrackedTransactions` | `10000` | Upper bound on transactions kept for linking |
 
@@ -107,7 +107,9 @@ Attribute definitions:
 With an OpenTelemetry metrics SDK set up (or `meterProvider`), the tracker records three histograms:
 `blockchain.client.send.duration` and `blockchain.client.confirmation.duration` in seconds, and
 `blockchain.client.fee` in wei. Their attributes are the chain and the outcome only, never an address, hash or
-agent identity. Definitions:
+agent identity. The `redact` hook does not run on metrics: a fee it removes from spans is still recorded by
+`blockchain.client.fee`. To keep a histogram out of your backend, drop it with a View of your metrics SDK (drop
+aggregation). Definitions:
 [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/semconv.md#metrics).
 
 ## Privacy notes
@@ -124,8 +126,8 @@ agent identity. Definitions:
 - **Inbound Baggage can claim an identity.** A caller can send Baggage entries with any agent id. A field set in the
   `agent` option cannot be overridden that way; to ignore identity from Baggage entirely, set `agentFromBaggage: false`
   ([ADR 0011](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/adr/0011-agent-identity-precedence.md)).
-- The redaction hook (`redact`) runs last on every attribute set and on exception attributes; use it for anything
-  else your policy forbids.
+- The redaction hook (`redact`) runs last on every span attribute set and on exception attributes; use it for
+  anything else your policy forbids. It does not run on [metrics](#metrics), which carry no address or hash.
 - **Your callbacks' errors go to the diagnostic logger.** If a custom `hash` function or the `redact` hook throws,
   its error object is logged through the OpenTelemetry `diag` logger, outside the address mode and the redaction
   hook. Errors of the instrumented call never are. Do not put sensitive values, such as the address being hashed,
