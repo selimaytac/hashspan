@@ -41,7 +41,8 @@ Not tied to a version: an item ships with the first release after its pull reque
 - [x] viem transport wrapper: JSON-RPC spans ([ADR 0019](adr/0019-json-rpc-spans.md))
 - [ ] viem `deployContract`, `sendRawTransaction`
 - [x] viem EIP-5792 `sendCalls` ([ADR 0022](adr/0022-call-batches.md))
-- [ ] CDP smart account user operations (ERC-4337)
+- [x] User operations of smart accounts (ERC-4337): viem bundler clients and CDP smart accounts
+  ([ADR 0021](adr/0021-user-operations.md))
 - [x] Metrics: transaction fee and confirmation latency histograms ([ADR 0020](adr/0020-metrics.md))
 
 ## Toward 1.0: a stable API
@@ -56,4 +57,4 @@ Not tied to a version: an item ships with the first release after its pull reque
 ## Later
 
 - Upstream proposal for blockchain semantic conventions to OpenTelemetry
-- ERC-4337 user operations, ethers v6 adapter, non-EVM chains
+- ethers v6 adapter, non-EVM chains

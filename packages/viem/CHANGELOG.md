@@ -1,5 +1,13 @@
 # @hashspan/viem
 
+## 0.8.2
+
+### Patch Changes
+
+- [#194](https://github.com/selimaytac/hashspan/pull/194) [`b9fc0ee`](https://github.com/selimaytac/hashspan/commit/b9fc0ee2d1f7588f9e75eda55ca9f695f05675b0) Thanks [@selimaytac](https://github.com/selimaytac)! - The revert reason of a transaction that calls a contract created earlier in the same block is now recorded: when the
+  replay on the previous block does not revert (the contract has no code there yet), the transaction is replayed once
+  more on its own block (ADR 0005 amendment). It costs one more `eth_call`, only in that case.
+
 ## 0.8.0
 
 ### Minor Changes
