@@ -49,6 +49,9 @@ describe('check-licenses script', () => {
     'MIT)',
     'MIT Apache-2.0',
     'MIT WITH',
+    'MIT WITH NonexistentException',
+    'Apache-2.0 WITH Classpath-exception-2.0',
+    '(MIT WITH Unknown-exception) OR GPL-3.0',
     '',
   ])('rejects %j and names the package', async (license) => {
     const { code, stderr } = await check('MIT', license);

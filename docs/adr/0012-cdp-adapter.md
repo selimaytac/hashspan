@@ -84,3 +84,5 @@ agent toolkits. Relevant facts, from the SDK source (1.57):
 - Wrapping depends on the SDK's object shapes, which are not a public contract; CI tests the lowest version of the
   peer range, and a weekly workflow (`cdp-sdk-latest.yml`) tests the newest release within it.
 - AgentKit keeps its `CdpClient` private, so it needs a separate wallet provider wrapper; not part of this step.
+  Update (2026-10-02): AgentKit 0.10.4 exposes it through the wallet providers' `getClient()`, so `withHashspan()`
+  applies to `CdpEvmWalletProvider` without a wrapper ([integrations](../integrations.md#cdpevmwalletprovider)).
