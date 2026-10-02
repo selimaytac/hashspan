@@ -304,7 +304,8 @@ describe('user operations through Alto on Anvil', () => {
       'blockchain.user_operation.gas.cost': receipt.actualGasCost.toString(),
       'blockchain.user_operation.sender': account,
       'blockchain.user_operation.nonce': BigInt(receipt.nonce).toString(),
-      // As the bundler returns it: lower-cased on the confirm span, checksummed on the send span.
+      // As the bundler returns it, lower-cased, while the send span has viem's checksummed address: a known
+      // inconsistency between the two spans in the `full` address mode, recorded here as it is.
       'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
       'blockchain.tx.hash': receipt.receipt.transactionHash,
       'blockchain.block.number': Number(receipt.receipt.blockNumber),
@@ -353,6 +354,9 @@ describe('user operations through Alto on Anvil', () => {
       .catch((caught: unknown) => caught);
 
     expect((error as Error).name).toBe('UserOperationExecutionError');
+    expect((error as { details?: string }).details).toMatch(
+      /^UserOperation reverted during simulation with reason: 0x08c379a0/,
+    );
     const send = tracing.spanNamed('send 31337');
     expect(send.status.code).toBe(SpanStatusCode.ERROR);
     expect(send.attributes['error.type']).toBe('UserOperationExecutionError');
@@ -364,8 +368,15 @@ describe('user operations through Alto on Anvil', () => {
     const client = await bundlerClient(4n);
     await testClient.setAutomine(false);
     try {
+      const executor = privateKeyToAccount(executorKey).address;
+      const mined = await reader.getTransactionCount({ address: executor, blockTag: 'latest' });
       const hash = await client.sendUserOperation({ calls: [{ to: RECIPIENT, value: 1n }] });
-      // Alto has no receipt while its bundle transaction waits to be mined.
+      // Once Alto's bundle transaction waits in the node's pool, Alto has no receipt for the operation.
+      await expect
+        .poll(() => reader.getTransactionCount({ address: executor, blockTag: 'pending' }), {
+          timeout: 10_000,
+        })
+        .toBeGreaterThan(mined);
       expect(await rawReceipt(hash)).toBeNull();
 
       const error = await client

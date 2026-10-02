@@ -6,6 +6,7 @@
 // Alto's.
 import {
   type Address,
+  type BaseError,
   custom,
   decodeEventLog,
   type Hex,
@@ -108,6 +109,27 @@ export function testBundler(reader: PublicClient, executor: WalletClient): TestB
     };
   };
 
+  // Like Alto, estimation runs the operation's call and refuses one that reverts, with the revert data in the
+  // message and ERC-7769's code for a reverted operation; a sender gives limits of its own to send it anyway.
+  const simulate = async (operation: { sender: Address; callData: Hex }, entryPoint: Address) => {
+    try {
+      await reader.request({
+        method: 'eth_call',
+        params: [{ from: entryPoint, to: operation.sender, data: operation.callData }, 'latest'],
+      });
+    } catch (error) {
+      const reverted = (error as BaseError).walk(
+        (cause) => typeof (cause as { data?: unknown }).data === 'string',
+      ) as { data?: Hex } | null;
+      throw Object.assign(
+        new Error(
+          `UserOperation reverted during simulation with reason: ${reverted?.data ?? '0x'}`,
+        ),
+        { code: -32521 },
+      );
+    }
+  };
+
   const transport = custom({
     async request({ method, params }: { method: string; params?: unknown }) {
       const args = (params ?? []) as unknown[];
@@ -117,6 +139,7 @@ export function testBundler(reader: PublicClient, executor: WalletClient): TestB
         case 'eth_supportedEntryPoints':
           return [entryPoint07Address];
         case 'eth_estimateUserOperationGas':
+          await simulate(args[0] as { sender: Address; callData: Hex }, args[1] as Address);
           return {
             preVerificationGas: toHex(50_000),
             verificationGasLimit: toHex(200_000),
