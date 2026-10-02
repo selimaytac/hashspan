@@ -3,7 +3,7 @@ name: x402 SDK range
 # The x402 adapter relies on behaviour of the x402 SDK that is not a documented contract: which objects its hooks
 # pass on from one hook to the next (ADR 0013). CI tests the SDK from the lockfile; this job tests both ends of the
 # peer range, so that a change shows up before users report it: the newest release, with every x402 test, and the
-# oldest version the range allows, with the adapter's own tests (the settlement test uses newer server APIs). Tests
+# oldest version the range allows, with the adapter's own tests (the settlement tests use newer server APIs). Tests
 # run offline, as in CI. The updated lockfile is not committed.
 on:
   schedule:
@@ -51,4 +51,4 @@ jobs:
           pnpm vitest run packages/x402
       - name: The adapter's own x402 tests
         if: matrix.end == 'oldest'
-        run: pnpm vitest run packages/x402 --exclude '**/settlement.int.test.ts'
+        run: pnpm vitest run packages/x402 --exclude '**/*settlement.int.test.ts'

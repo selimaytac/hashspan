@@ -60,9 +60,14 @@ registered earlier can keep hashspan from seeing the outcome, which then ends as
 The settlement and its transaction hash come from the server you pay. With a reader, the payment span records
 `blockchain.payment.verified`: `true` when the reported transaction's receipt carries your payment, `false` when it
 does not. For an `exact` payment authorized with EIP-3009, that means the token emitted `AuthorizationUsed` with your
-nonce and `Transfer` from you to `payTo` of exactly the amount, all checked from your own payment, not from the
-settlement. The attribute is absent when no check was possible: no reader, no receipt, a reverted one, or another
-scheme or authorization method (Permit2 and `upto` come later). With a reader, the payment span is exported once
+nonce and `Transfer` from you to `payTo` of exactly the amount. For an `exact` payment authorized with Permit2, the
+transaction was sent to the x402 proxy you authorized, which emitted its settlement event, and the token emitted
+`Transfer` from you to `payTo` of exactly the amount; for `upto`, the transaction was also sent by the facilitator
+your authorization names, and the transfer is of more than nothing, at most your maximum and the amount the
+settlement reports. All of it is checked from your own payment, not from the settlement. A Permit2 transaction
+carries no nonce, so a transaction already verified for an earlier payment of the same client is `false` for a later
+one. The attribute is absent when no check was possible: no reader, no receipt, a reverted one, or another scheme
+(such as `batch-settlement`). With a reader, the payment span is exported once
 the receipt is checked; its end time stays when the response came. The revert reason of a reverted settlement, which
 would be text from a contract the server chooses, is only recorded with `decodeRevertReason: true`. See
 [ADR 0017](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.6.0/docs/adr/0017-x402-payment-verification.md).

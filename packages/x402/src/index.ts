@@ -71,6 +71,13 @@ const EIP3009_EVENTS = parseAbi([
   'event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)',
   'event Transfer(address indexed from, address indexed to, uint256 value)',
 ]);
+/** The events an x402 Permit2 proxy emits once it settled a payment; they carry no payment identifier. */
+const PROXY_EVENTS = parseAbi(['event Settled()', 'event SettledWithPermit()']);
+const TRANSFER_EVENT = parseAbi([
+  'event Transfer(address indexed from, address indexed to, uint256 value)',
+]);
+/** How many settlement transactions verified for a Permit2 payment are remembered, to refuse their reuse. */
+const MAX_VERIFIED_HASHES = 1000;
 const SETTLEMENT_PENDING = 'settlement_pending';
 const NO_SETTLEMENT = 'no_settlement';
 // Timers without Node.js or DOM types, which src/ is type-checked without.
@@ -141,7 +148,8 @@ function settlementOf(response: object): PaymentSettlement {
 }
 
 /** What identifies an `exact` EIP-3009 payment in a receipt, all from the payer's own payload and requirements. */
-interface PaymentCheck {
+interface Eip3009Check {
+  method: 'eip3009';
   asset: string;
   payer: string;
   payTo: string;
@@ -149,12 +157,49 @@ interface PaymentCheck {
   amount: bigint;
 }
 
+/** What identifies an `exact` Permit2 payment in a receipt, all from the payer's own payload and requirements. */
+interface Permit2Check {
+  method: 'permit2';
+  asset: string;
+  payer: string;
+  payTo: string;
+  /** The x402 proxy the payer authorized to transfer, which the settlement transaction calls. */
+  proxy: string;
+  amount: bigint;
+}
+
+/** What identifies an `upto` payment in a receipt: a Permit2 payment of at most `max`, sent by `facilitator`. */
+interface UptoCheck {
+  method: 'upto';
+  asset: string;
+  payer: string;
+  payTo: string;
+  proxy: string;
+  facilitator: string;
+  max: bigint;
+}
+
+type PaymentCheck = Eip3009Check | Permit2Check | UptoCheck;
+
+/** `value` lower-cased when it is an address, else undefined. */
+function addressOf(value: unknown): string | undefined {
+  return typeof value === 'string' && ADDRESS.test(value) ? value.toLowerCase() : undefined;
+}
+
+/** `value` as an amount when it is a decimal string, else undefined. */
+function amountOf(value: unknown): bigint | undefined {
+  return typeof value === 'string' && AMOUNT.test(value) ? BigInt(value) : undefined;
+}
+
+const lower = (value: unknown): unknown =>
+  typeof value === 'string' ? value.toLowerCase() : value;
+
 /**
  * The check of an `exact` payment authorized with EIP-3009 (`transferWithAuthorization`), or undefined for any
- * other scheme or authorization method, which has no check yet
+ * other scheme or authorization method
  * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.6.0/docs/adr/0017-x402-payment-verification.md).
  */
-function eip3009CheckOf(requirements: object, payload: object): PaymentCheck | undefined {
+function eip3009CheckOf(requirements: object, payload: object): Eip3009Check | undefined {
   if (own(requirements, 'scheme') !== 'exact') return undefined;
   const authorization = own(own(payload, 'payload'), 'authorization');
   const values = {
@@ -171,6 +216,7 @@ function eip3009CheckOf(requirements: object, payload: object): PaymentCheck | u
   if (typeof nonce !== 'string' || !BYTES32.test(nonce)) return undefined;
   if (typeof amount !== 'string' || !AMOUNT.test(amount)) return undefined;
   return {
+    method: 'eip3009',
     asset: asset.toLowerCase(),
     payer: payer.toLowerCase(),
     payTo: payTo.toLowerCase(),
@@ -180,11 +226,49 @@ function eip3009CheckOf(requirements: object, payload: object): PaymentCheck | u
 }
 
 /**
- * Whether `receipt` carries the payment: among the logs of its asset, `AuthorizationUsed` with the payer and the
- * nonce, and `Transfer` from the payer to the recipient of exactly the amount. Undefined when it cannot tell: no
+ * The check of an `exact` or `upto` payment authorized with Permit2 (`permit2Authorization`), or undefined for any
+ * other scheme or authorization method, or when the authorization does not match the requirements: another token,
+ * recipient or amount, or for `upto` no facilitator
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.6.0/docs/adr/0017-x402-payment-verification.md).
+ */
+function permit2CheckOf(
+  requirements: object,
+  payload: object,
+): Permit2Check | UptoCheck | undefined {
+  const scheme = own(requirements, 'scheme');
+  if (scheme !== 'exact' && scheme !== 'upto') return undefined;
+  const authorization = own(own(payload, 'payload'), 'permit2Authorization');
+  const permitted = own(authorization, 'permitted');
+  const witness = own(authorization, 'witness');
+  const asset = addressOf(own(requirements, 'asset'));
+  const payer = addressOf(own(authorization, 'from'));
+  const payTo = addressOf(own(requirements, 'payTo'));
+  const proxy = addressOf(own(authorization, 'spender'));
+  const amount = amountOf(own(requirements, 'amount'));
+  if (asset === undefined || payer === undefined || payTo === undefined || proxy === undefined) {
+    return undefined;
+  }
+  if (amount === undefined || amountOf(own(permitted, 'amount')) !== amount) return undefined;
+  if (addressOf(own(permitted, 'token')) !== asset || addressOf(own(witness, 'to')) !== payTo) {
+    return undefined;
+  }
+  if (scheme === 'exact') return { method: 'permit2', asset, payer, payTo, proxy, amount };
+  const facilitator = addressOf(own(witness, 'facilitator'));
+  if (facilitator === undefined) return undefined;
+  return { method: 'upto', asset, payer, payTo, proxy, facilitator, max: amount };
+}
+
+/** The check of a payment, or undefined for a scheme or authorization method without one (ADR 0017). */
+function checkOf(requirements: object, payload: object): PaymentCheck | undefined {
+  return eip3009CheckOf(requirements, payload) ?? permit2CheckOf(requirements, payload);
+}
+
+/**
+ * Whether `receipt` carries the EIP-3009 payment: among the logs of its asset, `AuthorizationUsed` with the payer and
+ * the nonce, and `Transfer` from the payer to the recipient of exactly the amount. Undefined when it cannot tell: no
  * receipt, or one that is not successful.
  */
-function carriesPayment(receipt: unknown, check: PaymentCheck): boolean | undefined {
+function carriesEip3009Payment(receipt: unknown, check: Eip3009Check): boolean | undefined {
   if (own(receipt, 'status') !== 'success') return undefined;
   const logs = own(receipt, 'logs');
   if (!Array.isArray(logs)) return undefined;
@@ -203,7 +287,6 @@ function carriesPayment(receipt: unknown, check: PaymentCheck): boolean | undefi
     } catch {
       continue;
     }
-    const lower = (value: unknown) => (typeof value === 'string' ? value.toLowerCase() : value);
     if (event.eventName === 'AuthorizationUsed') {
       authorized ||=
         lower(event.args.authorizer) === check.payer && lower(event.args.nonce) === check.nonce;
@@ -215,6 +298,65 @@ function carriesPayment(receipt: unknown, check: PaymentCheck): boolean | undefi
     }
   }
   return authorized && transferred;
+}
+
+/**
+ * Whether `receipt` carries the Permit2 payment: the transaction calls the proxy (sent by the facilitator, for
+ * `upto`), the proxy emitted `Settled` or `SettledWithPermit`, and the asset emitted `Transfer` from the payer to the
+ * recipient of exactly the amount, or for `upto` of more than nothing, at most the maximum and, when the settlement
+ * reported an amount, exactly that amount. Undefined when it cannot tell: no receipt, or one that is not successful.
+ */
+function carriesPermit2Payment(
+  receipt: unknown,
+  check: Permit2Check | UptoCheck,
+  reported: PaymentSettlement['amount'],
+): boolean | undefined {
+  if (own(receipt, 'status') !== 'success') return undefined;
+  const logs = own(receipt, 'logs');
+  if (!Array.isArray(logs)) return undefined;
+  if (lower(own(receipt, 'to')) !== check.proxy) return false;
+  let expected: bigint | undefined;
+  if (check.method === 'upto') {
+    if (lower(own(receipt, 'from')) !== check.facilitator) return false;
+    if (reported !== undefined) {
+      expected = typeof reported === 'bigint' ? reported : amountOf(reported);
+      // A reported amount that is not one cannot be the amount transferred.
+      if (expected === undefined) return false;
+    }
+  }
+  const amountMatches = (value: unknown): boolean => {
+    if (typeof value !== 'bigint') return false;
+    if (check.method === 'permit2') return value === check.amount;
+    return value > 0n && value <= check.max && (expected === undefined || value === expected);
+  };
+  let settled = false;
+  let transferred = false;
+  for (const log of logs) {
+    const address = lower(own(log, 'address'));
+    const data = own(log, 'data') as `0x${string}`;
+    const topics = own(log, 'topics') as [`0x${string}`, ...`0x${string}`[]];
+    if (address === check.proxy) {
+      try {
+        decodeEventLog({ abi: PROXY_EVENTS, data, topics });
+        settled = true;
+      } catch {
+        // Another event of the proxy, or one that does not decode.
+      }
+    }
+    if (address === check.asset) {
+      let event: { args: Record<string, unknown> };
+      try {
+        event = decodeEventLog({ abi: TRANSFER_EVENT, data, topics }) as typeof event;
+      } catch {
+        continue;
+      }
+      transferred ||=
+        lower(event.args.from) === check.payer &&
+        lower(event.args.to) === check.payTo &&
+        amountMatches(event.args.value);
+    }
+  }
+  return settled && transferred;
 }
 
 /** A payment between `onBeforePaymentCreation` and `onAfterPaymentCreation`. */
@@ -265,6 +407,31 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
   const open = new Map<object, OpenPayment>();
   // The open payment of a requirements object, for a creation failure reported after hashspan's after-hook ran.
   const byRequirements = new WeakMap<object, OpenPayment>();
+
+  // Settlement transactions verified for a Permit2 payment: no log carries the payment's nonce, so a server could
+  // report the transaction of an identical earlier payment; a hash verified once is refused afterwards (ADR 0017).
+  // Insertion order is age, for MAX_VERIFIED_HASHES.
+  const verifiedHashes = new Set<string>();
+  /** The verdict on `receipt` for `payment`, settled in the transaction `hash`. */
+  const verdictOf = (
+    payment: OpenPayment,
+    check: PaymentCheck,
+    hash: string,
+    settlement: PaymentSettlement,
+    receipt: unknown,
+  ): boolean | undefined => {
+    if (check.method === 'eip3009') return carriesEip3009Payment(receipt, check);
+    const carried = carriesPermit2Payment(receipt, check, settlement.amount);
+    if (carried !== true) return carried;
+    const key = `${payment.chainId}:${hash.toLowerCase()}`;
+    if (verifiedHashes.has(key)) return false;
+    verifiedHashes.add(key);
+    if (verifiedHashes.size > MAX_VERIFIED_HASHES) {
+      const oldest = verifiedHashes.values().next().value;
+      if (oldest !== undefined) verifiedHashes.delete(oldest);
+    }
+    return true;
+  };
 
   const warned = new Set<string>();
   const warnOnce = (key: string, message: string): void => {
@@ -421,7 +588,7 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
       ended: false,
       done,
       resolve,
-      check: eip3009CheckOf(requirements, payload),
+      check: checkOf(requirements, payload),
       settled: undefined,
     };
     payment.timer = timers.setTimeout(
@@ -516,7 +683,9 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
       chainId: payment.chainId,
       timeoutMs: confirmTimeoutMs,
       onReceipt: (receipt) =>
-        end(receipt === undefined ? undefined : carriesPayment(receipt, check)),
+        end(
+          receipt === undefined ? undefined : verdictOf(payment, check, hash, settlement, receipt),
+        ),
     });
   });
 
