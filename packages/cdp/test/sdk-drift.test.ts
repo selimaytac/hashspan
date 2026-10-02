@@ -36,6 +36,69 @@ describe('the installed @coinbase/cdp-sdk', () => {
     expect(networks.filter((n) => CDP_NETWORK_CHAIN_IDS[n] === undefined)).toEqual([]);
   });
 
+  it.each(['EvmUserOperationNetwork', 'SpendPermissionNetwork'])(
+    'accepts no user operation network (%s) that CDP_NETWORK_CHAIN_IDS lacks',
+    async (name) => {
+      const schemas = await sdkModule(
+        'openapi-client/generated/coinbaseDeveloperPlatformAPIs.schemas.js',
+      );
+      const networks = Object.values(schemas[name] as Record<string, string>);
+      expect(networks.length).toBeGreaterThan(0);
+      expect(networks.filter((n) => CDP_NETWORK_CHAIN_IDS[n] === undefined)).toEqual([]);
+    },
+  );
+
+  it('gives up waiting for a user operation with an error named TimeoutError', async () => {
+    const { waitForUserOperation } = await sdkModule('actions/evm/waitForUserOperation.js');
+    const pending = { getUserOperation: async () => ({ status: 'dropped', userOpHash: '0x' }) };
+    await expect(
+      waitForUserOperation(pending, {
+        userOpHash: '0x',
+        smartAccountAddress: '0x',
+        waitOptions: { timeoutSeconds: 0.05, intervalSeconds: 0.01 },
+      }),
+    ).rejects.toMatchObject({ name: 'TimeoutError' });
+  });
+
+  it('reports a user operation as complete with its transaction hash, or failed', async () => {
+    const { waitForUserOperation } = await sdkModule('actions/evm/waitForUserOperation.js');
+    const answering = (operation: object) => ({ getUserOperation: async () => operation });
+    const options = { userOpHash: '0x01', smartAccountAddress: '0x02' };
+    await expect(
+      waitForUserOperation(
+        answering({ status: 'complete', transactionHash: '0x03', userOpHash: '0x01' }),
+        options,
+      ),
+    ).resolves.toEqual({
+      smartAccountAddress: '0x02',
+      status: 'complete',
+      transactionHash: '0x03',
+      userOpHash: '0x01',
+    });
+    await expect(
+      waitForUserOperation(answering({ status: 'failed', userOpHash: '0x01' }), options),
+    ).resolves.toEqual({ smartAccountAddress: '0x02', status: 'failed', userOpHash: '0x01' });
+  });
+
+  it("sends a smart account's user operations without going through another traced method", async () => {
+    const read = (path: string) => readFile(join(sdkRoot, '_esm', path), 'utf8');
+    // Each send method calls the SDK's functions, so the adapter wraps each and traces each once ...
+    for (const path of [
+      'accounts/evm/toEvmSmartAccount.js',
+      'accounts/evm/toNetworkScopedEvmSmartAccount.js',
+      'client/evm/evm.js',
+    ]) {
+      const source = await read(path);
+      expect(source, path).not.toMatch(
+        /(?:this|account|smartAccount)\.(?:sendUserOperation|transfer|swap)\(/,
+      );
+    }
+    // ... except a network-scoped smart account's useSpendPermission, which calls the smart account's.
+    expect(await read('accounts/evm/toNetworkScopedEvmSmartAccount.js')).toMatch(
+      /options\.smartAccount\.useSpendPermission\(/,
+    );
+  });
+
   it('sends network-scoped transactions through its API on the chains of CDP_API_SEND_CHAIN_IDS', async () => {
     const source = await readFile(
       join(sdkRoot, '_esm', 'accounts/evm/toNetworkScopedEvmServerAccount.js'),

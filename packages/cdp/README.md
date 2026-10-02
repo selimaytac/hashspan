@@ -1,7 +1,7 @@
 # @hashspan/cdp
 
-Trace the transactions your AI agents send with [Coinbase CDP](https://docs.cdp.coinbase.com) server accounts, using
-OpenTelemetry.
+Trace the transactions your AI agents send with [Coinbase CDP](https://docs.cdp.coinbase.com) server accounts, and
+the user operations of CDP smart accounts, using OpenTelemetry.
 
 CDP signs and broadcasts transactions through its API, so no RPC client of yours sees them. This adapter wraps a
 `CdpClient` so that each transaction becomes a `send {chainId}` span inside your agent's trace, and, with a reader,
@@ -39,8 +39,9 @@ await hashspan.flush();
 
 `reader` is a viem public client, or a function `(chainId) => client | undefined` for several chains. Confirmations
 run in the background through it and never delay your call. Without a reader, only send spans are recorded: the
-adapter never picks an RPC endpoint itself. The exception is `waitForTransactionReceipt` on a network-scoped
-account, which records a confirm span from the receipt it returns, without a revert reason.
+adapter never picks an RPC endpoint itself. The exceptions are the SDK's waits: `waitForTransactionReceipt` on a
+network-scoped account, which records a confirm span from the receipt it returns, without a revert reason, and
+`waitForUserOperation` ([Smart accounts](#smart-accounts)).
 
 `flush({ timeoutMs })` (default 10 000 ms) waits for every confirm span the adapter still has open, from the reader or
 from such a wait, and ends what is left as `timeout` if it cannot wait longer. Call it before a short-lived process
@@ -72,6 +73,38 @@ await Promise.all([hashspanCdp.flush(), hashspanViem.flush()]);
 A reader client whose chain differs from the transaction's, given directly or returned by a reader function, is not
 used; a `diag` warning says so.
 
+### Smart accounts
+
+Smart accounts send ERC-4337 user operations, which CDP's bundler puts into a bundle transaction. Each operation
+becomes a `send {chainId}` span, ended when CDP returns its `userOpHash`, and, when your code waits for it with
+`waitForUserOperation`, a linked `confirm {chainId}` span:
+
+```ts
+const owner = await cdp.evm.getOrCreateAccount({ name: 'owner' });
+const smartAccount = await cdp.evm.getOrCreateSmartAccount({ name: 'treasury', owner });
+
+const { userOpHash } = await smartAccount.sendUserOperation({
+  network: 'base-sepolia',
+  calls: [{ to, value, data: '0x' }],
+}); // send span
+await smartAccount.waitForUserOperation({ userOpHash }); // confirm span
+```
+
+The spans carry `blockchain.user_operation.*` attributes instead of a transaction's sender, nonce and fee
+([semantic conventions](https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.7.0/docs/semconv.md)):
+
+- CDP reports `complete` with the bundle transaction's hash, or `failed` without a reason, which ends the confirm
+  span as an error with `error.type` `failed`. A wait that gives up (the SDK's `TimeoutError`) ends it as `timeout`.
+- `complete` does not say whether the operation's calls succeeded: a bundle can be mined while an operation in it
+  reverts. With a `reader` for the chain, the adapter reads the bundle's receipt and records the operation's
+  `UserOperationEvent`: success (a reverted operation ends with `error.type` `reverted`), gas used, cost, nonce,
+  paymaster and EntryPoint. Without one, the confirm span records the bundle transaction's hash only.
+- The bundle transaction's status and fee are not recorded: they cover every operation in the bundle.
+- Without a wait, only the send span is recorded, with or without a reader. A wait names no network: it is traced
+  when the operation was sent through the same client, or on a network-scoped smart account.
+- A tracker from a `@hashspan/core` without user operations records none: they are passed on untraced, with a
+  `diag` warning.
+
 ## Traced
 
 While a traced call runs, its send span is the active span, so spans of the CDP API request that your HTTP
@@ -86,17 +119,21 @@ instrumentation creates nest under it.
 | `execute()` of a quote from `cdp.evm.createSwapQuote` or account `quoteSwap` | chain id and from (the taker) |
 | network-scoped accounts (`useNetwork`) | as above; on Base and Ethereum they send through the account itself, elsewhere through the SDK's own viem client, and both are traced once |
 | network-scoped `waitForTransactionReceipt` | without a reader: a confirm span with status, block, gas and fees, but no revert reason; with a reader, the background confirmation records it |
+| smart account `sendUserOperation`, `cdp.evm.sendUserOperation`, `cdp.evm.prepareAndSendUserOperation` | user operation: chain id, hash, sender (the smart account) and the number of calls |
+| smart account `transfer`, `swap`, `useSpendPermission`; `execute()` of a quote for a smart account (`cdp.evm.createSwapQuote` with `smartAccount`, or smart account `quoteSwap`); `cdp.evm.createSpendPermission`, `cdp.evm.revokeSpendPermission` | user operation: chain id, hash and sender |
+| network-scoped smart accounts (`useNetwork`) | as above, each traced once |
+| `waitForUserOperation` (`cdp.evm`, smart accounts, network-scoped smart accounts) | a confirm span: the bundle transaction's hash; with a reader, the operation's outcome and cost from its `UserOperationEvent` |
 
 Accounts are traced when they come from `createAccount`, `getAccount`, `getOrCreateAccount`, `importAccount`,
-`updateAccount` or `listAccounts`. Networks are mapped to chain ids with `CDP_NETWORK_CHAIN_IDS`; a call on another network, or a
+`updateAccount` or `listAccounts`, and smart accounts when they come from `createSmartAccount`, `getSmartAccount`,
+`getOrCreateSmartAccount` or `updateSmartAccount` (`listSmartAccounts` returns records without methods). Networks are mapped to chain ids with `CDP_NETWORK_CHAIN_IDS`; a call on another network, or a
 network-scoped account created from an RPC URL, is passed through untraced, with a `diag` warning once per network
 (an RPC URL is never logged, as it can contain an API key).
 
 Each call gets its own send span: retrying a call with the same `idempotencyKey` records a second send span, even
 when CDP returns the transaction of the first attempt; the confirm span is shared.
 
-Not traced yet: smart account user operations (`sendUserOperation`, and quotes created for a smart account), which
-get their own design; EIP-7702 delegated accounts; Solana (`cdp.solana`); `requestFaucet`, which Coinbase sends; `signTransaction`,
+Not traced yet: EIP-7702 delegated accounts; Solana (`cdp.solana`); `requestFaucet`, which Coinbase sends; `signTransaction`,
 which does not broadcast (send the signed transaction with a client extended by `@hashspan/viem`). Accounts turned
 into viem accounts with `toAccount()` are sent through your viem client: extend it with `@hashspan/viem`.
 
