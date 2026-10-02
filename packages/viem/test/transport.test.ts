@@ -164,6 +164,52 @@ describe('traceTransport', () => {
     expect(rpcSpans()).toHaveLength(0);
   });
 
+  it('runs no getter of the request: a method behind one is sent untraced', async () => {
+    /** Arguments whose method is a getter answering differently per read, and how often it was read. */
+    const withGetter = () => {
+      const methods = ['eth_blockNumber', 'eth_chainId', 'eth_blockNumber'];
+      let reads = 0;
+      const args = {
+        get method() {
+          return methods[reads++];
+        },
+      };
+      return { args, reads: () => reads };
+    };
+    const plain = mockTransport();
+    const untraced = withGetter();
+    const plainResult = await createPublicClient({
+      chain: base,
+      transport: plain.transport,
+    }).request(untraced.args as never);
+    const traced = mockTransport();
+    const tracedArgs = withGetter();
+    const tracedResult = await createPublicClient({
+      chain: base,
+      transport: traceTransport(traced.transport),
+    }).request(tracedArgs.args as never);
+    expect(tracedArgs.reads()).toBe(untraced.reads());
+    expect(traced.calls).toEqual(plain.calls);
+    expect(tracedResult).toEqual(plainResult);
+    expect(rpcSpans()).toHaveLength(0);
+  });
+
+  it('sends untraced when reading the method throws', async () => {
+    const { transport, calls } = mockTransport();
+    const client = createPublicClient({ chain: base, transport: traceTransport(transport) });
+    const args = new Proxy(
+      { method: 'eth_blockNumber' },
+      {
+        getOwnPropertyDescriptor: () => {
+          throw new Error('trap');
+        },
+      },
+    );
+    expect(await client.request(args as never)).toBe('0x7b');
+    expect(calls).toEqual(['eth_blockNumber']);
+    expect(rpcSpans()).toHaveLength(0);
+  });
+
   it('returns the transport untouched when its request cannot be traced', async () => {
     const provider = trace.getTracerProvider();
     const broken = {
