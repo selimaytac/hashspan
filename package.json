@@ -15,6 +15,7 @@
     "format": "biome check --write .",
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration --passWithNoTests",
+    "test:integrations": "pnpm --dir integrations typecheck && pnpm --dir integrations test",
     "test:all": "vitest run",
     "changeset": "changeset",
     "release": "pnpm build && node scripts/publish-in-order.mjs",

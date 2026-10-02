@@ -37,8 +37,17 @@ await hashspan.flush();
 ```
 
 `sendTransaction`, `nativeTransfer` and the action providers that send through the wallet provider (such as the
-ERC-20 actions) then record a `send` and a `confirm` span per transaction. This was run against Anvil: without
-background confirmation, only the send spans are recorded.
+ERC-20 actions) then record a `send` and a `confirm` span per transaction; without background confirmation, only
+the send spans are recorded. CI runs this setup against Anvil with `sendTransaction`, `nativeTransfer` and the ERC-20
+`approve` action, both ways, in
+[`integrations/test/agentkit-viem.int.test.ts`](../integrations/test/agentkit-viem.int.test.ts).
+
+Two details of the provider apply with or without hashspan:
+
+- Its public client connects to the `rpcUrl` of its second argument, else to the `RPC_URL` environment variable,
+  else to the chain's default RPC; never through the wallet client's transport.
+- AgentKit 0.10.4 depends on viem 2.38.3 exactly. With viem 2.57 in the application, TypeScript rejects the
+  wallet client in `new ViemWalletProvider(walletClient)`, while the client works at runtime; the test casts it.
 
 ### `CdpEvmWalletProvider`
 

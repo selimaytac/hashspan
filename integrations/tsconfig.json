@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "isolatedDeclarations": false,
+    "declaration": false,
+    "paths": {
+      "@hashspan/core": ["../packages/core/src/index.ts"],
+      "@hashspan/viem": ["../packages/viem/src/index.ts"]
+    }
+  },
+  "include": ["test", "vitest.config.ts"]
+}

@@ -12,6 +12,8 @@ OpenTelemetry tracing for on-chain transactions sent by AI agents: every transac
 - Build: `pnpm build`
 - Test (unit / integration): `pnpm test` / `pnpm test:integration` (needs Anvil: `make tools`)
   - Tests import workspace packages from source (`vitest.config.ts` alias), so no build is needed first
+- Third-party integration tests: `pnpm --dir integrations install`, then `pnpm test:integrations` (typecheck and
+  tests, needs Anvil)
 - Lint & format: `pnpm lint` / `pnpm format`
 - Typecheck: `pnpm typecheck` (builds the packages first, since adapters type-check against `@hashspan/core` output)
 - Coverage: `pnpm test:coverage` (unit and integration, with thresholds in `vitest.config.ts`; runs in CI)
@@ -66,6 +68,15 @@ Run lint, typecheck and tests before proposing a change.
     `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break;
     `src/base-sepolia.ts` (behind `make demo-base-sepolia`) runs it on the testnet with a key from the environment,
     tested against an Anvil that reports chain id 84532
+- `integrations/` → private tests that run the setups of docs/integrations.md with the third-party libraries they
+  name, against Anvil
+  - a workspace of its own with its own lockfile, so those libraries stay out of the main install and of the
+    dependency audit and license check; it imports hashspan from source (`integrations/vitest.config.ts` alias), so
+    the main install comes first
+  - `test/offline.ts` a setup file that lets only loopback requests through `fetch` and answers AgentKit's analytics
+    requests; `test/agentkit-viem.int.test.ts` the AgentKit `ViemWalletProvider` setup
+  - `.github/workflows/integrations.yml` runs them on pull requests that touch `packages/` or `integrations/`, and
+    weekly with every dependency of `integrations/` updated to the newest release within its range
 - `docker/`, `scripts/`, `Makefile` → local lab; `scripts/demo.sh` (behind `make demo`) starts a fresh Anvil or
   fails, waiting for Anvil's own "Listening on" line rather than probing the port, and is tested from
   `examples/ai-sdk-agent/test/demo-script.test.ts`; `scripts/publish-in-order.mjs` (behind `pnpm release`) publishes
