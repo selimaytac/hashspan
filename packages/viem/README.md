@@ -58,9 +58,10 @@ hashspan.watch(reader, { hash: transactionHash });
 ```
 
 Options: `chainId` (defaults to the client's chain; without either, or when it contradicts the client's chain,
-nothing is recorded and a `diag` message says why), `timeoutMs` (default
-120 000 ms) and `abi`, to decode custom errors in the revert reason. `watch()` never throws or waits; `flush()` awaits
-it.
+nothing is recorded and a `diag` message says why), `timeoutMs` (default 120 000 ms), `abi`, to decode custom errors
+in the revert reason, and `onReceipt`, called once when the watch ends with the receipt of the mined transaction, or
+with `undefined` when none was retrieved; it never affects the confirm span. `watch()` never throws or waits;
+`flush()` awaits the confirmation, not the callback.
 
 ## Shutting down
 

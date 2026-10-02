@@ -11,6 +11,7 @@ import { type Context, context, diag, type TimeInput } from '@opentelemetry/api'
 import {
   type Abi,
   getAbiItem,
+  type TransactionReceipt,
   toFunctionSelector,
   WaitForTransactionReceiptTimeoutError,
 } from 'viem';
@@ -196,6 +197,13 @@ export interface WatchOptions {
   timeoutMs?: number | undefined;
   /** ABI of the called contract, to decode custom errors in the revert reason. */
   abi?: Abi | undefined;
+  /**
+   * Called once when the watch ends: with the receipt of the mined transaction (of a replacing transaction, if one
+   * was mined instead), or with `undefined` when no receipt was retrieved (timeout, failure, or nothing watched). Its
+   * result and errors are ignored; it never affects the confirm span. See
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.5.0/docs/adr/0017-x402-payment-verification.md.
+   */
+  onReceipt?: ((receipt: TransactionReceipt | undefined) => void) | undefined;
 }
 
 interface SendArgs {
@@ -635,6 +643,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     chainId: number,
     hash: string,
     timeoutMs: number,
+    onReceipt?: (receipt: TransactionReceipt | undefined) => void,
   ): void => {
     const handle = tracker.startConfirm({ chainId, hash });
     const capture: ReplacementCapture = {};
@@ -662,14 +671,35 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         }
       }
     };
-    track(recordConfirmation(chainId, hash, handle, wait(), capture, client));
+    const waited = wait();
+    track(recordConfirmation(chainId, hash, handle, waited, capture, client));
+    // Not tracked: flush() waits for the confirm span, not for the caller's callback.
+    if (onReceipt) {
+      void waited.then(
+        (receipt) => onReceipt(receipt as unknown as TransactionReceipt),
+        () => onReceipt(undefined),
+      );
+    }
   };
 
   const watch = (client: ViemClientLike, options: WatchOptions): void => {
+    let called = false;
+    /** Calls the caller's `onReceipt` once, never throwing into the watch. */
+    const onReceipt = (receipt: TransactionReceipt | undefined): void => {
+      if (called) return;
+      called = true;
+      try {
+        const callback: unknown = options.onReceipt;
+        if (typeof callback === 'function') callback(receipt);
+      } catch (error) {
+        diag.error(`hashspan: the onReceipt callback of watch() failed (${errorName(error)})`);
+      }
+    };
     try {
       const chainId = options.chainId ?? client.chain?.id;
       if (chainId === undefined) {
         diag.debug('hashspan: watch() needs a chain id or a client with a chain; not recording it');
+        onReceipt(undefined);
         return;
       }
       // Polling another chain would only end in a timeout, recorded for the wrong chain.
@@ -678,13 +708,15 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         diag.warn(
           `hashspan: watch() got chain ${chainId} and a client on chain ${clientChainId}; not recording it`,
         );
+        onReceipt(undefined);
         return;
       }
       if (options.abi) abis.set(confirmKey(chainId, options.hash), options.abi);
       const timeoutMs = options.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS;
-      confirmThrough(client, chainId, options.hash, timeoutMs);
+      confirmThrough(client, chainId, options.hash, timeoutMs, onReceipt);
     } catch (error) {
       diag.error(`hashspan: failed to watch a transaction (${errorName(error)})`);
+      onReceipt(undefined);
     }
   };
 
