@@ -230,12 +230,24 @@ export function withHashspan(
     return undefined;
   };
 
-  /** Runs `send` inside a send span when the chain id is known; the result and errors are passed on unchanged. */
+  /**
+   * Runs `send` inside a send span when the chain id is known; the result and errors are passed on unchanged. If
+   * reading the chain id from the call's options throws, the call is made untraced.
+   */
   const traced = async (
-    chainId: number | undefined,
+    chainIdOf: () => number | undefined,
     describe: () => Omit<SendInput, 'chainId'>,
     send: () => Promise<unknown>,
   ): Promise<unknown> => {
+    let chainId: number | undefined;
+    try {
+      chainId = chainIdOf();
+    } catch (error) {
+      diag.error(
+        `hashspan: failed to read the call options; call not traced (${errorName(error)})`,
+      );
+      return send();
+    }
     if (chainId === undefined) {
       diag.debug('hashspan: no known CDP network in the call; not tracing it');
       return send();
@@ -284,7 +296,15 @@ export function withHashspan(
     options: unknown,
     wait: () => Promise<unknown>,
   ): Promise<unknown> => {
-    const hash = stringOrUndefined(own(options, 'hash')) ?? own(options, 'transactionHash');
+    let hash: unknown;
+    try {
+      hash = stringOrUndefined(own(options, 'hash')) ?? own(options, 'transactionHash');
+    } catch (error) {
+      diag.error(
+        `hashspan: failed to read the call options; call not traced (${errorName(error)})`,
+      );
+      return wait();
+    }
     if (typeof hash !== 'string' || readerFor(chainId)) return wait();
     let handle: ReturnType<TxTracker['startConfirm']> | undefined;
     try {
@@ -340,35 +360,59 @@ export function withHashspan(
     );
   };
 
-  /** Replaces `target[name]` with `wrap(original)`, calling the original with `target` as `this`. */
+  /**
+   * Replaces `target[name]` with `wrap(original)`, calling the original with `target` as `this`. Returns false when
+   * the method cannot be replaced, for example on a frozen object; a method replaced before is left as it is, so
+   * wrapping an object again never traces a call twice.
+   */
   const replace = (
     target: Record<string, unknown>,
     name: string,
     wrap: (original: AnyFn) => AnyFn,
-  ): void => {
-    const original = target[name];
-    if (typeof original !== 'function') return;
-    target[name] = wrap((original as AnyFn).bind(target));
+  ): boolean => {
+    try {
+      const original = target[name];
+      if (typeof original !== 'function' || WRAPPED in original) return true;
+      const wrapper = wrap((original as AnyFn).bind(target));
+      Object.defineProperty(wrapper, WRAPPED, { value: true });
+      target[name] = wrapper;
+      return target[name] === wrapper;
+    } catch (error) {
+      diag.error(`hashspan: failed to wrap ${name} (${errorName(error)})`);
+      return false;
+    }
   };
 
+  /** Logs a failure to wrap a value the SDK returned; the value is then returned as it is. */
+  const wrapFailed = (error: unknown): void => {
+    diag.error(`hashspan: failed to wrap a CDP result (${errorName(error)})`);
+  };
+
+  /** Wraps a network-scoped account in place; never throws, so a call that returned it never fails. */
   const wrapScopedAccount = (scoped: unknown): unknown => {
     if (scoped === null || typeof scoped !== 'object') return scoped;
     const account = scoped as AccountLike;
-    const chainId = chainIdFor(own(account, 'network'));
+    let chainId: number | undefined;
+    try {
+      chainId = chainIdFor(own(account, 'network'));
+    } catch (error) {
+      wrapFailed(error);
+    }
     if (chainId === undefined) return scoped;
+    const id = chainId;
     replace(
       account,
       'waitForTransactionReceipt',
       (original) =>
         async (...args: never[]) =>
-          confirmed(chainId, args[0], () => original(...args)),
+          confirmed(id, args[0], () => original(...args)),
     );
     // Through the CDP API, the scoped methods call the wrapped account's own methods, which trace the call.
-    if (CDP_API_SEND_CHAIN_IDS.has(chainId)) return scoped;
+    if (CDP_API_SEND_CHAIN_IDS.has(id)) return scoped;
     replace(account, 'sendTransaction', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [{ transaction?: unknown } | undefined];
       return traced(
-        chainId,
+        () => id,
         () => ({ from: addressOf(account), ...describeTransaction(own(opts, 'transaction')) }),
         () => original(...args),
       );
@@ -376,7 +420,7 @@ export function withHashspan(
     replace(account, 'transfer', (original) => async (...args: never[]) => {
       const [opts] = args as unknown as [Record<string, unknown> | undefined];
       return traced(
-        chainId,
+        () => id,
         () => describeTransfer(account, opts),
         () => original(...args),
       );
@@ -414,7 +458,7 @@ export function withHashspan(
       (original) =>
         async (...args: never[]) =>
           traced(
-            chainIdFor(own(quote, 'network')),
+            () => chainIdFor(own(quote, 'network')),
             () => ({ from: addressOf(from) }),
             () => original(...args),
           ),
@@ -422,60 +466,79 @@ export function withHashspan(
     return value;
   };
 
+  /**
+   * Wraps an account in place; never throws, so a call that returned it never fails. The account is marked as wrapped
+   * only once every method was replaced; wrapping it again replaces only the methods still missing.
+   */
   const wrapAccount = (value: unknown): unknown => {
     if (value === null || typeof value !== 'object') return value;
     const account = value as AccountLike & { [WRAPPED]?: true };
-    if (account[WRAPPED]) return value;
-    Object.defineProperty(account, WRAPPED, { value: true });
+    try {
+      if (account[WRAPPED]) return value;
+    } catch (error) {
+      wrapFailed(error);
+      return value;
+    }
 
-    replace(account, 'sendTransaction', (original) => async (...args: never[]) => {
-      const [opts] = args as unknown as [{ network?: unknown; transaction?: unknown } | undefined];
-      return traced(
-        chainIdFor(own(opts, 'network')),
-        () => ({ from: addressOf(account), ...describeTransaction(own(opts, 'transaction')) }),
-        () => original(...args),
-      );
-    });
-    replace(account, 'transfer', (original) => async (...args: never[]) => {
-      const [opts] = args as unknown as [Record<string, unknown> | undefined];
-      return traced(
-        chainIdFor(own(opts, 'network')),
-        () => describeTransfer(account, opts),
-        () => original(...args),
-      );
-    });
-    replace(account, 'swap', (original) => async (...args: never[]) => {
-      const [opts] = args as unknown as [
-        { network?: unknown; swapQuote?: { network?: unknown } } | undefined,
-      ];
-      return traced(
-        chainIdFor(own(opts, 'network') ?? own(own(opts, 'swapQuote'), 'network')),
-        () => ({ from: addressOf(account) }),
-        () => original(...args),
-      );
-    });
-    replace(
-      account,
-      'quoteSwap',
-      (original) =>
-        async (...args: never[]) =>
-          wrapQuote(await original(...args), account),
-    );
-    replace(account, 'useSpendPermission', (original) => async (...args: never[]) => {
-      const [opts] = args as unknown as [{ network?: unknown; value?: unknown } | undefined];
-      return traced(
-        chainIdFor(own(opts, 'network')),
-        () => ({ from: addressOf(account) }),
-        () => original(...args),
-      );
-    });
-    replace(
-      account,
-      'useNetwork',
-      (original) =>
-        async (...args: never[]) =>
-          wrapScopedAccount(await original(...args)),
-    );
+    const replaced = [
+      replace(account, 'sendTransaction', (original) => async (...args: never[]) => {
+        const [opts] = args as unknown as [
+          { network?: unknown; transaction?: unknown } | undefined,
+        ];
+        return traced(
+          () => chainIdFor(own(opts, 'network')),
+          () => ({ from: addressOf(account), ...describeTransaction(own(opts, 'transaction')) }),
+          () => original(...args),
+        );
+      }),
+      replace(account, 'transfer', (original) => async (...args: never[]) => {
+        const [opts] = args as unknown as [Record<string, unknown> | undefined];
+        return traced(
+          () => chainIdFor(own(opts, 'network')),
+          () => describeTransfer(account, opts),
+          () => original(...args),
+        );
+      }),
+      replace(account, 'swap', (original) => async (...args: never[]) => {
+        const [opts] = args as unknown as [
+          { network?: unknown; swapQuote?: { network?: unknown } } | undefined,
+        ];
+        return traced(
+          () => chainIdFor(own(opts, 'network') ?? own(own(opts, 'swapQuote'), 'network')),
+          () => ({ from: addressOf(account) }),
+          () => original(...args),
+        );
+      }),
+      replace(
+        account,
+        'quoteSwap',
+        (original) =>
+          async (...args: never[]) =>
+            wrapQuote(await original(...args), account),
+      ),
+      replace(account, 'useSpendPermission', (original) => async (...args: never[]) => {
+        const [opts] = args as unknown as [{ network?: unknown; value?: unknown } | undefined];
+        return traced(
+          () => chainIdFor(own(opts, 'network')),
+          () => ({ from: addressOf(account) }),
+          () => original(...args),
+        );
+      }),
+      replace(
+        account,
+        'useNetwork',
+        (original) =>
+          async (...args: never[]) =>
+            wrapScopedAccount(await original(...args)),
+      ),
+    ];
+    if (replaced.every(Boolean)) {
+      try {
+        Object.defineProperty(account, WRAPPED, { value: true });
+      } catch (error) {
+        wrapFailed(error);
+      }
+    }
     return value;
   };
 
@@ -503,7 +566,7 @@ export function withHashspan(
       { address?: unknown; network?: unknown; transaction?: unknown } | undefined,
     ];
     return traced(
-      chainIdFor(own(opts, 'network')),
+      () => chainIdFor(own(opts, 'network')),
       () => ({
         from: addressOf(own(opts, 'address')),
         ...describeTransaction(own(opts, 'transaction')),
@@ -523,16 +586,26 @@ export function withHashspan(
   replace(evm, 'createSwapQuote', (original) => async (...args: never[]) => {
     const [opts] = args as unknown as [{ taker?: unknown; smartAccount?: unknown } | undefined];
     const quote = await original(...args);
-    // A smart account given through a getter still makes a user operation quote: it is left alone too.
-    const smartAccount = opts ? Object.getOwnPropertyDescriptor(opts, 'smartAccount') : undefined;
-    const forSmartAccount =
-      smartAccount !== undefined &&
-      (!('value' in smartAccount) || smartAccount.value !== undefined);
-    return forSmartAccount ? quote : wrapQuote(quote, own(opts, 'taker'));
+    try {
+      // A smart account given through a getter still makes a user operation quote: it is left alone too.
+      const smartAccount = opts ? Object.getOwnPropertyDescriptor(opts, 'smartAccount') : undefined;
+      const forSmartAccount =
+        smartAccount !== undefined &&
+        (!('value' in smartAccount) || smartAccount.value !== undefined);
+      return forSmartAccount ? quote : wrapQuote(quote, own(opts, 'taker'));
+    } catch (error) {
+      wrapFailed(error);
+      return quote;
+    }
   });
   replace(evm, 'listAccounts', (original) => async (...args: never[]) => {
     const result = (await original(...args)) as { accounts?: unknown[] } | undefined;
-    if (Array.isArray(result?.accounts)) result.accounts.forEach(wrapAccount);
+    try {
+      // Each account is wrapped on its own: one that cannot be wrapped leaves the others traced.
+      if (Array.isArray(result?.accounts)) result.accounts.forEach(wrapAccount);
+    } catch (error) {
+      wrapFailed(error);
+    }
     return result;
   });
 
