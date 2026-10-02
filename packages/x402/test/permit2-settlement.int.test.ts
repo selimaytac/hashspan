@@ -248,7 +248,7 @@ describe('a Permit2 payment settled by the SDK facilitator', () => {
     const payment = tracing.spanNamed(PAYMENT_SPAN);
     expect(payment.attributes).toMatchObject({
       'blockchain.payment.status': 'settled',
-      'blockchain.payment.payer': agent.address,
+      'blockchain.payment.payer': agent.address.toLowerCase(),
       'blockchain.payment.amount': String(PRICE),
       'x402.scheme': 'exact',
       'blockchain.payment.verified': true,

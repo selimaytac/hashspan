@@ -202,10 +202,11 @@ an address or a number, is recorded as `_OTHER`. The span keeps its own `error.t
 
 ## Privacy
 
-`blockchain.tx.from`, `blockchain.tx.to`, the `blockchain.payment.*` addresses and the user operation's sender,
-EntryPoint and paymaster follow the address mode: `raw`
-(default), `hashed` (`sha256:` + first 32 hex characters of SHA-256 of the lower-cased address, or a custom
-function) or `off`.
+`blockchain.tx.from`, `blockchain.tx.to`, the `blockchain.payment.*` addresses, the user operation's sender,
+EntryPoint and paymaster, and `blockchain.call_batch.sender` follow the address mode: `raw` (default, the address in
+lower case), `hashed` (`sha256:` + first 32 hex characters of SHA-256 of the lower-cased address, or a custom
+function) or `off`. Neither depends on how the source wrote the address, so one address has one value on every
+span, whether it came checksummed from the call's arguments or lower-cased from a receipt.
 A redaction hook runs last on every attribute set of the tracker's spans, not on metrics or JSON-RPC spans; if it
 throws, only `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
 `blockchain.tx.replacement.reason`, `blockchain.payment.protocol`, `blockchain.payment.status`,

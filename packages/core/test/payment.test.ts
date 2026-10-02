@@ -48,7 +48,7 @@ describe('payment span', () => {
       'blockchain.payment.protocol': 'x402',
       'blockchain.payment.payer': PAYER,
       'blockchain.payment.recipient': RECIPIENT,
-      'blockchain.payment.asset': ASSET,
+      'blockchain.payment.asset': ASSET.toLowerCase(),
       'blockchain.payment.amount': '10000',
       'blockchain.payment.status': 'settled',
       'blockchain.tx.hash': HASH,

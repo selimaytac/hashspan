@@ -7,7 +7,8 @@ import type {
 } from '@opentelemetry/api';
 
 /**
- * How wallet addresses are recorded. See
+ * How wallet addresses are recorded: `raw` in lower case, `hashed` as a hash of the lower-cased address, `off` not at
+ * all. See
  * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0004-privacy-defaults.md.
  */
 export type AddressMode = 'raw' | 'hashed' | 'off';

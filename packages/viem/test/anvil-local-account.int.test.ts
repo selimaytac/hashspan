@@ -139,8 +139,8 @@ describe('a local account', () => {
 
     expect(tracing.spanNamed('send 31337').attributes).toMatchObject({
       'blockchain.tx.hash': hash,
-      'blockchain.tx.from': signer.address,
-      'blockchain.tx.to': RECIPIENT,
+      'blockchain.tx.from': signer.address.toLowerCase(),
+      'blockchain.tx.to': RECIPIENT.toLowerCase(),
     });
     expect(tracing.spanNamed('confirm 31337').attributes['blockchain.tx.status']).toBe('success');
   });

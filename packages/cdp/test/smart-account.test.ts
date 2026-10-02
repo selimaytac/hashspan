@@ -685,7 +685,7 @@ describe('waitForUserOperation with a reader', () => {
       'blockchain.user_operation.nonce': ((5n << 64n) | 3n).toString(),
       'blockchain.user_operation.sender': SMART,
       'blockchain.user_operation.paymaster': PAYMASTER,
-      'blockchain.user_operation.entry_point': ENTRY_POINT,
+      'blockchain.user_operation.entry_point': ENTRY_POINT.toLowerCase(),
     });
     expect(span.status.code).toBe(SpanStatusCode.UNSET);
     // The bundle's fee covers every operation in it: it is not recorded.
@@ -713,7 +713,9 @@ describe('waitForUserOperation with a reader', () => {
       ])
     ).confirm();
     expect(span.attributes['blockchain.user_operation.success']).toBe(true);
-    expect(span.attributes['blockchain.user_operation.entry_point']).toBe(ENTRY_POINT);
+    expect(span.attributes['blockchain.user_operation.entry_point']).toBe(
+      ENTRY_POINT.toLowerCase(),
+    );
   });
 
   it('records only the bundle hash and block without a matching event', async () => {

@@ -84,8 +84,8 @@ describe('the CDP SDK against a local CDP API and Anvil', () => {
     const send = tracing.spanNamed('send 84532');
     expect(send.attributes).toMatchObject({
       'blockchain.tx.hash': transactionHash,
-      'blockchain.tx.from': account.address,
-      'blockchain.tx.to': RECIPIENT,
+      'blockchain.tx.from': account.address.toLowerCase(),
+      'blockchain.tx.to': RECIPIENT.toLowerCase(),
       'blockchain.tx.value': '1',
     });
     const confirm = tracing.spanNamed('confirm 84532');
