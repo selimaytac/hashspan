@@ -55,6 +55,8 @@ function walletWithStandIns(fail = false) {
     sendTransaction: [],
     writeContract: [],
     waitForTransactionReceipt: [],
+    sendUserOperation: [],
+    waitForUserOperationReceipt: [],
   };
   const standIn = (name: string, result: unknown) => async (args: unknown) => {
     calls[name]?.push(args);
@@ -71,6 +73,8 @@ function walletWithStandIns(fail = false) {
       sendTransaction: standIn('sendTransaction', HASH),
       writeContract: standIn('writeContract', HASH),
       waitForTransactionReceipt: standIn('waitForTransactionReceipt', receipt),
+      sendUserOperation: standIn('sendUserOperation', HASH),
+      waitForUserOperationReceipt: standIn('waitForUserOperationReceipt', receipt),
     })) as () => Record<never, never>)
     .extend(withHashspan());
   return {
@@ -83,6 +87,9 @@ const cases: [action: string, args: (trap: object) => unknown, result: unknown][
   ['sendTransaction', (trap) => trap, HASH],
   ['writeContract', (trap) => trap, HASH],
   ['waitForTransactionReceipt', (trap) => trap, receipt],
+  ['sendUserOperation', (trap) => trap, HASH],
+  ['waitForUserOperationReceipt', (trap) => trap, receipt],
+  ['sendUserOperation', (trap) => ({ account: trap, calls: [trap] }), HASH],
   ['writeContract', (trap) => ({ address: TO, abi: trap, functionName: 'pay', args: [1n] }), HASH],
 ];
 

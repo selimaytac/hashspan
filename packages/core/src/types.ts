@@ -91,13 +91,17 @@ export interface TxTrackerOptions {
    * If it throws or returns something other than an attributes object, the tracker fails closed and records only
    * `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`,
    * `blockchain.tx.status`, `blockchain.tx.replacement.hash`, `blockchain.tx.replacement.reason`,
-   * `blockchain.payment.protocol`, `blockchain.payment.status`, `blockchain.payment.verified`, `error.type` and
-   * `exception.type`, and logs the failure via `diag`.
+   * `blockchain.payment.protocol`, `blockchain.payment.status`, `blockchain.payment.verified`,
+   * `blockchain.user_operation.hash`, `blockchain.user_operation.success`, `error.type` and `exception.type`, and logs
+   * the failure via `diag`.
    */
   redact?: ((attributes: Attributes) => Attributes) | undefined;
-  /** How long a sent transaction can be linked from its confirmation. Default: 10 minutes. */
+  /** How long a sent transaction or user operation can be linked from its confirmation. Default: 10 minutes. */
   linkTtlMs?: number | undefined;
-  /** Maximum number of sent transactions kept for linking. Default: 10 000. */
+  /**
+   * Maximum number of sent transactions kept for linking. Default: 10 000. User operations are kept separately, up to
+   * the same number.
+   */
   maxTrackedTransactions?: number | undefined;
 }
 
@@ -320,4 +324,111 @@ export interface PaymentHandle {
    * such as one of its own sends, keeps its link; `end` with a hash links it as well.
    */
   link(hash: string): void;
+}
+
+/**
+ * A user operation of an ERC-4337 smart account, handed to a bundler
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0021-user-operations.md). It has no
+ * transaction of its own: the bundler includes it in a bundle transaction that the bundler sends.
+ */
+export interface UserOperationInput {
+  /** EIP-155 chain id. */
+  chainId: number;
+  /** Address of the smart account, recorded as `blockchain.user_operation.sender` per the address mode. */
+  sender?: string | undefined;
+  /** Address of the EntryPoint contract, recorded as `blockchain.user_operation.entry_point` per the address mode. */
+  entryPoint?: string | undefined;
+  /** Number of calls the operation makes, recorded as `blockchain.user_operation.call_count`. */
+  callCount?: number | undefined;
+  /** When the send started, for adapters that record it after the fact; see {@link SendInput.startTime}. */
+  startTime?: TimeInput | undefined;
+}
+
+/** What handing a user operation to a bundler produced. */
+export interface UserOperationResult {
+  /** Hash of the user operation, `0x`-prefixed 32 bytes, as the bundler returned it. */
+  userOpHash: string;
+}
+
+/**
+ * Ends the send span of a user operation. Only the first call counts; methods never throw.
+ * Produced by the tracker only; methods may be added in minor releases
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0014-core-api-boundary.md).
+ */
+export interface UserOperationSendHandle {
+  /**
+   * The parent context with the send span set. Run the call that hands the operation to the bundler in it, as for
+   * {@link SendHandle.context}.
+   */
+  readonly context: Context;
+  /** Ends the send span successfully once the user operation hash is known. */
+  end(result: UserOperationResult, options?: EndOptions): void;
+  /** Ends the send span with an error (preparing, signing or handing the operation to the bundler failed). */
+  fail(error: unknown, options?: FailOptions): void;
+}
+
+export interface UserOperationConfirmInput {
+  /** EIP-155 chain id; with `userOpHash`, it identifies the user operation and its confirm span. */
+  chainId: number;
+  /** Hash of the user operation awaited, `0x`-prefixed. */
+  userOpHash: string;
+  /** When the wait started, for adapters that record it after the fact; see {@link SendInput.startTime}. */
+  startTime?: TimeInput | undefined;
+}
+
+/**
+ * Library-agnostic view of a user operation receipt (ERC-4337 `eth_getUserOperationReceipt`, or the EntryPoint's
+ * `UserOperationEvent`). Every field is optional, since some SDKs report less; values usually come from a bundler,
+ * and malformed ones are not recorded.
+ */
+export interface UserOperationReceiptLike {
+  /**
+   * Whether the operation's calls succeeded. `false` ends the confirm span with an error status and `error.type`
+   * `reverted`; the bundle transaction itself can still have succeeded.
+   */
+  success?: boolean | undefined;
+  /** What the operation paid, in wei (`actualGasCost`), recorded as `blockchain.user_operation.gas.cost`. */
+  actualGasCost?: bigint | string | undefined;
+  /** Gas the operation used (`actualGasUsed`), recorded as `blockchain.user_operation.gas.used`. */
+  actualGasUsed?: bigint | number | string | undefined;
+  /** Address of the smart account. */
+  sender?: string | undefined;
+  /**
+   * The operation's nonce, recorded as a decimal string: it holds a 192-bit key and a 64-bit sequence number. Bundlers
+   * return it as a hex string, which some libraries pass on unchanged.
+   */
+  nonce?: bigint | string | undefined;
+  /** Address of the paymaster that paid for the operation; the zero address means none. */
+  paymaster?: string | undefined;
+  /** Address of the EntryPoint contract. */
+  entryPoint?: string | undefined;
+  /** Decoded revert reason, recorded as `blockchain.tx.revert.reason` with addresses per the address mode. */
+  revertReason?: string | undefined;
+  /** Hash of the bundle transaction that included the operation, recorded as `blockchain.tx.hash`. */
+  transactionHash?: string | undefined;
+  /** Block of the bundle transaction. */
+  blockNumber?: bigint | number | undefined;
+}
+
+/**
+ * One wait for a user operation's receipt, joined to the operation's shared confirm span, as for transactions
+ * ({@link ConfirmHandle}). Only the first call counts; methods never throw.
+ * Produced by the tracker only; methods may be added in minor releases
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0014-core-api-boundary.md).
+ */
+export interface UserOperationConfirmHandle {
+  /** Ends the shared confirm span with the receipt, for every handle of the user operation. */
+  end(receipt: UserOperationReceiptLike, options?: EndOptions): void;
+  /**
+   * Withdraws this handle because waiting for the receipt timed out. The confirm span ends as `timeout` only if no
+   * other handle of the user operation is still waiting.
+   */
+  timeout(options?: EndOptions): void;
+  /**
+   * Withdraws this handle because the operation failed or its receipt could not be retrieved. The confirm span ends
+   * as a failure only if no other handle is still waiting. Called without an error, as
+   * `fail(undefined, { errorType })`, it records no exception event: for an SDK that reports a failed operation
+   * without an error.
+   */
+  fail(error: unknown, options?: FailOptions): void;
 }

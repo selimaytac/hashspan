@@ -7,7 +7,7 @@ Rationale: [ADR 0003](adr/0003-attribute-namespace.md). Privacy defaults: [ADR 0
 
 | Span name | Kind | Parent | Ends when |
 |---|---|---|---|
-| `send {blockchain.chain.id}` | CLIENT | active context (e.g. `execute_tool`) | hash returned or send failed |
+| `send {blockchain.chain.id}` | CLIENT | active context (e.g. `execute_tool`) | hash returned (a transaction's, or a user operation's) or send failed |
 | `confirm {blockchain.chain.id}` | CLIENT | see below | receipt retrieved, timeout or error; links to `send` or `payment` |
 | `payment {blockchain.chain.id}` | CLIENT | active context (e.g. `execute_tool`) | settlement reported or payment failed |
 
@@ -38,10 +38,22 @@ for confirmation in the background, as a `send` span would.
 `blockchain.payment.status` is recorded only from the settlement the settling party reported; when the client never
 learned it, the payment span has none and `error.type` says why.
 
+**User operations.** A user operation of an ERC-4337 smart account has no transaction of its own: a bundler
+includes it in a bundle transaction that the bundler sends, together with other operations. It gets the same `send`
+and `confirm` spans as a transaction, identified by its chain and `blockchain.user_operation.hash` instead of
+`blockchain.tx.hash` ([ADR 0021](adr/0021-user-operations.md)). The send span covers handing the operation to the
+bundler, until its hash is returned, and has no `blockchain.tx.*` attribute. The confirm span records the
+operation's own outcome and cost (`blockchain.user_operation.*`), and the bundle transaction's `blockchain.tx.hash`
+and `blockchain.block.number`; it has no `blockchain.tx.status`, gas or fee, which describe the whole bundle. Parent
+and link rules are those of transactions, and confirmations of user operations are kept apart from those of
+transactions: a wait for the bundle transaction's own receipt is a separate confirm span. Replacement attribution does
+not apply: a bundler that resubmits a bundle keeps the operation's hash.
+
 **One confirm span per transaction and tracker.** Concurrent waits for the same transaction share one confirm span;
 its parent is determined by the first wait. A receipt from any wait ends it; a timeout or failure ends it only when
 it is the last wait still running, with that wait's outcome. After a receipt, further waits within the link TTL add
-no span; after a timeout or failure, a retry gets a new span. See [ADR 0007](adr/0007-confirmation-ownership.md).
+no span; after a timeout or failure, a retry gets a new span. The same holds for each user operation. See
+[ADR 0007](adr/0007-confirmation-ownership.md).
 
 ### Span status
 
@@ -55,6 +67,9 @@ no span; after a timeout or failure, a retry gets a new span. See [ADR 0007](adr
 | Replaced by another transaction (same sender and nonce) | confirm of the replaced hash | unset | none | `replaced` |
 | Receipt with an invalid transaction hash | confirm | error | `_OTHER` | none |
 | Retrieving the receipt failed | confirm | error | error class name, else `_OTHER` | none |
+| User operation receipt with success | confirm | unset | none | none; `blockchain.user_operation.success` is `true` |
+| User operation receipt without success (its calls reverted) | confirm | error | `reverted` | none; `blockchain.user_operation.success` is `false` |
+| User operation failed without a receipt (e.g. an SDK reports `failed`) | confirm | error | the adapter's error type, else error class name, else `_OTHER` | none |
 | Payment settled | payment | unset | none | none; `blockchain.payment.status` is `settled` |
 | Payment settlement pending: transaction known, receipt not seen | payment | unset | none | none; `blockchain.payment.status` is `pending` |
 | Payment settlement failed | payment | error | the settling party's reason if it is a short identifier (see below), else `_OTHER` | none; `blockchain.payment.status` is `failed` |
@@ -92,7 +107,7 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.system` | string | all | on | `evm` |
 | `blockchain.chain.id` | int | all | on | EIP-155 chain id, e.g. `8453` |
 | `blockchain.operation.name` | string | all | on | `send` \| `confirm` \| `payment` |
-| `blockchain.tx.hash` | string | all | on | `0x`-prefixed tx hash; on a payment span, the settling transaction's, when reported |
+| `blockchain.tx.hash` | string | send, confirm, payment | on | `0x`-prefixed tx hash; on a payment span, the settling transaction's, when reported; on a user operation's confirm span, the bundle transaction's; absent on a user operation's send span |
 | `blockchain.tx.from` | string | send | raw | sender address, subject to address mode |
 | `blockchain.tx.to` | string | send | raw | recipient / contract address, subject to address mode |
 | `blockchain.tx.value` | string | send | on | value in wei, decimal string |
@@ -101,14 +116,24 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.contract.function.selector` | string | send | on | 4-byte selector, e.g. `0xa9059cbb` |
 | `blockchain.contract.function.arguments` | string | send | off (opt-in) | decoded call arguments as a JSON array, e.g. `["0x2222...2222","1000000"]`: bigints as decimal strings, addresses per address mode, truncated after 4096 characters. Only own enumerable data properties are serialized; `toJSON()` and getters are never called |
 | `blockchain.tx.status` | string | confirm | on | from chain data: `success` \| `reverted` \| `replaced` |
-| `blockchain.block.number` | int | confirm | on | inclusion block |
+| `blockchain.block.number` | int | confirm | on | inclusion block; for a user operation, the bundle transaction's |
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
 | `blockchain.tx.effective_gas_price` | string | confirm | on | wei, decimal string |
 | `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, wei |
 | `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, wei; omitted if the gas price is unknown |
-| `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available: the `Error(string)` message, `Panic(0x..)`, `ErrorName(arg, ...)` for custom errors with a known ABI, else the 4-byte error selector. See [ADR 0005](adr/0005-revert-reason-replay.md) |
+| `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available, also of a reverted user operation: the `Error(string)` message, `Panic(0x..)`, `ErrorName(arg, ...)` for custom errors with a known ABI, else the 4-byte error selector. See [ADR 0005](adr/0005-revert-reason-replay.md) |
 | `blockchain.tx.replacement.hash` | string | confirm | on | on a `replaced` confirm span: hash of the mined transaction that replaced it |
 | `blockchain.tx.replacement.reason` | string | confirm | on | on a `replaced` confirm span: `repriced` \| `cancelled` \| `replaced`, as reported by the instrumented library; omitted when it reported none |
+| `blockchain.user_operation.hash` | string | send, confirm | on | `0x`-prefixed user operation hash (`userOpHash`), which identifies the operation with the chain id |
+| `blockchain.user_operation.sender` | string | send, confirm | raw | address of the smart account, subject to address mode |
+| `blockchain.user_operation.entry_point` | string | send, confirm | raw | address of the EntryPoint contract, subject to address mode |
+| `blockchain.user_operation.call_count` | int | send | on | number of calls the operation makes, when the adapter knows them |
+| `blockchain.user_operation.nonce` | string | confirm | on | the operation's nonce, decimal string (a 192-bit key and a 64-bit sequence number) |
+| `blockchain.user_operation.success` | boolean | confirm | on | whether the operation's calls succeeded; the bundle transaction can succeed while they revert |
+| `blockchain.user_operation.gas.used` | int | confirm | on | gas the operation used (`actualGasUsed`) |
+| `blockchain.user_operation.gas.cost` | string | confirm | on | what the operation paid (`actualGasCost`), wei, decimal string; its share of the bundle, not the bundle transaction's fee |
+| `blockchain.user_operation.paymaster` | string | confirm | raw | address of the paymaster that paid for the operation, subject to address mode; absent when none paid |
+| `blockchain.operation.subject` | string | none (metrics only) | on | on [metrics](#metrics) of user operations: `user_operation`; absent on those of transactions |
 | `blockchain.payment.protocol` | string | payment | on | `x402` |
 | `blockchain.payment.payer` | string | payment | raw | address that pays, subject to address mode |
 | `blockchain.payment.recipient` | string | payment | raw | address that is paid, subject to address mode |
@@ -131,13 +156,16 @@ must stay internal belong in the static `agent` option, which is never propagate
 
 The tracker records these histograms through the meter provider (the global one unless `meterProvider` is given),
 so every adapter gets them ([ADR 0020](adr/0020-metrics.md)). Their attributes are low-cardinality only:
-`blockchain.system`, `blockchain.chain.id`, and the outcome; never an address, a hash or the agent identity.
+`blockchain.system`, `blockchain.chain.id`, and the outcome; never an address, a hash or the agent identity. Samples
+of user operations also carry `blockchain.operation.subject` `user_operation`, and their outcome from chain data is
+`blockchain.user_operation.success` instead of `blockchain.tx.status`
+([ADR 0021](adr/0021-user-operations.md)).
 
 | Metric | Instrument | Unit | Attributes | Recorded when |
 |---|---|---|---|---|
 | `blockchain.client.send.duration` | histogram | `s` | chain; `error.type` if the send failed | a send span ends: from the start of the sending call until the hash is known or the call failed |
 | `blockchain.client.confirmation.duration` | histogram | `s` | chain; `blockchain.tx.status` from chain data, else `error.type` (`timeout`, an error class) | a confirm span ends: from the start of the wait until the receipt, a replacement, a timeout or a failure |
-| `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.tx.status` | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number |
+| `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.tx.status` | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number; for a user operation, a receipt with its cost: `blockchain.user_operation.gas.cost` |
 
 Bucket boundaries are given as advice: 0.05 s to 300 s for durations, and one bucket per power of ten from 10^8 to
 10^18 wei for fees. Fees above 2^53 wei lose precision as numbers; the span attribute keeps the exact value.
@@ -148,15 +176,18 @@ an address or a number, is recorded as `_OTHER`. The span keeps its own `error.t
 
 ## Privacy
 
-`blockchain.tx.from`, `blockchain.tx.to` and the `blockchain.payment.*` addresses follow the address mode: `raw`
+`blockchain.tx.from`, `blockchain.tx.to`, the `blockchain.payment.*` addresses and the user operation's sender,
+EntryPoint and paymaster follow the address mode: `raw`
 (default), `hashed` (`sha256:` + first 32 hex characters of SHA-256 of the lower-cased address, or a custom
 function) or `off`.
 A redaction hook runs last on every attribute set of the tracker's spans, not on metrics or JSON-RPC spans; if it
 throws, only `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
 `blockchain.tx.replacement.reason`, `blockchain.payment.protocol`, `blockchain.payment.status`,
-`blockchain.payment.verified` and `error.type` are recorded.
+`blockchain.payment.verified`, `blockchain.user_operation.hash`, `blockchain.user_operation.success` and `error.type`
+are recorded.
 Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md). Neither `hashed` nor
-`off` hides the parties of a transaction: `blockchain.tx.hash` is always recorded and resolves to them on chain.
+`off` hides the parties of a transaction: `blockchain.tx.hash` is always recorded and resolves to them on chain, as
+`blockchain.user_operation.hash` does for a user operation.
 The address mode also applies to addresses inside `blockchain.tx.revert.reason`,
 `blockchain.contract.function.arguments`, `x402.resource`, `error.type` and sanitized error messages (`<address>` in `off` mode).
 In `hashed` and `off` mode, hex values longer than an address are recorded as `<hex>` in those attributes, because a
@@ -168,7 +199,8 @@ Payment values usually come from a remote party (the paid server or the settling
 identifiers (protocol, scheme, failure reason) that are not short identifiers are not recorded. Paths of paid
 APIs often carry user or account identifiers, so `x402.resource` records only the origin by default; with
 `paymentResource: 'path'` it records the path too, never the query string, fragment or user info, which can carry
-credentials ([ADR 0004](adr/0004-privacy-defaults.md)).
+credentials ([ADR 0004](adr/0004-privacy-defaults.md)). A user operation's hash and receipt come from the bundler and are checked the
+same way; its nonce, gas and cost may also be `0x` hex quantities.
 
 ## Change policy
 

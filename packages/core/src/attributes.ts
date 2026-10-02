@@ -53,6 +53,34 @@ export const ATTR_BLOCKCHAIN_PAYMENT_VERIFIED = 'blockchain.payment.verified' as
 export const ATTR_X402_SCHEME = 'x402.scheme' as const;
 export const ATTR_X402_RESOURCE = 'x402.resource' as const;
 
+/**
+ * User operations of ERC-4337 smart accounts. See
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0021-user-operations.md.
+ */
+export const ATTR_BLOCKCHAIN_USER_OPERATION_HASH = 'blockchain.user_operation.hash' as const;
+export const ATTR_BLOCKCHAIN_USER_OPERATION_SENDER = 'blockchain.user_operation.sender' as const;
+export const ATTR_BLOCKCHAIN_USER_OPERATION_ENTRY_POINT =
+  'blockchain.user_operation.entry_point' as const;
+export const ATTR_BLOCKCHAIN_USER_OPERATION_CALL_COUNT =
+  'blockchain.user_operation.call_count' as const;
+export const ATTR_BLOCKCHAIN_USER_OPERATION_NONCE = 'blockchain.user_operation.nonce' as const;
+export const ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS = 'blockchain.user_operation.success' as const;
+export const ATTR_BLOCKCHAIN_USER_OPERATION_GAS_USED =
+  'blockchain.user_operation.gas.used' as const;
+/** What the operation itself paid, in wei; the bundle transaction's fee covers every operation in the bundle. */
+export const ATTR_BLOCKCHAIN_USER_OPERATION_GAS_COST =
+  'blockchain.user_operation.gas.cost' as const;
+export const ATTR_BLOCKCHAIN_USER_OPERATION_PAYMASTER =
+  'blockchain.user_operation.paymaster' as const;
+/**
+ * Metrics only: what a send, confirmation or fee sample is about. Recorded as `user_operation` on samples of user
+ * operations, and absent on those of transactions.
+ */
+export const ATTR_BLOCKCHAIN_OPERATION_SUBJECT = 'blockchain.operation.subject' as const;
+
+/** Values for {@link ATTR_BLOCKCHAIN_OPERATION_SUBJECT}. */
+export const BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION = 'user_operation' as const;
+
 /** Values for {@link ATTR_BLOCKCHAIN_SYSTEM}. */
 export const BLOCKCHAIN_SYSTEM_VALUE_EVM = 'evm' as const;
 

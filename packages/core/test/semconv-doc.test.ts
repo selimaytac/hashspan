@@ -39,6 +39,7 @@ describe('docs/semconv.md', () => {
     ['blockchain.operation.name', 'BLOCKCHAIN_OPERATION_NAME_VALUE_'],
     ['blockchain.payment.status', 'BLOCKCHAIN_PAYMENT_STATUS_VALUE_'],
     ['blockchain.payment.protocol', 'BLOCKCHAIN_PAYMENT_PROTOCOL_VALUE_'],
+    ['blockchain.operation.subject', 'BLOCKCHAIN_OPERATION_SUBJECT_VALUE_'],
   ])('lists exactly the exported values of %s', (attribute, prefix) => {
     const row = doc.split('\n').find((line) => line.startsWith(`| \`${attribute}\` |`));
     // Values are the backticked words without a dot; the cells use escaped pipes (\|) as separators.

@@ -26,6 +26,12 @@ export type {
   SendInput,
   SendResult,
   TxTrackerOptions,
+  UserOperationConfirmHandle,
+  UserOperationConfirmInput,
+  UserOperationInput,
+  UserOperationReceiptLike,
+  UserOperationResult,
+  UserOperationSendHandle,
   X402PaymentDetails,
 } from './types.js';
 export { VERSION } from './version.js';
