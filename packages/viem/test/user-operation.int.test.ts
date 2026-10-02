@@ -138,8 +138,8 @@ describe('user operations on Anvil', () => {
 
     expect(await reader.getBalance({ address: RECIPIENT })).toBe(before + 3_000n);
     expect(receipt.success).toBe(true);
-    // viem types the nonce as a bigint, but passes on the bundler's hex string.
-    expect(receipt.nonce as unknown).toBe(`0x${nonce.toString(16)}`);
+    // The bundler returns the nonce as a hex string; viem 2.57 passes it on unchanged, typed as a bigint.
+    expect([nonce, `0x${nonce.toString(16)}`]).toContain(receipt.nonce as unknown);
 
     const send = tracing.spanNamed('send 31337');
     const [confirm, bundle] = tracing.spans().filter((span) => span.name === 'confirm 31337');

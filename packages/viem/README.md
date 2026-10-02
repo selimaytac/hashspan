@@ -177,9 +177,10 @@ const hash = await bundler.sendUserOperation({ calls: [{ to, value }] }); // sen
 await bundler.waitForUserOperationReceipt({ hash }); // confirm span, linked to the send span
 ```
 
-- The send span covers preparing, signing and handing the operation to the bundler, with the bundler and paymaster
-  requests nested under it. It records the smart account, EntryPoint, number of calls and user operation hash, and
-  no `blockchain.tx.*` attribute.
+- The send span covers preparing, signing and handing the operation to the bundler, and is the active span while
+  that runs, so spans that your RPC or HTTP instrumentation creates for the bundler and paymaster requests nest under
+  it. It records the smart account, EntryPoint, number of calls and user operation hash, and no `blockchain.tx.*`
+  attribute.
 - The confirm span records the operation's success, gas used and cost (`actualGasCost`), nonce (a decimal string)
   and paymaster, and the bundle transaction's hash and block. An operation whose calls reverted ends with
   `error.type` `reverted` and its decoded revert reason, even though the bundle transaction succeeded. The bundle
