@@ -8,12 +8,21 @@ import {
 } from '@opentelemetry/api';
 import { ATTR_ERROR_TYPE, ERROR_TYPE_VALUE_OTHER } from './attributes.js';
 
-/** Duration of a send: from the start of the sending call until the hash is known or the call failed. */
+/**
+ * Duration of a send of a transaction or user operation: from the start of the sending call until the hash is known or
+ * the call failed.
+ */
 export const METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION = 'blockchain.client.send.duration' as const;
-/** Duration of a confirmation: from the start of the wait until the receipt, a timeout or a failure. */
+/**
+ * Duration of a confirmation of a transaction or user operation: from the start of the wait until the receipt, a
+ * timeout or a failure.
+ */
 export const METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION =
   'blockchain.client.confirmation.duration' as const;
-/** Total fee of a mined transaction (execution fee plus L1 data fee), in the chain's smallest unit (wei). */
+/**
+ * Total fee of a mined transaction (execution fee plus L1 data fee), or the cost of a user operation, in the chain's
+ * smallest unit (wei).
+ */
 export const METRIC_BLOCKCHAIN_CLIENT_FEE = 'blockchain.client.fee' as const;
 
 // Seconds: block times range from under a second to minutes, and confirmations time out after two minutes by default.
@@ -71,17 +80,18 @@ export function createTxMetrics(
       return {
         send: meter.createHistogram(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION, {
           unit: 's',
-          description: 'Duration of sending a transaction, until its hash is known',
+          description:
+            'Duration of sending a transaction or user operation, until its hash is known',
           advice: { explicitBucketBoundaries: DURATION_BUCKETS },
         }),
         confirmation: meter.createHistogram(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION, {
           unit: 's',
-          description: 'Duration of waiting for a transaction receipt',
+          description: 'Duration of waiting for a transaction or user operation receipt',
           advice: { explicitBucketBoundaries: DURATION_BUCKETS },
         }),
         fee: meter.createHistogram(METRIC_BLOCKCHAIN_CLIENT_FEE, {
           unit: '{wei}',
-          description: 'Total fee of a mined transaction',
+          description: 'Total fee of a mined transaction, or the cost of a user operation',
           advice: { explicitBucketBoundaries: FEE_BUCKETS },
         }),
       };
