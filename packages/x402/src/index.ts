@@ -11,6 +11,7 @@ import {
   withHashspan as withViemHashspan,
 } from '@hashspan/viem';
 import { type Context, context, diag } from '@opentelemetry/api';
+import { decodeEventLog, parseAbi } from 'viem';
 
 export interface WithHashspanX402Options extends Omit<ViemOptions, 'confirm'> {
   /**
@@ -62,6 +63,14 @@ const EIP155 = /^eip155:([1-9][0-9]{0,15})$/;
 // Unknown networks are named in warnings only when they look like a CAIP-2 identifier.
 const NETWORK_NAME = /^[a-z0-9-]{1,32}:[a-zA-Z0-9-]{1,64}$/;
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
+const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+const BYTES32 = /^0x[0-9a-fA-F]{64}$/;
+const AMOUNT = /^(0|[1-9][0-9]{0,77})$/;
+/** The events an EIP-3009 settlement emits on the token; decoded with this ABI only, never a caller's. */
+const EIP3009_EVENTS = parseAbi([
+  'event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)',
+  'event Transfer(address indexed from, address indexed to, uint256 value)',
+]);
 const SETTLEMENT_PENDING = 'settlement_pending';
 const NO_SETTLEMENT = 'no_settlement';
 // Timers without Node.js or DOM types, which src/ is type-checked without.
@@ -131,6 +140,83 @@ function settlementOf(response: object): PaymentSettlement {
   };
 }
 
+/** What identifies an `exact` EIP-3009 payment in a receipt, all from the payer's own payload and requirements. */
+interface PaymentCheck {
+  asset: string;
+  payer: string;
+  payTo: string;
+  nonce: string;
+  amount: bigint;
+}
+
+/**
+ * The check of an `exact` payment authorized with EIP-3009 (`transferWithAuthorization`), or undefined for any
+ * other scheme or authorization method, which has no check yet
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.5.0/docs/adr/0017-x402-payment-verification.md).
+ */
+function eip3009CheckOf(requirements: object, payload: object): PaymentCheck | undefined {
+  if (own(requirements, 'scheme') !== 'exact') return undefined;
+  const authorization = own(own(payload, 'payload'), 'authorization');
+  const values = {
+    asset: own(requirements, 'asset'),
+    payer: own(authorization, 'from'),
+    payTo: own(requirements, 'payTo'),
+    nonce: own(authorization, 'nonce'),
+    amount: own(requirements, 'amount'),
+  };
+  const { asset, payer, payTo, nonce, amount } = values;
+  if (typeof asset !== 'string' || !ADDRESS.test(asset)) return undefined;
+  if (typeof payer !== 'string' || !ADDRESS.test(payer)) return undefined;
+  if (typeof payTo !== 'string' || !ADDRESS.test(payTo)) return undefined;
+  if (typeof nonce !== 'string' || !BYTES32.test(nonce)) return undefined;
+  if (typeof amount !== 'string' || !AMOUNT.test(amount)) return undefined;
+  return {
+    asset: asset.toLowerCase(),
+    payer: payer.toLowerCase(),
+    payTo: payTo.toLowerCase(),
+    nonce: nonce.toLowerCase(),
+    amount: BigInt(amount),
+  };
+}
+
+/**
+ * Whether `receipt` carries the payment: among the logs of its asset, `AuthorizationUsed` with the payer and the
+ * nonce, and `Transfer` from the payer to the recipient of exactly the amount. Undefined when it cannot tell: no
+ * receipt, or one that is not successful.
+ */
+function carriesPayment(receipt: unknown, check: PaymentCheck): boolean | undefined {
+  if (own(receipt, 'status') !== 'success') return undefined;
+  const logs = own(receipt, 'logs');
+  if (!Array.isArray(logs)) return undefined;
+  let authorized = false;
+  let transferred = false;
+  for (const log of logs) {
+    const address = own(log, 'address');
+    if (typeof address !== 'string' || address.toLowerCase() !== check.asset) continue;
+    let event: { eventName: string; args: Record<string, unknown> };
+    try {
+      event = decodeEventLog({
+        abi: EIP3009_EVENTS,
+        data: own(log, 'data') as `0x${string}`,
+        topics: own(log, 'topics') as [`0x${string}`, ...`0x${string}`[]],
+      }) as typeof event;
+    } catch {
+      continue;
+    }
+    const lower = (value: unknown) => (typeof value === 'string' ? value.toLowerCase() : value);
+    if (event.eventName === 'AuthorizationUsed') {
+      authorized ||=
+        lower(event.args.authorizer) === check.payer && lower(event.args.nonce) === check.nonce;
+    } else if (event.eventName === 'Transfer') {
+      transferred ||=
+        lower(event.args.from) === check.payer &&
+        lower(event.args.to) === check.payTo &&
+        event.args.value === check.amount;
+    }
+  }
+  return authorized && transferred;
+}
+
 /** A payment between `onBeforePaymentCreation` and `onAfterPaymentCreation`. */
 interface Start {
   startTime: Date;
@@ -147,6 +233,10 @@ interface OpenPayment {
   ended: boolean;
   done: Promise<void>;
   resolve: () => void;
+  /** How to check that the settlement transaction carries the payment; absent when there is no check. */
+  check: PaymentCheck | undefined;
+  /** The settlement, while the payment span waits for its transaction's receipt to be checked. */
+  settled: { settlement: PaymentSettlement; endTime: Date } | undefined;
 }
 
 /**
@@ -218,8 +308,20 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
       diag.error(`hashspan: failed to record ${what} (${errorName(error)})`);
     }
   };
-  const timeOut = (payment: OpenPayment): void =>
+  /**
+   * Ends a payment that cannot wait any longer: as `timeout` while it waits for its response, or with its settlement
+   * and no verdict while it waits for the receipt to check.
+   */
+  const timeOut = (payment: OpenPayment): void => {
+    const { settled } = payment;
+    if (settled) {
+      finish(payment, 'payment settlement', (handle) =>
+        handle.end(settled.settlement, { endTime: settled.endTime }),
+      );
+      return;
+    }
     finish(payment, 'payment timeout', (handle) => handle.timeout({ endTime: new Date() }));
+  };
 
   /** The chain id of the payment for `requirements`, or undefined when it is not traced. */
   const tracedChainId = (paymentRequired: unknown, requirements: unknown): number | undefined => {
@@ -319,6 +421,8 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
       ended: false,
       done,
       resolve,
+      check: eip3009CheckOf(requirements, payload),
+      settled: undefined,
     };
     payment.timer = timers.setTimeout(
       () => timeOut(payment),
@@ -372,20 +476,48 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
       return;
     }
     const settlement = settlementOf(response);
-    finish(payment, 'payment settlement', (handle) => handle.end(settlement, { endTime }));
+    const end = (verified?: boolean): void =>
+      finish(payment, 'payment settlement', (handle) =>
+        handle.end(verified === undefined ? settlement : { ...settlement, verified }, { endTime }),
+      );
     const { hash } = settlement;
-    if (settlement.status === 'failed' || hash === undefined || !TX_HASH.test(hash)) return;
+    if (settlement.status === 'failed' || hash === undefined || !TX_HASH.test(hash)) {
+      end();
+      return;
+    }
     const network = own(response, 'network');
     if (network !== undefined && chainIdOf(network) !== payment.chainId) {
       diag.warn(
         'hashspan: the settlement is on another network than the payment; not confirming it',
       );
+      end();
       return;
     }
     const confirmWith = readerFor(payment.chainId);
-    if (confirmWith) {
-      viem.watch(confirmWith, { hash, chainId: payment.chainId, timeoutMs: confirmTimeoutMs });
+    const { check, handle } = payment;
+    // A tracker from a core before 0.6 cannot link an open payment span: it ends now, unchecked (ADR 0014).
+    if (!confirmWith || !check || typeof handle.link !== 'function') {
+      end();
+      if (confirmWith) {
+        viem.watch(confirmWith, { hash, chainId: payment.chainId, timeoutMs: confirmTimeoutMs });
+      }
+      return;
     }
+    // The payment span ends once the receipt is checked, at the time the response came (ADR 0017).
+    payment.settled = { settlement, endTime };
+    timers.clearTimeout(payment.timer);
+    try {
+      handle.link(hash);
+    } catch (error) {
+      diag.error(`hashspan: failed to link the payment span (${errorName(error)})`);
+    }
+    viem.watch(confirmWith, {
+      hash,
+      chainId: payment.chainId,
+      timeoutMs: confirmTimeoutMs,
+      onReceipt: (receipt) =>
+        end(receipt === undefined ? undefined : carriesPayment(receipt, check)),
+    });
   });
 
   /** Waits for every open payment to end; true if they did before `deadline`, else ends them as `timeout`. */

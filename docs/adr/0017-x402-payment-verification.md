@@ -1,6 +1,6 @@
 # 0017. Verify that an x402 settlement transaction carries the payment
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-02
 
 ## Context
@@ -32,7 +32,10 @@ is not this payment's, such as the confirm span of a transaction the agent sent 
   receipt, or a scheme or authorization method without a check.
 - **With a reader, the payment span ends once the check is done**, with its end time set to when the response was
   processed (ADR 0009), so its duration does not change; only its export waits for the confirmation. Without a
-  reader, or for a payment without a check, it ends as before.
+  reader, or for a payment without a check, it ends as before. The tracker's new `PaymentHandle.link(hash)` makes the
+  settlement transaction's confirm span link to the payment span while it is still open; a tracker without it (an
+  older core) gets the previous behaviour (ADR 0014). If `flush()` gives up or too many payments are open, a payment
+  waiting for its receipt ends with its settlement and no verdict.
 - **The receipt reaches the adapter through `watch()`**: a new `onReceipt` option of `@hashspan/viem`'s `watch()` is
   called once when the watch ends, with the mined transaction's receipt, or without one when none was retrieved. It
   never affects the confirm span or a caller's wait.

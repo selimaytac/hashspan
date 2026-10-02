@@ -82,10 +82,10 @@ and paid MCP tools. Relevant facts, from the v2 JavaScript SDK (`@x402/core`, `@
   for every settlement or pending settlement with a hash: the confirm span adds block, gas and fees (paid by the
   facilitator) and resolves pending settlements. `flush()` awaits it (ADR 0010).
 
-  The server chooses the hash it reports. The confirm span shows that this transaction exists and how it ended; it
-  does not check that the transaction is this payment. Its revert reason would be text from a contract the server
-  chooses, so the adapter replays reverted settlements for their reason (ADR 0005) only with `decodeRevertReason:
-  true`.
+  The server chooses the hash it reports. The confirm span shows that this transaction exists and how it ended;
+  whether the transaction carries this payment is checked as ADR 0017 describes. Its revert reason would be text from
+  a contract the server chooses, so the adapter replays reverted settlements for their reason (ADR 0005) only with
+  `decodeRevertReason: true`.
 - **x402 v2 on EVM only, for now.** Payments on networks other than `eip155:*` (Solana, Stellar, ...) and x402 v1
   payments (`x402Version` 1, which `registerExactEvmScheme` also registers) are passed through untraced, with a `diag`
   message once per network or version. Server-side tracing (the resource server's settle hooks) is a separate step.
