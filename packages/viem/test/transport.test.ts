@@ -138,6 +138,54 @@ describe('traceTransport', () => {
     );
   });
 
+  it('sends a request whose method is behind a getter untraced, running the getter as often as without tracing', async () => {
+    let reads = 0;
+    const seen: unknown[] = [];
+    const inner: Transport = (params) => ({
+      ...custom({ request: async () => '0x2105' })(params),
+      request: (async (args: { method: string }) => {
+        seen.push(args.method);
+        return '0x2105';
+      }) as never,
+    });
+    const args = {
+      get method() {
+        reads++;
+        return 'eth_chainId';
+      },
+    };
+    const { request } = traceTransport(inner)({ chain: base });
+
+    await expect(request(args as never)).resolves.toBe('0x2105');
+    expect(reads).toBe(1);
+    expect(seen).toEqual(['eth_chainId']);
+    expect(rpcSpans()).toHaveLength(0);
+  });
+
+  it('sends a request whose descriptor read throws once, untraced', async () => {
+    let calls = 0;
+    const inner: Transport = (params) => ({
+      ...custom({ request: async () => '0x2105' })(params),
+      request: (async () => {
+        calls++;
+        return '0x2105';
+      }) as never,
+    });
+    const args = new Proxy(
+      { method: 'eth_chainId' },
+      {
+        getOwnPropertyDescriptor() {
+          throw new Error('trap');
+        },
+      },
+    );
+    const { request } = traceTransport(inner)({ chain: base });
+
+    await expect(request(args as never)).resolves.toBe('0x2105');
+    expect(calls).toBe(1);
+    expect(rpcSpans()).toHaveLength(0);
+  });
+
   it('skips the methods the filter leaves out, and a method name that is not one', async () => {
     const client = createPublicClient({
       chain: base,
