@@ -1,4 +1,10 @@
-import type { Attributes, Context, TimeInput, TracerProvider } from '@opentelemetry/api';
+import type {
+  Attributes,
+  Context,
+  MeterProvider,
+  TimeInput,
+  TracerProvider,
+} from '@opentelemetry/api';
 
 /**
  * How wallet addresses are recorded. See
@@ -48,6 +54,11 @@ export interface AgentIdentity {
 export interface TxTrackerOptions {
   /** Defaults to the globally registered tracer provider. */
   tracerProvider?: TracerProvider | undefined;
+  /**
+   * Meter provider for the send, confirmation and fee histograms. Defaults to the globally registered one, which
+   * records nothing until an OpenTelemetry metrics SDK is set up.
+   */
+  meterProvider?: MeterProvider | undefined;
   /** Address recording mode. Default: `raw`. */
   address?: AddressMode | AddressOptions | undefined;
   /**
