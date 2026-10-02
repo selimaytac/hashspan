@@ -6,7 +6,12 @@ export function noopSend(parent: Context): SendHandle {
   return { context: parent, end: () => {}, fail: () => {} };
 }
 const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
-const NOOP_PAYMENT: PaymentHandle = { end: () => {}, fail: () => {}, timeout: () => {} };
+const NOOP_PAYMENT: PaymentHandle = {
+  end: () => {},
+  fail: () => {},
+  timeout: () => {},
+  link: () => {},
+};
 
 /**
  * What `diag` logs for an error: its name only. viem errors carry request arguments and RPC URLs, which may
@@ -109,6 +114,7 @@ export function guardTracker(tracker: TxTracker): TxTracker {
         end: (...args: unknown[]) => call(handle, 'end', 'record payment settlement', ...args),
         fail: (...args: unknown[]) => call(handle, 'fail', 'record payment failure', ...args),
         timeout: (...args: unknown[]) => call(handle, 'timeout', 'record payment timeout', ...args),
+        link: (...args: unknown[]) => call(handle, 'link', 'link the payment span', ...args),
       };
     },
   };

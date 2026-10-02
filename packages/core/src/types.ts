@@ -303,4 +303,10 @@ export interface PaymentHandle {
    * learned, e.g. no response arrived before the authorization expired.
    */
   timeout(options?: EndOptions): void;
+  /**
+   * Makes the confirm span of the settling transaction `hash` link to this payment span before it ends, for an
+   * adapter that ends it only after checking that transaction's receipt (ADR 0017). A hash this tracker already links,
+   * such as one of its own sends, keeps its link; `end` with a hash links it as well.
+   */
+  link(hash: string): void;
 }

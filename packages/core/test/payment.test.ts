@@ -228,6 +228,35 @@ describe('payment span', () => {
 });
 
 describe('payment confirmation', () => {
+  it('links the confirm span to a payment span that is still open, once linked by hash', () => {
+    const tracker = createTxTracker();
+    const handle = tracker.startPayment(payment);
+    handle.link(HASH);
+    // The confirm span starts before the payment span ends, as when an adapter checks the receipt first.
+    tracker
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end({ status: 'success', blockNumber: 1n, gasUsed: 1n });
+    handle.end({ status: 'settled', hash: HASH, verified: true }, { endTime: new Date() });
+    expect(tracing.spanNamed(`confirm ${CHAIN_ID}`).links.map((l) => l.context.spanId)).toEqual([
+      tracing.spanNamed(PAYMENT_SPAN).spanContext().spanId,
+    ]);
+  });
+
+  it('does not take over a link, and ignores a hash that is not one', () => {
+    const tracker = createTxTracker();
+    tracker.startSend({ chainId: CHAIN_ID }).end({ hash: HASH });
+    const handle = tracker.startPayment(payment);
+    handle.link(HASH);
+    handle.link('not a hash');
+    tracker
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end({ status: 'success', blockNumber: 1n, gasUsed: 1n });
+    handle.end({ status: 'settled' });
+    expect(tracing.spanNamed(`confirm ${CHAIN_ID}`).links.map((l) => l.context.spanId)).toEqual([
+      tracing.spanNamed(`send ${CHAIN_ID}`).spanContext().spanId,
+    ]);
+  });
+
   it('links the confirm span of the settling transaction and confirms in the background', () => {
     const tracker = createTxTracker();
     const tool = trace.getTracer('test').startSpan('execute_tool weather');

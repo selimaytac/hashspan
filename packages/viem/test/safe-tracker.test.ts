@@ -56,7 +56,12 @@ describe('guardTracker() handles', () => {
       (name: string) =>
       (...args: unknown[]) =>
         void calls.push([name, ...args]);
-    const handle = { end: record('end'), fail: record('fail'), timeout: record('timeout') };
+    const handle = {
+      end: record('end'),
+      fail: record('fail'),
+      timeout: record('timeout'),
+      link: record('link'),
+    };
     const tracker = {
       startSend: () => handle,
       startConfirm: () => handle,
@@ -69,12 +74,14 @@ describe('guardTracker() handles', () => {
     guarded.startConfirm({ chainId: 1, hash: HASH }).timeout(5);
     guarded.startPayment(payment).fail('boom', options);
     guarded.startPayment(payment).timeout(options);
+    guarded.startPayment(payment).link(HASH);
     expect(calls).toEqual([
       ['end', { hash: HASH }, options],
       ['fail', 'boom', undefined, options],
       ['timeout', 5],
       ['fail', 'boom', options],
       ['timeout', options],
+      ['link', HASH],
     ]);
   });
 });
