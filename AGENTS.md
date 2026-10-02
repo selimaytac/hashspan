@@ -74,7 +74,8 @@ Run lint, typecheck and tests before proposing a change.
     dependency audit and license check; it imports hashspan from source (`integrations/vitest.config.ts` alias), so
     the main install comes first
   - `test/offline.ts` a setup file that lets only loopback requests through `fetch` and answers AgentKit's analytics
-    requests; `test/agentkit-viem.int.test.ts` the AgentKit `ViemWalletProvider` setup
+    requests; `test/agentkit-viem.int.test.ts` the AgentKit `ViemWalletProvider` setup;
+    `test/goat-viem.int.test.ts` the GOAT `viem()` wallet setup
   - `.github/workflows/integrations.yml` runs them on pull requests that touch `packages/` or `integrations/`, and
     weekly with every dependency of `integrations/` updated to the newest release within its range
 - `docker/`, `scripts/`, `Makefile` → local lab; `scripts/demo.sh` (behind `make demo`) starts a fresh Anvil or

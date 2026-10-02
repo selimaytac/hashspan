@@ -100,8 +100,14 @@ const wallet = viem(createWalletClient({ account, chain, transport: http() }).ex
 ```
 
 Pass `wallet` to GOAT as usual, for example `getOnChainTools({ wallet })`. A transaction sent through it then records a
-`send` and a `confirm` span; this was run against Anvil. `@goat-sdk/wallet-viem` pins its own viem version, so the
-wallet client must be created with a viem that GOAT accepts.
+`send` and a `confirm` span. CI runs this setup against Anvil with GOAT's `send_token` and `approve_token_evm` tools,
+invoked directly, both ways, in [`integrations/test/goat-viem.int.test.ts`](../integrations/test/goat-viem.int.test.ts).
+
+`@goat-sdk/wallet-viem` pins viem 2.23.4 exactly. With a newer viem in the application, TypeScript rejects the wallet
+client in `viem(walletClient)`, while the client works at runtime; the test casts it. GOAT's packages have no
+`exports` map, so Node.js loads their CommonJS build even from an ES module; the application's viem and GOAT's then
+come from different module copies. With viem 2.57 this does not affect the spans, because hashspan wraps the client
+instance rather than a module.
 
 ## Agent frameworks
 
