@@ -15,10 +15,10 @@
   - [x] Chain id resolution off the call path ([ADR 0009](adr/0009-telemetry-off-the-call-path.md))
   - [x] Opt-in recording of contract call arguments
   - [x] `flush()` before shutting down ([ADR 0010](adr/0010-flush-before-shutdown.md))
-- [ ] **M4** Example agent, Jaeger quick start, README
+- [x] **M4** Example agent, Jaeger quick start, README
   - [x] AI SDK agent example on Anvil, runnable without an API key, tested in CI (`make demo`)
   - [x] Trace screenshot in the README
-  - [ ] Base Sepolia run of the example
+  - [x] Base Sepolia run of the example (`make demo-base-sepolia`, see the [example](../examples/ai-sdk-agent/README.md#run-it-on-base-sepolia))
 - [x] **M5** First release to npm with provenance, good first issues
   - [x] Packages checked with publint and arethetypeswrong in CI; release process in [docs/releasing.md](releasing.md)
   - [x] One-time setup (placeholders, trusted publishers) and the first release: 0.1.0, published with provenance

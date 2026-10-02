@@ -6,7 +6,7 @@ import {
   http,
   parseEther,
 } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { nonceManager, privateKeyToAccount } from 'viem/accounts';
 import { baseSepolia } from 'viem/chains';
 import { type DemoChain, deployCode, hashspan, vaultCode, WITHDRAW_GAS } from './chain.js';
 
@@ -66,7 +66,9 @@ export async function baseSepoliaChain(
     );
   }
 
-  const account = privateKeyToAccount(privateKey);
+  // Public RPCs balance requests over nodes that can lag a block behind: count nonces locally rather than ask a node
+  // that may not have seen the previous transaction yet.
+  const account = privateKeyToAccount(privateKey, { nonceManager });
   const creation = deployCode(vaultCode(parseEther(WITHDRAW_LIMIT_ETH), parseEther(WITHDRAW_ETH)));
   const [balance, { maxFeePerGas }, deployGas] = await Promise.all([
     setup.getBalance({ address: account.address }),
@@ -84,9 +86,9 @@ export async function baseSepoliaChain(
 
   const deployer = createWalletClient({ account, chain: baseSepolia, transport: http(rpcUrl) });
   const deployment = await deployer.sendTransaction({ data: creation, gas: deployGas });
-  const { contractAddress } = await setup.waitForTransactionReceipt({ hash: deployment });
-  const code = contractAddress ? await setup.getCode({ address: contractAddress }) : undefined;
-  if (!contractAddress || !code || code === '0x') {
+  // The receipt's status says whether the code was stored; reading the code back could reach a node that lags.
+  const { status, contractAddress } = await setup.waitForTransactionReceipt({ hash: deployment });
+  if (status !== 'success' || !contractAddress) {
     throw new DemoSetupError(`The demo vault was not deployed: ${EXPLORER}/tx/${deployment}`);
   }
   log(`Demo vault deployed at ${contractAddress}: ${EXPLORER}/tx/${deployment}`);
