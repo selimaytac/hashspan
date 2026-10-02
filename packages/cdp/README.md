@@ -118,7 +118,7 @@ instrumentation creates nest under it.
 | account `swap`, `useSpendPermission` | chain id and from |
 | `execute()` of a quote from `cdp.evm.createSwapQuote` or account `quoteSwap` | chain id and from (the taker) |
 | network-scoped accounts (`useNetwork`) | as above; on Base and Ethereum they send through the account itself, elsewhere through the SDK's own viem client, and both are traced once |
-| network-scoped `waitForTransactionReceipt` | without a reader: a confirm span with status, block, gas and fees, but no revert reason; with a reader, the background confirmation records it |
+| network-scoped `waitForTransactionReceipt` | without a reader: a confirm span with status, block, gas and fees, but no revert reason, and no fees for a flashblocks preconfirmation (a receipt with a zero block hash, whose fee can be another transaction's); with a reader, the background confirmation records it from the sealed receipt |
 | smart account `sendUserOperation`, `cdp.evm.sendUserOperation`, `cdp.evm.prepareAndSendUserOperation` | user operation: chain id, hash, sender (the smart account) and the number of calls |
 | smart account `transfer`, `swap`, `useSpendPermission`; `execute()` of a quote for a smart account (`cdp.evm.createSwapQuote` with `smartAccount`, or smart account `quoteSwap`); `cdp.evm.createSpendPermission`, `cdp.evm.revokeSpendPermission` | user operation: chain id, hash and sender |
 | network-scoped smart accounts (`useNetwork`) | as above, each traced once |
