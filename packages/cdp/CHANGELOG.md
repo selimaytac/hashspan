@@ -1,5 +1,17 @@
 # @hashspan/cdp
 
+## 0.6.0
+
+### Patch Changes
+
+- [#143](https://github.com/selimaytac/hashspan/pull/143) [`6146a93`](https://github.com/selimaytac/hashspan/commit/6146a9392eaf0e81c9dce6715e9e74e7d4d20461) Thanks [@selimaytac](https://github.com/selimaytac)! - Wrapping a result of the SDK can no longer fail a call that succeeded: an account, quote or network-scoped account
+  that cannot be wrapped, such as a frozen one, is returned as it is, untraced, and one such account in
+  `listAccounts` leaves the others traced. An account is marked as wrapped only once all its methods were replaced,
+  and wrapping it again traces each call once. A call whose options throw when read is made untraced.
+- Updated dependencies [[`7ba73bb`](https://github.com/selimaytac/hashspan/commit/7ba73bb2e2a87c157c2819d23b66b6266925472a), [`071730f`](https://github.com/selimaytac/hashspan/commit/071730f525c7f9446b5591dd3ba3b72e6bd34780), [`c898941`](https://github.com/selimaytac/hashspan/commit/c898941305240ee1b13513d0f9de14ccf984c47d)]:
+  - @hashspan/core@0.6.0
+  - @hashspan/viem@0.6.0
+
 ## 0.5.0
 
 ### Patch Changes
