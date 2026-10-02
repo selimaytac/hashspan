@@ -17,11 +17,14 @@ const allowed = new Set([
   // Weak copyleft, file-level; only the dev dependency lightningcss uses it today.
   'MPL-2.0',
 ]);
+// SPDX exceptions accepted after `WITH`; an exception outside this list, or one that is not an SPDX exception at
+// all, makes the expression unacceptable until it is reviewed.
+const allowedExceptions = new Set(['LLVM-exception']);
 
 /**
  * Whether an SPDX license expression is acceptable: `OR` needs one allowed operand, `AND` needs all of them, and
- * `WITH` an exception keeps the license it extends. Anything that does not parse, such as `Unknown` or
- * `SEE LICENSE IN ...`, is not acceptable.
+ * `WITH` an allowed exception keeps the license it extends. Anything that does not parse, such as `Unknown` or
+ * `SEE LICENSE IN ...`, and any exception outside the allowlist, is not acceptable.
  */
 const isAllowed = (expression) => {
   const tokens = String(expression).match(/\(|\)|[^\s()]+/g) ?? [];
@@ -53,11 +56,14 @@ const isAllowed = (expression) => {
       return ok;
     }
     if (token === undefined || ['(', ')', 'AND', 'OR', 'WITH'].includes(token)) fail();
+    let exceptionOk = true;
     if (tokens[at] === 'WITH') {
       at++;
-      if (!/^[A-Za-z0-9.-]+$/.test(tokens[at++] ?? '')) fail();
+      const exception = tokens[at++] ?? '';
+      if (!/^[A-Za-z0-9.-]+$/.test(exception)) fail();
+      exceptionOk = allowedExceptions.has(exception);
     }
-    return allowed.has(token);
+    return allowed.has(token) && exceptionOk;
   };
   try {
     const ok = or();

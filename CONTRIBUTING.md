@@ -92,7 +92,7 @@ Anvil integration test (`*.int.test.ts`). Tests never use a public network.
 - **Span and attribute names are a public contract**: changing them needs an update to
   [`docs/semconv.md`](docs/semconv.md) and, if significant, an [ADR](docs/adr/).
 - **New dependencies** need a short justification in the PR description. CI fails on high or critical
-  advisories (`pnpm audit --audit-level high`) and on licenses outside the allowlist in
+  advisories (`pnpm audit --audit-level high`) and on licenses or SPDX exceptions outside the allowlists in
   [`scripts/check-licenses.mjs`](scripts/check-licenses.mjs).
 
 The full conventions (architecture, stability rules, what instrumentation may and may not do) are in
