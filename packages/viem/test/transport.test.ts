@@ -58,13 +58,16 @@ describe('traceTransport', () => {
   it('records the error code of a failed request, not its message, and passes the error on', async () => {
     const failure = new InvalidParamsRpcError(new Error('secret detail'));
     const transport = traceTransport(
-      custom({
-        request: async () => {
-          throw failure;
+      custom(
+        {
+          request: async () => {
+            throw failure;
+          },
         },
-      }),
+        { retryCount: 0 },
+      ),
     );
-    const client = createPublicClient({ chain: base, transport, retryCount: 0 });
+    const client = createPublicClient({ chain: base, transport });
 
     await expect(client.request({ method: 'eth_chainId' })).rejects.toMatchObject({
       code: -32602,
