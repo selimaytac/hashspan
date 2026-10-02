@@ -1,6 +1,6 @@
 # 0019. JSON-RPC spans from a viem transport
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-02
 
 ## Context
