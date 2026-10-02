@@ -77,6 +77,10 @@ firewall blocks the endpoint, ends the Node.js process
 
 ## GOAT SDK
 
+GOAT is no longer maintained: since July 2026 its repository is a read-only snapshot that accepts no issues or pull
+requests, and `@goat-sdk/core` 0.5.0 and `@goat-sdk/wallet-viem` 0.3.0 (May 2025) are its last releases. The setup
+below works with those releases.
+
 Checked with `@goat-sdk/wallet-viem` 0.3.0. GOAT sends with methods of the wallet client you pass to `viem()`, and
 waits for receipts on a client it derives from it, so the setup needs background confirmation:
 
