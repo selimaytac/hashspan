@@ -83,7 +83,7 @@ no span; after a timeout or failure, a retry gets a new span. The same holds for
 | Call batch status 4xx (failed without inclusion) | confirm | error | `failed` | none |
 | Call batch status 5xx (reverted) | confirm | error | `reverted` | none |
 | Call batch status 6xx (partially reverted) | confirm | error | `partially_reverted` | none |
-| Call batch status 1xx (a wait that accepted a pending status) | confirm | unset | none | none; no confirmation metric is recorded |
+| Call batch status 1xx (a wait that accepted a pending status), or a status without a known code | confirm | unset | none | none; no confirmation metric is recorded |
 | Payment settled | payment | unset | none | none; `blockchain.payment.status` is `settled` |
 | Payment settlement pending: transaction known, receipt not seen | payment | unset | none | none; `blockchain.payment.status` is `pending` |
 | Payment settlement failed | payment | error | the settling party's reason if it is a short identifier (see below), else `_OTHER` | none; `blockchain.payment.status` is `failed` |
@@ -130,7 +130,7 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.contract.function.selector` | string | send | on | 4-byte selector, e.g. `0xa9059cbb` |
 | `blockchain.contract.function.arguments` | string | send | off (opt-in) | decoded call arguments as a JSON array, e.g. `["0x2222...2222","1000000"]`: bigints as decimal strings, addresses per address mode, truncated after 4096 characters. Only own enumerable data properties are serialized; `toJSON()` and getters are never called |
 | `blockchain.tx.status` | string | confirm | on | from chain data: `success` \| `reverted` \| `replaced` |
-| `blockchain.block.number` | int | confirm | on | inclusion block; for a user operation, the bundle transaction's |
+| `blockchain.block.number` | int | confirm | on | inclusion block; for a user operation, the bundle transaction's; for a call batch, the last receipt's |
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
 | `blockchain.tx.effective_gas_price` | string | confirm | on | wei, decimal string; see the `fee` row for when it is omitted |
 | `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, wei; see the `fee` row for when it is omitted |

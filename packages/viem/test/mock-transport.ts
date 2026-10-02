@@ -15,6 +15,8 @@ export interface MockOptions {
   /** Transaction fields merged into the default transaction, such as its `input`; a function gets the hash asked for. */
   transaction?: Record<string, unknown> | ((hash: unknown) => Record<string, unknown>);
   sendError?: { code: number; message: string };
+  /** Fails only this `eth_sendTransaction` call (the first is 1) with `sendError`. */
+  sendErrorOnCall?: number;
   /** Methods that never answer, like an unresponsive provider. */
   hangOn?: string[];
   /** Methods that fail with a non-retryable JSON-RPC error (invalid params). */
@@ -48,6 +50,7 @@ export function mockTransport(options: MockOptions = {}) {
   let block = 0x7b;
   let receiptCalls = 0;
   let statusCalls = 0;
+  let sendCalls = 0;
   const transaction = (hash?: unknown) => ({
     hash: HASH,
     from: FROM,
@@ -92,7 +95,11 @@ export function mockTransport(options: MockOptions = {}) {
           if (options.sendDelayMs) {
             await new Promise((resolve) => setTimeout(resolve, options.sendDelayMs));
           }
-          if (options.sendError)
+          sendCalls++;
+          if (
+            options.sendError &&
+            (options.sendErrorOnCall === undefined || options.sendErrorOnCall === sendCalls)
+          )
             throw Object.assign(new Error(options.sendError.message), options.sendError);
           return HASH;
         case 'eth_blockNumber':

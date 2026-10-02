@@ -215,6 +215,26 @@ describe("viem's fallback to eth_sendTransaction", () => {
   });
 });
 
+describe("viem's fallback with a call that fails to send", () => {
+  it('records the batch and confirms only the transaction that was sent', async () => {
+    const { client, hashspan } = wallet(
+      {
+        sendCalls: { error: { code: -32601, message: 'Method not found' } },
+        sendError: { code: -32000, message: 'insufficient funds' },
+        sendErrorOnCall: 2,
+      },
+      withHashspan({ confirm: { mode: 'background' } }),
+    );
+    const { id } = await client.sendCalls({ calls, experimental_fallback: true });
+    await hashspan.flush();
+
+    // viem marks the call that failed with a zero hash in the id.
+    expect(id).toContain('0'.repeat(64));
+    expect(confirms()).toHaveLength(1);
+    expect(confirms()[0]?.attributes['blockchain.tx.hash']).toBe(HASH);
+  });
+});
+
 describe('with a tracker from a core without call batches', () => {
   it('records no call batch spans, and the calls work', async () => {
     const full = createTxTracker();

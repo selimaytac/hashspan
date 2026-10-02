@@ -1,6 +1,6 @@
 import { Instance } from 'prool';
 import { type Address, createWalletClient, custom, type Hex, http } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { mnemonicToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
@@ -10,10 +10,10 @@ const PORT = 18592;
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 const OTHER = '0x00000000000000000000000000000000000000cd' as const;
-// Anvil's second well-known test account, so that the unlocked first account stays free for the stand-in wallet.
-const LOCAL_ACCOUNT = privateKeyToAccount(
-  '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d',
-);
+/** Anvil's public default mnemonic; its first accounts are funded on every Anvil chain. */
+const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
+// A local account that signs in-process, the second one, so that the first stays free for the stand-in wallet.
+const LOCAL_ACCOUNT = mnemonicToAccount(ANVIL_MNEMONIC, { addressIndex: 1 });
 
 const instance = Instance.anvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,

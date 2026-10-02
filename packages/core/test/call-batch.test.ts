@@ -137,6 +137,18 @@ describe('call batch confirm span', () => {
     expect(span.attributes['blockchain.call_batch.status_code']).toBe(statusCode);
   });
 
+  it.each([
+    ['without a code', {}],
+    ['with a 3xx code', { statusCode: 300 }],
+    ['with an unknown code', { statusCode: 999 }],
+  ])('ends a status %s without an outcome', (_, status) => {
+    const tracker = createTxTracker();
+    tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID }).end(status);
+    const span = tracing.spanNamed(confirm);
+    expect(span.status.code).toBe(SpanStatusCode.UNSET);
+    expect(span.attributes).not.toHaveProperty('error.type');
+  });
+
   it('ends a pending status without an outcome', () => {
     const tracker = createTxTracker();
     tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID }).end({ statusCode: 100 });
@@ -246,6 +258,9 @@ describe('call batch metrics', () => {
     tracker
       .startCallBatchConfirm({ chainId: CHAIN_ID, id: 'c', startTime: new Date(2_000) })
       .end({ statusCode: 100 }, { endTime: new Date(3_000) });
+    tracker
+      .startCallBatchConfirm({ chainId: CHAIN_ID, id: 'd', startTime: new Date(2_000) })
+      .end({}, { endTime: new Date(3_000) });
 
     expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION)).toEqual([
       { value: 1, attributes: base },

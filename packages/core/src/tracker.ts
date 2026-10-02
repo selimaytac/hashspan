@@ -1361,7 +1361,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
   /** The `error.type` of an EIP-5792 status code; undefined for success, pending or an unknown code. */
   const callBatchErrorType = (code: unknown): string | undefined => {
     if (typeof code !== 'number') return undefined;
-    if (code >= 300 && code < 500) return CALL_BATCH_FAILED;
+    if (code >= 400 && code < 500) return CALL_BATCH_FAILED;
     if (code >= 500 && code < 600) return BLOCKCHAIN_TX_STATUS_VALUE_REVERTED;
     if (code >= 600 && code < 700) return CALL_BATCH_PARTIALLY_REVERTED;
     return undefined;
@@ -1406,9 +1406,10 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
             const attributes = callBatchStatusAttributes(status ?? {});
             span.setAttributes(redact(attributes));
             const code = attributes[ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE];
-            // A batch still pending has no outcome yet: nothing to record as a confirmation (ADR 0022).
-            if (typeof code === 'number' && code >= 100 && code < 200) return;
             const failure = callBatchErrorType(code);
+            const confirmed = typeof code === 'number' && code >= 200 && code < 300;
+            // Pending, or a code that tells no outcome (missing or unknown): nothing to record as one (ADR 0022).
+            if (failure === undefined && !confirmed) return;
             if (failure !== undefined) markError(span, failure);
             // Batches record no fee: a wallet's receipt can be a bundle shared with others (ADR 0022).
             recordConfirmation(

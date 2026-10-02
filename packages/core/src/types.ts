@@ -493,7 +493,7 @@ export interface CallBatchConfirmInput {
 export interface CallBatchStatusLike {
   /**
    * The EIP-5792 status code. 2xx ends the confirm span successfully; 4xx (failed without inclusion), 5xx (reverted)
-   * and 6xx (partially reverted) with an error status; 1xx (still pending) without an outcome.
+   * and 6xx (partially reverted) with an error status; 1xx (still pending), another code or none without an outcome.
    */
   statusCode?: number | undefined;
   /** Whether the wallet ran the calls atomically. */

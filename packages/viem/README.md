@@ -219,8 +219,10 @@ await wallet.waitForCallsStatus({ id }); // confirm span, linked to the send spa
 - With `experimental_fallback`, viem sends the calls as plain transactions when the wallet lacks `wallet_sendCalls`.
   They are traced as transactions linked to the batch's send span: background confirmation, when enabled, records
   each one's receipt and fee.
-- `sendCallsSync` records one send span and one confirm span. `getCallsStatus` is not traced: polling it yourself
-  records nothing, as with `getTransactionReceipt`. Background confirmation and `watch()` do not cover batches.
+- `sendCallsSync` records one send span and one confirm span: viem's own `sendCallsSync` runs with the traced
+  `sendCalls` and `waitForCallsStatus`, so an extension applied before this one that replaces `sendCallsSync` itself
+  is not called ([apply it last](#apply-it-last)). `getCallsStatus` is not traced: polling it yourself records
+  nothing, as with `getTransactionReceipt`. Background confirmation and `watch()` do not cover batches.
 - See [ADR 0022](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0022-call-batches.md).
 
 ## JSON-RPC requests
