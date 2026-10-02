@@ -142,6 +142,10 @@ so every adapter gets them ([ADR 0020](adr/0020-metrics.md)). Their attributes a
 Bucket boundaries are given as advice: 0.05 s to 300 s for durations, and one bucket per power of ten from 10^8 to
 10^18 wei for fees. Fees above 2^53 wei lose precision as numbers; the span attribute keeps the exact value.
 
+On metrics, `error.type` is kept only when it is an error class name of letters (such as `TransactionExecutionError`)
+or a lower-case code (such as `timeout` or `insufficient_balance`); any other value, which could carry an identifier,
+an address or a number, is recorded as `_OTHER`. The span keeps its own `error.type`.
+
 ## Privacy
 
 `blockchain.tx.from`, `blockchain.tx.to` and the `blockchain.payment.*` addresses follow the address mode: `raw`

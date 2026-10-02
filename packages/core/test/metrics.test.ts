@@ -145,6 +145,47 @@ describe('metrics', () => {
     }
   });
 
+  it('records error.type as an error class or a code, and anything else as _OTHER', () => {
+    const meters = recordingMeterProvider();
+    const tracker = createTxTracker({ meterProvider: meters.provider, redact: () => ({}) });
+    const named = (name: string) => Object.assign(new Error('boom'), { name });
+    const failSend = (error: unknown, errorType?: string) =>
+      tracker.startSend({ chainId: 1 }).fail(error, errorType === undefined ? {} : { errorType });
+
+    failSend(named('TransactionExecutionError'));
+    failSend(new Error('plain'));
+    failSend(named('Failure_user_42_0x1111111111111111111111111111111111111111'));
+    failSend(named('Http500Error'));
+    failSend(named('quota exceeded'));
+    failSend(new Error('cdp'), 'insufficient_balance');
+    failSend(new Error('cdp'), 'code_42');
+    tracker.startConfirm({ chainId: 1, hash: HASH }).fail(named('user-42'));
+    tracker.startConfirm({ chainId: 1, hash: OTHER_HASH }).timeout();
+
+    const types = (name: string) =>
+      meters.recorded(name).map(({ attributes }) => attributes['error.type']);
+    expect(types(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION)).toEqual([
+      'TransactionExecutionError',
+      'Error',
+      '_OTHER',
+      '_OTHER',
+      '_OTHER',
+      'insufficient_balance',
+      '_OTHER',
+    ]);
+    expect(types(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)).toEqual(['_OTHER', 'timeout']);
+  });
+
+  it('keeps the span error.type as it is', () => {
+    const meters = recordingMeterProvider();
+    const tracker = createTxTracker({ meterProvider: meters.provider });
+    tracker.startSend({ chainId: 1 }).fail(Object.assign(new Error('x'), { name: 'Failure42' }));
+    expect(tracing.spans()[0]?.attributes['error.type']).toBe('Failure42');
+    expect(
+      meters.recorded(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION)[0]?.attributes['error.type'],
+    ).toBe('_OTHER');
+  });
+
   it('keeps tracing when the meter provider throws', () => {
     const broken = {
       getMeter: () => {

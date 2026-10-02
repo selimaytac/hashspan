@@ -6,6 +6,7 @@ import {
   metrics,
   type TimeInput,
 } from '@opentelemetry/api';
+import { ATTR_ERROR_TYPE, ERROR_TYPE_VALUE_OTHER } from './attributes.js';
 
 /** Duration of a send: from the start of the sending call until the hash is known or the call failed. */
 export const METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION = 'blockchain.client.send.duration' as const;
@@ -19,6 +20,26 @@ export const METRIC_BLOCKCHAIN_CLIENT_FEE = 'blockchain.client.fee' as const;
 const DURATION_BUCKETS = [0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300];
 // Wei, one bucket per power of ten: fees range from fractions of a gwei on L2s to fractions of an ether on L1.
 const FEE_BUCKETS = Array.from({ length: 11 }, (_, i) => 10 ** (i + 8));
+
+// error.type values kept on metrics: an error class name (letters only, such as viem's `TransactionExecutionError`)
+// or a lower-case code (`timeout`, `reverted`, an adapter's code such as `insufficient_balance`). Neither can hold an
+// address, a hash or a number, so the label stays low-cardinality.
+const ERROR_CLASS = /^[A-Z][A-Za-z]{0,62}Error$|^Error$/;
+const ERROR_CODE = /^[a-z]{1,32}(_[a-z]{1,32}){0,7}$/;
+
+/**
+ * `attributes` with `error.type` kept only if it is an error class name or a lower-case code, else `_OTHER`. Error
+ * names are free text (any `Error.name`), and metrics do not pass through the `redact` hook; the span keeps its own
+ * `error.type`.
+ */
+function withMetricErrorType(attributes: Attributes): Attributes {
+  const type = attributes[ATTR_ERROR_TYPE];
+  if (type === undefined) return attributes;
+  const kept =
+    typeof type === 'string' &&
+    (type === ERROR_TYPE_VALUE_OTHER || ERROR_CLASS.test(type) || ERROR_CODE.test(type));
+  return kept ? attributes : { ...attributes, [ATTR_ERROR_TYPE]: ERROR_TYPE_VALUE_OTHER };
+}
 
 /** Records the tracker's histograms; never throws. */
 export interface TxMetrics {
@@ -77,11 +98,11 @@ export function createTxMetrics(
   return {
     sendDuration: (seconds, attributes) =>
       record('send duration', () => {
-        if (seconds >= 0) get().send.record(seconds, attributes);
+        if (seconds >= 0) get().send.record(seconds, withMetricErrorType(attributes));
       }),
     confirmationDuration: (seconds, attributes) =>
       record('confirmation duration', () => {
-        if (seconds >= 0) get().confirmation.record(seconds, attributes);
+        if (seconds >= 0) get().confirmation.record(seconds, withMetricErrorType(attributes));
       }),
     fee: (wei, attributes) =>
       record('fee', () => {

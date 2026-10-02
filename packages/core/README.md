@@ -107,7 +107,8 @@ Attribute definitions:
 With an OpenTelemetry metrics SDK set up (or `meterProvider`), the tracker records three histograms:
 `blockchain.client.send.duration` and `blockchain.client.confirmation.duration` in seconds, and
 `blockchain.client.fee` in wei. Their attributes are the chain and the outcome only, never an address, hash or
-agent identity. The `redact` hook does not run on metrics: a fee it removes from spans is still recorded by
+agent identity; an `error.type` that is neither an error class name nor a lower-case code is recorded as `_OTHER`.
+The `redact` hook does not run on metrics: a fee it removes from spans is still recorded by
 `blockchain.client.fee`. To keep a histogram out of your backend, drop it with a View of your metrics SDK (drop
 aggregation). Definitions:
 [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/semconv.md#metrics).
