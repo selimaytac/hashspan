@@ -15,6 +15,8 @@ export interface MockOptions {
   /** Transaction fields merged into the default transaction, such as its `input`; a function gets the hash asked for. */
   transaction?: Record<string, unknown> | ((hash: unknown) => Record<string, unknown>);
   sendError?: { code: number; message: string };
+  /** Fails only this `eth_sendTransaction` call (the first is 1) with `sendError`. */
+  sendErrorOnCall?: number;
   /** Methods that never answer, like an unresponsive provider. */
   hangOn?: string[];
   /** Methods that fail with a non-retryable JSON-RPC error (invalid params). */
@@ -35,6 +37,10 @@ export interface MockOptions {
   advanceBlocks?: boolean;
   /** Blocks contain the mined transaction, as they do on a node that returns a receipt late. */
   blockIncludesTransaction?: boolean;
+  /** Answer to `wallet_sendCalls`: the batch id, or a JSON-RPC error (e.g. -32601 when the wallet lacks it). */
+  sendCalls?: { id: string } | { error: { code: number; message: string } };
+  /** Answers `wallet_getCallsStatus` per call (the first is 1); merged into a confirmed status. */
+  callsStatus?: (call: number) => Record<string, unknown>;
   /** Called with each request's method as the request starts, in the context it was made in. */
   onRequest?: (method: string) => void;
 }
@@ -45,6 +51,8 @@ export function mockTransport(options: MockOptions = {}) {
   const requests: { method: string; params?: unknown }[] = [];
   let block = 0x7b;
   let receiptCalls = 0;
+  let statusCalls = 0;
+  let sendCalls = 0;
   const transaction = (hash?: unknown) => ({
     hash: HASH,
     from: FROM,
@@ -89,7 +97,11 @@ export function mockTransport(options: MockOptions = {}) {
           if (options.sendDelayMs) {
             await new Promise((resolve) => setTimeout(resolve, options.sendDelayMs));
           }
-          if (options.sendError)
+          sendCalls++;
+          if (
+            options.sendError &&
+            (options.sendErrorOnCall === undefined || options.sendErrorOnCall === sendCalls)
+          )
             throw Object.assign(new Error(options.sendError.message), options.sendError);
           return HASH;
         case 'eth_blockNumber':
@@ -156,6 +168,32 @@ export function mockTransport(options: MockOptions = {}) {
             type: '0x2',
             ...options.receipt,
             ...options.receiptAt?.(++receiptCalls),
+          };
+        case 'wallet_sendCalls': {
+          const answer = options.sendCalls ?? { id: '0xb47c4' };
+          if ('error' in answer) {
+            throw new RpcRequestError({ body: {}, error: answer.error, url: 'mock' });
+          }
+          return answer;
+        }
+        case 'wallet_getCallsStatus':
+          return {
+            version: '2.0.0',
+            id: (params as unknown[] | undefined)?.[0],
+            chainId: options.chainIdHex ?? '0x2105',
+            status: 200,
+            atomic: true,
+            receipts: [
+              {
+                transactionHash: HASH,
+                blockHash: `0x${'cd'.repeat(32)}`,
+                blockNumber: '0x7b',
+                gasUsed: '0x5208',
+                logs: [],
+                status: '0x1',
+              },
+            ],
+            ...options.callsStatus?.(++statusCalls),
           };
         default:
           throw new Error(`mock transport: unexpected method ${method}`);

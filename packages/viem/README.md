@@ -193,6 +193,40 @@ await bundler.waitForUserOperationReceipt({ hash }); // confirm span, linked to 
 - Only these two bundler actions are traced; viem calls the others from inside them. Background confirmation and
   `watch()` cover transactions only: a user operation gets a confirm span when you wait for its receipt.
 
+## Call batches (EIP-5792)
+
+A wallet that supports EIP-5792 takes a batch of calls with `wallet_sendCalls` and returns a batch id; the wallet
+decides how the calls reach the chain. `withHashspan()` traces `sendCalls`, `waitForCallsStatus` and `sendCallsSync`
+as `send` and `confirm` spans identified by the batch id:
+
+```ts
+import { createWalletClient, custom } from 'viem';
+import { base } from 'viem/chains';
+import { withHashspan } from '@hashspan/viem';
+
+const wallet = createWalletClient({ account, chain: base, transport: custom(provider) }).extend(
+  withHashspan(),
+);
+
+const { id } = await wallet.sendCalls({ calls: [{ to, value }] }); // send span
+await wallet.waitForCallsStatus({ id }); // confirm span, linked to the send span
+```
+
+- The send span covers handing the batch to the wallet, and records the account, number of calls and batch id.
+- The confirm span records the outcome (`blockchain.call_batch.status`: `success` for 200, `reverted` for 500,
+  `partially_reverted` for 600), the status code, whether the batch ran atomically, the hashes of the transactions
+  that carried it, and the highest block among its receipts. A status 400 ends with `error.type` `failed`, any other code with `_OTHER`; a
+  wait that accepts a pending status ends without an outcome. No fee is recorded: wallet receipts lack the L1 fee and
+  can be a bundle transaction shared with others. Batch ids must be `0x`-prefixed hex; others are not recorded.
+- With `experimental_fallback`, viem sends the calls as plain transactions when the wallet lacks `wallet_sendCalls`.
+  Each is confirmed as a transaction linked to the batch's send span, as `watch()` does, so its receipt and fee are
+  recorded whether or not background confirmation is on.
+- `sendCallsSync` records one send span and one confirm span: viem's own `sendCallsSync` runs with the traced
+  `sendCalls` and `waitForCallsStatus`, so an extension applied before this one that replaces `sendCallsSync` itself
+  is not called ([apply it last](#apply-it-last)). `getCallsStatus` is not traced: polling it yourself records
+  nothing, as with `getTransactionReceipt`. Background confirmation and `watch()` do not cover batches.
+- See [ADR 0022](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0022-call-batches.md).
+
 ## JSON-RPC requests
 
 `traceTransport()` wraps a viem transport so that each request it sends becomes a client span named after its
@@ -230,13 +264,16 @@ const wallet = createWalletClient({
 | `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack), total fee |
 | `sendUserOperation` | `send` | chain id, smart account, EntryPoint, number of calls, user operation hash; see [Smart accounts](#smart-accounts-erc-4337) |
 | `waitForUserOperationReceipt` | `confirm` | success, gas used, cost, nonce, paymaster, revert reason, bundle transaction hash and block |
+| `sendCalls` | `send` | chain id, account, number of calls, batch id; see [Call batches](#call-batches-eip-5792) |
+| `waitForCallsStatus` | `confirm` | outcome, status code, atomicity, transaction hashes, highest block |
+| `sendCallsSync` | `send` and `confirm` | as `sendCalls` and `waitForCallsStatus` |
 
-While `sendTransaction`, `writeContract` or `sendUserOperation` runs, its send span is the active span, so spans that your RPC or HTTP
+While `sendTransaction`, `writeContract`, `sendUserOperation` or `sendCalls` runs, its send span is the active span, so spans that your RPC or HTTP
 instrumentation creates for the request nest under it; the code after the call stays in your own context.
 
 Failed sends, reverted receipts and receipt timeouts set error status; the original error is always rethrown
 unchanged. Spans record only the error type unless `errorMessages` allows more, because viem error messages
-include the request arguments. Not traced yet: `deployContract`, `sendRawTransaction`, `sendCalls`.
+include the request arguments. Not traced yet: `deployContract`, `sendRawTransaction`.
 
 ## Apply it last
 

@@ -1,4 +1,6 @@
 import type {
+  CallBatchConfirmHandle,
+  CallBatchSendHandle,
   ConfirmHandle,
   PaymentHandle,
   SendHandle,
@@ -19,6 +21,14 @@ const NOOP_USER_OPERATION_CONFIRM: UserOperationConfirmHandle = {
   fail: () => {},
 };
 function noopUserOperationSend(parent: Context): UserOperationSendHandle {
+  return { context: parent, end: () => {}, fail: () => {} };
+}
+const NOOP_CALL_BATCH_CONFIRM: CallBatchConfirmHandle = {
+  end: () => {},
+  timeout: () => {},
+  fail: () => {},
+};
+function noopCallBatchSend(parent: Context): CallBatchSendHandle {
   return { context: parent, end: () => {}, fail: () => {} };
 }
 const NOOP_PAYMENT: PaymentHandle = {
@@ -171,6 +181,43 @@ export function guardTracker(tracker: TxTracker): TxTracker {
           call(handle, 'timeout', 'record user operation confirmation timeout', ...args),
         fail: (...args: unknown[]) =>
           call(handle, 'fail', 'record user operation confirmation failure', ...args),
+      };
+    },
+    // A tracker from a core before 0.9 has no call batch members: it records no call batch spans.
+    startCallBatchSend: (input, parent) => {
+      const caller = parent ?? context.active();
+      const handle = safely(
+        'start call batch send span',
+        () =>
+          typeof tracker.startCallBatchSend === 'function'
+            ? tracker.startCallBatchSend(input, parent)
+            : noopCallBatchSend(caller),
+        noopCallBatchSend(caller),
+      );
+      if (typeof handle !== 'object' || handle === null) return noopCallBatchSend(caller);
+      return {
+        context: sendContextOf(handle, caller),
+        end: (...args: unknown[]) => call(handle, 'end', 'end call batch send span', ...args),
+        fail: (...args: unknown[]) =>
+          call(handle, 'fail', 'record call batch send failure', ...args),
+      };
+    },
+    startCallBatchConfirm: (input, parent) => {
+      const handle = safely(
+        'start call batch confirm span',
+        () =>
+          typeof tracker.startCallBatchConfirm === 'function'
+            ? tracker.startCallBatchConfirm(input, parent)
+            : NOOP_CALL_BATCH_CONFIRM,
+        NOOP_CALL_BATCH_CONFIRM,
+      );
+      if (typeof handle !== 'object' || handle === null) return NOOP_CALL_BATCH_CONFIRM;
+      return {
+        end: (...args: unknown[]) => call(handle, 'end', 'record call batch status', ...args),
+        timeout: (...args: unknown[]) =>
+          call(handle, 'timeout', 'record call batch confirmation timeout', ...args),
+        fail: (...args: unknown[]) =>
+          call(handle, 'fail', 'record call batch confirmation failure', ...args),
       };
     },
   };

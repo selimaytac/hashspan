@@ -262,6 +262,8 @@ describe('robustness', () => {
       startPayment: () => ({ end: boom, fail: boom, timeout: boom, link: boom }),
       startUserOperationSend: () => ({ context: ROOT_CONTEXT, end: boom, fail: boom }),
       startUserOperationConfirm: () => ({ end: boom, timeout: boom, fail: boom }),
+      startCallBatchSend: () => ({ context: ROOT_CONTEXT, end: boom, fail: boom }),
+      startCallBatchConfirm: () => ({ end: boom, timeout: boom, fail: boom }),
     };
   };
 
@@ -288,6 +290,23 @@ describe('robustness', () => {
       transport: mockTransport().transport,
     }).extend(withHashspan({ tracker: throwingHandles() }));
     await expect(wallet.sendTransaction({ to: TO })).resolves.toBe(HASH);
+  });
+
+  it('returns the call batch status when the tracker throws while recording the batch', async () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const hashspan = withHashspan({ tracker: throwingHandles() });
+    const wallet = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: mockTransport().transport,
+      pollingInterval: 10,
+    }).extend(hashspan);
+    await withoutUnhandledRejections(async () => {
+      await expect(wallet.sendCallsSync({ calls: [{ to: TO }] })).resolves.toMatchObject({
+        status: 'success',
+      });
+      await hashspan.flush();
+    });
   });
 
   it('rethrows the original send error when the tracker throws while recording it', async () => {
