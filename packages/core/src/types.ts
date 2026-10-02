@@ -80,8 +80,8 @@ export interface TxTrackerOptions {
    * If it throws or returns something other than an attributes object, the tracker fails closed and records only
    * `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`,
    * `blockchain.tx.status`, `blockchain.tx.replacement.hash`, `blockchain.tx.replacement.reason`,
-   * `blockchain.payment.protocol`, `blockchain.payment.status`, `error.type` and `exception.type`, and logs the
-   * failure via `diag`.
+   * `blockchain.payment.protocol`, `blockchain.payment.status`, `blockchain.payment.verified`, `error.type` and
+   * `exception.type`, and logs the failure via `diag`.
    */
   redact?: ((attributes: Attributes) => Attributes) | undefined;
   /** How long a sent transaction can be linked from its confirmation. Default: 10 minutes. */
@@ -275,6 +275,11 @@ export interface PaymentSettlement {
    * `blockchain.payment.amount` when the input had none.
    */
   amount?: bigint | string | undefined;
+  /**
+   * Whether the settlement transaction's receipt carries this payment, as the adapter checked it from the payer's own
+   * data; recorded as `blockchain.payment.verified`. Leave it unset when no check was possible.
+   */
+  verified?: boolean | undefined;
   /** Why a `failed` settlement failed, recorded as `error.type` if it is a short identifier, else `_OTHER`. */
   errorReason?: string | undefined;
 }

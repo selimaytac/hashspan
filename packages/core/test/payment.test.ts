@@ -106,6 +106,25 @@ describe('payment span', () => {
     expect(span.attributes['blockchain.payment.settled_amount']).toBe('9000');
   });
 
+  it('records whether the settlement transaction carries the payment, as the adapter checked it', () => {
+    const tracker = createTxTracker();
+    tracker.startPayment(payment).end({ status: 'settled', hash: HASH, verified: true });
+    tracker.startPayment(payment).end({ status: 'settled', hash: HASH, verified: false });
+    tracker.startPayment(payment).end({ status: 'settled', hash: HASH });
+    tracker
+      .startPayment(payment)
+      .end({ status: 'settled', hash: HASH, verified: 'yes' as unknown as boolean });
+    const spans = tracing.spans();
+    expect(spans.map((s) => s.attributes['blockchain.payment.verified'])).toEqual([
+      true,
+      false,
+      undefined,
+      undefined,
+    ]);
+    // A verdict is not an error.
+    expect(spans.map((s) => s.status.code)).toEqual(Array(4).fill(SpanStatusCode.UNSET));
+  });
+
   it('records no settled amount when the settlement reports none or a malformed one', () => {
     const tracker = createTxTracker();
     tracker.startPayment(payment).end({ status: 'settled', hash: HASH });
@@ -402,13 +421,14 @@ describe('payment privacy', () => {
       },
     })
       .startPayment(payment)
-      .end({ status: 'settled', hash: HASH });
+      .end({ status: 'settled', hash: HASH, verified: false });
     expect(tracing.spanNamed(PAYMENT_SPAN).attributes).toEqual({
       'blockchain.system': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'payment',
       'blockchain.payment.protocol': 'x402',
       'blockchain.payment.status': 'settled',
+      'blockchain.payment.verified': false,
       'blockchain.tx.hash': HASH,
     });
   });

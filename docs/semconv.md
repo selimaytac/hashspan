@@ -110,6 +110,7 @@ today.
 | `blockchain.payment.asset` | string | payment | raw | contract address of the token paid with, subject to address mode |
 | `blockchain.payment.amount` | string | payment | on | amount in the asset's smallest unit, decimal string; the settlement's amount only when the payer knew none |
 | `blockchain.payment.settled_amount` | string | payment | on | amount the settling party reports it settled, decimal string, e.g. less than the authorized maximum with x402 `upto`; as reported, not checked |
+| `blockchain.payment.verified` | boolean | payment | on | whether the settlement transaction's receipt carries this payment, checked by the adapter from the payer's own data; absent when no check was possible ([ADR 0017](adr/0017-x402-payment-verification.md)) |
 | `blockchain.payment.status` | string | payment | on | `settled` \| `pending` \| `failed` |
 | `x402.scheme` | string | payment | on | x402 payment scheme, e.g. `exact` |
 | `x402.resource` | string | payment | origin | the resource paid for, per the tracker's `paymentResource` mode: `origin` (default) records scheme, host and port only, `path` the URL without query string, fragment or user info, `off` nothing; at most 512 characters, and nothing for text whose user info contains `?` or `#` |
@@ -128,8 +129,8 @@ must stay internal belong in the static `agent` option, which is never propagate
 function) or `off`.
 A redaction hook runs last on every attribute set; if it throws, only `blockchain.system`, `blockchain.chain.id`,
 `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
-`blockchain.tx.replacement.reason`, `blockchain.payment.protocol`, `blockchain.payment.status` and `error.type` are
-recorded.
+`blockchain.tx.replacement.reason`, `blockchain.payment.protocol`, `blockchain.payment.status`,
+`blockchain.payment.verified` and `error.type` are recorded.
 Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md). Neither `hashed` nor
 `off` hides the parties of a transaction: `blockchain.tx.hash` is always recorded and resolves to them on chain.
 The address mode also applies to addresses inside `blockchain.tx.revert.reason`,
