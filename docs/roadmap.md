@@ -38,7 +38,7 @@
 
 Not tied to a version: an item ships with the first release after its pull request is merged.
 
-- [ ] viem transport wrapper: JSON-RPC spans
+- [x] viem transport wrapper: JSON-RPC spans ([ADR 0019](adr/0019-json-rpc-spans.md))
 - [ ] viem `deployContract`, `sendRawTransaction`, `sendCalls`
 - [ ] CDP smart account user operations (ERC-4337)
 - [ ] Metrics: transaction fee and confirmation latency histograms
