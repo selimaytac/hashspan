@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(~/.ssh/**)",
+      "Read(~/.npmrc)",
+      "Read(~/.config/hashspan/**)",
+      "Bash(npm publish *)",
+      "Bash(pnpm publish *)",
+      "Bash(pnpm release *)",
+      "Bash(npm login *)",
+      "Bash(npm adduser *)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push --force-with-lease *)",
+      "Bash(git push * --force *)",
+      "Bash(git push * -f *)",
+      "Bash(git push * --force-with-lease *)"
+    ]
+  }
+}
