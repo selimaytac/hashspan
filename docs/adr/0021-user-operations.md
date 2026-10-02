@@ -60,3 +60,27 @@ What the SDKs give (viem 2.57, `@coinbase/cdp-sdk` 1.57):
   external dev-only process (the common bundlers are copyleft; none is a dependency of a published package), plus a
   mock bundler for failure, revert and timeout paths.
 - The lab validates it on Base Sepolia, where the canonical EntryPoints are deployed and CDP sponsors operations.
+
+## Implementation notes
+
+- **Core API.** `tracker.startUserOperationSend(input)` returns a send handle whose `end({ userOpHash })` registers
+  the link, and `tracker.startUserOperationConfirm({ chainId, userOpHash })` a confirm handle whose `end(receipt)`
+  takes a user operation receipt. Every receipt field is optional, for SDKs that report less, and checked like
+  payment values; `fail(undefined, { errorType })` records an outcome without an error, such as CDP's `failed`.
+  User operations have their own link store and confirm registry, with the same bounds as transactions'.
+- **Attribute names.** The EntryPoint is `blockchain.user_operation.entry_point` and the number of calls
+  `blockchain.user_operation.call_count`. The confirm span also records the receipt's `sender`, `entryPoint` and
+  `nonce` (`blockchain.user_operation.nonce`, a decimal string). Sender, EntryPoint and paymaster follow the
+  address mode.
+- **Metrics.** The attribute that tells operations from transactions is `blockchain.operation.subject`, recorded as
+  `user_operation` on all three histograms (send duration includes the bundler and paymaster requests) and absent on
+  those of transactions. The outcome from chain data is `blockchain.user_operation.success`.
+- **viem.** Background confirmation and `watch()` stay for transactions; a user operation gets a confirm span from
+  `waitForUserOperationReceipt`.
+- **Tests.** The Anvil test does not use the canonical EntryPoint or an external bundler: the common bundlers (Alto
+  is GPL-3.0-or-later) and the EntryPoint package (`@account-abstraction/contracts` depends on
+  `@uniswap/v3-periphery`, GPL-2.0-or-later) fail the license check, which covers dev dependencies too. A stand-in
+  EntryPoint at the v0.7 address, with the v0.7 user operation hash, nonces and events, and an in-process bundler
+  that sends one `handleOps` transaction per operation, run viem's real bundler actions against Anvil, including an
+  operation that reverts inside a successful bundle. Not exercised: signature validation, gas accounting and
+  prefunds of a real EntryPoint, paymaster contracts, and a bundler's simulation.
