@@ -81,7 +81,7 @@ after its method (`_OTHER` for a name that is not a method), following the OpenT
 [JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/rpc/json-rpc.md):
 `rpc.system.name = "jsonrpc"`, `rpc.method`, `jsonrpc.protocol.version`, `server.address` and `server.port`, plus
 `blockchain.chain.id`; on failure, `error.type` and, for a JSON-RPC error, `rpc.response.status_code`. Parameters,
-results, the URL path and error messages are not recorded. Its parent is the active span, such as a `send` span
+results, the URL path and error messages are not recorded; the host is recorded as is. Its parent is the active span, such as a `send` span
 ([ADR 0019](adr/0019-json-rpc-spans.md)).
 
 ## Attributes
@@ -130,7 +130,8 @@ must stay internal belong in the static `agent` option, which is never propagate
 
 The tracker records these histograms through the meter provider (the global one unless `meterProvider` is given),
 so every adapter gets them ([ADR 0020](adr/0020-metrics.md)). Their attributes are low-cardinality only:
-`blockchain.system`, `blockchain.chain.id`, and the outcome; never an address, a hash or the agent identity.
+`blockchain.system`, `blockchain.chain.id`, and the outcome; never an address, a hash or the agent identity. The
+`redact` hook applies to span attributes, not to metrics.
 
 | Metric | Instrument | Unit | Attributes | Recorded when |
 |---|---|---|---|---|

@@ -175,7 +175,8 @@ const wallet = createWalletClient({
 - Spans follow the OpenTelemetry RPC conventions: `rpc.system.name` `jsonrpc`, `rpc.method`,
   `jsonrpc.protocol.version`, and `server.address` and `server.port` from the transport's URL, plus
   `blockchain.chain.id`. No parameters or results are recorded, and of the URL only the host and port, since the
-  path often holds an API key.
+  path often holds an API key. The host is recorded as is; a provider that gives each endpoint its own subdomain is
+  identified by it, so drop `server.address` in a span processor or the collector if that matters.
 - A failed request ends with error status and `error.type`: its JSON-RPC error code (also `rpc.response.status_code`)
   or the error's class name, never the message.
 - `methods` chooses which methods get a span (default: all); the example leaves out receipt polling.

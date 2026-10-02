@@ -90,7 +90,7 @@ until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core
 | `recordFunctionArguments` | `false` | Record `functionArguments` as a JSON array in `blockchain.contract.function.arguments`: bigints as decimal strings, addresses per `address` mode (longer hex values become `<hex>` in `hashed` and `off` mode), at most 4096 characters. Reads only own enumerable data properties: `toJSON()` and getters are never called, so a `Date` records as `{}`; a Proxy's traps still run |
 | `agent` | none | Agent `{ id, name }`; a field set here always wins, unset fields come from the Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` |
 | `agentFromBaggage` | `true` | Read agent identity fields that `agent` leaves unset from Baggage; set to `false` in services that accept requests from outside their trust boundary |
-| `redact` | none | `(attributes) => attributes`, runs last on every attribute set, including exception event attributes; if it throws, only non-sensitive identifiers are kept |
+| `redact` | none | `(attributes) => attributes`, runs last on every span attribute set, including exception event attributes, not on [metrics](#metrics); if it throws, only non-sensitive identifiers are kept |
 | `linkTtlMs` | `600000` | How long a sent transaction can be linked from its confirmation |
 | `maxTrackedTransactions` | `10000` | Upper bound on transactions kept for linking |
 
@@ -124,8 +124,10 @@ agent identity. Definitions:
 - **Inbound Baggage can claim an identity.** A caller can send Baggage entries with any agent id. A field set in the
   `agent` option cannot be overridden that way; to ignore identity from Baggage entirely, set `agentFromBaggage: false`
   ([ADR 0011](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/adr/0011-agent-identity-precedence.md)).
-- The redaction hook (`redact`) runs last on every attribute set and on exception attributes; use it for anything
-  else your policy forbids.
+- The redaction hook (`redact`) runs last on every span attribute set and on exception attributes; use it for
+  anything else your policy forbids. It does not apply to metrics: `blockchain.client.fee` records the fee even when
+  `redact` drops it from spans. To keep it out, drop the histogram with a metrics `View`, or pass a `meterProvider`
+  without it.
 - **Your callbacks' errors go to the diagnostic logger.** If a custom `hash` function or the `redact` hook throws,
   its error object is logged through the OpenTelemetry `diag` logger, outside the address mode and the redaction
   hook. Errors of the instrumented call never are. Do not put sensitive values, such as the address being hashed,
