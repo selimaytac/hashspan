@@ -34,16 +34,50 @@
 
 - [x] x402 adapter (payment signing → facilitator settlement, [ADR 0013](adr/0013-x402-payments.md))
 
-## Next: more send paths
+## v0.5: Settled amounts, status from chain data
 
-Not tied to a version: an item ships with the first release after its pull request is merged.
+- [x] `blockchain.payment.settled_amount`: what an x402 `upto` payment actually charged
+  ([ADR 0013](adr/0013-x402-payments.md))
+- [x] `timeout` no longer recorded as `blockchain.tx.status` ([ADR 0016](adr/0016-timeout-is-an-observer-outcome.md))
 
+## v0.6: Verified x402 payments
+
+- [x] `blockchain.payment.verified` for `exact` EIP-3009 payments, checked against the settlement receipt with a
+  reader ([ADR 0017](adr/0017-x402-payment-verification.md)); viem `watch()` takes `onReceipt`
+
+## v0.7: Metrics, JSON-RPC spans, Permit2
+
+- [x] Send, confirmation and fee histograms from the tracker ([ADR 0020](adr/0020-metrics.md))
 - [x] viem transport wrapper: JSON-RPC spans ([ADR 0019](adr/0019-json-rpc-spans.md))
-- [ ] viem `deployContract`, `sendRawTransaction`
-- [x] viem EIP-5792 `sendCalls` ([ADR 0022](adr/0022-call-batches.md))
+- [x] A limit on background confirmations ([ADR 0018](adr/0018-background-confirmation-limit.md))
+- [x] Payment verification for Permit2 `exact` and `upto`
+  ([ADR 0017 amendment](adr/0017-x402-payment-verification.md#amendment-permit2-and-upto))
+
+## v0.8: Smart accounts
+
 - [x] User operations of smart accounts (ERC-4337): viem bundler clients and CDP smart accounts
   ([ADR 0021](adr/0021-user-operations.md))
-- [x] Metrics: transaction fee and confirmation latency histograms ([ADR 0020](adr/0020-metrics.md))
+- [x] Fees from the sealed receipt, not a flashblocks preconfirmation, in viem and, in 0.8.1, CDP
+  ([ADR 0024](adr/0024-sealed-receipt-fees.md))
+- [x] Permit2 payments verified by their nonce
+  ([ADR 0017 amendment](adr/0017-x402-payment-verification.md#amendment-the-permit2-nonce))
+- [x] viem 0.8.2: revert reasons of transactions that call a contract created in the same block
+  ([ADR 0005 amendment](adr/0005-revert-reason-replay.md#amendment-2026-10-03-a-contract-created-in-the-same-block))
+
+## Unreleased
+
+Merged, and shipped with the next release.
+
+- [x] viem EIP-5792 `sendCalls` ([ADR 0022](adr/0022-call-batches.md))
+
+## Now: 0.9, maturation
+
+Tracked in the [0.9 milestone](https://github.com/selimaytac/hashspan/milestone/1).
+
+- [ ] Every documented integration runs in CI on Anvil
+- [x] Published packages checked on every supported Node.js version (#34)
+- [ ] User operations tested through a real bundler
+- [ ] Mutation testing of fee and receipt matching
 
 ## Toward 1.0: a stable API
 
@@ -54,7 +88,25 @@ Not tied to a version: an item ships with the first release after its pull reque
 - [x] `blockchain.tx.status` from chain data only: `timeout` deprecated, then no longer recorded
   ([ADR 0016](adr/0016-timeout-is-an-observer-outcome.md))
 
-## Later
+Exit criteria:
 
+- [ ] Every public export and `withHashspan` option of the four packages is documented, and the export pins in each
+  package's `test/exports.test.ts` match the docs
+- [ ] No open P0 or P1 issue; the known limits of each adapter are stated in its README
+- [ ] Span and attribute names reviewed once as a whole, for consistent naming across transaction, user operation,
+  payment and call batch spans; renames done through deprecation
+- [ ] Each adapter validated in at least one real integration, with its findings closed
+- [x] The published packages smoke-tested on every supported Node.js version (#34)
+- [ ] A stated policy for what 1.0 freezes (the public API) and what stays `development` (the semantic conventions,
+  under their [change policy](semconv.md#change-policy))
+
+## Candidates
+
+Not scheduled: each needs a user or an integration that asks for it.
+
+- viem `deployContract` and `sendRawTransaction` (#36, #33)
+- EIP-7702 authorizations (#165)
+- x402 resource servers and facilitators (#164; ADR 0023 proposed in #199)
+- ethers v6 adapter
+- Non-EVM chains
 - Upstream proposal for blockchain semantic conventions to OpenTelemetry
-- ethers v6 adapter, non-EVM chains
