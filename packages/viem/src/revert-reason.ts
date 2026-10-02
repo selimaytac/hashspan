@@ -36,8 +36,9 @@ function revertDataOf(error: unknown): Hex | undefined {
 
 /**
  * Replays a mined transaction with `eth_call` on the state of the previous block and returns the decoded revert
- * reason. Best effort: see
- * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0005-revert-reason-replay.md.
+ * reason. If that call does not revert, as when the contract was created earlier in the same block, it is replayed
+ * once more on the state at the end of the transaction's block. Best effort: see
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0005-revert-reason-replay.md.
  */
 export async function fetchRevertReason(
   client: unknown,
@@ -46,18 +47,25 @@ export async function fetchRevertReason(
   abi: Abi | undefined,
 ): Promise<string | undefined> {
   const tx = await getTransaction(client as never, { hash });
-  try {
-    await call(client as never, {
-      account: tx.from,
-      to: tx.to,
-      data: tx.input,
-      value: tx.value,
-      gas: tx.gas,
-      blockNumber: blockNumber > 0n ? blockNumber - 1n : 0n,
-    });
-  } catch (error) {
-    const data = revertDataOf(error);
-    return data ? formatRevertData(data, abi) : undefined;
-  }
-  return undefined;
+  const replayOn = async (
+    block: bigint,
+  ): Promise<{ reverted: boolean; reason?: string | undefined }> => {
+    try {
+      await call(client as never, {
+        account: tx.from,
+        to: tx.to,
+        data: tx.input,
+        value: tx.value,
+        gas: tx.gas,
+        blockNumber: block,
+      });
+      return { reverted: false };
+    } catch (error) {
+      const data = revertDataOf(error);
+      return { reverted: true, reason: data ? formatRevertData(data, abi) : undefined };
+    }
+  };
+  const before = await replayOn(blockNumber > 0n ? blockNumber - 1n : 0n);
+  if (before.reverted) return before.reason;
+  return (await replayOn(blockNumber)).reason;
 }

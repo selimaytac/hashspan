@@ -43,14 +43,14 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    * Replay reverted transactions to record their revert reason (two extra RPC requests per reverted transaction).
    * `{ timeoutMs }` bounds the replay; if the provider has not answered by then, the receipt is recorded without a
    * reason. Default: true, with a 10 000 ms bound. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0005-revert-reason-replay.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0005-revert-reason-replay.md.
    */
   decodeRevertReason?: boolean | { timeoutMs?: number | undefined } | undefined;
   /**
    * Most background confirmations (`confirm: { mode: 'background' }` and `watch()`) polling at once. A transaction
    * sent while that many are polling gets no background confirm span, and a `diag` warning is logged; waits of the
    * caller are not counted and always traced. Default: 256. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0018-background-confirmation-limit.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0018-background-confirmation-limit.md.
    */
   maxBackgroundConfirmations?: number | undefined;
 }
@@ -196,14 +196,14 @@ export interface HashspanExtension {
    * Waits for tracing work still running after traced calls returned (background confirmations, revert reason
    * replays, calls recorded once their chain id is known), so their spans are ended before the OpenTelemetry SDK
    * shuts down. Resolves true when all of it finished, false on timeout; never rejects. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0010-flush-before-shutdown.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
   /**
    * Confirms a transaction sent outside the extended clients (for example by a wallet API) through `client`, in the
    * background: a confirm span with the receipt, revert reason and fees, linked to the send span when the same
    * tracker recorded one. Never throws and never waits; `flush()` awaits it. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0012-cdp-adapter.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0012-cdp-adapter.md.
    */
   watch(client: ViemClientLike, options: WatchOptions): void;
 }
@@ -224,7 +224,7 @@ export interface WatchOptions {
    * Called once when the watch ends: with the receipt of the mined transaction (of a replacing transaction, if one
    * was mined instead), or with `undefined` when no receipt was retrieved (timeout, failure, or nothing watched). Its
    * result and errors are ignored; it never affects the confirm span. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0017-x402-payment-verification.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0017-x402-payment-verification.md.
    */
   onReceipt?: ((receipt: TransactionReceipt | undefined) => void) | undefined;
 }
@@ -296,7 +296,7 @@ interface ViemReceipt {
 /**
  * Whether `receipt` is a preconfirmation: a flashblocks node returns a receipt before its block is sealed, with a zero
  * (or null) block hash, and its `l1Fee` can be that of another transaction. Fees are recorded from the sealed receipt
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0024-sealed-receipt-fees.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0024-sealed-receipt-fees.md).
  */
 function isPreconfirmed(receipt: ViemReceipt): boolean {
   const { blockHash } = receipt;
@@ -652,12 +652,12 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   /**
    * Ends `handle` from the outcome of `wait`; never rejects. The tracker joins handles for one transaction into one
    * confirm span
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0007-confirmation-ownership.md) and
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0007-confirmation-ownership.md) and
    * attributes the receipt of a replacing transaction to that transaction
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0008-replaced-transactions.md). For
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0008-replaced-transactions.md). For
    * reverted receipts, the span ends after the revert reason was fetched with `client`. For a preconfirmed receipt, it
    * ends with the sealed receipt, read with `client` until `deadline` at the latest
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0024-sealed-receipt-fees.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0024-sealed-receipt-fees.md).
    */
   const recordReceipt = async (
     chainId: number,
@@ -742,7 +742,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   /**
    * Records the outcome of `wait` on `waitingHandle`; never rejects. Resolves as soon as the handle has ended,
    * including when a flush that gave up ended it
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0010-flush-before-shutdown.md), so the
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0010-flush-before-shutdown.md), so the
    * tracked work drains.
    */
   const recordConfirmation = (
@@ -893,7 +893,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     /**
      * Asks a client without a chain for its chain id. Concurrent calls share one request; the answer is not cached,
      * since a wallet can switch networks. Callers never await it before the call they trace
-     * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0009-telemetry-off-the-call-path.md).
+     * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0009-telemetry-off-the-call-path.md).
      */
     let pendingChainId: Promise<number> | undefined;
     const queryChainId = (): Promise<number> => {
