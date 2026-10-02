@@ -897,3 +897,102 @@ describe('the sending call', () => {
     expect(tracing.spanNamed('send 8453').attributes['blockchain.tx.hash']).toBe(HASH);
   });
 });
+
+describe('results that cannot be wrapped', () => {
+  const WRAPPED = Symbol.for('hashspan.cdp.wrapped');
+  /** Options whose reads throw; the SDK stand-ins never read them. */
+  const trappedOptions = () =>
+    new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor() {
+          throw new Error('trap');
+        },
+      },
+    );
+
+  it('a frozen account from a factory is returned unchanged', async () => {
+    const cdp = fakeCdp();
+    const frozen = Object.freeze(fakeAccount());
+    cdp.evm.getAccount = async () => frozen;
+    withHashspan(cdp);
+
+    const account = (await cdp.evm.getAccount()) as unknown as TracedAccount;
+    expect(account).toBe(frozen);
+    await expect(account.sendTransaction({ network: 'base' })).resolves.toEqual({
+      transactionHash: HASH,
+    });
+    expect(sends()).toHaveLength(0);
+  });
+
+  it('a frozen account in listAccounts leaves the others traced', async () => {
+    const cdp = fakeCdp();
+    const frozen = Object.freeze(fakeAccount());
+    cdp.evm.listAccounts = async () => ({ accounts: [fakeAccount(), frozen, fakeAccount()] });
+    withHashspan(cdp);
+
+    const { accounts } = (await cdp.evm.listAccounts()) as { accounts: TracedAccount[] };
+    expect(accounts[1]).toBe(frozen);
+    for (const account of accounts) await account.sendTransaction({ network: 'base' });
+    expect(sends()).toHaveLength(2);
+  });
+
+  it('frozen quotes and scoped accounts are returned unchanged', async () => {
+    const cdp = fakeCdp();
+    const quote = Object.freeze(fakeQuote('base'));
+    const scoped = Object.freeze({
+      address: ACCOUNT,
+      network: 'polygon',
+      transfer: async () => ({}),
+    });
+    cdp.evm.createSwapQuote = async () => quote;
+    const account = fakeAccount();
+    account.quoteSwap = async () => quote;
+    account.useNetwork = async () => scoped;
+    cdp.evm.getAccount = async () => account;
+    withHashspan(cdp);
+
+    await expect(cdp.evm.createSwapQuote({ network: 'base' })).resolves.toBe(quote);
+    const traced = (await cdp.evm.getAccount()) as unknown as TracedAccount;
+    await expect(traced.quoteSwap({ network: 'base' })).resolves.toBe(quote);
+    await expect(traced.useNetwork('polygon')).resolves.toBe(scoped);
+  });
+
+  it('an account wrapped part-way is not marked, and wrapping it again traces each call once', async () => {
+    const cdp = fakeCdp();
+    const account = fakeAccount();
+    Object.defineProperty(account, 'swap', { value: account.swap, writable: false });
+    cdp.evm.getAccount = async () => account;
+    withHashspan(cdp);
+
+    const first = (await cdp.evm.getAccount()) as unknown as TracedAccount;
+    expect(WRAPPED in first).toBe(false);
+    const again = (await cdp.evm.getAccount()) as unknown as TracedAccount;
+    await again.sendTransaction({ network: 'base' });
+    expect(sends()).toHaveLength(1);
+  });
+
+  it.each(['sendTransaction', 'transfer', 'swap'] as const)(
+    '%s with options that throw on read calls the SDK once, untraced',
+    async (method) => {
+      const calls: string[] = [];
+      const cdp = fakeCdp(calls);
+      withHashspan(cdp);
+      const account = (await cdp.evm.getAccount()) as unknown as TracedAccount;
+
+      await expect(account[method](trappedOptions())).resolves.toEqual({ transactionHash: HASH });
+      expect(calls).toHaveLength(1);
+      expect(sends()).toHaveLength(0);
+    },
+  );
+
+  it("a scoped account's wait with options that throw on read is passed on", async () => {
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    const account = (await cdp.evm.getAccount()) as unknown as TracedAccount;
+    const scoped = (await account.useNetwork('base')) as unknown as ScopedAccount;
+
+    await expect(scoped.waitForTransactionReceipt(trappedOptions())).resolves.toBe(viemReceipt);
+    expect(tracing.spans().filter((s) => s.name.startsWith('confirm '))).toHaveLength(0);
+  });
+});
