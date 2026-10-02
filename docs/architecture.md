@@ -25,7 +25,7 @@ flowchart LR
 | Component | Purpose | Path |
 |---|---|---|
 | core | Lifecycle tracker: `send`/`confirm` spans, links, one confirm span per transaction, replaced transactions, fees, privacy modes. No network calls: adapters pass it receipts | `packages/core` |
-| viem adapter | Hooks `sendTransaction` / `writeContract` / `waitForTransactionReceipt` via `client.extend()`; background confirmation, `watch()` for transactions sent elsewhere, revert reason decoding by replay, `flush()`; `traceTransport()` records JSON-RPC requests as spans | `packages/viem` |
+| viem adapter | Hooks `sendTransaction` / `writeContract` / `waitForTransactionReceipt`, and `sendUserOperation` / `waitForUserOperationReceipt` of a bundler client, via `client.extend()`; background confirmation, `watch()` for transactions sent elsewhere, revert reason decoding by replay, `flush()`; `traceTransport()` records JSON-RPC requests as spans | `packages/viem` |
 | cdp adapter | Wraps a Coinbase CDP client in place: sends of server accounts become send spans; confirmations through a viem reader and `@hashspan/viem`'s `watch()` | `packages/cdp` |
 | x402 adapter | Registers hooks on an `x402Client`: each payment becomes a `payment` span, as the facilitator, not the agent, sends the settling transaction; confirmations through a viem reader and `@hashspan/viem`'s `watch()` | `packages/x402` |
 | examples | Runnable agent integrations | `examples/` |

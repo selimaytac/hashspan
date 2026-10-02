@@ -6,6 +6,9 @@ import {
   type SendInput,
   type TxTracker,
   type TxTrackerOptions,
+  type UserOperationConfirmHandle,
+  type UserOperationInput,
+  type UserOperationReceiptLike,
 } from '@hashspan/core';
 import { type Context, context, diag, type TimeInput } from '@opentelemetry/api';
 import {
@@ -16,7 +19,7 @@ import {
   WaitForTransactionReceiptTimeoutError,
 } from 'viem';
 import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
-import { fetchRevertReason } from './revert-reason.js';
+import { fetchRevertReason, formatRevertData } from './revert-reason.js';
 import { errorName, guardTracker, noopSend } from './safe-tracker.js';
 
 export { type TraceTransportOptions, traceTransport } from './transport.js';
@@ -154,8 +157,13 @@ class Recent<T> {
   }
 }
 
-/** Actions this adapter traces. */
-export type TracedAction = 'sendTransaction' | 'writeContract' | 'waitForTransactionReceipt';
+/** Actions this adapter traces; the last two are actions of a bundler client (`createBundlerClient`). */
+export type TracedAction =
+  | 'sendTransaction'
+  | 'writeContract'
+  | 'waitForTransactionReceipt'
+  | 'sendUserOperation'
+  | 'waitForUserOperationReceipt';
 
 // biome-ignore lint/suspicious/noExplicitAny: viem action signatures are preserved via Pick<TClient, ...>.
 type AnyAction = (args: any) => Promise<any>;
@@ -283,6 +291,51 @@ function isTimeout(error: unknown): boolean {
   return error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError';
 }
 
+/** viem gives up waiting for a user operation receipt with this error, on its timeout or after `retryCount` polls. */
+function isUserOperationTimeout(error: unknown): boolean {
+  return error instanceof Error && error.name === 'WaitForUserOperationReceiptTimeoutError';
+}
+
+/** What viem's `waitForUserOperationReceipt` returns, as far as the adapter reads it. */
+interface ViemUserOperationReceipt {
+  success?: unknown;
+  actualGasCost?: unknown;
+  actualGasUsed?: unknown;
+  sender?: unknown;
+  nonce?: unknown;
+  paymaster?: unknown;
+  entryPoint?: unknown;
+  reason?: unknown;
+  receipt?: { transactionHash?: unknown; blockNumber?: unknown } | undefined;
+}
+
+const HEX_DATA = /^0x(?:[0-9a-fA-F]{2})*$/;
+
+/**
+ * Normalises viem's user operation receipt. The core checks every value, since they come from the bundler. viem
+ * types `nonce` as a bigint but passes on the bundler's hex string; the core accepts both. `reason` is the revert
+ * data of the operation's call, decoded like a transaction's (without an ABI, a custom error is its selector).
+ */
+function toUserOperationReceiptLike(receipt: ViemUserOperationReceipt): UserOperationReceiptLike {
+  const { reason } = receipt;
+  const bundle = receipt.receipt;
+  return {
+    success: receipt.success as boolean | undefined,
+    actualGasCost: receipt.actualGasCost as bigint | undefined,
+    actualGasUsed: receipt.actualGasUsed as bigint | undefined,
+    sender: receipt.sender as string | undefined,
+    nonce: receipt.nonce as bigint | string | undefined,
+    paymaster: receipt.paymaster as string | undefined,
+    entryPoint: receipt.entryPoint as string | undefined,
+    revertReason:
+      receipt.success === false && typeof reason === 'string' && HEX_DATA.test(reason)
+        ? formatRevertData(reason as `0x${string}`, undefined)
+        : undefined,
+    transactionHash: bundle?.transactionHash as string | undefined,
+    blockNumber: bundle?.blockNumber as bigint | undefined,
+  };
+}
+
 /**
  * viem gives up waiting when a node returns a mined transaction before its receipt: it looks for a replacement,
  * finds the transaction itself in the block and fails to fetch its receipt again. Background confirmation waits
@@ -408,6 +461,16 @@ function toReceiptLike(receipt: ViemReceipt): ReceiptLike {
   };
 }
 
+/** A confirm handle of a transaction or of a user operation. */
+type AnyConfirmHandle = ConfirmHandle | UserOperationConfirmHandle;
+
+/** A started send span, of a transaction or a user operation, as `traceSend` ends it. */
+interface StartedSend {
+  context: Context;
+  end(hash: string, endTime?: Date): void;
+  fail(error: unknown, endTime?: Date): void;
+}
+
 /**
  * viem client extension that traces transactions with `@hashspan/core`:
  * `client.extend(withHashspan())`. Apply it after other extensions such as `publicActions`,
@@ -472,17 +535,17 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     return true;
   };
 
-  interface PendingConfirmation {
+  interface PendingConfirmation<H extends AnyConfirmHandle = ConfirmHandle> {
     /** Ends the wrapped handle at most once; later calls are ignored. */
-    handle: ConfirmHandle;
+    handle: H;
     /** Resolves once the handle has ended, by any path. */
     ended: Promise<void>;
     /** How `flush()` ends the underlying handle if it cannot wait any longer; `timeout` until replaced. */
-    onAbandon(abandon: (handle: ConfirmHandle) => void): void;
+    onAbandon(abandon: (handle: H) => void): void;
   }
 
   /** Wraps `handle` so it ends at most once, and registers it with `flush()` until it has ended. */
-  const settleOnce = (handle: ConfirmHandle): PendingConfirmation => {
+  const settleOnce = <H extends AnyConfirmHandle>(handle: H): PendingConfirmation<H> => {
     let settled = false;
     let resolveEnded: () => void = () => {};
     const ended = new Promise<void>((resolve) => {
@@ -498,7 +561,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         resolveEnded();
       }
     };
-    let onAbandon = (underlying: ConfirmHandle): void => underlying.timeout();
+    let onAbandon = (underlying: H): void => underlying.timeout();
     const abandon = (): void => settle(() => onAbandon(handle));
     waiting.add(abandon);
     return {
@@ -506,7 +569,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         end: (...args: unknown[]) => settle(() => Reflect.apply(handle.end, handle, args)),
         timeout: (...args: unknown[]) => settle(() => Reflect.apply(handle.timeout, handle, args)),
         fail: (...args: unknown[]) => settle(() => Reflect.apply(handle.fail, handle, args)),
-      },
+      } as H,
       ended,
       onAbandon: (abandonWith) => {
         onAbandon = abandonWith;
@@ -802,6 +865,16 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       }
     };
 
+    /** How `traceSend` records one kind of send: a transaction or a user operation. */
+    interface SendTrace {
+      /** The chain id when it is known before the call. Reads the call's arguments, so it may throw. */
+      chainId(): number | undefined;
+      /** Starts the send span, in the active context. */
+      start(chainId: number, startTime?: Date): StartedSend;
+      /** Work after a successful send. */
+      after(chainId: number, hash: string): void;
+    }
+
     /**
      * Records a send whose chain id was unknown when it started, once the chain id is known: same parent context,
      * start and end time as the call. Never rejects.
@@ -811,8 +884,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       startTime: Date,
       chainId: Promise<number>,
       result: Promise<string>,
-      describe: (chainId: number) => SendInput,
-      abi: Abi | undefined,
+      sendTrace: SendTrace,
     ): Promise<void> => {
       let hash: string | undefined;
       let error: unknown;
@@ -825,27 +897,25 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       const id = await chainIdOrGiveUp(chainId, Promise.resolve());
       if (id === undefined) return;
       try {
-        const handle = context.with(ctx, () => tracker.startSend({ ...describe(id), startTime }));
+        const handle = context.with(ctx, () => sendTrace.start(id, startTime));
         if (hash === undefined) {
           handle.fail(error, endTime);
           return;
         }
         handle.end(hash, endTime);
-        afterSend(id, hash, abi);
+        sendTrace.after(id, hash);
       } catch (thrown) {
         diag.error(`hashspan: failed to record send span (${errorName(thrown)})`);
       }
     };
 
     const traceSend = async (
-      args: SendArgs,
-      describe: (chainId: number) => SendInput,
+      sendTrace: SendTrace,
       send: () => Promise<string>,
-      abi?: Abi,
     ): Promise<string> => {
       let chainId: number | undefined;
       try {
-        chainId = knownChainId(args);
+        chainId = sendTrace.chainId();
       } catch (error) {
         untraced(error);
         return send();
@@ -856,12 +926,12 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         const startTime = new Date();
         const chainIdQuery = queryChainId();
         const result = send();
-        track(recordLateSend(ctx, startTime, chainIdQuery, result, describe, abi));
+        track(recordLateSend(ctx, startTime, chainIdQuery, result, sendTrace));
         return result;
       }
-      let handle = noopSend(context.active());
+      let handle: StartedSend = noopSend(context.active());
       try {
-        handle = tracker.startSend(describe(chainId));
+        handle = sendTrace.start(chainId);
       } catch (error) {
         diag.error(`hashspan: failed to start send span (${errorName(error)})`);
       }
@@ -875,9 +945,29 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         throw error;
       }
       handle.end(hash);
-      afterSend(chainId, hash, abi);
+      sendTrace.after(chainId, hash);
       return hash;
     };
+
+    /** Records a transaction sent with `args`, described by `describe`; `abi` decodes its revert reason later. */
+    const transactionSend = (
+      args: SendArgs,
+      describe: (chainId: number) => SendInput,
+      abi?: Abi,
+    ): SendTrace => ({
+      chainId: () => knownChainId(args),
+      start: (chainId, startTime) => {
+        const handle = tracker.startSend(
+          startTime === undefined ? describe(chainId) : { ...describe(chainId), startTime },
+        );
+        return {
+          context: handle.context,
+          end: (hash, endTime) => handle.end(hash, endTime),
+          fail: (error, endTime) => handle.fail(error, endTime),
+        };
+      },
+      after: (chainId, hash) => afterSend(chainId, hash, abi),
+    });
 
     const sendInput = (
       args: SendArgs,
@@ -902,16 +992,21 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     };
 
     const actions: Partial<Record<TracedAction, AnyAction>> = {};
-    const { sendTransaction, writeContract, waitForTransactionReceipt } = client;
+    const {
+      sendTransaction,
+      writeContract,
+      waitForTransactionReceipt,
+      sendUserOperation,
+      waitForUserOperationReceipt,
+    } = client;
 
     if (typeof sendTransaction === 'function') {
       actions.sendTransaction = (args: SendArgs) =>
         traceSend(
-          args,
-          (chainId) => ({
+          transactionSend(args, (chainId) => ({
             ...sendInput(args, own(args, 'to') as string | undefined, chainId),
             functionSelector: selectorOf(own(args, 'data') as string | undefined),
-          }),
+          })),
           () => sendTransaction(args),
         );
     }
@@ -930,29 +1025,31 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
           return writeContract(args);
         }
         return traceSend(
-          args,
-          (chainId) => {
-            let functionSelector: string | undefined;
-            try {
-              const item = getAbiItem({
-                abi,
-                name: functionName,
-                // Overload matching reads the arguments deeply: it gets a copy without accessors.
-                args: dataOnly(functionArguments, MAX_ARGUMENTS_COPY_DEPTH),
-              } as never);
-              functionSelector = item ? toFunctionSelector(item as never) : undefined;
-            } catch {
-              // Unknown or ambiguous ABI item: record the function name only.
-            }
-            return {
-              ...sendInput(args, own(args, 'address') as string | undefined, chainId),
-              functionName,
-              functionSelector,
-              functionArguments,
-            };
-          },
+          transactionSend(
+            args,
+            (chainId) => {
+              let functionSelector: string | undefined;
+              try {
+                const item = getAbiItem({
+                  abi,
+                  name: functionName,
+                  // Overload matching reads the arguments deeply: it gets a copy without accessors.
+                  args: dataOnly(functionArguments, MAX_ARGUMENTS_COPY_DEPTH),
+                } as never);
+                functionSelector = item ? toFunctionSelector(item as never) : undefined;
+              } catch {
+                // Unknown or ambiguous ABI item: record the function name only.
+              }
+              return {
+                ...sendInput(args, own(args, 'address') as string | undefined, chainId),
+                functionName,
+                functionSelector,
+                functionArguments,
+              };
+            },
+            abi,
+          ),
           () => writeContract(args),
-          abi,
         );
       };
     }
@@ -1043,6 +1140,165 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         } else if (late) {
           track(
             recordLateConfirmation(late.ctx, late.startTime, late.chainId, hash, wait, capture),
+          );
+        }
+        return wait;
+      };
+    }
+
+    /**
+     * The chain of a bundler client: its own, else that of the client it was created with (`createBundlerClient`'s
+     * `client`). viem's user operation actions take no `chain` argument.
+     */
+    const userOperationChainId = (): number | undefined => {
+      const id = client.chain?.id ?? (client as { client?: ViemClientLike }).client?.chain?.id;
+      return typeof id === 'number' ? id : undefined;
+    };
+
+    // Of the bundler actions, only these two: viem calls the others from inside them (prepareUserOperation,
+    // getUserOperationReceipt), but nothing calls these two, so no operation is traced twice (docs/adr/0021).
+    if (typeof sendUserOperation === 'function') {
+      actions.sendUserOperation = (args: unknown) =>
+        traceSend(
+          {
+            chainId: userOperationChainId,
+            start: (chainId, startTime) => {
+              const handle = tracker.startUserOperationSend({
+                ...userOperationInput(args, chainId),
+                ...(startTime !== undefined ? { startTime } : {}),
+              });
+              return {
+                context: handle.context,
+                end: (userOpHash, endTime) =>
+                  handle.end({ userOpHash }, endTime !== undefined ? { endTime } : undefined),
+                fail: (error, endTime) =>
+                  handle.fail(error, endTime !== undefined ? { endTime } : undefined),
+              };
+            },
+            after: () => {},
+          },
+          () => sendUserOperation(args),
+        );
+    }
+
+    /** What the send span of `sendUserOperation(args)` records, read from own data properties only. */
+    const userOperationInput = (args: unknown, chainId: number): UserOperationInput => {
+      const account = own(args, 'account') ?? client.account;
+      const entryPoint =
+        own(args, 'entryPointAddress') ?? own(own(account, 'entryPoint'), 'address');
+      const calls = own(args, 'calls');
+      const callCount = Array.isArray(calls) ? own(calls, 'length') : undefined;
+      // Without an account, the arguments are a complete user operation with its `sender`.
+      const sender = addressOf(account) ?? own(args, 'sender');
+      return {
+        chainId,
+        sender: typeof sender === 'string' ? sender : undefined,
+        entryPoint: typeof entryPoint === 'string' ? entryPoint : undefined,
+        callCount: typeof callCount === 'number' ? callCount : undefined,
+      };
+    };
+
+    if (typeof waitForUserOperationReceipt === 'function') {
+      /**
+       * Ends `waitingHandle` from the outcome of `wait`; never rejects. Resolves as soon as the handle has ended,
+       * including when a flush that gave up ended it.
+       */
+      const recordUserOperationReceipt = (
+        waitingHandle: UserOperationConfirmHandle,
+        wait: Promise<ViemUserOperationReceipt>,
+        endTimeOf: () => TimeInput | undefined = () => undefined,
+      ): Promise<void> => {
+        const confirmation = settleOnce(waitingHandle);
+        const { handle } = confirmation;
+        const options = () => {
+          const endTime = endTimeOf();
+          return endTime !== undefined ? { endTime } : undefined;
+        };
+        const record = async (): Promise<void> => {
+          let receipt: ViemUserOperationReceipt;
+          try {
+            receipt = await wait;
+          } catch (error) {
+            if (isUserOperationTimeout(error)) handle.timeout(options());
+            else handle.fail(error, options());
+            return;
+          }
+          try {
+            handle.end(toUserOperationReceiptLike(receipt), options());
+          } catch (error) {
+            diag.error(`hashspan: failed to record user operation receipt (${errorName(error)})`);
+            handle.fail(error, options());
+          }
+        };
+        return Promise.race([record(), confirmation.ended]);
+      };
+
+      /** Records a wait whose chain id was unknown when it started, once it is known. Never rejects. */
+      const recordLateUserOperationReceipt = async (
+        ctx: Context,
+        startTime: Date,
+        chainId: Promise<number>,
+        userOpHash: string,
+        wait: Promise<ViemUserOperationReceipt>,
+      ): Promise<void> => {
+        let endTime: Date | undefined;
+        const settled = wait.then(
+          () => {
+            endTime = new Date();
+          },
+          () => {
+            endTime = new Date();
+          },
+        );
+        const id = await chainIdOrGiveUp(chainId, settled);
+        if (id === undefined) return;
+        try {
+          const handle = context.with(ctx, () =>
+            tracker.startUserOperationConfirm({ chainId: id, userOpHash, startTime }),
+          );
+          await recordUserOperationReceipt(handle, wait, () => endTime ?? new Date());
+        } catch (error) {
+          diag.error(`hashspan: failed to record confirm span (${errorName(error)})`);
+        }
+      };
+
+      actions.waitForUserOperationReceipt = (args: unknown) => {
+        let userOpHash: unknown;
+        let chainId: number | undefined;
+        try {
+          userOpHash = own(args, 'hash');
+          chainId = userOperationChainId();
+        } catch (error) {
+          untraced(error);
+          return waitForUserOperationReceipt(args);
+        }
+        if (typeof userOpHash !== 'string') return waitForUserOperationReceipt(args);
+        let handle: UserOperationConfirmHandle | undefined;
+        if (chainId !== undefined) {
+          try {
+            handle = tracker.startUserOperationConfirm({ chainId, userOpHash });
+          } catch (error) {
+            diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
+          }
+        }
+        const late =
+          chainId === undefined
+            ? { ctx: context.active(), startTime: new Date(), chainId: queryChainId() }
+            : undefined;
+        // Called synchronously, as without hashspan; a synchronous throw becomes a rejection the handle records.
+        const wait = (async () =>
+          waitForUserOperationReceipt(args))() as Promise<ViemUserOperationReceipt>;
+        if (handle) {
+          track(recordUserOperationReceipt(handle, wait));
+        } else if (late) {
+          track(
+            recordLateUserOperationReceipt(
+              late.ctx,
+              late.startTime,
+              late.chainId,
+              userOpHash,
+              wait,
+            ),
           );
         }
         return wait;

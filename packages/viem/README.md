@@ -156,6 +156,41 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
   [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.7.0/docs/adr/0018-background-confirmation-limit.md).
 - In serverless runtimes that freeze after the response, background confirmations may not complete.
 
+## Smart accounts (ERC-4337)
+
+A smart account sends user operations, not transactions: a bundler includes them in a bundle transaction that the
+bundler sends. On a bundler client from viem's `createBundlerClient`, `withHashspan()` traces `sendUserOperation`
+and `waitForUserOperationReceipt` as `send` and `confirm` spans identified by the user operation hash:
+
+```ts
+import { createPublicClient, http } from 'viem';
+import { createBundlerClient } from 'viem/account-abstraction';
+import { baseSepolia } from 'viem/chains';
+import { withHashspan } from '@hashspan/viem';
+
+const client = createPublicClient({ chain: baseSepolia, transport: http() });
+const bundler = createBundlerClient({ account, client, transport: http(bundlerUrl) }).extend(
+  withHashspan(),
+);
+
+const hash = await bundler.sendUserOperation({ calls: [{ to, value }] }); // send span
+await bundler.waitForUserOperationReceipt({ hash }); // confirm span, linked to the send span
+```
+
+- The send span covers preparing, signing and handing the operation to the bundler, with the bundler and paymaster
+  requests nested under it. It records the smart account, EntryPoint, number of calls and user operation hash, and
+  no `blockchain.tx.*` attribute.
+- The confirm span records the operation's success, gas used and cost (`actualGasCost`), nonce (a decimal string)
+  and paymaster, and the bundle transaction's hash and block. An operation whose calls reverted ends with
+  `error.type` `reverted` and its decoded revert reason, even though the bundle transaction succeeded. The bundle
+  transaction's status and fee are not recorded: they cover every operation in the bundle. The fee histogram records
+  the operation's cost
+  ([ADR 0021](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.7.0/docs/adr/0021-user-operations.md)).
+- The chain id is the bundler client's, which `createBundlerClient` takes from its `client`; without one, the spans
+  are recorded once the bundler answered `eth_chainId`, as for [clients without a chain](#clients-without-a-chain).
+- Only these two bundler actions are traced; viem calls the others from inside them. Background confirmation and
+  `watch()` cover transactions only: a user operation gets a confirm span when you wait for its receipt.
+
 ## JSON-RPC requests
 
 `traceTransport()` wraps a viem transport so that each request it sends becomes a client span named after its
@@ -191,8 +226,10 @@ const wallet = createWalletClient({
 | `sendTransaction` | `send` | chain id, from, to, value, nonce (when the call passes one), function selector, hash |
 | `writeContract` | `send` | as above, plus the function name, and the call arguments with `recordFunctionArguments: true` |
 | `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack), total fee |
+| `sendUserOperation` | `send` | chain id, smart account, EntryPoint, number of calls, user operation hash; see [Smart accounts](#smart-accounts-erc-4337) |
+| `waitForUserOperationReceipt` | `confirm` | success, gas used, cost, nonce, paymaster, revert reason, bundle transaction hash and block |
 
-While `sendTransaction` or `writeContract` runs, its send span is the active span, so spans that your RPC or HTTP
+While `sendTransaction`, `writeContract` or `sendUserOperation` runs, its send span is the active span, so spans that your RPC or HTTP
 instrumentation creates for the request nest under it; the code after the call stays in your own context.
 
 Failed sends, reverted receipts and receipt timeouts set error status; the original error is always rethrown
