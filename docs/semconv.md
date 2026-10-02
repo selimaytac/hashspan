@@ -115,7 +115,7 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.payment.asset` | string | payment | raw | contract address of the token paid with, subject to address mode |
 | `blockchain.payment.amount` | string | payment | on | amount in the asset's smallest unit, decimal string; the settlement's amount only when the payer knew none |
 | `blockchain.payment.settled_amount` | string | payment | on | amount the settling party reports it settled, decimal string, e.g. less than the authorized maximum with x402 `upto`; as reported, not checked |
-| `blockchain.payment.verified` | boolean | payment | on | whether the settlement transaction's receipt carries this payment, checked by the adapter from the payer's own data; absent when no check was possible ([ADR 0017](adr/0017-x402-payment-verification.md)) |
+| `blockchain.payment.verified` | boolean | payment | on | whether the settlement transaction carries this payment (its receipt and, for Permit2, its input), checked by the adapter from the payer's own data; absent when no check was possible ([ADR 0017](adr/0017-x402-payment-verification.md)) |
 | `blockchain.payment.status` | string | payment | on | `settled` \| `pending` \| `failed` |
 | `x402.scheme` | string | payment | on | x402 payment scheme, e.g. `exact` |
 | `x402.resource` | string | payment | origin | the resource paid for, per the tracker's `paymentResource` mode: `origin` (default) records scheme, host and port only, `path` the URL without query string, fragment or user info, `off` nothing; at most 512 characters, and nothing for text whose user info contains `?` or `#` |
