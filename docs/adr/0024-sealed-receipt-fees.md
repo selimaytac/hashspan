@@ -1,6 +1,6 @@
 # 0024. Fees from the sealed receipt, not a preconfirmation
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-02
 
 ## Context
