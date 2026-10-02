@@ -1,5 +1,30 @@
 # @hashspan/viem
 
+## 0.8.0
+
+### Minor Changes
+
+- [#178](https://github.com/selimaytac/hashspan/pull/178) [`c8bc60e`](https://github.com/selimaytac/hashspan/commit/c8bc60e4984e16bfd86671ae825e7f19a83f6329) Thanks [@selimaytac](https://github.com/selimaytac)! - Smart accounts (ADR 0021): on a bundler client from `createBundlerClient`, `withHashspan()` also traces
+  `sendUserOperation` as a `send` span, with the send span active while it runs, and `waitForUserOperationReceipt` as
+  a `confirm` span linked to it, with the operation's success, gas used, cost, nonce, paymaster and decoded revert
+  reason, and the bundle transaction's hash and block. A reverted operation ends with `error.type` `reverted`, and a
+  wait that gives up as `timeout`. The chain id comes from the bundler client, or the client it was created with, and
+  is otherwise resolved after the call. Requires `@hashspan/core` with user operations; with an older tracker,
+  nothing is recorded for them.
+
+### Patch Changes
+
+- [#183](https://github.com/selimaytac/hashspan/pull/183) [`8446f17`](https://github.com/selimaytac/hashspan/commit/8446f17465b63d1660932b6edc1f9426fb6c4efa) Thanks [@selimaytac](https://github.com/selimaytac)! - Confirm spans record fees from the sealed receipt (ADR 0024). On flashblocks RPCs such as Base's, a receipt returned
+  before its block is sealed (zero block hash) can carry the L1 fee of another transaction; the span now waits, off the
+  caller's path and for at most 30 s, for the sealed receipt, and records the preconfirmation without
+  `effective_gas_price`, `l1_fee` and `fee` if it does not come. The caller's receipt is unchanged.
+
+- [#175](https://github.com/selimaytac/hashspan/pull/175) [`09628e2`](https://github.com/selimaytac/hashspan/commit/09628e2c64131d5df3deee0c58e69c4859f4df3a) Thanks [@selimaytac](https://github.com/selimaytac)! - `traceTransport()` reads a request's `method` only from an own data property, as the other traced actions read
+  their arguments: a request whose `method` is an accessor, or whose properties cannot be read, is sent untraced, and
+  no getter of the caller's runs an extra time.
+- Updated dependencies [[`1ba39b9`](https://github.com/selimaytac/hashspan/commit/1ba39b9d18ef63bb4d79ea691f9080cb1d8a8dc5), [`c8bc60e`](https://github.com/selimaytac/hashspan/commit/c8bc60e4984e16bfd86671ae825e7f19a83f6329)]:
+  - @hashspan/core@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes

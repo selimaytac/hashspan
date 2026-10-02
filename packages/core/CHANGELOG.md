@@ -1,5 +1,26 @@
 # @hashspan/core
 
+## 0.8.0
+
+### Minor Changes
+
+- [#178](https://github.com/selimaytac/hashspan/pull/178) [`c8bc60e`](https://github.com/selimaytac/hashspan/commit/c8bc60e4984e16bfd86671ae825e7f19a83f6329) Thanks [@selimaytac](https://github.com/selimaytac)! - User operations of ERC-4337 smart accounts (ADR 0021): `tracker.startUserOperationSend()` records handing an
+  operation to a bundler as a `send {chainId}` span with `blockchain.user_operation.hash`, `.sender`, `.entry_point`
+  and `.call_count`, and `tracker.startUserOperationConfirm()` joins its `confirm {chainId}` span, keyed by chain and
+  user operation hash apart from transactions, with `blockchain.user_operation.success`, `.gas.used`, `.gas.cost`,
+  `.nonce` and `.paymaster`, and the bundle transaction's `blockchain.tx.hash` and `blockchain.block.number`. A reverted
+  operation ends with `error.type` `reverted`; no `blockchain.tx.status` or bundle fee is recorded. The send,
+  confirmation and fee histograms record user operations with `blockchain.operation.subject` `user_operation`, and
+  the fee histogram records the operation's own cost. When the redaction hook fails, the user operation hash and
+  success flag are kept.
+
+### Patch Changes
+
+- [#177](https://github.com/selimaytac/hashspan/pull/177) [`1ba39b9`](https://github.com/selimaytac/hashspan/commit/1ba39b9d18ef63bb4d79ea691f9080cb1d8a8dc5) Thanks [@selimaytac](https://github.com/selimaytac)! - The send and confirmation histograms keep `error.type` only when it is an error class name of letters or a
+  lower-case code (such as `timeout` or an adapter's error code); any other value, such as a custom error name with an
+  identifier or an address in it, is recorded as `_OTHER`, so metric labels stay low-cardinality and free of
+  addresses. Spans keep their own `error.type`.
+
 ## 0.7.0
 
 ### Minor Changes

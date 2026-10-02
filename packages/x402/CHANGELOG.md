@@ -1,5 +1,22 @@
 # @hashspan/x402
 
+## 0.8.0
+
+### Minor Changes
+
+- [#157](https://github.com/selimaytac/hashspan/pull/157) [`7485f5f`](https://github.com/selimaytac/hashspan/commit/7485f5fd118e7b1f75c72f89807d6c19830a88e2) Thanks [@selimaytac](https://github.com/selimaytac)! - A Permit2 settlement is now verified by its nonce (ADR 0017): with a reader, when the receipt carries an `exact`
+  Permit2 or `upto` payment, the mined transaction (the replacement, when the reported one was replaced) is read with
+  one more request through the reader, and `blockchain.payment.verified` is `true` only when its input passes the
+  payer's Permit2 nonce and the payer as owner to the proxy. The transaction of an earlier payment is therefore `false`
+  in any client or process, also after a restart; the in-memory list of the last 1000 verified transactions is removed.
+  A transaction that cannot be read gives no verdict.
+
+### Patch Changes
+
+- Updated dependencies [[`1ba39b9`](https://github.com/selimaytac/hashspan/commit/1ba39b9d18ef63bb4d79ea691f9080cb1d8a8dc5), [`8446f17`](https://github.com/selimaytac/hashspan/commit/8446f17465b63d1660932b6edc1f9426fb6c4efa), [`c8bc60e`](https://github.com/selimaytac/hashspan/commit/c8bc60e4984e16bfd86671ae825e7f19a83f6329), [`c8bc60e`](https://github.com/selimaytac/hashspan/commit/c8bc60e4984e16bfd86671ae825e7f19a83f6329), [`09628e2`](https://github.com/selimaytac/hashspan/commit/09628e2c64131d5df3deee0c58e69c4859f4df3a)]:
+  - @hashspan/core@0.8.0
+  - @hashspan/viem@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes

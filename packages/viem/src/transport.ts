@@ -77,7 +77,7 @@ function endWith(span: Span, error: unknown): void {
  * the OpenTelemetry RPC conventions describe. Used with `withHashspan()`, the requests a transaction makes nest under
  * its `send` span. Records no parameters or results, and of the transport's URL only the host and port. Tracing never
  * changes a request, its result or its error. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.7.0/docs/adr/0019-json-rpc-spans.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.0/docs/adr/0019-json-rpc-spans.md.
  */
 export function traceTransport<TTransport extends Transport>(
   transport: TTransport,

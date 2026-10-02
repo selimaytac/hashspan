@@ -1,2 +1,2 @@
 // Kept in sync with package.json by scripts/sync-version.mjs (run on `changeset version`).
-export const VERSION: string = '0.7.0';
+export const VERSION: string = '0.8.0';
