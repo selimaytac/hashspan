@@ -1,8 +1,9 @@
-// An in-process stand-in for an ERC-4337 bundler, for the user operation tests on Anvil. The common bundlers are
-// GPL or LGPL licensed, which the repository's license check rejects even for dev dependencies (docs/adr/0021,
-// Implementation notes). It answers the bundler methods viem's `sendUserOperation` and
-// `waitForUserOperationReceipt` use, puts each operation into its own bundle transaction (`handleOps` on the
-// EntryPoint, sent from a bundler account) and builds receipts from that transaction's logs, as a bundler does.
+// An in-process stand-in for an ERC-4337 bundler, for the user operation tests on Anvil that need no real EntryPoint.
+// It answers the bundler methods viem's `sendUserOperation` and `waitForUserOperationReceipt` use, puts each operation
+// into its own bundle transaction (`handleOps` on the EntryPoint, sent from a bundler account) and builds receipts
+// from that transaction's logs, as a bundler does. real-bundler.int.test.ts checks the same paths through Alto, a real
+// bundler installed outside the workspace (docs/adr/0021, Implementation notes); the receipts here are shaped like
+// Alto's.
 import {
   type Address,
   custom,
@@ -88,10 +89,11 @@ export function testBundler(reader: PublicClient, executor: WalletClient): TestB
     if (operation?.eventName !== 'UserOperationEvent') return null;
     const revert = events.find((event) => event.eventName === 'UserOperationRevertReason');
     const { args } = operation;
-    // Shaped like Alto's answer: the nonce as a hex string, no paymaster when none paid.
+    // Shaped like Alto's answer (real-bundler.int.test.ts): the nonce as a hex string, the EntryPoint lower-cased, no
+    // paymaster when none paid.
     return {
       userOpHash,
-      entryPoint: entryPoint07Address,
+      entryPoint: entryPoint07Address.toLowerCase(),
       sender: args.sender,
       nonce: toHex(args.nonce),
       actualGasCost: toHex(args.actualGasCost),

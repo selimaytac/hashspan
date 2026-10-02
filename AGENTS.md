@@ -10,7 +10,7 @@ OpenTelemetry tracing for on-chain transactions sent by AI agents: every transac
 - Node version: see `.nvmrc` (`nvm use`); package manager: pnpm via corepack (`corepack enable pnpm`)
 - Install deps: `pnpm install`
 - Build: `pnpm build`
-- Test (unit / integration): `pnpm test` / `pnpm test:integration` (needs Anvil: `make tools`)
+- Test (unit / integration): `pnpm test` / `pnpm test:integration` (needs Anvil and Alto: `make tools`)
   - Tests import workspace packages from source (`vitest.config.ts` alias), so no build is needed first
 - Third-party integration tests: `pnpm --dir integrations install`, then `pnpm test:integrations` (typecheck and
   tests, needs Anvil)
@@ -42,7 +42,9 @@ Run lint, typecheck and tests before proposing a change.
   - `src/revert-reason.ts` replays reverted transactions and decodes the revert data (ADR 0005)
   - `test/mock-transport.ts` EIP-1193 mock for unit tests (`test/mock-bundler.ts` for bundler clients);
     `test/*.int.test.ts` run against Anvil via prool; user operations go through `test/test-bundler.ts`, an
-    in-process bundler, to a stand-in EntryPoint (`test/entry-point/`, compiled into `test-entry-point.ts`)
+    in-process bundler, to a stand-in EntryPoint (`test/entry-point/`, compiled into `test-entry-point.ts`);
+    `test/real-bundler.int.test.ts` sends them through Alto, a real bundler, to the canonical EntryPoint v0.7, both
+    installed outside the workspace by `scripts/install-bundler.sh` (GPL, pinned by `scripts/bundler/package-lock.json`)
 - `packages/cdp` → capture adapter for the Coinbase CDP SDK (ADR 0012)
   - `src/index.ts` `withHashspan(cdp, { reader })` wraps `cdp.evm` and the accounts its factories return, in place;
     confirmations go through `@hashspan/viem`'s `watch()`; `src/networks.ts` maps CDP network names to chain ids;

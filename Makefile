@@ -5,13 +5,16 @@ COMPOSE := docker compose -f docker/compose.yaml
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-18s %s\n", $$1, $$2}'
 
-tools: ## Install pinned Anvil into ./.tools/bin (project-local)
+tools: ## Install pinned Anvil and the ERC-4337 bundler Alto into ./.tools (project-local, for integration tests)
 	./scripts/install-anvil.sh
+	./scripts/install-bundler.sh
 
-anvil: tools ## Run a local chain on 127.0.0.1:8545 (foreground)
+anvil: ## Run a local chain on 127.0.0.1:8545 (foreground)
+	@./scripts/install-anvil.sh
 	./.tools/bin/anvil --host 127.0.0.1 --chain-id 31337
 
-demo: tools ## Run the example agent against a fresh local chain; traces go to Jaeger (make lab-up)
+demo: ## Run the example agent against a fresh local chain; traces go to Jaeger (make lab-up)
+	@./scripts/install-anvil.sh
 	@./scripts/demo.sh
 
 demo-base-sepolia: ## Run the example agent on Base Sepolia (needs BASE_SEPOLIA_PRIVATE_KEY, see the example README)
