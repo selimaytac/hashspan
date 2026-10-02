@@ -19,6 +19,8 @@ import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem
 import { fetchRevertReason } from './revert-reason.js';
 import { errorName, guardTracker, noopSend } from './safe-tracker.js';
 
+export { type TraceTransportOptions, traceTransport } from './transport.js';
+
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
    * Tracker from `createTxTracker()` to report to, to share one between adapters. Defaults to one tracker per
