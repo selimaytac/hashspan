@@ -51,6 +51,21 @@ describe('sendCalls', () => {
     expect(send?.attributes).not.toHaveProperty('blockchain.tx.hash');
   });
 
+  it('records a duplicate id (EIP-5792 error 5720) as a failed send, and rethrows it', async () => {
+    const { client } = wallet({ sendCalls: { error: { code: 5720, message: 'Duplicate ID' } } });
+    await expect(client.sendCalls({ calls, id: BATCH_ID })).rejects.toThrow();
+    expect(sends()[0]?.status.code).toBe(SpanStatusCode.ERROR);
+  });
+
+  it('records no batch id when the wallet returns one that is not hex', async () => {
+    const { client, hashspan } = wallet({ sendCalls: { id: 'batch-1' } });
+    await client.sendCalls({ calls });
+    await client.waitForCallsStatus({ id: 'batch-1' });
+    await hashspan.flush();
+    expect(sends()[0]?.attributes).not.toHaveProperty('blockchain.call_batch.id');
+    expect(confirms()).toHaveLength(0);
+  });
+
   it('records the failure and rethrows it when the wallet rejects the batch', async () => {
     const { client } = wallet({ sendCalls: { error: { code: 4001, message: 'rejected' } } });
     await expect(client.sendCalls({ calls })).rejects.toThrow();
@@ -74,6 +89,7 @@ describe('waitForCallsStatus', () => {
     expect(confirm?.status.code).toBe(SpanStatusCode.UNSET);
     expect(confirm?.attributes).toMatchObject({
       'blockchain.call_batch.id': BATCH_ID,
+      'blockchain.call_batch.status': 'success',
       'blockchain.call_batch.status_code': 200,
       'blockchain.call_batch.atomic': true,
       'blockchain.call_batch.transaction_hashes': [HASH],
@@ -96,15 +112,55 @@ describe('waitForCallsStatus', () => {
     expect(confirms()[0]?.attributes['error.type']).toBe(errorType);
   });
 
+  it.each([
+    ['a legacy CONFIRMED', { status: 'CONFIRMED' }, 'success', undefined],
+    ['an unknown string', { status: 'DONE' }, undefined, '_OTHER'],
+    ['a code EIP-5792 does not define', { status: 300 }, undefined, '_OTHER'],
+  ])('maps %s status', async (_, answer, status, errorType) => {
+    const { client, hashspan } = wallet({ callsStatus: () => answer });
+    await client.waitForCallsStatus({ id: BATCH_ID, status: () => true });
+    await hashspan.flush();
+
+    expect(confirms()[0]?.attributes['blockchain.call_batch.status']).toBe(status);
+    expect(confirms()[0]?.attributes['error.type']).toBe(errorType);
+  });
+
+  it('records a status without atomic, receipts or chain id', async () => {
+    const { client, hashspan } = wallet({
+      callsStatus: () => ({ atomic: undefined, receipts: undefined, chainId: undefined }),
+    });
+    await client.waitForCallsStatus({ id: BATCH_ID });
+    await hashspan.flush();
+
+    expect(confirms()[0]?.attributes).toMatchObject({
+      'blockchain.call_batch.status': 'success',
+      'blockchain.call_batch.atomic': false,
+    });
+    expect(confirms()[0]?.attributes).not.toHaveProperty(
+      'blockchain.call_batch.transaction_hashes',
+    );
+  });
+
+  it('shares one confirm span between concurrent waits for a batch', async () => {
+    const { client, hashspan } = wallet();
+    await Promise.all([
+      client.waitForCallsStatus({ id: BATCH_ID }),
+      client.waitForCallsStatus({ id: BATCH_ID, status: () => true }),
+    ]);
+    await hashspan.flush();
+    expect(confirms()).toHaveLength(1);
+  });
+
   it('records the status a BundleFailedError carries, and passes the error on unchanged', async () => {
     const { client, hashspan } = wallet({ callsStatus: () => ({ status: 500 }) });
     await expect(
-      client.waitForCallsStatus({ id: BATCH_ID, throwOnFailure: true }),
+      client.waitForCallsStatus({ id: BATCH_ID, throwOnFailure: true, retryCount: 0 }),
     ).rejects.toMatchObject({ name: 'BundleFailedError' });
     await hashspan.flush();
 
     expect(confirms()[0]?.attributes).toMatchObject({
       'error.type': 'reverted',
+      'blockchain.call_batch.status': 'reverted',
       'blockchain.call_batch.status_code': 500,
     });
   });
@@ -196,11 +252,10 @@ describe('sendCallsSync', () => {
 });
 
 describe("viem's fallback to eth_sendTransaction", () => {
-  it('records the batch and confirms its transactions in the background, linked to the batch', async () => {
-    const { client, hashspan } = wallet(
-      { sendCalls: { error: { code: -32601, message: 'Method not found' } } },
-      withHashspan({ confirm: { mode: 'background' } }),
-    );
+  it('records the batch and confirms its transactions, linked to the batch, without background confirmation', async () => {
+    const { client, hashspan } = wallet({
+      sendCalls: { error: { code: -32601, message: 'Method not found' } },
+    });
     const { id } = await client.sendCalls({ calls, experimental_fallback: true });
     await hashspan.flush();
 
@@ -217,14 +272,11 @@ describe("viem's fallback to eth_sendTransaction", () => {
 
 describe("viem's fallback with a call that fails to send", () => {
   it('records the batch and confirms only the transaction that was sent', async () => {
-    const { client, hashspan } = wallet(
-      {
-        sendCalls: { error: { code: -32601, message: 'Method not found' } },
-        sendError: { code: -32000, message: 'insufficient funds' },
-        sendErrorOnCall: 2,
-      },
-      withHashspan({ confirm: { mode: 'background' } }),
-    );
+    const { client, hashspan } = wallet({
+      sendCalls: { error: { code: -32601, message: 'Method not found' } },
+      sendError: { code: -32000, message: 'insufficient funds' },
+      sendErrorOnCall: 2,
+    });
     const { id } = await client.sendCalls({ calls, experimental_fallback: true });
     await hashspan.flush();
 

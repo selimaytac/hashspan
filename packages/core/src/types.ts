@@ -451,7 +451,10 @@ export interface CallBatchInput {
 
 /** What handing a call batch to a wallet produced. */
 export interface CallBatchResult {
-  /** The batch id the wallet returned: an opaque string that identifies the batch with the chain id. */
+  /**
+   * The batch id the wallet returned, which identifies the batch with the chain id: `0x`-prefixed hex of at most 8194
+   * characters. Any other id is not recorded.
+   */
   id: string;
   /**
    * Hashes of transactions the account itself sent for the batch, when the adapter knows them (viem's fallback to
@@ -492,13 +495,18 @@ export interface CallBatchConfirmInput {
  */
 export interface CallBatchStatusLike {
   /**
-   * The EIP-5792 status code. 2xx ends the confirm span successfully; 4xx (failed without inclusion), 5xx (reverted)
-   * and 6xx (partially reverted) with an error status; 1xx (still pending), another code or none without an outcome.
+   * The EIP-5792 status code, recorded as `blockchain.call_batch.status_code`. 200 ends the confirm span as
+   * `success`, 500 as `reverted` and 600 as `partially_reverted` (`blockchain.call_batch.status`); 400 (failed without
+   * inclusion) with `error.type` `failed`; 100 (still pending) without an outcome; any other code, or none, with
+   * `error.type` `_OTHER`.
    */
   statusCode?: number | undefined;
   /** Whether the wallet ran the calls atomically. */
   atomic?: boolean | undefined;
-  /** Receipts of the transactions that carried the batch; only their hashes and block numbers are recorded. */
+  /**
+   * Receipts of the transactions that carried the batch; only their hashes (validated, de-duplicated, at most 64) and
+   * the last block number are recorded.
+   */
   receipts?:
     | readonly {
         transactionHash?: string | undefined;

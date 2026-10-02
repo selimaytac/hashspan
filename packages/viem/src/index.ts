@@ -1449,11 +1449,23 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
                   handle.fail(error, endTime !== undefined ? { endTime } : undefined),
               };
             },
-            // The transactions of viem's fallback are the account's own: confirmed as transactions (ADR 0022).
+            // The transactions of viem's fallback are the account's own: always confirmed as transactions, as
+            // watch() does, so their fees are recorded with the sealed receipt (ADR 0022, ADR 0024).
             after: (chainId, result) => {
               const id = callBatchIdOf(result);
               for (const hash of (id && fallbackTransactionHashes(id)) || []) {
-                afterSend(chainId, hash, undefined);
+                try {
+                  confirmThrough(
+                    client,
+                    chainId,
+                    hash,
+                    confirm?.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS,
+                  );
+                } catch (error) {
+                  diag.error(
+                    `hashspan: failed to confirm a fallback transaction (${errorName(error)})`,
+                  );
+                }
               }
             },
           },

@@ -52,11 +52,12 @@ not apply: a bundler that resubmits a bundle keeps the operation's hash.
 **Call batches.** A batch of calls handed to a wallet with EIP-5792 `wallet_sendCalls` is identified by its chain and
 the batch id the wallet returned (`blockchain.call_batch.id`), and gets the same `send` and `confirm` spans
 ([ADR 0022](adr/0022-call-batches.md)). The send span covers handing the batch to the wallet, until the id is
-returned. The confirm span ends with the status a wait returned: its EIP-5792 status code, whether the batch ran
-atomically, and the hashes of the transactions that carried it; it has no `blockchain.tx.status`, gas or fee, since a
-wallet may report a bundle transaction shared with others. Confirmations of batches are kept apart from those of
+returned. The confirm span ends with the status a wait returned: its outcome (`blockchain.call_batch.status`) and
+EIP-5792 status code, whether the batch ran atomically, and the hashes of the transactions that carried it; it has no
+`blockchain.tx.status`, gas or fee, since wallet receipts lack the L1 fee and may be a bundle transaction shared with
+others. A wait that resolves while the batch is pending ends without an outcome, and a later wait gets its own span. Confirmations of batches are kept apart from those of
 transactions and user operations. Transactions an account sends itself for a batch (viem's fallback to
-`eth_sendTransaction`) are linked to the batch's send span and traced as transactions.
+`eth_sendTransaction`) are linked to the batch's send span and confirmed as transactions, with their fees.
 
 **One confirm span per transaction and tracker.** Concurrent waits for the same transaction share one confirm span;
 its parent is determined by the first wait. A receipt from any wait ends it; a timeout or failure ends it only when
@@ -79,11 +80,12 @@ no span; after a timeout or failure, a retry gets a new span. The same holds for
 | User operation receipt with success | confirm | unset | none | none; `blockchain.user_operation.success` is `true` |
 | User operation receipt without success (its calls reverted) | confirm | error | `reverted` | none; `blockchain.user_operation.success` is `false` |
 | User operation failed without a receipt (e.g. an SDK reports `failed`) | confirm | error | the adapter's error type, else error class name, else `_OTHER` | none |
-| Call batch status 2xx (confirmed) | confirm | unset | none | none; `blockchain.call_batch.status_code` is the code |
-| Call batch status 4xx (failed without inclusion) | confirm | error | `failed` | none |
-| Call batch status 5xx (reverted) | confirm | error | `reverted` | none |
-| Call batch status 6xx (partially reverted) | confirm | error | `partially_reverted` | none |
-| Call batch status 1xx (a wait that accepted a pending status), or a status without a known code | confirm | unset | none | none; no confirmation metric is recorded |
+| Call batch status 200 (confirmed) | confirm | unset | none | none; `blockchain.call_batch.status` is `success` |
+| Call batch status 500 (reverted) | confirm | error | `reverted` | none; `blockchain.call_batch.status` is `reverted` |
+| Call batch status 600 (partially reverted) | confirm | error | `partially_reverted` | none; `blockchain.call_batch.status` is `partially_reverted` |
+| Call batch status 400 (failed without inclusion) | confirm | error | `failed` | none |
+| Call batch status with any other code, or none | confirm | error | `_OTHER` | none; `blockchain.call_batch.status_code` keeps an integer code |
+| Call batch status 100 (a wait that accepted a pending status) | confirm | unset | none | none; no metric sample is recorded |
 | Payment settled | payment | unset | none | none; `blockchain.payment.status` is `settled` |
 | Payment settlement pending: transaction known, receipt not seen | payment | unset | none | none; `blockchain.payment.status` is `pending` |
 | Payment settlement failed | payment | error | the settling party's reason if it is a short identifier (see below), else `_OTHER` | none; `blockchain.payment.status` is `failed` |
@@ -147,12 +149,13 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.user_operation.gas.used` | int | confirm | on | gas the operation used (`actualGasUsed`) |
 | `blockchain.user_operation.gas.cost` | string | confirm | on | what the operation paid (`actualGasCost`), wei, decimal string; its share of the bundle, not the bundle transaction's fee |
 | `blockchain.user_operation.paymaster` | string | confirm | raw | address of the paymaster that paid for the operation, subject to address mode; absent when none paid |
-| `blockchain.call_batch.id` | string | send, confirm | on | the batch id the wallet returned for EIP-5792 `wallet_sendCalls`, truncated after 256 characters; with the chain id, it identifies the batch |
+| `blockchain.call_batch.id` | string | send, confirm | on | the batch id the wallet returned for EIP-5792 `wallet_sendCalls` (`0x`-prefixed hex, at most 8194 characters), truncated after 256 characters; with the chain id, it identifies the batch |
 | `blockchain.call_batch.sender` | string | send | raw | address of the account the calls are sent from, subject to address mode |
 | `blockchain.call_batch.call_count` | int | send | on | number of calls in the batch |
-| `blockchain.call_batch.status_code` | int | confirm | on | the EIP-5792 status code the wallet reported, e.g. `200` confirmed, `500` reverted |
+| `blockchain.call_batch.status` | string | confirm | on | the batch's outcome from chain data: `success` \| `reverted` \| `partially_reverted`; absent for other outcomes, which `error.type` describes |
+| `blockchain.call_batch.status_code` | int | confirm | on | the EIP-5792 status code the wallet reported, e.g. `200` confirmed, `500` reverted; spans only, never a metric attribute |
 | `blockchain.call_batch.atomic` | boolean | confirm | on | whether the wallet ran the calls atomically |
-| `blockchain.call_batch.transaction_hashes` | string[] | confirm | on | hashes of the transactions whose receipts the wallet reported for the batch |
+| `blockchain.call_batch.transaction_hashes` | string[] | confirm | on | hashes of the transactions whose receipts the wallet reported for the batch, de-duplicated, at most 64 |
 | `blockchain.operation.subject` | string | none (metrics only) | on | on [metrics](#metrics) of user operations: `user_operation`; of call batches: `call_batch`; absent on those of transactions |
 | `blockchain.payment.protocol` | string | payment | on | `x402` |
 | `blockchain.payment.payer` | string | payment | raw | address that pays, subject to address mode |
@@ -180,7 +183,8 @@ so every adapter gets them ([ADR 0020](adr/0020-metrics.md)). Their attributes a
 of user operations also carry `blockchain.operation.subject` `user_operation`, and their outcome from chain data is
 `blockchain.user_operation.success` instead of `blockchain.tx.status`
 ([ADR 0021](adr/0021-user-operations.md)). Samples of call batches carry `blockchain.operation.subject` `call_batch`,
-their outcome is `error.type` from the status code, and they record no fee ([ADR 0022](adr/0022-call-batches.md)).
+their outcome from chain data is `blockchain.call_batch.status`, else `error.type`; raw status codes are never
+recorded on metrics, and batches record no fee ([ADR 0022](adr/0022-call-batches.md)).
 
 | Metric | Instrument | Unit | Attributes | Recorded when |
 |---|---|---|---|---|
@@ -205,7 +209,7 @@ A redaction hook runs last on every attribute set of the tracker's spans, not on
 throws, only `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
 `blockchain.tx.replacement.reason`, `blockchain.payment.protocol`, `blockchain.payment.status`,
 `blockchain.payment.verified`, `blockchain.user_operation.hash`, `blockchain.user_operation.success`,
-`blockchain.call_batch.id`, `blockchain.call_batch.status_code` and `error.type` are recorded.
+`blockchain.call_batch.id`, `blockchain.call_batch.status` and `error.type` are recorded.
 Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md). Neither `hashed` nor
 `off` hides the parties of a transaction: `blockchain.tx.hash` is always recorded and resolves to them on chain, as
 `blockchain.user_operation.hash` does for a user operation.

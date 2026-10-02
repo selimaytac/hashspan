@@ -17,7 +17,7 @@ import {
 import { setupTracing, type TestTracing } from './helpers.js';
 
 const CHAIN_ID = 8453;
-const BATCH_ID = '0xBatch-Id-1';
+const BATCH_ID = '0xB47C4';
 const TX_A = `0x${'a1'.repeat(32)}`;
 const TX_B = `0x${'b2'.repeat(32)}`;
 const ZERO_HASH = `0x${'00'.repeat(32)}`;
@@ -65,10 +65,12 @@ describe('call batch send span', () => {
     });
   });
 
-  it('records no batch id and no key for an id that is not a bounded string', () => {
+  it('records no batch id for an id that is not hex of at most 8194 characters', () => {
     const tracker = createTxTracker();
     tracker.startCallBatchSend({ chainId: CHAIN_ID }).end({ id: 42 as never });
-    tracker.startCallBatchSend({ chainId: CHAIN_ID }).end({ id: 'x'.repeat(4097) });
+    tracker.startCallBatchSend({ chainId: CHAIN_ID }).end({ id: 'batch-1' });
+    tracker.startCallBatchSend({ chainId: CHAIN_ID }).end({ id: '0x' });
+    tracker.startCallBatchSend({ chainId: CHAIN_ID }).end({ id: `0x${'a'.repeat(8193)}` });
     for (const span of tracing.spans()) {
       expect(span.attributes).not.toHaveProperty('blockchain.call_batch.id');
     }
@@ -76,7 +78,7 @@ describe('call batch send span', () => {
 
   it('truncates a long batch id in the attribute and keys the batch by the whole id', () => {
     const tracker = createTxTracker();
-    const id = `0x${'ab'.repeat(200)}`;
+    const id = `0x${'ab'.repeat(4096)}`;
     tracker.startCallBatchSend({ chainId: CHAIN_ID }).end({ id });
     tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id }).end({ statusCode: 200 });
     expect(tracing.spanNamed(send).attributes['blockchain.call_batch.id']).toBe(id.slice(0, 256));
@@ -93,15 +95,17 @@ describe('call batch send span', () => {
 });
 
 describe('call batch confirm span', () => {
-  it('links to the send span and records the status code, atomicity, transaction hashes and last block', () => {
+  it('links to the send span and records the outcome, status code, atomicity, transaction hashes and last block', () => {
     const tracker = createTxTracker();
     tracker.startCallBatchSend({ chainId: CHAIN_ID }).end({ id: BATCH_ID });
     tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID }).end({
       statusCode: 200,
       atomic: true,
+      // Safe repeats one receipt per call: each transaction is recorded once.
       receipts: [
         { transactionHash: TX_A, blockNumber: 41n },
         { transactionHash: TX_B, blockNumber: 42 },
+        { transactionHash: TX_A.toUpperCase().replace('0X', '0x'), blockNumber: 41n },
         { transactionHash: 'not a hash' },
       ],
     });
@@ -112,6 +116,7 @@ describe('call batch confirm span', () => {
     expect(span.attributes).toMatchObject({
       'blockchain.operation.name': 'confirm',
       'blockchain.call_batch.id': BATCH_ID,
+      'blockchain.call_batch.status': 'success',
       'blockchain.call_batch.status_code': 200,
       'blockchain.call_batch.atomic': true,
       'blockchain.call_batch.transaction_hashes': [TX_A, TX_B],
@@ -124,51 +129,87 @@ describe('call batch confirm span', () => {
   });
 
   it.each([
-    [400, 'failed'],
-    [422, 'failed'],
-    [500, 'reverted'],
-    [600, 'partially_reverted'],
-  ])('ends a status %i with error.type %s', (statusCode, errorType) => {
+    [500, 'reverted', 'reverted'],
+    [600, 'partially_reverted', 'partially_reverted'],
+    [400, undefined, 'failed'],
+  ])('ends a status %i with status %s and error.type %s', (statusCode, status, errorType) => {
     const tracker = createTxTracker();
     tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID }).end({ statusCode });
     const span = tracing.spanNamed(confirm);
     expect(span.status.code).toBe(SpanStatusCode.ERROR);
     expect(span.attributes['error.type']).toBe(errorType);
+    expect(span.attributes['blockchain.call_batch.status']).toBe(status);
     expect(span.attributes['blockchain.call_batch.status_code']).toBe(statusCode);
   });
 
   it.each([
     ['without a code', {}],
-    ['with a 3xx code', { statusCode: 300 }],
-    ['with an unknown code', { statusCode: 999 }],
-  ])('ends a status %s without an outcome', (_, status) => {
+    ['with a code EIP-5792 does not define', { statusCode: 300 }],
+    ['with a 7xx code', { statusCode: 700 }],
+    ['with another 2xx code', { statusCode: 201 }],
+    ['with a non-integer code', { statusCode: 200.5 }],
+    ['with a string', { statusCode: 'FAILED' as never }],
+  ])('ends a status %s with error.type _OTHER', (_, status) => {
     const tracker = createTxTracker();
     tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID }).end(status);
     const span = tracing.spanNamed(confirm);
-    expect(span.status.code).toBe(SpanStatusCode.UNSET);
-    expect(span.attributes).not.toHaveProperty('error.type');
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.attributes['error.type']).toBe('_OTHER');
+    expect(span.attributes).not.toHaveProperty('blockchain.call_batch.status');
   });
 
-  it('ends a pending status without an outcome', () => {
+  it('ends a pending status without an outcome, and releases the batch for a later wait', () => {
     const tracker = createTxTracker();
     tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID }).end({ statusCode: 100 });
     const span = tracing.spanNamed(confirm);
     expect(span.status.code).toBe(SpanStatusCode.UNSET);
     expect(span.attributes).not.toHaveProperty('error.type');
+    expect(span.attributes).not.toHaveProperty('blockchain.call_batch.status');
     expect(span.attributes['blockchain.call_batch.status_code']).toBe(100);
+
+    tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID }).end({ statusCode: 200 });
+    expect(confirms()).toHaveLength(2);
+    // A settled batch adds no span for a later wait.
+    tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID }).end({ statusCode: 200 });
+    expect(confirms()).toHaveLength(2);
   });
 
-  it('shares one span between waits, ends as timeout only with the last one, and keeps ids case-sensitive', () => {
+  it('shares one span between waits, ends as timeout only with the last one, and compares ids as hex', () => {
     const tracker = createTxTracker();
     const first = tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID });
-    const second = tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID });
-    const other = tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID.toLowerCase() });
+    const second = tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID.toLowerCase() });
     first.timeout();
     expect(confirms()).toHaveLength(0);
     second.timeout();
-    other.end({ statusCode: 200 });
-    expect(confirms()).toHaveLength(2);
-    expect(confirms().map((s) => s.attributes['error.type'])).toContain('timeout');
+    expect(confirms()).toHaveLength(1);
+    expect(confirms()[0]?.attributes['error.type']).toBe('timeout');
+  });
+
+  it('records at most 64 transaction hashes', () => {
+    const tracker = createTxTracker();
+    const receipts = Array.from({ length: 70 }, (_, i) => ({
+      transactionHash: `0x${i.toString(16).padStart(64, '0')}`,
+    }));
+    tracker
+      .startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID })
+      .end({ statusCode: 200, receipts });
+    expect(
+      tracing.spanNamed(confirm).attributes['blockchain.call_batch.transaction_hashes'],
+    ).toHaveLength(64);
+  });
+
+  it('hands the transaction hashes to the redaction hook as an array', () => {
+    const seen: unknown[] = [];
+    const tracker = createTxTracker({
+      redact: (attributes) => {
+        seen.push(attributes['blockchain.call_batch.transaction_hashes']);
+        return attributes;
+      },
+    });
+    tracker
+      .startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID })
+      .end({ statusCode: 200, receipts: [{ transactionHash: TX_A }] });
+    expect(seen).toContainEqual([TX_A]);
   });
 
   it('ends with an error when the status could not be retrieved', () => {
@@ -243,31 +284,36 @@ describe('call batch metrics', () => {
     'blockchain.operation.subject': 'call_batch',
   };
 
-  it('records durations told apart from transactions, the outcome as error.type, and no fee', () => {
+  it('records durations told apart from transactions, the outcome without raw codes, and no fee', () => {
     const meters = recordingMeterProvider();
     const tracker = createTxTracker({ meterProvider: meters.provider });
     tracker
       .startCallBatchSend({ chainId: CHAIN_ID, startTime: new Date(1_000) })
       .end({ id: BATCH_ID }, { endTime: new Date(2_000) });
     tracker
-      .startCallBatchConfirm({ chainId: CHAIN_ID, id: 'a', startTime: new Date(2_000) })
+      .startCallBatchConfirm({ chainId: CHAIN_ID, id: '0xa', startTime: new Date(2_000) })
       .end({ statusCode: 200 }, { endTime: new Date(5_000) });
     tracker
-      .startCallBatchConfirm({ chainId: CHAIN_ID, id: 'b', startTime: new Date(2_000) })
+      .startCallBatchConfirm({ chainId: CHAIN_ID, id: '0xb', startTime: new Date(2_000) })
       .end({ statusCode: 600 }, { endTime: new Date(3_000) });
     tracker
-      .startCallBatchConfirm({ chainId: CHAIN_ID, id: 'c', startTime: new Date(2_000) })
+      .startCallBatchConfirm({ chainId: CHAIN_ID, id: '0xc', startTime: new Date(2_000) })
       .end({ statusCode: 100 }, { endTime: new Date(3_000) });
     tracker
-      .startCallBatchConfirm({ chainId: CHAIN_ID, id: 'd', startTime: new Date(2_000) })
+      .startCallBatchConfirm({ chainId: CHAIN_ID, id: '0xd', startTime: new Date(2_000) })
       .end({}, { endTime: new Date(3_000) });
+    tracker
+      .startCallBatchConfirm({ chainId: CHAIN_ID, id: '0xe', startTime: new Date(2_000) })
+      .end({ statusCode: 400 }, { endTime: new Date(3_000) });
 
     expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION)).toEqual([
       { value: 1, attributes: base },
     ]);
     expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)).toEqual([
-      { value: 3, attributes: base },
-      { value: 1, attributes: { ...base, 'error.type': 'partially_reverted' } },
+      { value: 3, attributes: { ...base, 'blockchain.call_batch.status': 'success' } },
+      { value: 1, attributes: { ...base, 'blockchain.call_batch.status': 'partially_reverted' } },
+      { value: 1, attributes: { ...base, 'error.type': '_OTHER' } },
+      { value: 1, attributes: { ...base, 'error.type': 'failed' } },
     ]);
     expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)).toEqual([]);
   });
@@ -282,7 +328,7 @@ describe('call batch safety', () => {
       tracker.startCallBatchConfirm(null as never).end({ statusCode: 200 });
       tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID }).end(null as never);
       tracker
-        .startCallBatchConfirm({ chainId: CHAIN_ID, id: 'z' })
+        .startCallBatchConfirm({ chainId: CHAIN_ID, id: '0xf' })
         .end({ receipts: [null, 5] as never, statusCode: '200' as never });
     }).not.toThrow();
   });

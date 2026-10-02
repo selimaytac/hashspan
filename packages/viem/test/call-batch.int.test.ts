@@ -58,7 +58,7 @@ function standInWallet() {
           method: 'eth_sendTransaction',
           params: [{ from, to: calls[0]?.to, value: calls[0]?.value }],
         } as never)) as Hex;
-        const id = `batch-${batches.size + 1}`;
+        const id = `0x${(batches.size + 1).toString(16).padStart(64, '0')}`;
         batches.set(id, hash);
         return { id };
       }
@@ -84,7 +84,8 @@ function standInWallet() {
 
 describe('call batches on Anvil', () => {
   it("traces viem's fallback as a batch whose transactions are confirmed as transactions", async () => {
-    const hashspan = withHashspan({ confirm: { mode: 'background' } });
+    // Without background confirmation: the fallback's transactions are confirmed anyway.
+    const hashspan = withHashspan();
     const wallet = createWalletClient({
       account: LOCAL_ACCOUNT,
       chain: anvil,
@@ -109,6 +110,7 @@ describe('call batches on Anvil', () => {
 
     const batch = confirms().find((s) => s.attributes['blockchain.call_batch.id'] !== undefined);
     expect(batch?.attributes).toMatchObject({
+      'blockchain.call_batch.status': 'success',
       'blockchain.call_batch.status_code': 200,
       'blockchain.call_batch.transaction_hashes': hashes,
     });

@@ -18,6 +18,7 @@ import {
   ATTR_BLOCKCHAIN_CALL_BATCH_CALL_COUNT,
   ATTR_BLOCKCHAIN_CALL_BATCH_ID,
   ATTR_BLOCKCHAIN_CALL_BATCH_SENDER,
+  ATTR_BLOCKCHAIN_CALL_BATCH_STATUS,
   ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE,
   ATTR_BLOCKCHAIN_CALL_BATCH_TRANSACTION_HASHES,
   ATTR_BLOCKCHAIN_CHAIN_ID,
@@ -60,6 +61,9 @@ import {
   ATTR_ERROR_TYPE,
   ATTR_X402_RESOURCE,
   ATTR_X402_SCHEME,
+  BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_PARTIALLY_REVERTED,
+  BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_REVERTED,
+  BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_SUCCESS,
   BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
   BLOCKCHAIN_OPERATION_NAME_VALUE_PAYMENT,
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
@@ -143,7 +147,7 @@ const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
   ATTR_BLOCKCHAIN_USER_OPERATION_HASH,
   ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS,
   ATTR_BLOCKCHAIN_CALL_BATCH_ID,
-  ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE,
+  ATTR_BLOCKCHAIN_CALL_BATCH_STATUS,
   ATTR_ERROR_TYPE,
   ATTR_EXCEPTION_TYPE,
 ]);
@@ -159,14 +163,16 @@ const MAX_UINT256 = 2n ** 256n - 1n;
 const MAX_SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
 /** `error.type` of a wait that gave up: a confirmation or a payment whose outcome was never learned. */
 const OBSERVER_TIMEOUT = 'timeout';
-/** `error.type` of a call batch that failed without being included (EIP-5792 status 4xx). */
+/** `error.type` of a call batch that failed without being included (EIP-5792 status 400). */
 const CALL_BATCH_FAILED = 'failed';
-/** `error.type` of a call batch whose calls partly reverted (EIP-5792 status 6xx). */
-const CALL_BATCH_PARTIALLY_REVERTED = 'partially_reverted';
-/** Longest call batch id tracked: wallets return opaque ids, viem's fallback ids grow with the number of calls. */
-const MAX_CALL_BATCH_ID_LENGTH = 4096;
+/** A call batch id: `0x`-prefixed hex of at most 8194 characters, the bound EIP-5792 sets. */
+const CALL_BATCH_ID = /^0x[0-9a-fA-F]{1,8192}$/;
 /** Longest call batch id recorded as an attribute. */
 const MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH = 256;
+/** Most transaction hashes recorded for one call batch. */
+const MAX_CALL_BATCH_TRANSACTION_HASHES = 64;
+/** EIP-5792 status code of a batch that is still pending. */
+const CALL_BATCH_PENDING = 100;
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
@@ -413,9 +419,14 @@ interface CallBatchConfirmSpan extends SharedConfirm {
   fail(error: unknown, options: HandleOptions): void;
 }
 
-/** A call batch id the tracker keys and records: an opaque wallet string of bounded length. */
+/** A call batch id the tracker keys and records. */
 function isCallBatchId(id: unknown): id is string {
-  return typeof id === 'string' && id.length > 0 && id.length <= MAX_CALL_BATCH_ID_LENGTH;
+  return typeof id === 'string' && CALL_BATCH_ID.test(id);
+}
+
+/** Whether `status` says the batch is still pending: its wait resolved before an outcome. */
+function isPendingCallBatch(status: CallBatchStatusLike | null | undefined): boolean {
+  return status?.statusCode === CALL_BATCH_PENDING;
 }
 
 /** One handle's claim on a shared confirm span (ADR 0007). */
@@ -508,16 +519,14 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
     maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
   });
-  // Call batches have a third key space (docs/adr/0022-call-batches.md); their ids are opaque, so case matters.
+  // Call batches have a third key space (docs/adr/0022-call-batches.md), with the same bounds.
   const callBatchLinks = new LinkStore({
     ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
     maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
-    caseSensitive: true,
   });
   const callBatchConfirmations = new ConfirmRegistry<CallBatchConfirmSpan>({
     ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
     maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
-    caseSensitive: true,
   });
   const txMetrics = createTxMetrics(options.meterProvider, INSTRUMENTATION_NAME, VERSION);
   /** Attributes of a metric: low-cardinality only, never an address, hash or agent identity. */
@@ -1345,10 +1354,20 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     const receipts: unknown = status.receipts;
     if (Array.isArray(receipts)) {
       const hashes: string[] = [];
+      const seen = new Set<string>();
       let block: number | undefined;
       for (const receipt of receipts) {
         const hash: unknown = receipt?.transactionHash;
-        if (typeof hash === 'string' && TX_HASH.test(hash)) hashes.push(hash);
+        // Some wallets repeat one receipt per call: each transaction is recorded once, up to a bound.
+        if (
+          typeof hash === 'string' &&
+          TX_HASH.test(hash) &&
+          !seen.has(hash.toLowerCase()) &&
+          hashes.length < MAX_CALL_BATCH_TRANSACTION_HASHES
+        ) {
+          seen.add(hash.toLowerCase());
+          hashes.push(hash);
+        }
         const number = smallQuantity(receipt?.blockNumber);
         if (number !== undefined && (block === undefined || number > block)) block = number;
       }
@@ -1358,13 +1377,29 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     return attributes;
   };
 
-  /** The `error.type` of an EIP-5792 status code; undefined for success, pending or an unknown code. */
-  const callBatchErrorType = (code: unknown): string | undefined => {
-    if (typeof code !== 'number') return undefined;
-    if (code >= 400 && code < 500) return CALL_BATCH_FAILED;
-    if (code >= 500 && code < 600) return BLOCKCHAIN_TX_STATUS_VALUE_REVERTED;
-    if (code >= 600 && code < 700) return CALL_BATCH_PARTIALLY_REVERTED;
-    return undefined;
+  /**
+   * The outcome of an EIP-5792 status code (ADR 0022): `blockchain.call_batch.status` for outcomes from chain data,
+   * `error.type` for the rest; a code the spec does not define, or none, is `_OTHER`.
+   */
+  const callBatchOutcome = (code: unknown): { status?: string; errorType?: string } => {
+    switch (code) {
+      case 200:
+        return { status: BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_SUCCESS };
+      case 400:
+        return { errorType: CALL_BATCH_FAILED };
+      case 500:
+        return {
+          status: BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_REVERTED,
+          errorType: BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_REVERTED,
+        };
+      case 600:
+        return {
+          status: BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_PARTIALLY_REVERTED,
+          errorType: BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_PARTIALLY_REVERTED,
+        };
+      default:
+        return { errorType: ERROR_TYPE_VALUE_OTHER };
+    }
   };
 
   /** Opens the confirm span of a call batch. */
@@ -1404,17 +1439,24 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
           'record call batch status',
           () => {
             const attributes = callBatchStatusAttributes(status ?? {});
+            // A wait that resolved while the batch is pending has no outcome yet: no metric sample (ADR 0022).
+            if (isPendingCallBatch(status)) {
+              span.setAttributes(redact(attributes));
+              return;
+            }
+            const outcome = callBatchOutcome(status?.statusCode);
+            if (outcome.status !== undefined) {
+              attributes[ATTR_BLOCKCHAIN_CALL_BATCH_STATUS] = outcome.status;
+            }
             span.setAttributes(redact(attributes));
-            const code = attributes[ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE];
-            const failure = callBatchErrorType(code);
-            const confirmed = typeof code === 'number' && code >= 200 && code < 300;
-            // Pending, or a code that tells no outcome (missing or unknown): nothing to record as one (ADR 0022).
-            if (failure === undefined && !confirmed) return;
-            if (failure !== undefined) markError(span, failure);
-            // Batches record no fee: a wallet's receipt can be a bundle shared with others (ADR 0022).
+            if (outcome.errorType !== undefined) markError(span, outcome.errorType);
+            // The outcome from chain data is the batch status; raw codes never become metric attributes. Batches
+            // record no fee: wallet receipts lack the L1 fee and can be a bundle shared with others (ADR 0022).
             recordConfirmation(
               endTime,
-              failure === undefined ? {} : { [ATTR_ERROR_TYPE]: failure },
+              outcome.status !== undefined
+                ? { [ATTR_BLOCKCHAIN_CALL_BATCH_STATUS]: outcome.status }
+                : { [ATTR_ERROR_TYPE]: outcome.errorType },
             );
           },
           endTime,
@@ -1461,7 +1503,9 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       end: (status, second) => {
         const { endTime } = handleOptions(second);
         if (!claim.receive()) return;
-        callBatchConfirmations.settle(chainId, id, shared);
+        // A pending result releases the key, so that a later wait gets its own span (ADR 0007).
+        if (isPendingCallBatch(status)) callBatchConfirmations.release(chainId, id, shared);
+        else callBatchConfirmations.settle(chainId, id, shared);
         shared.status(status, endTime);
       },
       timeout: (second) => {

@@ -213,13 +213,14 @@ await wallet.waitForCallsStatus({ id }); // confirm span, linked to the send spa
 ```
 
 - The send span covers handing the batch to the wallet, and records the account, number of calls and batch id.
-- The confirm span records the EIP-5792 status code, whether the batch ran atomically, the hashes of the
-  transactions that carried it, and the last block. A status 4xx ends with `error.type` `failed`, 5xx with
-  `reverted`, 6xx with `partially_reverted`; a wait that accepts a pending status ends without an outcome. No fee is
-  recorded: a wallet can report a bundle transaction shared with others.
+- The confirm span records the outcome (`blockchain.call_batch.status`: `success` for 200, `reverted` for 500,
+  `partially_reverted` for 600), the status code, whether the batch ran atomically, the hashes of the transactions
+  that carried it, and the last block. A status 400 ends with `error.type` `failed`, any other code with `_OTHER`; a
+  wait that accepts a pending status ends without an outcome. No fee is recorded: wallet receipts lack the L1 fee and
+  can be a bundle transaction shared with others. Batch ids must be `0x`-prefixed hex; others are not recorded.
 - With `experimental_fallback`, viem sends the calls as plain transactions when the wallet lacks `wallet_sendCalls`.
-  They are traced as transactions linked to the batch's send span: background confirmation, when enabled, records
-  each one's receipt and fee.
+  Each is confirmed as a transaction linked to the batch's send span, as `watch()` does, so its receipt and fee are
+  recorded whether or not background confirmation is on.
 - `sendCallsSync` records one send span and one confirm span: viem's own `sendCallsSync` runs with the traced
   `sendCalls` and `waitForCallsStatus`, so an extension applied before this one that replaces `sendCallsSync` itself
   is not called ([apply it last](#apply-it-last)). `getCallsStatus` is not traced: polling it yourself records

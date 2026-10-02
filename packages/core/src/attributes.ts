@@ -80,7 +80,9 @@ export const ATTR_BLOCKCHAIN_USER_OPERATION_PAYMASTER =
 export const ATTR_BLOCKCHAIN_CALL_BATCH_ID = 'blockchain.call_batch.id' as const;
 export const ATTR_BLOCKCHAIN_CALL_BATCH_SENDER = 'blockchain.call_batch.sender' as const;
 export const ATTR_BLOCKCHAIN_CALL_BATCH_CALL_COUNT = 'blockchain.call_batch.call_count' as const;
-/** The EIP-5792 status code of the batch, e.g. 200 confirmed or 500 reverted. */
+/** The outcome of a batch from chain data: `success`, `reverted` or `partially_reverted`. */
+export const ATTR_BLOCKCHAIN_CALL_BATCH_STATUS = 'blockchain.call_batch.status' as const;
+/** The EIP-5792 status code of the batch as the wallet reported it, e.g. 200 confirmed or 500 reverted; spans only. */
 export const ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE = 'blockchain.call_batch.status_code' as const;
 export const ATTR_BLOCKCHAIN_CALL_BATCH_ATOMIC = 'blockchain.call_batch.atomic' as const;
 /** Hashes of the transactions whose receipts the wallet reported for the batch. */
@@ -95,6 +97,11 @@ export const ATTR_BLOCKCHAIN_OPERATION_SUBJECT = 'blockchain.operation.subject' 
 /** Values for {@link ATTR_BLOCKCHAIN_OPERATION_SUBJECT}. */
 export const BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION = 'user_operation' as const;
 export const BLOCKCHAIN_OPERATION_SUBJECT_VALUE_CALL_BATCH = 'call_batch' as const;
+
+/** Values for {@link ATTR_BLOCKCHAIN_CALL_BATCH_STATUS}. */
+export const BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_SUCCESS = 'success' as const;
+export const BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_REVERTED = 'reverted' as const;
+export const BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_PARTIALLY_REVERTED = 'partially_reverted' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_SYSTEM}. */
 export const BLOCKCHAIN_SYSTEM_VALUE_EVM = 'evm' as const;
