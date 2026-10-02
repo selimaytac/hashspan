@@ -1,6 +1,6 @@
 {
   "name": "@hashspan/x402",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "x402 adapter for @hashspan/core: traces the payments an AI agent makes over x402 as payment spans.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",

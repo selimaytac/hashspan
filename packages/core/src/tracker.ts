@@ -159,7 +159,7 @@ const REPLACEMENT_REASONS: ReadonlySet<string> = new Set([
 /**
  * Records transactions, payments and user operations as spans. Obtain one from {@link createTxTracker}: it is not meant to be
  * implemented, and members may be added to it and to its handles in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface TxTracker {
   /**
@@ -177,14 +177,14 @@ export interface TxTracker {
   /**
    * Starts a `payment` span as a child of `parent` (default: the active context), for a payment that another party
    * settles on chain
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0013-x402-payments.md). Call
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0013-x402-payments.md). Call
    * `end(settlement)` with the settlement, or `fail(error)`. A settlement with a hash links the transaction's confirm
    * span to this span, as a send span would.
    */
   startPayment(input: PaymentInput, parent?: Context): PaymentHandle;
   /**
    * Starts a `send` span for a user operation of a smart account as a child of `parent` (default: the active context)
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0021-user-operations.md). Call
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0021-user-operations.md). Call
    * `end({ userOpHash })` once the bundler returned the operation's hash, or `fail(error)`.
    */
   startUserOperationSend(input: UserOperationInput, parent?: Context): UserOperationSendHandle;
@@ -336,7 +336,7 @@ function reportedErrorType(error: unknown, options: HandleOptions | undefined): 
 interface ConfirmSpan extends SharedConfirm {
   /**
    * What a confirm span of a replacing transaction inherits from this one
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0008-replaced-transactions.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0008-replaced-transactions.md).
    */
   origin: ConfirmOrigin;
   receipt(receipt: ReceiptLike, endTime?: TimeInput): void;
@@ -414,7 +414,7 @@ function joinConfirm<S extends SharedConfirm>(
 
 /**
  * Creates a tracker that records transactions as `send` and `confirm` spans, and payments as `payment` spans, with
- * `@opentelemetry/api` (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/semconv.md). It makes
+ * `@opentelemetry/api` (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/semconv.md). It makes
  * no network calls; the caller passes hashes and receipts. Its methods and handles never throw: failures are logged
  * via `diag`, and a method that fails returns a handle that records nothing.
  */
@@ -499,7 +499,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
   /**
    * Exception event attributes for `error`, per the error message mode. The error object itself is never handed to
    * the SDK: its message and stack can carry addresses and calldata
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0006-error-privacy.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0006-error-privacy.md).
    */
   const exceptionAttributes = (type: string, error: unknown): Attributes => {
     const attributes: Attributes = { [ATTR_EXCEPTION_TYPE]: type };
@@ -811,7 +811,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
 
   /**
    * Ends `shared` with `receipt`, attributing it to the transaction that was mined
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0008-replaced-transactions.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0008-replaced-transactions.md).
    */
   const endWithReceipt = (
     chainId: number,

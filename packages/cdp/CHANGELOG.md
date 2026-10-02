@@ -1,5 +1,25 @@
 # @hashspan/cdp
 
+## 0.8.0
+
+### Minor Changes
+
+- [#182](https://github.com/selimaytac/hashspan/pull/182) [`2c69131`](https://github.com/selimaytac/hashspan/commit/2c6913136771dd6c6b8e3727b420a26c1c3e6b7c) Thanks [@selimaytac](https://github.com/selimaytac)! - Smart accounts (ADR 0021): smart accounts from `createSmartAccount`, `getSmartAccount`, `getOrCreateSmartAccount`
+  and `updateSmartAccount` are wrapped in place. Their `sendUserOperation`, `transfer`, `swap`, `useSpendPermission`
+  and quote `execute()`, the same on network-scoped smart accounts, and `cdp.evm.sendUserOperation`,
+  `prepareAndSendUserOperation`, `createSpendPermission` and `revokeSpendPermission` record a user operation `send`
+  span with its hash, sender and number of calls. `waitForUserOperation` records a linked `confirm` span with the
+  bundle transaction's hash; with a reader, the operation's success, gas used, cost, nonce, paymaster and EntryPoint
+  come from the bundle receipt's `UserOperationEvent`. CDP's `failed` ends it with `error.type` `failed`, and the SDK's
+  `TimeoutError` as `timeout`. `CDP_NETWORK_CHAIN_IDS` gains `bnb`, the user operation name of BNB Smart Chain.
+  Requires `@hashspan/core` with user operations; with an older tracker, user operations are passed on untraced.
+
+### Patch Changes
+
+- Updated dependencies [[`1ba39b9`](https://github.com/selimaytac/hashspan/commit/1ba39b9d18ef63bb4d79ea691f9080cb1d8a8dc5), [`8446f17`](https://github.com/selimaytac/hashspan/commit/8446f17465b63d1660932b6edc1f9426fb6c4efa), [`c8bc60e`](https://github.com/selimaytac/hashspan/commit/c8bc60e4984e16bfd86671ae825e7f19a83f6329), [`c8bc60e`](https://github.com/selimaytac/hashspan/commit/c8bc60e4984e16bfd86671ae825e7f19a83f6329), [`09628e2`](https://github.com/selimaytac/hashspan/commit/09628e2c64131d5df3deee0c58e69c4859f4df3a)]:
+  - @hashspan/core@0.8.0
+  - @hashspan/viem@0.8.0
+
 ## 0.7.0
 
 ### Patch Changes
