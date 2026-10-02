@@ -156,6 +156,32 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
   [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.6.0/docs/adr/0018-background-confirmation-limit.md).
 - In serverless runtimes that freeze after the response, background confirmations may not complete.
 
+## JSON-RPC requests
+
+`traceTransport()` wraps a viem transport so that each request it sends becomes a client span named after its
+JSON-RPC method, such as `eth_sendRawTransaction`. With `withHashspan()`, the requests of a transaction nest under its
+`send` span, so a slow or failing provider call shows up there:
+
+```ts
+const wallet = createWalletClient({
+  account,
+  chain,
+  transport: traceTransport(http(), {
+    methods: (method) => method !== 'eth_getTransactionReceipt',
+  }),
+}).extend(withHashspan());
+```
+
+- Spans follow the OpenTelemetry RPC conventions: `rpc.system.name` `jsonrpc`, `rpc.method`,
+  `jsonrpc.protocol.version`, and `server.address` and `server.port` from the transport's URL, plus
+  `blockchain.chain.id`. No parameters or results are recorded, and of the URL only the host and port, since the
+  path often holds an API key.
+- A failed request ends with error status and `error.type`: its JSON-RPC error code (also `rpc.response.status_code`)
+  or the error's class name, never the message.
+- `methods` chooses which methods get a span (default: all); the example leaves out receipt polling.
+  `tracerProvider` replaces the global tracer provider.
+- See [ADR 0019](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.6.0/docs/adr/0019-json-rpc-spans.md).
+
 ## Traced actions
 
 | Action | Span | Recorded |
