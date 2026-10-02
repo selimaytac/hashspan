@@ -690,10 +690,14 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         sameHex(replacement.transactionReceipt.transactionHash, receipt.transactionHash);
       const replacementReason = reported ? replacement.reason : undefined;
       let recorded = toReceiptLike(receipt);
+      let endAt = endTimeOf;
       if (isPreconfirmed(receipt)) {
-        // Its status, block and gas are final; its fee may not be. A flush that cannot wait records it without fees.
+        // The span ends when the receipt arrived, not when the sealed one was read, so its duration stays the wait's.
+        const arrivedAt = endTimeOf() ?? new Date();
+        endAt = () => arrivedAt;
+        // Its fee may be another transaction's. A flush that cannot wait records it without fees.
         const preconfirmed = { ...withoutFees(recorded), replacementReason };
-        confirmation.onAbandon((underlying) => underlying.end(preconfirmed, endTimeOf()));
+        confirmation.onAbandon((underlying) => underlying.end(preconfirmed, endAt()));
         const sealed = await sealedReceipt(
           client,
           receipt,
@@ -726,10 +730,10 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
             : undefined);
         // The receipt is known: a flush that cannot wait for the reason records the receipt without it.
         const mined = { ...recorded, replacementReason };
-        confirmation.onAbandon((underlying) => underlying.end(mined, endTimeOf()));
+        confirmation.onAbandon((underlying) => underlying.end(mined, endAt()));
         revertReason = await revertReasonOf(minedKey, receipt, abi, client);
       }
-      handle.end({ ...recorded, revertReason, replacementReason }, endTimeOf());
+      handle.end({ ...recorded, revertReason, replacementReason }, endAt());
     } catch (error) {
       diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
       handle.fail(error, endTimeOf());

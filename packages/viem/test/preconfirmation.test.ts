@@ -38,7 +38,7 @@ function flashblocksNode(
 
 describe('a preconfirmed receipt', () => {
   it("is returned to the caller unchanged, while the span records the sealed receipt's fees", async () => {
-    const node = flashblocksNode(1);
+    const node = flashblocksNode(4);
     const hashspan = withHashspan();
     const reader = createPublicClient({
       chain: base,
@@ -47,6 +47,7 @@ describe('a preconfirmed receipt', () => {
     }).extend(hashspan);
 
     const receipt = await reader.waitForTransactionReceipt({ hash: HASH });
+    const returnedAt = Date.now();
     expect(receipt.blockHash).toBe(ZERO_HASH);
     expect(receipt.l1Fee).toBe(5_000n);
     await expect(hashspan.flush()).resolves.toBe(true);
@@ -58,6 +59,9 @@ describe('a preconfirmed receipt', () => {
       'blockchain.tx.l1_fee': SEALED_L1_FEE,
       'blockchain.tx.fee': SEALED_FEE,
     });
+    // The span ends when the preconfirmation arrived, not three polling intervals later with the sealed receipt.
+    const [seconds, nanos] = confirms()[0]?.endTime ?? [0, 0];
+    expect(seconds * 1_000 + nanos / 1e6).toBeLessThanOrEqual(returnedAt + 5);
   });
 
   it('is replaced by the sealed receipt in watch(), however many preconfirmations come first', async () => {
