@@ -19,6 +19,7 @@ import {
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR,
   ATTR_BLOCKCHAIN_OPERATION_NAME,
+  ATTR_BLOCKCHAIN_OPERATION_SUBJECT,
   ATTR_BLOCKCHAIN_PAYMENT_AMOUNT,
   ATTR_BLOCKCHAIN_PAYMENT_ASSET,
   ATTR_BLOCKCHAIN_PAYMENT_PAYER,
@@ -41,12 +42,22 @@ import {
   ATTR_BLOCKCHAIN_TX_STATUS,
   ATTR_BLOCKCHAIN_TX_TO,
   ATTR_BLOCKCHAIN_TX_VALUE,
+  ATTR_BLOCKCHAIN_USER_OPERATION_CALL_COUNT,
+  ATTR_BLOCKCHAIN_USER_OPERATION_ENTRY_POINT,
+  ATTR_BLOCKCHAIN_USER_OPERATION_GAS_COST,
+  ATTR_BLOCKCHAIN_USER_OPERATION_GAS_USED,
+  ATTR_BLOCKCHAIN_USER_OPERATION_HASH,
+  ATTR_BLOCKCHAIN_USER_OPERATION_NONCE,
+  ATTR_BLOCKCHAIN_USER_OPERATION_PAYMASTER,
+  ATTR_BLOCKCHAIN_USER_OPERATION_SENDER,
+  ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS,
   ATTR_ERROR_TYPE,
   ATTR_X402_RESOURCE,
   ATTR_X402_SCHEME,
   BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
   BLOCKCHAIN_OPERATION_NAME_VALUE_PAYMENT,
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
+  BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
@@ -87,6 +98,11 @@ import type {
   SendInput,
   SendResult,
   TxTrackerOptions,
+  UserOperationConfirmHandle,
+  UserOperationConfirmInput,
+  UserOperationInput,
+  UserOperationReceiptLike,
+  UserOperationSendHandle,
 } from './types.js';
 import { VERSION } from './version.js';
 
@@ -112,14 +128,21 @@ const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
   ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL,
   ATTR_BLOCKCHAIN_PAYMENT_STATUS,
   ATTR_BLOCKCHAIN_PAYMENT_VERIFIED,
+  ATTR_BLOCKCHAIN_USER_OPERATION_HASH,
+  ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS,
   ATTR_ERROR_TYPE,
   ATTR_EXCEPTION_TYPE,
 ]);
 
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+const ZERO_ADDRESS = /^0x0{40}$/;
 /** A non-negative integer that fits in 256 bits. */
 const AMOUNT = /^(0|[1-9][0-9]{0,77})$/;
+/** A `0x` hex quantity of at most 256 bits, as JSON-RPC encodes integers. */
+const HEX_QUANTITY = /^0x[0-9a-fA-F]{1,64}$/;
+const MAX_UINT256 = 2n ** 256n - 1n;
+const MAX_SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
 /** `error.type` of a wait that gave up: a confirmation or a payment whose outcome was never learned. */
 const OBSERVER_TIMEOUT = 'timeout';
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
@@ -134,7 +157,7 @@ const REPLACEMENT_REASONS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Records transactions and payments as spans. Obtain one from {@link createTxTracker}: it is not meant to be
+ * Records transactions, payments and user operations as spans. Obtain one from {@link createTxTracker}: it is not meant to be
  * implemented, and members may be added to it and to its handles in minor releases
  * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0014-core-api-boundary.md).
  */
@@ -159,10 +182,31 @@ export interface TxTracker {
    * span to this span, as a send span would.
    */
   startPayment(input: PaymentInput, parent?: Context): PaymentHandle;
+  /**
+   * Starts a `send` span for a user operation of a smart account as a child of `parent` (default: the active context)
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0021-user-operations.md). Call
+   * `end({ userOpHash })` once the bundler returned the operation's hash, or `fail(error)`.
+   */
+  startUserOperationSend(input: UserOperationInput, parent?: Context): UserOperationSendHandle;
+  /**
+   * Joins the `confirm` span of a user operation, starting it for the first caller; linked to its `send` span when
+   * known. As for {@link TxTracker.startConfirm}, calls for the same chain id and user operation hash share one span,
+   * apart from those of transactions. Returns a no-op handle for an operation that recently got a receipt. Every
+   * returned handle must be ended.
+   */
+  startUserOperationConfirm(
+    input: UserOperationConfirmInput,
+    parent?: Context,
+  ): UserOperationConfirmHandle;
 }
 
 /** Records nothing; its context is the parent, so a call run in it still nests under the caller. */
 const noopSend = (parent: Context): SendHandle => ({
+  context: parent,
+  end: () => {},
+  fail: () => {},
+});
+const noopUserOperationSend = (parent: Context): UserOperationSendHandle => ({
   context: parent,
   end: () => {},
   fail: () => {},
@@ -174,6 +218,11 @@ const NOOP_PAYMENT: PaymentHandle = {
   link: () => {},
 };
 const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
+const NOOP_USER_OPERATION_CONFIRM: UserOperationConfirmHandle = {
+  end: () => {},
+  timeout: () => {},
+  fail: () => {},
+};
 
 /** Runs `fn`, logging instead of throwing: instrumentation must never break the caller. */
 function safely<T>(what: string, fn: () => T, fallback: T): T {
@@ -200,6 +249,26 @@ const ERROR_TYPE_OVERRIDE = /^[A-Za-z0-9_.-]{1,64}$/;
 /** `value` if it is a short identifier, the only kind of free text recorded from a remote party. */
 function identifier(value: unknown): string | undefined {
   return typeof value === 'string' && ERROR_TYPE_OVERRIDE.test(value) ? value : undefined;
+}
+
+/**
+ * A non-negative integer of at most 256 bits, from a bigint, a safe integer, or a decimal or `0x` hex string, as
+ * bundlers return them; undefined for anything else.
+ */
+function quantity(value: unknown): bigint | undefined {
+  let parsed: bigint | undefined;
+  if (typeof value === 'bigint') parsed = value;
+  else if (typeof value === 'number' && Number.isSafeInteger(value)) parsed = BigInt(value);
+  else if (typeof value === 'string' && (AMOUNT.test(value) || HEX_QUANTITY.test(value))) {
+    parsed = BigInt(value);
+  }
+  return parsed !== undefined && parsed >= 0n && parsed <= MAX_UINT256 ? parsed : undefined;
+}
+
+/** A quantity as a number, or undefined when it is none or too large to be one exactly. */
+function smallQuantity(value: unknown): number | undefined {
+  const parsed = quantity(value);
+  return parsed !== undefined && parsed <= MAX_SAFE_INTEGER ? Number(parsed) : undefined;
 }
 
 /** A decimal amount, or undefined when `value` is not a non-negative integer. */
@@ -285,6 +354,64 @@ interface ConfirmOrigin {
   links: Link[];
 }
 
+/** The confirm span of one user operation and how to end it; shared by all its handles. */
+interface UserOperationConfirmSpan extends SharedConfirm {
+  receipt(receipt: UserOperationReceiptLike, endTime?: TimeInput): void;
+  timeout(endTime?: TimeInput): void;
+  fail(error: unknown, options: HandleOptions): void;
+}
+
+/** One handle's claim on a shared confirm span (ADR 0007). */
+interface ConfirmClaim<S extends SharedConfirm> {
+  shared: S;
+  /** Claims the span for a receipt: true, and the span counts as ended, unless this handle or the span ended. */
+  receive(): boolean;
+  /** Withdraws this handle, calling `end` if it was the last one still waiting. */
+  withdraw(end: () => void): void;
+}
+
+/**
+ * Joins the confirm span for `hash` in `registry`, opening it with `open` for the first handle; undefined when the
+ * key recently got a receipt. A receipt from any handle ends the span; a timeout or failure only ends it when it is the
+ * last handle still waiting.
+ */
+function joinConfirm<S extends SharedConfirm>(
+  registry: ConfirmRegistry<S>,
+  chainId: number,
+  hash: string,
+  open: () => S,
+): ConfirmClaim<S> | undefined {
+  const current = registry.get(chainId, hash);
+  if (current === 'settled') return undefined;
+  let confirm = current;
+  if (!confirm) {
+    confirm = open();
+    registry.start(chainId, hash, confirm);
+  }
+  const shared = confirm;
+  shared.active += 1;
+  let done = false;
+  return {
+    shared,
+    receive: () => {
+      if (done || shared.ended) return false;
+      done = true;
+      shared.active -= 1;
+      shared.ended = true;
+      return true;
+    },
+    withdraw: (end) => {
+      if (done || shared.ended) return;
+      done = true;
+      shared.active -= 1;
+      if (shared.active > 0) return;
+      shared.ended = true;
+      registry.release(chainId, hash, shared);
+      end();
+    },
+  };
+}
+
 /**
  * Creates a tracker that records transactions as `send` and `confirm` spans, and payments as `payment` spans, with
  * `@opentelemetry/api` (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/semconv.md). It makes
@@ -315,6 +442,15 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     () => resolvePaymentResourceMode(options.paymentResource),
     'off',
   );
+  // User operations have their own key space (docs/adr/0021-user-operations.md), with the same bounds.
+  const userOperationLinks = new LinkStore({
+    ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
+    maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
+  });
+  const userOperationConfirmations = new ConfirmRegistry<UserOperationConfirmSpan>({
+    ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
+    maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
+  });
   const txMetrics = createTxMetrics(options.meterProvider, INSTRUMENTATION_NAME, VERSION);
   /** Attributes of a metric: low-cardinality only, never an address, hash or agent identity. */
   const metricAttributes = (chainId: number, extra: Attributes = {}): Attributes => ({
@@ -322,6 +458,12 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     [ATTR_BLOCKCHAIN_CHAIN_ID]: chainId,
     ...extra,
   });
+  /** Metric attributes of a user operation sample: as for transactions, plus what the sample is about. */
+  const userOperationMetricAttributes = (chainId: number, extra: Attributes = {}): Attributes =>
+    metricAttributes(chainId, {
+      [ATTR_BLOCKCHAIN_OPERATION_SUBJECT]: BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION,
+      ...extra,
+    });
   const secondsSince = (startMs: number, endTime: TimeInput | undefined): number =>
     (toEpochMs(endTime) - startMs) / 1000;
   let tracer: Tracer | undefined;
@@ -420,8 +562,8 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     if (formatted !== undefined) attributes[key] = formatted;
   };
 
-  /** Records `address` only if it is one: payment addresses come from remote parties. */
-  const setPaymentAddress = (attributes: Attributes, key: string, address: unknown): void => {
+  /** Records `address` only if it is one: payment and user operation addresses come from remote parties. */
+  const setRemoteAddress = (attributes: Attributes, key: string, address: unknown): void => {
     if (typeof address === 'string' && ADDRESS.test(address)) setAddress(attributes, key, address);
   };
 
@@ -711,34 +853,13 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
    */
   const startConfirm = (input: ConfirmInput, parentCtx?: Context): ConfirmHandle => {
     const { chainId, hash } = input;
-    const current = confirmations.get(chainId, hash);
-    if (current === 'settled') return NOOP_CONFIRM;
-    let confirm = current;
-    if (!confirm) {
-      confirm = openConfirm(input, parentCtx);
-      confirmations.start(chainId, hash, confirm);
-    }
-    const shared = confirm;
-    shared.active += 1;
-    let done = false;
-
-    const withdraw = (end: () => void): void => {
-      if (done || shared.ended) return;
-      done = true;
-      shared.active -= 1;
-      if (shared.active > 0) return;
-      shared.ended = true;
-      confirmations.release(chainId, hash, shared);
-      end();
-    };
-
+    const claim = joinConfirm(confirmations, chainId, hash, () => openConfirm(input, parentCtx));
+    if (!claim) return NOOP_CONFIRM;
+    const { shared } = claim;
     return {
       end: (receipt: ReceiptLike, second?: EndOptions | TimeInput): void => {
         const { endTime } = handleOptions(second);
-        if (done || shared.ended) return;
-        done = true;
-        shared.active -= 1;
-        shared.ended = true;
+        if (!claim.receive()) return;
         safely(
           'record receipt',
           () => endWithReceipt(chainId, hash, shared, receipt, endTime),
@@ -747,11 +868,11 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       },
       timeout: (second?: EndOptions | TimeInput): void => {
         const { endTime } = handleOptions(second);
-        withdraw(() => shared.timeout(endTime));
+        claim.withdraw(() => shared.timeout(endTime));
       },
       fail: (error: unknown, second?: EndOptions | TimeInput): void => {
         const { endTime } = handleOptions(second);
-        withdraw(() => shared.fail(error, endTime));
+        claim.withdraw(() => shared.fail(error, endTime));
       },
     };
   };
@@ -765,10 +886,10 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     );
     const protocol = identifier(input.protocol);
     if (protocol !== undefined) attributes[ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL] = protocol;
-    setPaymentAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_PAYER, input.payer);
+    setRemoteAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_PAYER, input.payer);
     const knownPayer = typeof input.payer === 'string' && ADDRESS.test(input.payer);
-    setPaymentAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_RECIPIENT, input.recipient);
-    setPaymentAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_ASSET, input.asset);
+    setRemoteAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_RECIPIENT, input.recipient);
+    setRemoteAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_ASSET, input.asset);
     const paid = amount(input.amount);
     if (paid !== undefined) attributes[ATTR_BLOCKCHAIN_PAYMENT_AMOUNT] = paid;
     const scheme = identifier(input.x402?.scheme);
@@ -812,7 +933,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       if (linkHash(hash)) {
         settled[ATTR_BLOCKCHAIN_TX_HASH] = hash;
       }
-      if (!knownPayer) setPaymentAddress(settled, ATTR_BLOCKCHAIN_PAYMENT_PAYER, settlement.payer);
+      if (!knownPayer) setRemoteAddress(settled, ATTR_BLOCKCHAIN_PAYMENT_PAYER, settlement.payer);
       // Recorded as reported, next to the amount the payer knew, which it never replaces.
       const settledAmount = amount(settlement.amount);
       if (settledAmount !== undefined) {
@@ -852,6 +973,217 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     };
   };
 
+  const startUserOperationSend = (
+    input: UserOperationInput,
+    parentCtx?: Context,
+  ): UserOperationSendHandle => {
+    const parent = parentCtx ?? context.active();
+    const { chainId } = input;
+    const attributes = baseAttributes(chainId, BLOCKCHAIN_OPERATION_NAME_VALUE_SEND, parent);
+    setRemoteAddress(attributes, ATTR_BLOCKCHAIN_USER_OPERATION_SENDER, input.sender);
+    setRemoteAddress(attributes, ATTR_BLOCKCHAIN_USER_OPERATION_ENTRY_POINT, input.entryPoint);
+    const callCount = smallQuantity(input.callCount);
+    if (callCount !== undefined) attributes[ATTR_BLOCKCHAIN_USER_OPERATION_CALL_COUNT] = callCount;
+
+    const span = getTracer().startSpan(
+      `send ${chainId}`,
+      {
+        kind: SpanKind.CLIENT,
+        attributes: redact(attributes),
+        ...(input.startTime !== undefined ? { startTime: input.startTime } : {}),
+      },
+      parent,
+    );
+    const finish = finisher(span);
+    const startMs = toEpochMs(input.startTime);
+    const recordSend = (endTime: TimeInput | undefined, errorType?: string): void =>
+      txMetrics.sendDuration(
+        secondsSince(startMs, endTime),
+        userOperationMetricAttributes(
+          chainId,
+          errorType === undefined ? {} : { [ATTR_ERROR_TYPE]: errorType },
+        ),
+      );
+
+    return {
+      context: trace.setSpan(parent, span),
+      end: (result, second) => {
+        const { endTime } = handleOptions(second);
+        finish(
+          'record user operation hash',
+          () => {
+            const hash: unknown = result?.userOpHash;
+            // The hash comes from the bundler: validated before it is recorded or used as a key.
+            if (typeof hash !== 'string' || !TX_HASH.test(hash)) {
+              diag.debug('hashspan: ending a send span without a valid user operation hash');
+              return;
+            }
+            userOperationLinks.set(chainId, hash, { spanContext: span.spanContext(), parent });
+            span.setAttributes(redact({ [ATTR_BLOCKCHAIN_USER_OPERATION_HASH]: hash }));
+            recordSend(endTime);
+          },
+          endTime,
+        );
+      },
+      fail: (error, second) => {
+        const read = handleOptions(second);
+        finish(
+          'record user operation send failure',
+          () =>
+            recordSend(
+              read.endTime,
+              markError(span, reportedErrorType(error, read), error, errorType(error)),
+            ),
+          read.endTime,
+        );
+      },
+    };
+  };
+
+  /**
+   * Attributes of a user operation receipt. Its values come from a bundler: what is malformed is left out. The bundle
+   * transaction's status, gas and fee are not recorded: they cover every operation in the bundle (ADR 0021).
+   */
+  const userOperationReceiptAttributes = (receipt: UserOperationReceiptLike): Attributes => {
+    const attributes: Attributes = {};
+    const success: unknown = receipt.success;
+    if (typeof success === 'boolean') attributes[ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS] = success;
+    const gasUsed = smallQuantity(receipt.actualGasUsed);
+    if (gasUsed !== undefined) attributes[ATTR_BLOCKCHAIN_USER_OPERATION_GAS_USED] = gasUsed;
+    const gasCost = quantity(receipt.actualGasCost);
+    if (gasCost !== undefined) {
+      attributes[ATTR_BLOCKCHAIN_USER_OPERATION_GAS_COST] = gasCost.toString();
+    }
+    setRemoteAddress(attributes, ATTR_BLOCKCHAIN_USER_OPERATION_SENDER, receipt.sender);
+    // 192-bit key and 64-bit sequence number: too large for an int attribute.
+    const nonce = quantity(receipt.nonce);
+    if (nonce !== undefined) attributes[ATTR_BLOCKCHAIN_USER_OPERATION_NONCE] = nonce.toString();
+    const paymaster: unknown = receipt.paymaster;
+    if (typeof paymaster === 'string' && !ZERO_ADDRESS.test(paymaster)) {
+      setRemoteAddress(attributes, ATTR_BLOCKCHAIN_USER_OPERATION_PAYMASTER, paymaster);
+    }
+    setRemoteAddress(attributes, ATTR_BLOCKCHAIN_USER_OPERATION_ENTRY_POINT, receipt.entryPoint);
+    const reason: unknown = receipt.revertReason;
+    if (typeof reason === 'string') {
+      attributes[ATTR_BLOCKCHAIN_TX_REVERT_REASON] = formatAddressesIn(reason, formatAddress);
+    }
+    const bundle: unknown = receipt.transactionHash;
+    if (typeof bundle === 'string' && TX_HASH.test(bundle))
+      attributes[ATTR_BLOCKCHAIN_TX_HASH] = bundle;
+    const block = smallQuantity(receipt.blockNumber);
+    if (block !== undefined) attributes[ATTR_BLOCKCHAIN_BLOCK_NUMBER] = block;
+    return attributes;
+  };
+
+  /** Opens the confirm span of a user operation. */
+  const openUserOperationConfirm = (
+    input: UserOperationConfirmInput,
+    parentCtx?: Context,
+  ): UserOperationConfirmSpan => {
+    const { chainId, userOpHash } = input;
+    const sent = userOperationLinks.get(chainId, userOpHash);
+    const active = context.active();
+    const parent = parentCtx ?? (trace.getSpan(active) ? active : (sent?.parent ?? active));
+    const attributes = baseAttributes(chainId, BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM, parent);
+    attributes[ATTR_BLOCKCHAIN_USER_OPERATION_HASH] = userOpHash;
+    const span = getTracer().startSpan(
+      `confirm ${chainId}`,
+      {
+        kind: SpanKind.CLIENT,
+        attributes: redact(attributes),
+        links: sent ? [{ context: sent.spanContext }] : [],
+        ...(input.startTime !== undefined ? { startTime: input.startTime } : {}),
+      },
+      parent,
+    );
+    const finish = finisher(span);
+    const startMs = toEpochMs(input.startTime);
+    const recordConfirmation = (endTime: TimeInput | undefined, outcome: Attributes): void =>
+      txMetrics.confirmationDuration(
+        secondsSince(startMs, endTime),
+        userOperationMetricAttributes(chainId, outcome),
+      );
+
+    return {
+      active: 0,
+      ended: false,
+      receipt: (receipt, endTime) =>
+        finish(
+          'record user operation receipt',
+          () => {
+            const attributes = userOperationReceiptAttributes(receipt ?? {});
+            span.setAttributes(redact(attributes));
+            const success = attributes[ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS];
+            if (success === false) markError(span, BLOCKCHAIN_TX_STATUS_VALUE_REVERTED);
+            // The outcome from chain data is the operation's success flag, not the bundle's status (ADR 0020).
+            const outcome: Attributes =
+              typeof success === 'boolean'
+                ? { [ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS]: success }
+                : {};
+            recordConfirmation(endTime, outcome);
+            const cost = attributes[ATTR_BLOCKCHAIN_USER_OPERATION_GAS_COST];
+            if (typeof cost === 'string') {
+              txMetrics.fee(BigInt(cost), userOperationMetricAttributes(chainId, outcome));
+            }
+          },
+          endTime,
+        ),
+      timeout: (endTime) =>
+        finish(
+          'record user operation confirmation timeout',
+          () =>
+            recordConfirmation(endTime, { [ATTR_ERROR_TYPE]: markError(span, OBSERVER_TIMEOUT) }),
+          endTime,
+        ),
+      fail: (error, read) =>
+        finish(
+          'record user operation confirmation failure',
+          () =>
+            recordConfirmation(read.endTime, {
+              [ATTR_ERROR_TYPE]: markError(
+                span,
+                reportedErrorType(error, read),
+                error,
+                errorType(error),
+              ),
+            }),
+          read.endTime,
+        ),
+    };
+  };
+
+  const startUserOperationConfirm = (
+    input: UserOperationConfirmInput,
+    parentCtx?: Context,
+  ): UserOperationConfirmHandle => {
+    const { chainId, userOpHash } = input;
+    if (typeof userOpHash !== 'string' || !TX_HASH.test(userOpHash)) {
+      diag.debug('hashspan: not confirming a user operation without a valid hash');
+      return NOOP_USER_OPERATION_CONFIRM;
+    }
+    const claim = joinConfirm(userOperationConfirmations, chainId, userOpHash, () =>
+      openUserOperationConfirm(input, parentCtx),
+    );
+    if (!claim) return NOOP_USER_OPERATION_CONFIRM;
+    const { shared } = claim;
+    return {
+      end: (receipt, second) => {
+        const { endTime } = handleOptions(second);
+        if (!claim.receive()) return;
+        userOperationConfirmations.settle(chainId, userOpHash, shared);
+        shared.receipt(receipt, endTime);
+      },
+      timeout: (second) => {
+        const { endTime } = handleOptions(second);
+        claim.withdraw(() => shared.timeout(endTime));
+      },
+      fail: (error, second) => {
+        const read = handleOptions(second);
+        claim.withdraw(() => shared.fail(error, read));
+      },
+    };
+  };
+
   return {
     startSend: (input, parent) =>
       safely(
@@ -863,5 +1195,17 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       safely('start confirm span', () => startConfirm(input, parent), NOOP_CONFIRM),
     startPayment: (input, parent) =>
       safely('start payment span', () => startPayment(input, parent), NOOP_PAYMENT),
+    startUserOperationSend: (input, parent) =>
+      safely(
+        'start user operation send span',
+        () => startUserOperationSend(input, parent),
+        noopUserOperationSend(parent ?? context.active()),
+      ),
+    startUserOperationConfirm: (input, parent) =>
+      safely(
+        'start user operation confirm span',
+        () => startUserOperationConfirm(input, parent),
+        NOOP_USER_OPERATION_CONFIRM,
+      ),
   };
 }

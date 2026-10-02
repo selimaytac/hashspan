@@ -71,7 +71,16 @@ party settles on chain, such as an x402 facilitator, as a `payment {chainId}` sp
 `end({ status, hash })` or `fail(error)`. A settlement with a hash links the transaction's confirm span to the payment
 span ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0013-x402-payments.md)).
 
-All three calls accept an explicit parent `Context` as a second argument. An integration that learns about a call only
+`tracker.startUserOperationSend({ chainId, sender, entryPoint, callCount })` records a user operation of an ERC-4337
+smart account handed to a bundler as a `send {chainId}` span; end it with `end({ userOpHash })` or `fail(error)`.
+`tracker.startUserOperationConfirm({ chainId, userOpHash })` joins its confirm span, as `startConfirm` does for a
+transaction, and `end(receipt)` takes the operation's receipt: `success`, `actualGasCost`, `actualGasUsed`, `sender`,
+`nonce`, `paymaster`, `entryPoint`, `revertReason`, and the bundle transaction's `transactionHash` and `blockNumber`.
+A receipt with `success: false` ends the span with `error.type` `reverted`; the bundle transaction's status and fee
+are not recorded, since they cover every operation in the bundle
+([ADR 0021](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0021-user-operations.md)).
+
+All of these calls accept an explicit parent `Context` as a second argument. An integration that learns about a call only
 after it started can record it after the fact: pass `startTime` in the input and `endTime` in the options of the
 handle method, e.g. `send.end({ hash }, { endTime })` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
 the instrumentation are reported through `diag` and never thrown into your code. The positional forms of earlier
@@ -97,7 +106,8 @@ until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core
 ## What is recorded
 
 Chain id, transaction hash, sender/recipient (per `address` mode), value, nonce, function name and selector, and,
-on confirmation, status, block number, gas used, effective gas price, L1 fee, total fee and revert reason. Decoded
+on confirmation, status, block number, gas used, effective gas price, L1 fee, total fee and revert reason. For user operations: their hash,
+smart account, EntryPoint, number of calls, success, gas used, cost, nonce and paymaster. Decoded
 call arguments are recorded only with `recordFunctionArguments`, and error messages only with `errorMessages`.
 Attribute definitions:
 [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.7.0/docs/semconv.md).

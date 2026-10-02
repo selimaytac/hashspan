@@ -121,3 +121,76 @@ describe('guardTracker().startSend context', () => {
     tool.end();
   });
 });
+
+describe('guardTracker() user operations', () => {
+  const USER_OP_HASH = `0x${'a1'.repeat(32)}`;
+
+  it('passes user operations through to the tracker', () => {
+    const guarded = guardTracker(createTxTracker());
+    const send = guarded.startUserOperationSend({ chainId: 8453 });
+    expect(trace.getSpan(send.context)).toBeDefined();
+    send.end({ userOpHash: USER_OP_HASH });
+    guarded
+      .startUserOperationConfirm({ chainId: 8453, userOpHash: USER_OP_HASH })
+      .end({ success: true });
+    expect(tracing.spans().map((s) => s.name)).toEqual(['send 8453', 'confirm 8453']);
+  });
+
+  it('records nothing for a tracker written for an older core, and keeps the caller context', () => {
+    const error = vi.spyOn(diag, 'error');
+    const { startSend, startConfirm, startPayment } = createTxTracker();
+    const older = { startSend, startConfirm, startPayment } as unknown as TxTracker;
+    const tool = trace.getTracer('test').startSpan('execute_tool transfer');
+    const caller = trace.setSpan(ROOT_CONTEXT, tool);
+    const send = guardTracker(older).startUserOperationSend({ chainId: 1 }, caller);
+    expect(send.context).toBe(caller);
+    const confirm = guardTracker(older).startUserOperationConfirm({
+      chainId: 1,
+      userOpHash: USER_OP_HASH,
+    });
+    expect(() => {
+      send.end({ userOpHash: USER_OP_HASH });
+      confirm.end({ success: true });
+      confirm.timeout();
+      confirm.fail(new Error('x'));
+    }).not.toThrow();
+    tool.end();
+    expect(tracing.spans().map((s) => s.name)).toEqual(['execute_tool transfer']);
+    // Detected, not failed: nothing is logged as an error.
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('never throws when the tracker or its handles throw', () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const boom = () => {
+      throw new Error('tracker bug');
+    };
+    const throwing = {
+      ...createTxTracker(),
+      startUserOperationSend: boom,
+      startUserOperationConfirm: boom,
+    } as unknown as TxTracker;
+    const failingHandles = {
+      ...createTxTracker(),
+      startUserOperationSend: () => ({ context: ROOT_CONTEXT, end: boom, fail: boom }),
+      startUserOperationConfirm: () => ({ end: boom, timeout: boom, fail: boom }),
+    } as unknown as TxTracker;
+    const notHandles = {
+      ...createTxTracker(),
+      startUserOperationSend: () => null,
+      startUserOperationConfirm: () => 'nope',
+    } as unknown as TxTracker;
+    for (const tracker of [throwing, failingHandles, notHandles]) {
+      const guarded = guardTracker(tracker);
+      const send = guarded.startUserOperationSend({ chainId: 1 });
+      const confirm = guarded.startUserOperationConfirm({ chainId: 1, userOpHash: USER_OP_HASH });
+      expect(() => {
+        send.end({ userOpHash: USER_OP_HASH });
+        send.fail(new Error('x'));
+        confirm.end({});
+        confirm.timeout();
+        confirm.fail(new Error('x'));
+      }).not.toThrow();
+    }
+  });
+});
