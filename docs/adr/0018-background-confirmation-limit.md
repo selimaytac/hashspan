@@ -1,6 +1,6 @@
 # 0018. A limit on background confirmations
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-02
 
 ## Context
