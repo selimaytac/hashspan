@@ -75,9 +75,9 @@ CI runs both providers against a local stand-in for the CDP API and Anvil, in
 [`integrations/test/agentkit-cdp.int.test.ts`](../integrations/test/agentkit-cdp.int.test.ts): `sendTransaction`,
 `nativeTransfer` and the ERC-20 `approve` action of `CdpEvmWalletProvider`, and `sendTransaction` and
 `waitForTransactionReceipt` of `CdpSmartWalletProvider`. `configureWithWallet()` itself is not run: it creates its
-`CdpClient` from the API key and wallet secret only, and neither AgentKit 0.10.4 nor the CDP SDK offers an option or
-environment variable for the API's base URL. The test builds each provider with the constructor that
-`configureWithWallet()` ends with, around a `CdpClient` pointed at the stand-in.
+`CdpClient` from the API key and wallet secret only, its config in AgentKit 0.10.4 has no field for the client's
+`basePath` option, and the CDP SDK reads no environment variable for the API's base URL. The test builds each
+provider with the constructor that `configureWithWallet()` ends with, around a `CdpClient` created with `basePath`.
 
 ### Other wallet providers
 

@@ -2,10 +2,11 @@
 // stand-in for the CDP API (packages/cdp/test/mock-cdp-api.ts) and Anvil: the providers' own send and wait methods
 // and an ERC-20 action, with their CdpClient wrapped by @hashspan/cdp. Nothing leaves localhost (see offline.ts).
 //
-// `configureWithWallet()` is not run: it builds its CdpClient from the three credentials only, and neither AgentKit
-// 0.10.4 nor the CDP SDK offers an option or environment variable for the API's base URL. The providers are built
-// with the constructor `configureWithWallet()` ends with (private in the type declarations only, see
-// dist/wallet-providers/cdpEvmWalletProvider.js and cdpSmartWalletProvider.js), around a client pointed at the stand-in.
+// `configureWithWallet()` is not run: it builds its CdpClient from the three credentials only, its config in AgentKit
+// 0.10.4 has no field for the client's `basePath` option, and the CDP SDK reads no environment variable for the API's
+// base URL. The providers are built with the constructor `configureWithWallet()` ends with (private in the type
+// declarations only, see dist/wallet-providers/cdpEvmWalletProvider.js and cdpSmartWalletProvider.js), around a client
+// created with `basePath`, pointed at the stand-in.
 // Never call `configureWithWallet()` or `new CdpClient()` without `basePath` here: every CdpClient reconfigures one
 // HTTP client shared by the SDK, so the requests of all clients would go to the real API, which offline.ts, a fetch
 // stub, does not see.
