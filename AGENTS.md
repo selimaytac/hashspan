@@ -77,6 +77,7 @@ Run lint, typecheck and tests before proposing a change.
     the main install comes first
   - `test/offline.ts` a setup file that lets only loopback requests through `fetch` and answers AgentKit's analytics
     requests; `test/agentkit-viem.int.test.ts` the AgentKit `ViemWalletProvider` setup;
+    `test/agentkit-cdp.int.test.ts` the AgentKit CDP wallet providers, against `packages/cdp/test/mock-cdp-api.ts`;
     `test/goat-viem.int.test.ts` the GOAT `viem()` wallet setup;
     `test/mastra.int.test.ts` the Mastra OpenTelemetry bridge setup, with a scripted model
   - `.github/workflows/integrations.yml` runs them on pull requests that touch `packages/` or `integrations/`, and

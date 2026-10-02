@@ -13,6 +13,7 @@
     "@arizeai/openinference-instrumentation-langchain": "^4.1.4",
     "@arizeai/openinference-instrumentation-openai-agents": "^0.3.2",
     "@coinbase/agentkit": "^0.10.4",
+    "@coinbase/cdp-sdk": "^1.57.1",
     "@goat-sdk/core": "0.5.0",
     "@goat-sdk/wallet-evm": "0.3.0",
     "@goat-sdk/wallet-viem": "0.3.0",

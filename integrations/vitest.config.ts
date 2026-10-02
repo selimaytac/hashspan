@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       '@hashspan/core': new URL('../packages/core/src/index.ts', import.meta.url).pathname,
       '@hashspan/viem': new URL('../packages/viem/src/index.ts', import.meta.url).pathname,
+      '@hashspan/cdp': new URL('../packages/cdp/src/index.ts', import.meta.url).pathname,
     },
   },
   test: {
