@@ -1,5 +1,13 @@
 # @hashspan/cdp
 
+## 0.7.0
+
+### Patch Changes
+
+- Updated dependencies [[`3fbc570`](https://github.com/selimaytac/hashspan/commit/3fbc57094efd99dd218aadb5e1d72f15bbbd4d8c), [`d1be4f8`](https://github.com/selimaytac/hashspan/commit/d1be4f8ec2deddb0060dc69d7de0b906ec4c3dcd), [`a777da8`](https://github.com/selimaytac/hashspan/commit/a777da8ecfe81d9e8221037271dcee07642d4023)]:
+  - @hashspan/core@0.7.0
+  - @hashspan/viem@0.7.0
+
 ## 0.6.0
 
 ### Patch Changes

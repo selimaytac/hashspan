@@ -1,5 +1,24 @@
 # @hashspan/viem
 
+## 0.7.0
+
+### Minor Changes
+
+- [#145](https://github.com/selimaytac/hashspan/pull/145) [`d1be4f8`](https://github.com/selimaytac/hashspan/commit/d1be4f8ec2deddb0060dc69d7de0b906ec4c3dcd) Thanks [@selimaytac](https://github.com/selimaytac)! - `maxBackgroundConfirmations` (default 256) limits how many background confirmations, from
+  `confirm: { mode: 'background' }` and `watch()`, poll at once (ADR 0018). A confirmation over the limit is not
+  started: no confirm span is recorded, `watch()` calls `onReceipt` with `undefined`, and a `diag` warning is logged.
+  The caller's own waits are not counted.
+
+- [#147](https://github.com/selimaytac/hashspan/pull/147) [`a777da8`](https://github.com/selimaytac/hashspan/commit/a777da8ecfe81d9e8221037271dcee07642d4023) Thanks [@selimaytac](https://github.com/selimaytac)! - `traceTransport(transport, options?)` wraps a viem transport so that each JSON-RPC request becomes a client span
+  named after its method, with the OpenTelemetry RPC attributes, the server's host and port and the chain id, and no
+  parameters, results or URL path (ADR 0019). With `withHashspan()`, the requests of a transaction nest under its send
+  span. `methods` selects the methods to trace.
+
+### Patch Changes
+
+- Updated dependencies [[`3fbc570`](https://github.com/selimaytac/hashspan/commit/3fbc57094efd99dd218aadb5e1d72f15bbbd4d8c)]:
+  - @hashspan/core@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes
