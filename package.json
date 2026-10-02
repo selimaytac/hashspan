@@ -21,6 +21,7 @@
     "version-packages": "changeset version && node scripts/sync-version.mjs && pnpm install --lockfile-only",
     "demo": "pnpm build && pnpm --filter @hashspan/example-ai-sdk-agent start",
     "demo:base-sepolia": "pnpm build && pnpm --filter @hashspan/example-ai-sdk-agent start:base-sepolia",
+    "smoke:packages": "pnpm build && node scripts/smoke-packages.mjs",
     "check:packages": "pnpm build && pnpm -r --filter \"./packages/*\" exec publint --strict && pnpm -r --filter \"./packages/*\" exec attw --pack . --profile node16",
     "test:coverage": "vitest run --coverage"
   },
