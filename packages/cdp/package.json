@@ -1,7 +1,7 @@
 {
   "name": "@hashspan/cdp",
   "version": "0.7.0",
-  "description": "Coinbase CDP adapter for @hashspan/core: traces transactions sent by CDP server accounts.",
+  "description": "Coinbase CDP adapter for @hashspan/core: traces transactions of CDP server accounts and user operations of smart accounts.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",
   "homepage": "https://github.com/selimaytac/hashspan/tree/main/packages/cdp#readme",

@@ -27,4 +27,4 @@ them.
 | [0018. A limit on background confirmations](0018-background-confirmation-limit.md) | accepted | At most `maxBackgroundConfirmations` (default 256) background confirmations poll at once; more are not started, with a `diag` warning |
 | [0019. JSON-RPC spans from a viem transport](0019-json-rpc-spans.md) | accepted | `traceTransport()` records each provider request as a client span named after its JSON-RPC method, without parameters, results or the URL path |
 | [0020. Send, confirmation and fee metrics from the tracker](0020-metrics.md) | accepted | The tracker records send and confirmation duration and fee histograms with chain and outcome attributes only |
-| [0021. User operations of smart accounts](0021-user-operations.md) | proposed | A user operation is keyed by chain and `userOpHash`; its send and confirm spans carry `blockchain.user_operation.*`, not the bundle transaction's fee or status |
+| [0021. User operations of smart accounts](0021-user-operations.md) | accepted | A user operation is keyed by chain and `userOpHash`; its send and confirm spans carry `blockchain.user_operation.*`, not the bundle transaction's fee or status |
