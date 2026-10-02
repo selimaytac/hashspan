@@ -805,7 +805,13 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       send: () => Promise<string>,
       abi?: Abi,
     ): Promise<string> => {
-      const chainId = knownChainId(args);
+      let chainId: number | undefined;
+      try {
+        chainId = knownChainId(args);
+      } catch (error) {
+        untraced(error);
+        return send();
+      }
       if (chainId === undefined) {
         // Telemetry must not delay the call: record it once the chain id is known (docs/adr/0009).
         const ctx = context.active();
@@ -847,6 +853,16 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       nonce: own(args, 'nonce') as SendInput['nonce'],
     });
 
+    /**
+     * Logs that reading the call's arguments for telemetry threw, for example on a Proxy whose traps throw; the caller
+     * then makes the call untraced, so the read never affects it.
+     */
+    const untraced = (error: unknown): void => {
+      diag.error(
+        `hashspan: failed to read the call arguments; call not traced (${errorName(error)})`,
+      );
+    };
+
     const actions: Partial<Record<TracedAction, AnyAction>> = {};
     const { sendTransaction, writeContract, waitForTransactionReceipt } = client;
 
@@ -864,9 +880,17 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
 
     if (typeof writeContract === 'function') {
       actions.writeContract = (args: WriteContractArgs) => {
-        const functionName = own(args, 'functionName') as string | undefined;
-        const abi = abiForTelemetry(own(args, 'abi'), functionName);
-        const functionArguments = own(args, 'args') as readonly unknown[] | undefined;
+        let functionName: string | undefined;
+        let abi: Abi | undefined;
+        let functionArguments: readonly unknown[] | undefined;
+        try {
+          functionName = own(args, 'functionName') as string | undefined;
+          abi = abiForTelemetry(own(args, 'abi'), functionName);
+          functionArguments = own(args, 'args') as readonly unknown[] | undefined;
+        } catch (error) {
+          untraced(error);
+          return writeContract(args);
+        }
         return traceSend(
           args,
           (chainId) => {
@@ -934,16 +958,35 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         }
       };
 
-      actions.waitForTransactionReceipt = async (args: WaitArgs) => {
-        const hash = own(args, 'hash');
-        // viem reads the callback through the prototype chain as well.
-        const onReplaced =
-          args !== null && typeof args === 'object' ? descriptorOf(args, 'onReplaced') : undefined;
-        // An inherited hash, or a hash or callback behind an accessor, is passed on untouched and not traced.
-        if (typeof hash !== 'string' || (onReplaced !== undefined && !('value' in onReplaced))) {
-          return waitForTransactionReceipt(args);
+      /**
+       * What tracing a wait needs, read without running a getter, or undefined when the wait is not traced: an
+       * inherited hash, a hash or callback behind an accessor, or arguments that throw when read.
+       */
+      const prepareWait = (args: WaitArgs) => {
+        try {
+          const hash = own(args, 'hash');
+          // viem reads the callback through the prototype chain as well.
+          const onReplaced =
+            args !== null && typeof args === 'object'
+              ? descriptorOf(args, 'onReplaced')
+              : undefined;
+          if (typeof hash !== 'string' || (onReplaced !== undefined && !('value' in onReplaced))) {
+            return undefined;
+          }
+          // Always wrapped, so that a replacement is attributed however the span is recorded (docs/adr/0008).
+          const capture: ReplacementCapture = {};
+          const waitArgs = shadowing(args, 'onReplaced', capturing(capture, onReplaced?.value));
+          return { hash, chainId: knownChainId(args), capture, waitArgs };
+        } catch (error) {
+          untraced(error);
+          return undefined;
         }
-        const chainId = knownChainId(args);
+      };
+
+      actions.waitForTransactionReceipt = async (args: WaitArgs) => {
+        const prepared = prepareWait(args);
+        if (!prepared) return waitForTransactionReceipt(args);
+        const { hash, chainId, capture, waitArgs } = prepared;
         let handle: ConfirmHandle | undefined;
         if (chainId !== undefined) {
           try {
@@ -956,11 +999,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
           chainId === undefined
             ? { ctx: context.active(), startTime: new Date(), chainId: queryChainId() }
             : undefined;
-        // Always wrapped, so that a replacement is attributed however the span is recorded (docs/adr/0008).
-        const capture: ReplacementCapture = {};
-        const wait = waitForTransactionReceipt(
-          shadowing(args, 'onReplaced', capturing(capture, onReplaced?.value)),
-        ) as Promise<ViemReceipt>;
+        const wait = waitForTransactionReceipt(waitArgs) as Promise<ViemReceipt>;
         if (handle && chainId !== undefined) {
           track(recordConfirmation(chainId, hash, handle, wait, capture, client));
         } else if (late) {
