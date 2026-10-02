@@ -1,6 +1,6 @@
 # 0022. Call batches of EIP-5792 `sendCalls`
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-03
 
 ## Context
@@ -97,7 +97,8 @@ understood is recorded as such rather than guessed:
   `getTransactionReceipt` today. Batches get no background confirmation and no `watch()`: only a wait the caller
   makes records a batch confirm span.
 - **Chain.** The send span takes the call's `chain`, else the client's. The wait takes the client's chain, else the
-  status's `chainId` once it is known (a late start, as for waits without a chain today).
+  status's `chainId` once it is known (a late start, as for waits without a chain today). Superseded by
+  *Amendment (2026-10-03): the chain of a wait*, which takes the call's `chain` first.
 
 ## Consequences
 
@@ -119,3 +120,12 @@ understood is recorded as such rather than guessed:
   a local account, and an in-process stand-in wallet that answers `wallet_sendCalls`.
 - Older viem releases in the peer range had `sendCalls` only as an experimental extension, with a string id and a
   status without a code: their batches end with `error.type` `_OTHER`.
+
+## Amendment (2026-10-03): the chain of a wait
+
+Compared with the implementation (#198), one decision reads differently in the code, which is kept:
+
+- **Chain.** A wait takes the call's `chain` first, as the send span does, since `sendCallsSync` passes its `chain` on
+  to `waitForCallsStatus`; so both spans of a batch sent with a `chain` other than the client's are recorded on that
+  chain. Without either, it takes the status's `chainId`, else asks the client for its chain id once the wait has
+  settled (a late start, as for waits without a chain today).
