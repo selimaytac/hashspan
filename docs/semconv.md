@@ -81,7 +81,8 @@ after its method (`_OTHER` for a name that is not a method), following the OpenT
 [JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/rpc/json-rpc.md):
 `rpc.system.name = "jsonrpc"`, `rpc.method`, `jsonrpc.protocol.version`, `server.address` and `server.port`, plus
 `blockchain.chain.id`; on failure, `error.type` and, for a JSON-RPC error, `rpc.response.status_code`. Parameters,
-results, the URL path and error messages are not recorded; the host is recorded as is. Its parent is the active span, such as a `send` span
+results, the URL path and error messages are not recorded; the host is recorded as it is, and these spans do not
+pass through the redaction hook. Its parent is the active span, such as a `send` span
 ([ADR 0019](adr/0019-json-rpc-spans.md)).
 
 ## Attributes
@@ -130,8 +131,7 @@ must stay internal belong in the static `agent` option, which is never propagate
 
 The tracker records these histograms through the meter provider (the global one unless `meterProvider` is given),
 so every adapter gets them ([ADR 0020](adr/0020-metrics.md)). Their attributes are low-cardinality only:
-`blockchain.system`, `blockchain.chain.id`, and the outcome; never an address, a hash or the agent identity. The
-`redact` hook applies to span attributes, not to metrics.
+`blockchain.system`, `blockchain.chain.id`, and the outcome; never an address, a hash or the agent identity.
 
 | Metric | Instrument | Unit | Attributes | Recorded when |
 |---|---|---|---|---|
@@ -147,8 +147,8 @@ Bucket boundaries are given as advice: 0.05 s to 300 s for durations, and one bu
 `blockchain.tx.from`, `blockchain.tx.to` and the `blockchain.payment.*` addresses follow the address mode: `raw`
 (default), `hashed` (`sha256:` + first 32 hex characters of SHA-256 of the lower-cased address, or a custom
 function) or `off`.
-A redaction hook runs last on every attribute set; if it throws, only `blockchain.system`, `blockchain.chain.id`,
-`blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
+A redaction hook runs last on every attribute set of the tracker's spans, not on metrics or JSON-RPC spans; if it
+throws, only `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
 `blockchain.tx.replacement.reason`, `blockchain.payment.protocol`, `blockchain.payment.status`,
 `blockchain.payment.verified` and `error.type` are recorded.
 Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-defaults.md). Neither `hashed` nor
