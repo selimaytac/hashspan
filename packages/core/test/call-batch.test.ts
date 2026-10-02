@@ -174,6 +174,20 @@ describe('call batch confirm span', () => {
     expect(confirms()).toHaveLength(2);
   });
 
+  it('keeps the shared span open for other waits when one wait accepts a pending status', () => {
+    const tracker = createTxTracker();
+    const first = tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID });
+    const second = tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID });
+    first.end({ statusCode: 100 });
+    expect(confirms()).toHaveLength(0);
+    second.end({ statusCode: 500 });
+    expect(confirms()).toHaveLength(1);
+    expect(confirms()[0]?.attributes).toMatchObject({
+      'blockchain.call_batch.status': 'reverted',
+      'error.type': 'reverted',
+    });
+  });
+
   it('shares one span between waits, ends as timeout only with the last one, and compares ids as hex', () => {
     const tracker = createTxTracker();
     const first = tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id: BATCH_ID });

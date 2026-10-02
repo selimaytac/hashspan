@@ -21,6 +21,8 @@ import {
   toFunctionSelector,
   WaitForTransactionReceiptTimeoutError,
 } from 'viem';
+// A namespace import: `sendCallsSync` is missing from older viem releases in the peer range, and a named import of it
+// would fail to load there.
 import * as viemActions from 'viem/actions';
 import {
   getTransactionReceipt as viemGetTransactionReceipt,
@@ -1439,7 +1441,13 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
               return {
                 context: handle.context,
                 end: (result, endTime) => {
-                  const id = callBatchIdOf(result) ?? '';
+                  // The result comes from the wallet: reading it must never reject a call that succeeded.
+                  let id = '';
+                  try {
+                    id = callBatchIdOf(result) ?? '';
+                  } catch (error) {
+                    diag.error(`hashspan: failed to read the call batch id (${errorName(error)})`);
+                  }
                   handle.end(
                     { id, transactionHashes: fallbackTransactionHashes(id) },
                     endTime !== undefined ? { endTime } : undefined,
@@ -1452,7 +1460,12 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
             // The transactions of viem's fallback are the account's own: always confirmed as transactions, as
             // watch() does, so their fees are recorded with the sealed receipt (ADR 0022, ADR 0024).
             after: (chainId, result) => {
-              const id = callBatchIdOf(result);
+              let id: string | undefined;
+              try {
+                id = callBatchIdOf(result);
+              } catch (error) {
+                diag.error(`hashspan: failed to read the call batch id (${errorName(error)})`);
+              }
               for (const hash of (id && fallbackTransactionHashes(id)) || []) {
                 try {
                   confirmThrough(
@@ -1507,7 +1520,12 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
           } catch (error) {
             // With throwOnFailure, a failed batch rejects with its status: recorded as that status.
             if (error instanceof Error && error.name === 'BundleFailedError') {
-              status = own(error, 'result');
+              try {
+                status = own(error, 'result');
+              } catch {
+                handle.fail(error, options());
+                return;
+              }
             } else {
               if (isCallsTimeout(error)) handle.timeout(options());
               else handle.fail(error, options());
@@ -1565,7 +1583,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         let chainId: number | undefined;
         try {
           id = own(args, 'id');
-          chainId = client.chain?.id;
+          // sendCallsSync passes its `chain` on to the wait, as a caller may.
+          chainId = knownChainId(args as SendArgs);
         } catch (error) {
           untraced(error);
           return waitForCallsStatus(args);

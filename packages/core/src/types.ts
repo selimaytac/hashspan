@@ -505,7 +505,7 @@ export interface CallBatchStatusLike {
   atomic?: boolean | undefined;
   /**
    * Receipts of the transactions that carried the batch; only their hashes (validated, de-duplicated, at most 64) and
-   * the last block number are recorded.
+   * the highest block number are recorded.
    */
   receipts?:
     | readonly {

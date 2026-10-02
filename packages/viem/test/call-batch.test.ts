@@ -1,7 +1,7 @@
 import { createTxTracker, type TxTracker } from '@hashspan/core';
 import { diag, SpanStatusCode } from '@opentelemetry/api';
 import { createWalletClient } from 'viem';
-import { base } from 'viem/chains';
+import { base, baseSepolia } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
 import { FROM, HASH, mockTransport, TO } from './mock-transport.js';
@@ -238,7 +238,88 @@ describe('arguments that throw when telemetry reads them', () => {
   });
 });
 
+describe('a wallet answer that throws when telemetry reads it', () => {
+  const throwingTraps = {
+    getOwnPropertyDescriptor: () => {
+      throw new Error('trap');
+    },
+  };
+
+  // A revoked Proxy cannot be a call's result at all: resolving a promise with it reads its `then`, which throws.
+  it('never rejects a sendCalls that succeeded when its result throws on reading', async () => {
+    const answer = () => new Proxy({ id: BATCH_ID }, throwingTraps);
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const result = answer();
+    // An earlier extension stands in for a wallet that answers with such an object.
+    const hashspan = withHashspan();
+    const client = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: mockTransport().transport,
+    })
+      .extend(() => ({ sendCalls: async () => result as { id: string } }))
+      .extend(hashspan);
+    await expect(client.sendCalls({ calls })).resolves.toBe(result);
+    await hashspan.flush();
+    expect(sends()).toHaveLength(1);
+    expect(sends()[0]?.attributes).not.toHaveProperty('blockchain.call_batch.id');
+  });
+
+  it('ends the confirm span when the status of a BundleFailedError cannot be read', async () => {
+    vi.spyOn(diag, 'error').mockImplementation(() => {});
+    const failure = Object.assign(new Error('failed'), { name: 'BundleFailedError' });
+    const thrown = new Proxy(failure, throwingTraps);
+    const hashspan = withHashspan();
+    const client = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: mockTransport().transport,
+    })
+      .extend(() => ({
+        waitForCallsStatus: async () => {
+          throw thrown;
+        },
+      }))
+      .extend(hashspan);
+    await expect(client.waitForCallsStatus({ id: BATCH_ID })).rejects.toBe(thrown);
+    await expect(hashspan.flush()).resolves.toBe(true);
+    expect(confirms()[0]?.status.code).toBe(SpanStatusCode.ERROR);
+  });
+});
+
+describe('waits for one batch through two clients', () => {
+  it('end the shared span with the final status, not with a pending one', async () => {
+    const hashspan = withHashspan();
+    const client = (status: number) =>
+      createWalletClient({
+        account: FROM,
+        chain: base,
+        transport: mockTransport({ callsStatus: () => ({ status }) }).transport,
+        pollingInterval: 10,
+      }).extend(hashspan);
+    const pending = client(100);
+    const final = client(200);
+    const firstWait = pending.waitForCallsStatus({ id: BATCH_ID, status: () => true });
+    const secondWait = final.waitForCallsStatus({ id: BATCH_ID });
+    await Promise.all([firstWait, secondWait]);
+    await hashspan.flush();
+
+    expect(confirms()).toHaveLength(1);
+    expect(confirms()[0]?.attributes['blockchain.call_batch.status']).toBe('success');
+  });
+});
+
 describe('sendCallsSync', () => {
+  it("records both spans on the chain the call names, not the client's", async () => {
+    const { client, hashspan } = wallet({ chainIdHex: '0x14a34' });
+    await client.sendCallsSync({ calls, chain: baseSepolia });
+    await hashspan.flush();
+
+    const send = tracing.spans().find((s) => s.name === 'send 84532');
+    const confirm = tracing.spans().find((s) => s.name === 'confirm 84532');
+    expect(confirm?.links[0]?.context.spanId).toBe(send?.spanContext().spanId);
+  });
+
   it('records one send span and one confirm span, and returns the status unchanged', async () => {
     const { client, hashspan } = wallet();
     const status = await client.sendCallsSync({ calls });

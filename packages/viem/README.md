@@ -215,7 +215,7 @@ await wallet.waitForCallsStatus({ id }); // confirm span, linked to the send spa
 - The send span covers handing the batch to the wallet, and records the account, number of calls and batch id.
 - The confirm span records the outcome (`blockchain.call_batch.status`: `success` for 200, `reverted` for 500,
   `partially_reverted` for 600), the status code, whether the batch ran atomically, the hashes of the transactions
-  that carried it, and the last block. A status 400 ends with `error.type` `failed`, any other code with `_OTHER`; a
+  that carried it, and the highest block among its receipts. A status 400 ends with `error.type` `failed`, any other code with `_OTHER`; a
   wait that accepts a pending status ends without an outcome. No fee is recorded: wallet receipts lack the L1 fee and
   can be a bundle transaction shared with others. Batch ids must be `0x`-prefixed hex; others are not recorded.
 - With `experimental_fallback`, viem sends the calls as plain transactions when the wallet lacks `wallet_sendCalls`.

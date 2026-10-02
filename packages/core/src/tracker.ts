@@ -1502,10 +1502,14 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     return {
       end: (status, second) => {
         const { endTime } = handleOptions(second);
+        // A pending result is an observer outcome, like a timeout: it withdraws this wait, and ends the span only as
+        // the last one still waiting, releasing the key for a later wait (ADR 0007, ADR 0016).
+        if (isPendingCallBatch(status)) {
+          claim.withdraw(() => shared.status(status, endTime));
+          return;
+        }
         if (!claim.receive()) return;
-        // A pending result releases the key, so that a later wait gets its own span (ADR 0007).
-        if (isPendingCallBatch(status)) callBatchConfirmations.release(chainId, id, shared);
-        else callBatchConfirmations.settle(chainId, id, shared);
+        callBatchConfirmations.settle(chainId, id, shared);
         shared.status(status, endTime);
       },
       timeout: (second) => {

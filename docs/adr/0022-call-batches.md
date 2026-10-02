@@ -62,16 +62,17 @@ understood is recorded as such rather than guessed:
   sender may be a bundler or relayer). Per-call function names and arguments are not recorded.
 - **The confirm span** ends with the status the caller's wait returned. It records the status code as reported, the
   outcome, whether the batch ran atomically (as viem reports it: `false` when the wallet omits it; capability checks
-  are out of scope), the receipts' transaction hashes and the block number of the last receipt. The hashes are
+  are out of scope), the receipts' transaction hashes and the highest block number among the receipts. The hashes are
   validated one by one, de-duplicated (Safe repeats one per call) and capped at 64.
 - **Outcomes** follow ADR 0016: an attribute only for outcomes from chain data, `error.type` for the rest.
   - 200 → `blockchain.call_batch.status` `success`; 500 → `reverted`; 600 → `partially_reverted`. The latter two
     also set error status and `error.type` `reverted` and `partially_reverted`.
   - 400 (nothing was included) → `error.type` `failed`. A wait that gives up → `timeout`. A `BundleFailedError` is
     recorded from the status it carries; its retries are part of the span's duration.
-  - Any other code, a non-integer, a string or no code → `error.type` `_OTHER`, with the code on the span.
-  - 100: a wait that resolves while the batch is pending ends without an outcome and records no metric sample, and the
-    key is released (ADR 0007), so a later wait gets its own span.
+  - Any other code, a non-integer, a string or no code → `error.type` `_OTHER`; an integer code is kept on the span.
+  - 100: a wait that resolves while the batch is pending is an observer outcome, like a timeout: it withdraws its
+    claim on the shared span, which ends without an outcome and without a metric sample only when it is the last wait
+    still running, and the key is released (ADR 0007), so a later wait gets its own span.
 - **Metrics.** The three histograms carry `blockchain.operation.subject` `call_batch`, as for user operations. The
   confirmation outcome is `blockchain.call_batch.status` or `error.type` as above; raw status codes never become metric
   attributes. The batch itself records no fee.

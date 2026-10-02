@@ -55,8 +55,9 @@ the batch id the wallet returned (`blockchain.call_batch.id`), and gets the same
 returned. The confirm span ends with the status a wait returned: its outcome (`blockchain.call_batch.status`) and
 EIP-5792 status code, whether the batch ran atomically, and the hashes of the transactions that carried it; it has no
 `blockchain.tx.status`, gas or fee, since wallet receipts lack the L1 fee and may be a bundle transaction shared with
-others. A wait that resolves while the batch is pending ends without an outcome, and a later wait gets its own span. Confirmations of batches are kept apart from those of
-transactions and user operations. Transactions an account sends itself for a batch (viem's fallback to
+others. A wait that resolves while the batch is pending withdraws, as a timeout does: the span ends without an outcome
+only when no other wait is still running, and a later wait gets its own span. Confirmations of batches are kept apart
+from those of transactions and user operations. Transactions an account sends itself for a batch (viem's fallback to
 `eth_sendTransaction`) are linked to the batch's send span and confirmed as transactions, with their fees.
 
 **One confirm span per transaction and tracker.** Concurrent waits for the same transaction share one confirm span;
@@ -132,7 +133,7 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.contract.function.selector` | string | send | on | 4-byte selector, e.g. `0xa9059cbb` |
 | `blockchain.contract.function.arguments` | string | send | off (opt-in) | decoded call arguments as a JSON array, e.g. `["0x2222...2222","1000000"]`: bigints as decimal strings, addresses per address mode, truncated after 4096 characters. Only own enumerable data properties are serialized; `toJSON()` and getters are never called |
 | `blockchain.tx.status` | string | confirm | on | from chain data: `success` \| `reverted` \| `replaced` |
-| `blockchain.block.number` | int | confirm | on | inclusion block; for a user operation, the bundle transaction's; for a call batch, the last receipt's |
+| `blockchain.block.number` | int | confirm | on | inclusion block; for a user operation, the bundle transaction's; for a call batch, the highest among its receipts |
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
 | `blockchain.tx.effective_gas_price` | string | confirm | on | wei, decimal string; see the `fee` row for when it is omitted |
 | `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, wei; see the `fee` row for when it is omitted |
@@ -189,7 +190,7 @@ recorded on metrics, and batches record no fee ([ADR 0022](adr/0022-call-batches
 | Metric | Instrument | Unit | Attributes | Recorded when |
 |---|---|---|---|---|
 | `blockchain.client.send.duration` | histogram | `s` | chain; `error.type` if the send failed | a send span ends: from the start of the sending call until the hash is known or the call failed |
-| `blockchain.client.confirmation.duration` | histogram | `s` | chain; `blockchain.tx.status` from chain data, else `error.type` (`timeout`, an error class) | a confirm span ends: from the start of the wait until the receipt, a replacement, a timeout or a failure |
+| `blockchain.client.confirmation.duration` | histogram | `s` | chain; `blockchain.tx.status` from chain data (for a call batch, `blockchain.call_batch.status`), else `error.type` (`timeout`, an error class) | a confirm span ends: from the start of the wait until the receipt or batch status, a replacement, a timeout or a failure; not for a call batch that ended while still pending |
 | `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.tx.status` | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number; for a user operation, a receipt with its cost: `blockchain.user_operation.gas.cost` |
 
 Bucket boundaries are given as advice: 0.05 s to 300 s for durations, and one bucket per power of ten from 10^8 to
