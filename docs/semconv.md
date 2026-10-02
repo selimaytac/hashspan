@@ -122,6 +122,21 @@ the same keys, unless `agentFromBaggage` is false ([ADR 0011](adr/0011-agent-ide
 backends search transactions by agent without joining spans. Baggage is propagated to downstream services; identifiers that
 must stay internal belong in the static `agent` option, which is never propagated.
 
+## Metrics
+
+The tracker records these histograms through the meter provider (the global one unless `meterProvider` is given),
+so every adapter gets them ([ADR 0020](adr/0020-metrics.md)). Their attributes are low-cardinality only:
+`blockchain.system`, `blockchain.chain.id`, and the outcome; never an address, a hash or the agent identity.
+
+| Metric | Instrument | Unit | Attributes | Recorded when |
+|---|---|---|---|---|
+| `blockchain.client.send.duration` | histogram | `s` | chain; `error.type` if the send failed | a send span ends: from the start of the sending call until the hash is known or the call failed |
+| `blockchain.client.confirmation.duration` | histogram | `s` | chain; `blockchain.tx.status` from chain data, else `error.type` (`timeout`, an error class) | a confirm span ends: from the start of the wait until the receipt, a replacement, a timeout or a failure |
+| `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.tx.status` | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number |
+
+Bucket boundaries are given as advice: 0.05 s to 300 s for durations, and one bucket per power of ten from 10^8 to
+10^18 wei for fees. Fees above 2^53 wei lose precision as numbers; the span attribute keeps the exact value.
+
 ## Privacy
 
 `blockchain.tx.from`, `blockchain.tx.to` and the `blockchain.payment.*` addresses follow the address mode: `raw`

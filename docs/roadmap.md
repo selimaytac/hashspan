@@ -41,7 +41,7 @@ Not tied to a version: an item ships with the first release after its pull reque
 - [ ] viem transport wrapper: JSON-RPC spans
 - [ ] viem `deployContract`, `sendRawTransaction`, `sendCalls`
 - [ ] CDP smart account user operations (ERC-4337)
-- [ ] Metrics: transaction fee and confirmation latency histograms
+- [x] Metrics: transaction fee and confirmation latency histograms ([ADR 0020](adr/0020-metrics.md))
 
 ## Toward 1.0: a stable API
 

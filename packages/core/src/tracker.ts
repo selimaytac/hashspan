@@ -61,6 +61,7 @@ import {
 } from './attributes.js';
 import { ConfirmRegistry, type SharedConfirm } from './confirm-registry.js';
 import { LinkStore } from './link-store.js';
+import { createTxMetrics, toEpochMs } from './metrics.js';
 import {
   type AddressFormatter,
   formatAddressesIn,
@@ -314,6 +315,15 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     () => resolvePaymentResourceMode(options.paymentResource),
     'off',
   );
+  const txMetrics = createTxMetrics(options.meterProvider, INSTRUMENTATION_NAME, VERSION);
+  /** Attributes of a metric: low-cardinality only, never an address, hash or agent identity. */
+  const metricAttributes = (chainId: number, extra: Attributes = {}): Attributes => ({
+    [ATTR_BLOCKCHAIN_SYSTEM]: BLOCKCHAIN_SYSTEM_VALUE_EVM,
+    [ATTR_BLOCKCHAIN_CHAIN_ID]: chainId,
+    ...extra,
+  });
+  const secondsSince = (startMs: number, endTime: TimeInput | undefined): number =>
+    (toEpochMs(endTime) - startMs) / 1000;
   let tracer: Tracer | undefined;
   const getTracer = (): Tracer => {
     tracer ??= (options.tracerProvider ?? trace.getTracerProvider()).getTracer(
@@ -372,7 +382,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     errorName: string,
     error?: unknown,
     exceptionName: string = errorName,
-  ): void => {
+  ): string => {
     const type = formatAddressesIn(errorName, formatAddress);
     let message: string | undefined;
     if (error !== undefined) {
@@ -385,6 +395,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     }
     span.setAttributes(redact({ [ATTR_ERROR_TYPE]: type }));
     span.setStatus({ code: SpanStatusCode.ERROR, ...(message !== undefined ? { message } : {}) });
+    return type;
   };
 
   /** Ends a span exactly once; the span is always ended even if recording attributes fails. */
@@ -455,6 +466,15 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       parent,
     );
     const finish = finisher(span);
+    const startMs = toEpochMs(input.startTime);
+    const recordSend = (endTime: TimeInput | undefined, errorType?: string): void =>
+      txMetrics.sendDuration(
+        secondsSince(startMs, endTime),
+        metricAttributes(
+          input.chainId,
+          errorType === undefined ? {} : { [ATTR_ERROR_TYPE]: errorType },
+        ),
+      );
 
     return {
       context: trace.setSpan(parent, span),
@@ -469,6 +489,7 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
             }
             links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
             span.setAttributes(redact({ [ATTR_BLOCKCHAIN_TX_HASH]: hash }));
+            recordSend(handleOptions(second).endTime);
           },
           handleOptions(second).endTime,
         ),
@@ -476,7 +497,11 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
         const options = handleOptions(second, third);
         finish(
           'record send failure',
-          () => markError(span, reportedErrorType(error, options), error, errorType(error)),
+          () =>
+            recordSend(
+              options.endTime,
+              markError(span, reportedErrorType(error, options), error, errorType(error)),
+            ),
           options.endTime,
         );
       },
@@ -543,6 +568,12 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       parent,
     );
     const finish = finisher(span);
+    const startMs = toEpochMs(explicitStart);
+    const recordConfirmation = (endTime: TimeInput | undefined, outcome: Attributes): void =>
+      txMetrics.confirmationDuration(
+        secondsSince(startMs, endTime),
+        metricAttributes(input.chainId, outcome),
+      );
     const origin: ConfirmOrigin = {
       parent,
       startTime: explicitStart ?? new Date(),
@@ -557,18 +588,32 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
         finish(
           'record receipt',
           () => {
-            span.setAttributes(redact(receiptAttributes(receipt)));
+            const attributes = receiptAttributes(receipt);
+            span.setAttributes(redact(attributes));
             if (receipt.status === 'reverted') markError(span, BLOCKCHAIN_TX_STATUS_VALUE_REVERTED);
+            const status = { [ATTR_BLOCKCHAIN_TX_STATUS]: attributes[ATTR_BLOCKCHAIN_TX_STATUS] };
+            recordConfirmation(endTime, status);
+            const fee = attributes[ATTR_BLOCKCHAIN_TX_FEE];
+            if (typeof fee === 'string')
+              txMetrics.fee(BigInt(fee), metricAttributes(input.chainId, status));
           },
           endTime,
         ),
       // Giving up describes the observer, not the transaction: no blockchain.tx.status (docs/adr/0016).
       timeout: (endTime) =>
-        finish('record confirmation timeout', () => markError(span, OBSERVER_TIMEOUT), endTime),
+        finish(
+          'record confirmation timeout',
+          () =>
+            recordConfirmation(endTime, { [ATTR_ERROR_TYPE]: markError(span, OBSERVER_TIMEOUT) }),
+          endTime,
+        ),
       fail: (error, endTime) =>
         finish(
           'record confirmation failure',
-          () => markError(span, errorType(error), error),
+          () =>
+            recordConfirmation(endTime, {
+              [ATTR_ERROR_TYPE]: markError(span, errorType(error), error),
+            }),
           endTime,
         ),
       replaced: (hash, reason, endTime) =>
@@ -583,13 +628,19 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
               attributes[ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON] = reason;
             }
             span.setAttributes(redact(attributes));
+            recordConfirmation(endTime, {
+              [ATTR_BLOCKCHAIN_TX_STATUS]: BLOCKCHAIN_TX_STATUS_VALUE_REPLACED,
+            });
           },
           endTime,
         ),
       unattributable: (endTime) =>
         finish(
           'record unattributable receipt',
-          () => markError(span, ERROR_TYPE_VALUE_OTHER),
+          () =>
+            recordConfirmation(endTime, {
+              [ATTR_ERROR_TYPE]: markError(span, ERROR_TYPE_VALUE_OTHER),
+            }),
           endTime,
         ),
     };

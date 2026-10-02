@@ -25,3 +25,4 @@ them.
 | [0016. A timeout is an outcome of the observer, not of the transaction](0016-timeout-is-an-observer-outcome.md) | accepted | `blockchain.tx.status` comes only from chain data; giving up is `error.type` `timeout`, and the status value `timeout` is deprecated |
 | [0017. Verify that an x402 settlement transaction carries the payment](0017-x402-payment-verification.md) | accepted | With a reader, the payment span records `blockchain.payment.verified` from the settlement receipt's logs, starting with `exact` EIP-3009 |
 | [0018. A limit on background confirmations](0018-background-confirmation-limit.md) | proposed | At most `maxBackgroundConfirmations` (default 256) background confirmations poll at once; more are not started, with a `diag` warning |
+| [0020. Send, confirmation and fee metrics from the tracker](0020-metrics.md) | proposed | The tracker records send and confirmation duration and fee histograms with chain and outcome attributes only |

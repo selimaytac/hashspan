@@ -83,6 +83,7 @@ until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core
 | Option | Default | Description |
 |---|---|---|
 | `tracerProvider` | global provider | Tracer provider to use |
+| `meterProvider` | global provider | Meter provider for the [metrics](#metrics) |
 | `address` | `'raw'` | `'raw'`, `'hashed'`, `'off'`, or `{ mode: 'hashed', hash: (address) => string }` |
 | `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace). `'raw'` can record RPC URLs that include API keys, as some libraries put the request URL in the message; `'sanitized'` keeps only the first line (viem puts the URL on a later line), which is best effort. See [ADR 0006](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/adr/0006-error-privacy.md) |
 | `paymentResource` | `'origin'` | How much of a paid resource's URL `x402.resource` records: `'origin'` (scheme, host and port; nothing for a resource that is not a URL), `'path'` (also the path, never the query string, fragment or user info) or `'off'`. Paths often carry user or account identifiers. At most 512 characters are recorded |
@@ -100,6 +101,14 @@ on confirmation, status, block number, gas used, effective gas price, L1 fee, to
 call arguments are recorded only with `recordFunctionArguments`, and error messages only with `errorMessages`.
 Attribute definitions:
 [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/semconv.md).
+
+## Metrics
+
+With an OpenTelemetry metrics SDK set up (or `meterProvider`), the tracker records three histograms:
+`blockchain.client.send.duration` and `blockchain.client.confirmation.duration` in seconds, and
+`blockchain.client.fee` in wei. Their attributes are the chain and the outcome only, never an address, hash or
+agent identity. Definitions:
+[docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.6.0/docs/semconv.md#metrics).
 
 ## Privacy notes
 
