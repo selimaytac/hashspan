@@ -16,10 +16,13 @@ export class LinkStore {
   private readonly entries = new Map<string, Entry>();
   private readonly ttlMs: number;
   private readonly maxEntries: number;
+  private readonly caseSensitive: boolean;
 
-  constructor(options: { ttlMs: number; maxEntries: number }) {
+  /** Keys are hex hashes compared case-insensitively, unless `caseSensitive` (for opaque ids such as call batch ids). */
+  constructor(options: { ttlMs: number; maxEntries: number; caseSensitive?: boolean }) {
     this.ttlMs = options.ttlMs;
     this.maxEntries = options.maxEntries;
+    this.caseSensitive = options.caseSensitive ?? false;
   }
 
   get size(): number {
@@ -27,7 +30,7 @@ export class LinkStore {
   }
 
   set(chainId: number, hash: string, value: SentTransaction): void {
-    const key = LinkStore.key(chainId, hash);
+    const key = this.key(chainId, hash);
     this.entries.delete(key);
     this.entries.set(key, { ...value, expiresAt: Date.now() + this.ttlMs });
     // Map iteration order is insertion order, so the first keys are the oldest.
@@ -38,7 +41,7 @@ export class LinkStore {
   }
 
   get(chainId: number, hash: string): SentTransaction | undefined {
-    const key = LinkStore.key(chainId, hash);
+    const key = this.key(chainId, hash);
     const entry = this.entries.get(key);
     if (!entry) return undefined;
     if (entry.expiresAt <= Date.now()) {
@@ -48,7 +51,7 @@ export class LinkStore {
     return entry;
   }
 
-  private static key(chainId: number, hash: string): string {
-    return `${chainId}:${hash.toLowerCase()}`;
+  private key(chainId: number, hash: string): string {
+    return `${chainId}:${this.caseSensitive ? hash : hash.toLowerCase()}`;
   }
 }

@@ -309,6 +309,12 @@ describe('withHashspan()', () => {
         startUserOperationConfirm: () => {
           throw new Error('broken');
         },
+        startCallBatchSend: () => {
+          throw new Error('broken');
+        },
+        startCallBatchConfirm: () => {
+          throw new Error('broken');
+        },
       },
     });
     const response = await wrapFetchWithPayment(

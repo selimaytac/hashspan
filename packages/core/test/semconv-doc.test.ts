@@ -6,9 +6,11 @@ const doc = readFileSync(new URL('../../../docs/semconv.md', import.meta.url), '
 
 /** Attribute names from the first column of the attribute table in docs/semconv.md. */
 const documented = new Set(
-  [...doc.matchAll(/^\| `([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)` \| (?:string|int|boolean) \|/gm)].map(
-    (m) => m[1] as string,
-  ),
+  [
+    ...doc.matchAll(
+      /^\| `([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)` \| (?:string|int|boolean|string\[\]) \|/gm,
+    ),
+  ].map((m) => m[1] as string),
 );
 const exported = (prefix: string) =>
   Object.entries(core)

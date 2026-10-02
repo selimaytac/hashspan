@@ -19,15 +19,18 @@ export class ConfirmRegistry<T extends SharedConfirm> {
   private readonly entries = new Map<string, Entry<T>>();
   private readonly ttlMs: number;
   private readonly maxEntries: number;
+  private readonly caseSensitive: boolean;
 
-  constructor(options: { ttlMs: number; maxEntries: number }) {
+  /** Keys are hex hashes compared case-insensitively, unless `caseSensitive` (for opaque ids such as call batch ids). */
+  constructor(options: { ttlMs: number; maxEntries: number; caseSensitive?: boolean }) {
     this.ttlMs = options.ttlMs;
     this.maxEntries = options.maxEntries;
+    this.caseSensitive = options.caseSensitive ?? false;
   }
 
   /** The in-flight confirm span, `'settled'` if the transaction recently got a receipt, else undefined. */
   get(chainId: number, hash: string): T | 'settled' | undefined {
-    const key = ConfirmRegistry.key(chainId, hash);
+    const key = this.key(chainId, hash);
     const entry = this.entries.get(key);
     if (!entry) return undefined;
     if ('confirm' in entry) return entry.confirm;
@@ -37,18 +40,18 @@ export class ConfirmRegistry<T extends SharedConfirm> {
   }
 
   start(chainId: number, hash: string, confirm: T): void {
-    this.put(ConfirmRegistry.key(chainId, hash), { confirm });
+    this.put(this.key(chainId, hash), { confirm });
   }
 
   /** Marks `confirm` as settled, unless the registry has since moved on from it. */
   settle(chainId: number, hash: string, confirm: T): void {
-    const key = ConfirmRegistry.key(chainId, hash);
+    const key = this.key(chainId, hash);
     if (this.isCurrent(key, confirm)) this.put(key, { settledUntil: Date.now() + this.ttlMs });
   }
 
   /** Forgets `confirm` so that a retry starts a new span, unless the registry has since moved on from it. */
   release(chainId: number, hash: string, confirm: T): void {
-    const key = ConfirmRegistry.key(chainId, hash);
+    const key = this.key(chainId, hash);
     if (this.isCurrent(key, confirm)) this.entries.delete(key);
   }
 
@@ -67,7 +70,7 @@ export class ConfirmRegistry<T extends SharedConfirm> {
     }
   }
 
-  private static key(chainId: number, hash: string): string {
-    return `${chainId}:${hash.toLowerCase()}`;
+  private key(chainId: number, hash: string): string {
+    return `${chainId}:${this.caseSensitive ? hash : hash.toLowerCase()}`;
   }
 }

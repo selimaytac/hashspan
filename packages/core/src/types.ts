@@ -432,3 +432,98 @@ export interface UserOperationConfirmHandle {
    */
   fail(error: unknown, options?: FailOptions): void;
 }
+
+/**
+ * A batch of calls handed to a wallet with EIP-5792 `wallet_sendCalls`
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0022-call-batches.md). The wallet decides
+ * how the calls reach the chain: in one transaction, several, or a user operation.
+ */
+export interface CallBatchInput {
+  /** EIP-155 chain id. */
+  chainId: number;
+  /** Address of the account the calls are sent from, recorded as `blockchain.call_batch.sender` per the address mode. */
+  sender?: string | undefined;
+  /** Number of calls in the batch, recorded as `blockchain.call_batch.call_count`. */
+  callCount?: number | undefined;
+  /** When the send started, for adapters that record it after the fact; see {@link SendInput.startTime}. */
+  startTime?: TimeInput | undefined;
+}
+
+/** What handing a call batch to a wallet produced. */
+export interface CallBatchResult {
+  /** The batch id the wallet returned: an opaque string that identifies the batch with the chain id. */
+  id: string;
+  /**
+   * Hashes of transactions the account itself sent for the batch, when the adapter knows them (viem's fallback to
+   * `eth_sendTransaction`). Each is recorded as sent by the batch's send span, so its confirm span links to it.
+   */
+  transactionHashes?: readonly string[] | undefined;
+}
+
+/**
+ * Ends the send span of a call batch. Only the first call counts; methods never throw.
+ * Produced by the tracker only; methods may be added in minor releases
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0014-core-api-boundary.md).
+ */
+export interface CallBatchSendHandle {
+  /**
+   * The parent context with the send span set. Run the call that hands the batch to the wallet in it, as for
+   * {@link SendHandle.context}.
+   */
+  readonly context: Context;
+  /** Ends the send span successfully once the batch id is known. */
+  end(result: CallBatchResult, options?: EndOptions): void;
+  /** Ends the send span with an error (the wallet rejected the batch, or sending it failed). */
+  fail(error: unknown, options?: FailOptions): void;
+}
+
+export interface CallBatchConfirmInput {
+  /** EIP-155 chain id; with `id`, it identifies the batch and its confirm span. */
+  chainId: number;
+  /** The batch id awaited, as the wallet returned it. */
+  id: string;
+  /** When the wait started, for adapters that record it after the fact; see {@link SendInput.startTime}. */
+  startTime?: TimeInput | undefined;
+}
+
+/**
+ * Library-agnostic view of an EIP-5792 call batch status (`wallet_getCallsStatus`). Every field is optional; values
+ * come from a wallet, and malformed ones are not recorded.
+ */
+export interface CallBatchStatusLike {
+  /**
+   * The EIP-5792 status code. 2xx ends the confirm span successfully; 4xx (failed without inclusion), 5xx (reverted)
+   * and 6xx (partially reverted) with an error status; 1xx (still pending) without an outcome.
+   */
+  statusCode?: number | undefined;
+  /** Whether the wallet ran the calls atomically. */
+  atomic?: boolean | undefined;
+  /** Receipts of the transactions that carried the batch; only their hashes and block numbers are recorded. */
+  receipts?:
+    | readonly {
+        transactionHash?: string | undefined;
+        blockNumber?: bigint | number | undefined;
+      }[]
+    | undefined;
+}
+
+/**
+ * One wait for a call batch's status, joined to the batch's shared confirm span, as for transactions
+ * ({@link ConfirmHandle}). Only the first call counts; methods never throw.
+ * Produced by the tracker only; methods may be added in minor releases
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0014-core-api-boundary.md).
+ */
+export interface CallBatchConfirmHandle {
+  /** Ends the shared confirm span with the status, for every handle of the batch. */
+  end(status: CallBatchStatusLike, options?: EndOptions): void;
+  /**
+   * Withdraws this handle because waiting for the status timed out. The confirm span ends as `timeout` only if no
+   * other handle of the batch is still waiting.
+   */
+  timeout(options?: EndOptions): void;
+  /**
+   * Withdraws this handle because the status could not be retrieved. The confirm span ends as a failure only if no
+   * other handle is still waiting.
+   */
+  fail(error: unknown, options?: FailOptions): void;
+}

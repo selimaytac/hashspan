@@ -72,14 +72,29 @@ export const ATTR_BLOCKCHAIN_USER_OPERATION_GAS_COST =
   'blockchain.user_operation.gas.cost' as const;
 export const ATTR_BLOCKCHAIN_USER_OPERATION_PAYMASTER =
   'blockchain.user_operation.paymaster' as const;
+// Call batches of EIP-5792 `sendCalls` (docs/adr/0022-call-batches.md).
+/**
+ * The batch id the wallet returned, truncated after 256 characters. See
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0022-call-batches.md.
+ */
+export const ATTR_BLOCKCHAIN_CALL_BATCH_ID = 'blockchain.call_batch.id' as const;
+export const ATTR_BLOCKCHAIN_CALL_BATCH_SENDER = 'blockchain.call_batch.sender' as const;
+export const ATTR_BLOCKCHAIN_CALL_BATCH_CALL_COUNT = 'blockchain.call_batch.call_count' as const;
+/** The EIP-5792 status code of the batch, e.g. 200 confirmed or 500 reverted. */
+export const ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE = 'blockchain.call_batch.status_code' as const;
+export const ATTR_BLOCKCHAIN_CALL_BATCH_ATOMIC = 'blockchain.call_batch.atomic' as const;
+/** Hashes of the transactions whose receipts the wallet reported for the batch. */
+export const ATTR_BLOCKCHAIN_CALL_BATCH_TRANSACTION_HASHES =
+  'blockchain.call_batch.transaction_hashes' as const;
 /**
  * Metrics only: what a send, confirmation or fee sample is about. Recorded as `user_operation` on samples of user
- * operations, and absent on those of transactions.
+ * operations and `call_batch` on those of call batches, and absent on those of transactions.
  */
 export const ATTR_BLOCKCHAIN_OPERATION_SUBJECT = 'blockchain.operation.subject' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_OPERATION_SUBJECT}. */
 export const BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION = 'user_operation' as const;
+export const BLOCKCHAIN_OPERATION_SUBJECT_VALUE_CALL_BATCH = 'call_batch' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_SYSTEM}. */
 export const BLOCKCHAIN_SYSTEM_VALUE_EVM = 'evm' as const;

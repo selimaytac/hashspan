@@ -14,6 +14,12 @@ import {
 import { agentAttributes } from './agent.js';
 import {
   ATTR_BLOCKCHAIN_BLOCK_NUMBER,
+  ATTR_BLOCKCHAIN_CALL_BATCH_ATOMIC,
+  ATTR_BLOCKCHAIN_CALL_BATCH_CALL_COUNT,
+  ATTR_BLOCKCHAIN_CALL_BATCH_ID,
+  ATTR_BLOCKCHAIN_CALL_BATCH_SENDER,
+  ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE,
+  ATTR_BLOCKCHAIN_CALL_BATCH_TRANSACTION_HASHES,
   ATTR_BLOCKCHAIN_CHAIN_ID,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME,
@@ -57,6 +63,7 @@ import {
   BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
   BLOCKCHAIN_OPERATION_NAME_VALUE_PAYMENT,
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
+  BLOCKCHAIN_OPERATION_SUBJECT_VALUE_CALL_BATCH,
   BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
@@ -85,6 +92,11 @@ import {
   serializeFunctionArguments,
 } from './privacy.js';
 import type {
+  CallBatchConfirmHandle,
+  CallBatchConfirmInput,
+  CallBatchInput,
+  CallBatchSendHandle,
+  CallBatchStatusLike,
   ConfirmHandle,
   ConfirmInput,
   EndOptions,
@@ -130,6 +142,8 @@ const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
   ATTR_BLOCKCHAIN_PAYMENT_VERIFIED,
   ATTR_BLOCKCHAIN_USER_OPERATION_HASH,
   ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS,
+  ATTR_BLOCKCHAIN_CALL_BATCH_ID,
+  ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE,
   ATTR_ERROR_TYPE,
   ATTR_EXCEPTION_TYPE,
 ]);
@@ -145,6 +159,14 @@ const MAX_UINT256 = 2n ** 256n - 1n;
 const MAX_SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
 /** `error.type` of a wait that gave up: a confirmation or a payment whose outcome was never learned. */
 const OBSERVER_TIMEOUT = 'timeout';
+/** `error.type` of a call batch that failed without being included (EIP-5792 status 4xx). */
+const CALL_BATCH_FAILED = 'failed';
+/** `error.type` of a call batch whose calls partly reverted (EIP-5792 status 6xx). */
+const CALL_BATCH_PARTIALLY_REVERTED = 'partially_reverted';
+/** Longest call batch id tracked: wallets return opaque ids, viem's fallback ids grow with the number of calls. */
+const MAX_CALL_BATCH_ID_LENGTH = 4096;
+/** Longest call batch id recorded as an attribute. */
+const MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH = 256;
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
@@ -198,6 +220,19 @@ export interface TxTracker {
     input: UserOperationConfirmInput,
     parent?: Context,
   ): UserOperationConfirmHandle;
+  /**
+   * Starts a `send` span for an EIP-5792 call batch as a child of `parent` (default: the active context)
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0022-call-batches.md). Call
+   * `end({ id })` once the wallet returned the batch id, or `fail(error)`.
+   */
+  startCallBatchSend(input: CallBatchInput, parent?: Context): CallBatchSendHandle;
+  /**
+   * Joins the `confirm` span of a call batch, starting it for the first caller; linked to its `send` span when
+   * known. As for {@link TxTracker.startConfirm}, calls for the same chain id and batch id share one span, apart from
+   * those of transactions and user operations. Returns a no-op handle for a batch that recently got its status. Every
+   * returned handle must be ended.
+   */
+  startCallBatchConfirm(input: CallBatchConfirmInput, parent?: Context): CallBatchConfirmHandle;
 }
 
 /** Records nothing; its context is the parent, so a call run in it still nests under the caller. */
@@ -219,6 +254,16 @@ const NOOP_PAYMENT: PaymentHandle = {
 };
 const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
 const NOOP_USER_OPERATION_CONFIRM: UserOperationConfirmHandle = {
+  end: () => {},
+  timeout: () => {},
+  fail: () => {},
+};
+const noopCallBatchSend = (parent: Context): CallBatchSendHandle => ({
+  context: parent,
+  end: () => {},
+  fail: () => {},
+});
+const NOOP_CALL_BATCH_CONFIRM: CallBatchConfirmHandle = {
   end: () => {},
   timeout: () => {},
   fail: () => {},
@@ -361,6 +406,18 @@ interface UserOperationConfirmSpan extends SharedConfirm {
   fail(error: unknown, options: HandleOptions): void;
 }
 
+/** The confirm span of one call batch and how to end it; shared by all its handles. */
+interface CallBatchConfirmSpan extends SharedConfirm {
+  status(status: CallBatchStatusLike, endTime?: TimeInput): void;
+  timeout(endTime?: TimeInput): void;
+  fail(error: unknown, options: HandleOptions): void;
+}
+
+/** A call batch id the tracker keys and records: an opaque wallet string of bounded length. */
+function isCallBatchId(id: unknown): id is string {
+  return typeof id === 'string' && id.length > 0 && id.length <= MAX_CALL_BATCH_ID_LENGTH;
+}
+
 /** One handle's claim on a shared confirm span (ADR 0007). */
 interface ConfirmClaim<S extends SharedConfirm> {
   shared: S;
@@ -451,6 +508,17 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
     maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
   });
+  // Call batches have a third key space (docs/adr/0022-call-batches.md); their ids are opaque, so case matters.
+  const callBatchLinks = new LinkStore({
+    ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
+    maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
+    caseSensitive: true,
+  });
+  const callBatchConfirmations = new ConfirmRegistry<CallBatchConfirmSpan>({
+    ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
+    maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
+    caseSensitive: true,
+  });
   const txMetrics = createTxMetrics(options.meterProvider, INSTRUMENTATION_NAME, VERSION);
   /** Attributes of a metric: low-cardinality only, never an address, hash or agent identity. */
   const metricAttributes = (chainId: number, extra: Attributes = {}): Attributes => ({
@@ -462,6 +530,12 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
   const userOperationMetricAttributes = (chainId: number, extra: Attributes = {}): Attributes =>
     metricAttributes(chainId, {
       [ATTR_BLOCKCHAIN_OPERATION_SUBJECT]: BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION,
+      ...extra,
+    });
+  /** Metric attributes of a call batch sample. */
+  const callBatchMetricAttributes = (chainId: number, extra: Attributes = {}): Attributes =>
+    metricAttributes(chainId, {
+      [ATTR_BLOCKCHAIN_OPERATION_SUBJECT]: BLOCKCHAIN_OPERATION_SUBJECT_VALUE_CALL_BATCH,
       ...extra,
     });
   const secondsSince = (startMs: number, endTime: TimeInput | undefined): number =>
@@ -1184,6 +1258,222 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     };
   };
 
+  const startCallBatchSend = (input: CallBatchInput, parentCtx?: Context): CallBatchSendHandle => {
+    const parent = parentCtx ?? context.active();
+    const { chainId } = input;
+    const attributes = baseAttributes(chainId, BLOCKCHAIN_OPERATION_NAME_VALUE_SEND, parent);
+    setRemoteAddress(attributes, ATTR_BLOCKCHAIN_CALL_BATCH_SENDER, input.sender);
+    const callCount = smallQuantity(input.callCount);
+    if (callCount !== undefined) attributes[ATTR_BLOCKCHAIN_CALL_BATCH_CALL_COUNT] = callCount;
+
+    const span = getTracer().startSpan(
+      `send ${chainId}`,
+      {
+        kind: SpanKind.CLIENT,
+        attributes: redact(attributes),
+        ...(input.startTime !== undefined ? { startTime: input.startTime } : {}),
+      },
+      parent,
+    );
+    const finish = finisher(span);
+    const startMs = toEpochMs(input.startTime);
+    const recordSend = (endTime: TimeInput | undefined, errorType?: string): void =>
+      txMetrics.sendDuration(
+        secondsSince(startMs, endTime),
+        callBatchMetricAttributes(
+          chainId,
+          errorType === undefined ? {} : { [ATTR_ERROR_TYPE]: errorType },
+        ),
+      );
+
+    return {
+      context: trace.setSpan(parent, span),
+      end: (result, second) => {
+        const { endTime } = handleOptions(second);
+        finish(
+          'record call batch id',
+          () => {
+            const id: unknown = result?.id;
+            // The id comes from the wallet: validated before it is recorded or used as a key.
+            if (!isCallBatchId(id)) {
+              diag.debug('hashspan: ending a send span without a valid call batch id');
+              return;
+            }
+            const sent = { spanContext: span.spanContext(), parent };
+            callBatchLinks.set(chainId, id, sent);
+            // Transactions the account sent itself for the batch are linked like those of a send span.
+            const hashes: unknown = result.transactionHashes;
+            if (Array.isArray(hashes)) {
+              for (const hash of hashes) {
+                if (typeof hash === 'string' && TX_HASH.test(hash) && !/^0x0+$/.test(hash)) {
+                  links.set(chainId, hash, sent);
+                }
+              }
+            }
+            span.setAttributes(
+              redact({
+                [ATTR_BLOCKCHAIN_CALL_BATCH_ID]: id.slice(0, MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH),
+              }),
+            );
+            recordSend(endTime);
+          },
+          endTime,
+        );
+      },
+      fail: (error, second) => {
+        const read = handleOptions(second);
+        finish(
+          'record call batch send failure',
+          () =>
+            recordSend(
+              read.endTime,
+              markError(span, reportedErrorType(error, read), error, errorType(error)),
+            ),
+          read.endTime,
+        );
+      },
+    };
+  };
+
+  /** Attributes of a call batch status. Its values come from a wallet: what is malformed is left out. */
+  const callBatchStatusAttributes = (status: CallBatchStatusLike): Attributes => {
+    const attributes: Attributes = {};
+    const code = smallQuantity(status.statusCode);
+    if (code !== undefined) attributes[ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE] = code;
+    const atomic: unknown = status.atomic;
+    if (typeof atomic === 'boolean') attributes[ATTR_BLOCKCHAIN_CALL_BATCH_ATOMIC] = atomic;
+    const receipts: unknown = status.receipts;
+    if (Array.isArray(receipts)) {
+      const hashes: string[] = [];
+      let block: number | undefined;
+      for (const receipt of receipts) {
+        const hash: unknown = receipt?.transactionHash;
+        if (typeof hash === 'string' && TX_HASH.test(hash)) hashes.push(hash);
+        const number = smallQuantity(receipt?.blockNumber);
+        if (number !== undefined && (block === undefined || number > block)) block = number;
+      }
+      if (hashes.length > 0) attributes[ATTR_BLOCKCHAIN_CALL_BATCH_TRANSACTION_HASHES] = hashes;
+      if (block !== undefined) attributes[ATTR_BLOCKCHAIN_BLOCK_NUMBER] = block;
+    }
+    return attributes;
+  };
+
+  /** The `error.type` of an EIP-5792 status code; undefined for success, pending or an unknown code. */
+  const callBatchErrorType = (code: unknown): string | undefined => {
+    if (typeof code !== 'number') return undefined;
+    if (code >= 300 && code < 500) return CALL_BATCH_FAILED;
+    if (code >= 500 && code < 600) return BLOCKCHAIN_TX_STATUS_VALUE_REVERTED;
+    if (code >= 600 && code < 700) return CALL_BATCH_PARTIALLY_REVERTED;
+    return undefined;
+  };
+
+  /** Opens the confirm span of a call batch. */
+  const openCallBatchConfirm = (
+    input: CallBatchConfirmInput,
+    parentCtx?: Context,
+  ): CallBatchConfirmSpan => {
+    const { chainId, id } = input;
+    const sent = callBatchLinks.get(chainId, id);
+    const active = context.active();
+    const parent = parentCtx ?? (trace.getSpan(active) ? active : (sent?.parent ?? active));
+    const attributes = baseAttributes(chainId, BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM, parent);
+    attributes[ATTR_BLOCKCHAIN_CALL_BATCH_ID] = id.slice(0, MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH);
+    const span = getTracer().startSpan(
+      `confirm ${chainId}`,
+      {
+        kind: SpanKind.CLIENT,
+        attributes: redact(attributes),
+        links: sent ? [{ context: sent.spanContext }] : [],
+        ...(input.startTime !== undefined ? { startTime: input.startTime } : {}),
+      },
+      parent,
+    );
+    const finish = finisher(span);
+    const startMs = toEpochMs(input.startTime);
+    const recordConfirmation = (endTime: TimeInput | undefined, outcome: Attributes): void =>
+      txMetrics.confirmationDuration(
+        secondsSince(startMs, endTime),
+        callBatchMetricAttributes(chainId, outcome),
+      );
+
+    return {
+      active: 0,
+      ended: false,
+      status: (status, endTime) =>
+        finish(
+          'record call batch status',
+          () => {
+            const attributes = callBatchStatusAttributes(status ?? {});
+            span.setAttributes(redact(attributes));
+            const code = attributes[ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE];
+            // A batch still pending has no outcome yet: nothing to record as a confirmation (ADR 0022).
+            if (typeof code === 'number' && code >= 100 && code < 200) return;
+            const failure = callBatchErrorType(code);
+            if (failure !== undefined) markError(span, failure);
+            // Batches record no fee: a wallet's receipt can be a bundle shared with others (ADR 0022).
+            recordConfirmation(
+              endTime,
+              failure === undefined ? {} : { [ATTR_ERROR_TYPE]: failure },
+            );
+          },
+          endTime,
+        ),
+      timeout: (endTime) =>
+        finish(
+          'record call batch confirmation timeout',
+          () =>
+            recordConfirmation(endTime, { [ATTR_ERROR_TYPE]: markError(span, OBSERVER_TIMEOUT) }),
+          endTime,
+        ),
+      fail: (error, read) =>
+        finish(
+          'record call batch confirmation failure',
+          () =>
+            recordConfirmation(read.endTime, {
+              [ATTR_ERROR_TYPE]: markError(
+                span,
+                reportedErrorType(error, read),
+                error,
+                errorType(error),
+              ),
+            }),
+          read.endTime,
+        ),
+    };
+  };
+
+  const startCallBatchConfirm = (
+    input: CallBatchConfirmInput,
+    parentCtx?: Context,
+  ): CallBatchConfirmHandle => {
+    const { chainId, id } = input;
+    if (!isCallBatchId(id)) {
+      diag.debug('hashspan: not confirming a call batch without a valid id');
+      return NOOP_CALL_BATCH_CONFIRM;
+    }
+    const claim = joinConfirm(callBatchConfirmations, chainId, id, () =>
+      openCallBatchConfirm(input, parentCtx),
+    );
+    if (!claim) return NOOP_CALL_BATCH_CONFIRM;
+    const { shared } = claim;
+    return {
+      end: (status, second) => {
+        const { endTime } = handleOptions(second);
+        if (!claim.receive()) return;
+        callBatchConfirmations.settle(chainId, id, shared);
+        shared.status(status, endTime);
+      },
+      timeout: (second) => {
+        const { endTime } = handleOptions(second);
+        claim.withdraw(() => shared.timeout(endTime));
+      },
+      fail: (error, second) => {
+        const read = handleOptions(second);
+        claim.withdraw(() => shared.fail(error, read));
+      },
+    };
+  };
+
   return {
     startSend: (input, parent) =>
       safely(
@@ -1206,6 +1496,18 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
         'start user operation confirm span',
         () => startUserOperationConfirm(input, parent),
         NOOP_USER_OPERATION_CONFIRM,
+      ),
+    startCallBatchSend: (input, parent) =>
+      safely(
+        'start call batch send span',
+        () => startCallBatchSend(input, parent),
+        noopCallBatchSend(parent ?? context.active()),
+      ),
+    startCallBatchConfirm: (input, parent) =>
+      safely(
+        'start call batch confirm span',
+        () => startCallBatchConfirm(input, parent),
+        NOOP_CALL_BATCH_CONFIRM,
       ),
   };
 }
