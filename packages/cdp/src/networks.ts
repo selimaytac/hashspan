@@ -1,6 +1,6 @@
 /**
- * EIP-155 chain ids of the network names the CDP SDK accepts for EVM sends. The SDK has such a map but does not
- * export it.
+ * EIP-155 chain ids of the network names the CDP SDK accepts for EVM sends and user operations. The SDK has such a
+ * map but does not export it. BNB Smart Chain has two names: `binance` for transactions, `bnb` for user operations.
  */
 export const CDP_NETWORK_CHAIN_IDS: Readonly<Record<string, number>> = {
   base: 8453,
@@ -18,6 +18,7 @@ export const CDP_NETWORK_CHAIN_IDS: Readonly<Record<string, number>> = {
   'ethereum-hoodi': 560048,
   'polygon-mumbai': 80001,
   binance: 56,
+  bnb: 56,
   zora: 7777777,
 };
 

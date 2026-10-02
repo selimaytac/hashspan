@@ -19,6 +19,7 @@ it('maps CDP network names to the chain ids of viem chains', () => {
     'optimism-sepolia': chains.optimismSepolia.id,
     avalanche: chains.avalanche.id,
     binance: chains.bsc.id,
+    bnb: chains.bsc.id,
     world: chains.worldchain.id,
     'world-sepolia': chains.worldchainSepolia.id,
     zora: chains.zora.id,
