@@ -44,13 +44,15 @@ network-scoped account, which records a confirm span from the receipt it returns
 `waitForUserOperation` ([Smart accounts](#smart-accounts)).
 
 `flush({ timeoutMs })` (default 10 000 ms) waits for every confirm span the adapter still has open, from the reader or
-from such a wait, and ends what is left as `timeout` if it cannot wait longer. Call it before a short-lived process
-exits.
+from such a wait, and ends what is left as `timeout` if it cannot wait longer (a user operation CDP already reported
+`complete` ends with what is known). Call it before a short-lived process exits.
 
 `withHashspan(cdp, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.8.1/packages/core#options)
-(address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem`, `tracker`, `reader`,
-and `confirmTimeoutMs` (default 120 000 ms). Call it once per client: a second call returns the first handle, ignores
-its options and logs a `diag` warning.
+(address mode, agent identity, redaction hook, ...), `decodeRevertReason` and `maxBackgroundConfirmations` as in
+`@hashspan/viem` (the limit applies to confirmations through the reader), `tracker`, `reader`, and `confirmTimeoutMs`
+(default 120 000 ms; for a user operation CDP reported complete, it also bounds the poll for its bundle receipt). With
+`tracker`, the core options are not used: they configure the tracker the adapter would otherwise create. Call it once
+per client: a second call returns the first handle, ignores its options and logs a `diag` warning.
 
 ### With `@hashspan/viem`
 
@@ -71,7 +73,7 @@ await Promise.all([hashspanCdp.flush(), hashspanViem.flush()]);
 ```
 
 A reader client whose chain differs from the transaction's, given directly or returned by a reader function, is not
-used; a `diag` warning says so.
+used; a `diag` warning says so. A reader client without a chain is used for every chain.
 
 ### Smart accounts
 
@@ -98,7 +100,8 @@ The spans carry `blockchain.user_operation.*` attributes instead of a transactio
 - `complete` does not say whether the operation's calls succeeded: a bundle can be mined while an operation in it
   reverts. With a `reader` for the chain, the adapter reads the bundle's receipt and records the operation's
   `UserOperationEvent`: success (a reverted operation ends with `error.type` `reverted`), gas used, cost, nonce,
-  paymaster and EntryPoint. Without one, the confirm span records the bundle transaction's hash only.
+  paymaster and EntryPoint. Without one, or if the bundle receipt is not found within `confirmTimeoutMs`, the confirm
+  span records the bundle transaction's hash only.
 - The bundle transaction's status and fee are not recorded: they cover every operation in the bundle.
 - Without a wait, only the send span is recorded, with or without a reader. A wait names no network: it is traced
   when the operation was sent through the same client, or on a network-scoped smart account.
@@ -114,7 +117,7 @@ instrumentation creates nest under it.
 |---|---|
 | `cdp.evm.sendTransaction` | chain id, from, to, value, nonce, function selector (object or serialized transaction) |
 | account `sendTransaction` | the same |
-| account `transfer` | ETH: to and value; tokens: the token contract, `transfer` and its selector (arguments with `recordFunctionArguments`) |
+| account `transfer` | from; ETH: to and value; tokens: the token contract when it is given by address (not for a named token such as `'usdc'`), `transfer` and its selector (arguments with `recordFunctionArguments`) |
 | account `swap`, `useSpendPermission` | chain id and from |
 | `execute()` of a quote from `cdp.evm.createSwapQuote` or account `quoteSwap` | chain id and from (the taker) |
 | network-scoped accounts (`useNetwork`) | as above; on Base and Ethereum they send through the account itself, elsewhere through the SDK's own viem client, and both are traced once |

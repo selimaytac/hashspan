@@ -32,3 +32,11 @@ The tracker already sees every send and confirmation, from every adapter, with i
   transaction's outcome for the replacing one; counts of confirmations should leave out `replaced`, as for spans.
 - Payments get no metrics yet; amounts in different assets do not add up in one histogram.
 - The metric names, units and attributes are a contract like span names, under the change policy in docs/semconv.md.
+
+## Amendment (2026-10-03): attributes added since
+
+- `error.type` on the histograms is kept only when it is an error class name ending in `Error` or a lower-case code of
+  letters and underscores; any other value, which could carry an identifier, an address or a number, is recorded as
+  `_OTHER` (#177). Spans keep their own `error.type`.
+- Samples of user operations carry `blockchain.operation.subject` `user_operation`, and their outcome from chain data
+  is `blockchain.user_operation.success` (ADR 0021).
