@@ -39,8 +39,9 @@ await hashspan.flush();
 
 `reader` is a viem public client, or a function `(chainId) => client | undefined` for several chains. Confirmations
 run in the background through it and never delay your call. Without a reader, only send spans are recorded: the
-adapter never picks an RPC endpoint itself. The exception is `waitForTransactionReceipt` on a network-scoped
-account, which records a confirm span from the receipt it returns, without a revert reason.
+adapter never picks an RPC endpoint itself. The exceptions are the SDK's waits: `waitForTransactionReceipt` on a
+network-scoped account, which records a confirm span from the receipt it returns, without a revert reason, and
+`waitForUserOperation` ([Smart accounts](#smart-accounts)).
 
 `flush({ timeoutMs })` (default 10 000 ms) waits for every confirm span the adapter still has open, from the reader or
 from such a wait, and ends what is left as `timeout` if it cannot wait longer. Call it before a short-lived process

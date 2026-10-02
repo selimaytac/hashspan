@@ -23,22 +23,27 @@ export { CDP_NETWORK_CHAIN_IDS } from './networks.js';
 
 export interface WithHashspanCdpOptions extends Omit<ViemOptions, 'confirm'> {
   /**
-   * viem public client(s) to confirm transactions with: one client, used for every chain it is on, or a function
-   * returning the client for a chain id. Without a reader, only send spans are recorded; the adapter never chooses
-   * an RPC endpoint itself.
+   * viem public client(s) to confirm transactions with, and to read the outcome of user operations from their bundle
+   * receipts: one client, used for every chain it is on, or a function returning the client for a chain id. Without
+   * a reader, only send spans are recorded, except for the waits the SDK offers (network-scoped
+   * `waitForTransactionReceipt` and `waitForUserOperation`); the adapter never chooses an RPC endpoint itself.
    */
   reader?: ViemClientLike | ((chainId: number) => ViemClientLike | undefined) | undefined;
-  /** How long to poll for a receipt before the confirm span ends as `timeout`. Default: 120 000 ms. */
+  /**
+   * How long to poll for a receipt before the confirm span ends as `timeout`; for a user operation that CDP reported
+   * complete, how long to poll for its bundle receipt before the span ends with the bundle's hash only. Default:
+   * 120 000 ms.
+   */
   confirmTimeoutMs?: number | undefined;
 }
 
 /** Returned by {@link withHashspan}; the CDP client itself is wrapped in place. */
 export interface HashspanCdp {
   /**
-   * Waits for tracing work still running after traced calls returned (background confirmations through the reader and
-   * waits of network-scoped accounts), so their spans are ended before the OpenTelemetry SDK shuts down. Resolves
-   * true when all of it finished, false on timeout (default 10 000 ms), ending confirm spans still open as `timeout`;
-   * never rejects. See
+   * Waits for tracing work still running after traced calls returned (background confirmations through the reader,
+   * waits of network-scoped accounts and `waitForUserOperation` waits), so their spans are ended before the OpenTelemetry SDK shuts down. Resolves
+   * true when all of it finished, false on timeout (default 10 000 ms), ending confirm spans still open as `timeout`
+   * (a user operation CDP reported complete ends with what is known); never rejects. See
    * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.7.0/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
@@ -172,9 +177,11 @@ function describeTransaction(transaction: unknown): Omit<SendInput, 'chainId'> {
 }
 
 /**
- * Traces transactions sent by a Coinbase CDP client's EVM server accounts with `@hashspan/core`
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.7.0/docs/adr/0012-cdp-adapter.md). It wraps the client
- * in place: `cdp.evm.sendTransaction`, the account factories and the send methods of every account they return. Call
+ * Traces transactions sent by a Coinbase CDP client's EVM server accounts, and user operations of its smart accounts,
+ * with `@hashspan/core` (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.7.0/docs/adr/0012-cdp-adapter.md,
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.7.0/docs/adr/0021-user-operations.md). It wraps the
+ * client in place: `cdp.evm.sendTransaction`, its user operation methods and `waitForUserOperation`, the account and
+ * smart account factories, and the send methods of every account they return. Call
  * it once, right after creating the client: a second call on the same client returns the first handle, ignores its
  * options and logs a `diag` warning. Never throws into the traced calls; transactions on networks it cannot map to a
  * chain id are sent untraced, with a warning.
