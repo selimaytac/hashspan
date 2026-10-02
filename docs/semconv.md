@@ -118,9 +118,9 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.tx.status` | string | confirm | on | from chain data: `success` \| `reverted` \| `replaced` |
 | `blockchain.block.number` | int | confirm | on | inclusion block; for a user operation, the bundle transaction's |
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
-| `blockchain.tx.effective_gas_price` | string | confirm | on | wei, decimal string |
-| `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, wei |
-| `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, wei; omitted if the gas price is unknown |
+| `blockchain.tx.effective_gas_price` | string | confirm | on | wei, decimal string; see the `fee` row for when it is omitted |
+| `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, wei; see the `fee` row for when it is omitted |
+| `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, wei; omitted if the gas price is unknown. Fee attributes come from the sealed receipt, never a flashblocks preconfirmation, and are omitted if only a preconfirmation was seen (see [ADR 0024](adr/0024-sealed-receipt-fees.md)) |
 | `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available, also of a reverted user operation: the `Error(string)` message, `Panic(0x..)`, `ErrorName(arg, ...)` for custom errors with a known ABI, else the 4-byte error selector. See [ADR 0005](adr/0005-revert-reason-replay.md) |
 | `blockchain.tx.replacement.hash` | string | confirm | on | on a `replaced` confirm span: hash of the mined transaction that replaced it |
 | `blockchain.tx.replacement.reason` | string | confirm | on | on a `replaced` confirm span: `repriced` \| `cancelled` \| `replaced`, as reported by the instrumented library; omitted when it reported none |

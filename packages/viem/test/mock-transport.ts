@@ -10,6 +10,8 @@ export interface MockOptions {
   chainId?: () => string | Promise<string>;
   /** Receipt fields merged into the default successful receipt; `null` means "not mined yet". */
   receipt?: Record<string, unknown> | null;
+  /** Receipt fields per `eth_getTransactionReceipt` call (the first is 1), merged after `receipt`. */
+  receiptAt?: (call: number) => Record<string, unknown>;
   /** Transaction fields merged into the default transaction, such as its `input`; a function gets the hash asked for. */
   transaction?: Record<string, unknown> | ((hash: unknown) => Record<string, unknown>);
   sendError?: { code: number; message: string };
@@ -40,6 +42,7 @@ export function mockTransport(options: MockOptions = {}) {
   const calls: string[] = [];
   const requests: { method: string; params?: unknown }[] = [];
   let block = 0x7b;
+  let receiptCalls = 0;
   const transaction = (hash?: unknown) => ({
     hash: HASH,
     from: FROM,
@@ -144,6 +147,7 @@ export function mockTransport(options: MockOptions = {}) {
             status: '0x1',
             type: '0x2',
             ...options.receipt,
+            ...options.receiptAt?.(++receiptCalls),
           };
         default:
           throw new Error(`mock transport: unexpected method ${method}`);

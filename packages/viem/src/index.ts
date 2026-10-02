@@ -18,7 +18,10 @@ import {
   toFunctionSelector,
   WaitForTransactionReceiptTimeoutError,
 } from 'viem';
-import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
+import {
+  getTransactionReceipt as viemGetTransactionReceipt,
+  waitForTransactionReceipt as viemWaitForTransactionReceipt,
+} from 'viem/actions';
 import { fetchRevertReason, formatRevertData } from './revert-reason.js';
 import { errorName, guardTracker, noopSend } from './safe-tracker.js';
 
@@ -65,6 +68,8 @@ const DEFAULT_REVERT_REASON_TIMEOUT_MS = 10_000;
 /** How long after a call settled its telemetry still waits for the client's chain id before it is dropped. */
 const CHAIN_ID_GRACE_MS = 30_000;
 const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
+/** How long telemetry waits for the sealed receipt of a preconfirmed transaction before it records it without fees. */
+const SEALED_RECEIPT_TIMEOUT_MS = 30_000;
 
 /** Timers of the JavaScript runtime; `src/` is type-checked without runtime-specific types. */
 const timers = globalThis as unknown as {
@@ -285,6 +290,22 @@ interface ViemReceipt {
   gasUsed: bigint;
   effectiveGasPrice?: bigint | undefined;
   l1Fee?: bigint | string | null | undefined;
+  blockHash?: string | null | undefined;
+}
+
+/**
+ * Whether `receipt` is a preconfirmation: a flashblocks node returns a receipt before its block is sealed, with a zero
+ * (or null) block hash, and its `l1Fee` can be that of another transaction. Fees are recorded from the sealed receipt
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.7.0/docs/adr/0024-sealed-receipt-fees.md).
+ */
+function isPreconfirmed(receipt: ViemReceipt): boolean {
+  const { blockHash } = receipt;
+  return blockHash === null || (typeof blockHash === 'string' && /^0x0*$/.test(blockHash));
+}
+
+/** `receipt` without the fields that make up its fee, for a preconfirmed receipt whose sealed one never came. */
+function withoutFees(receipt: ReceiptLike): ReceiptLike {
+  return { ...receipt, effectiveGasPrice: undefined, l1Fee: undefined };
 }
 
 function isTimeout(error: unknown): boolean {
@@ -355,6 +376,32 @@ function delay(ms: number): Promise<void> {
     const timer = timers.setTimeout(resolve, ms);
     (timer as { unref?: () => void }).unref?.();
   });
+}
+
+/**
+ * The sealed receipt of the preconfirmed `receipt`, read through `client` until `deadline`; undefined if none came.
+ * Never rejects: a missing receipt, a failed request or another preconfirmation is retried.
+ */
+async function sealedReceipt(
+  client: unknown,
+  receipt: ViemReceipt,
+  deadline: number,
+): Promise<ViemReceipt | undefined> {
+  const polling = (client as { pollingInterval?: unknown } | null)?.pollingInterval;
+  const retryMs = typeof polling === 'number' && polling > 0 ? polling : RECEIPT_LAG_RETRY_MS;
+  for (;;) {
+    try {
+      const sealed = (await viemGetTransactionReceipt(client as never, {
+        hash: receipt.transactionHash,
+      })) as ViemReceipt;
+      if (!isPreconfirmed(sealed)) return sealed;
+    } catch (error) {
+      diag.debug(`hashspan: the sealed receipt is not available yet (${errorName(error)})`);
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return undefined;
+    await delay(Math.min(retryMs, remaining));
+  }
 }
 
 function selectorOf(data: string | undefined): string | undefined {
@@ -608,7 +655,9 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
    * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.7.0/docs/adr/0007-confirmation-ownership.md) and
    * attributes the receipt of a replacing transaction to that transaction
    * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.7.0/docs/adr/0008-replaced-transactions.md). For
-   * reverted receipts, the span ends after the revert reason was fetched with `client`.
+   * reverted receipts, the span ends after the revert reason was fetched with `client`. For a preconfirmed receipt, it
+   * ends with the sealed receipt, read with `client` until `deadline` at the latest
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.7.0/docs/adr/0024-sealed-receipt-fees.md).
    */
   const recordReceipt = async (
     chainId: number,
@@ -618,6 +667,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     capture: ReplacementCapture,
     client: unknown,
     endTimeOf: () => TimeInput | undefined = () => undefined,
+    deadline?: number,
   ): Promise<void> => {
     const { handle } = confirmation;
     let receipt: ViemReceipt;
@@ -638,6 +688,31 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       const reported =
         replacement !== undefined &&
         sameHex(replacement.transactionReceipt.transactionHash, receipt.transactionHash);
+      const replacementReason = reported ? replacement.reason : undefined;
+      let recorded = toReceiptLike(receipt);
+      let endAt = endTimeOf;
+      if (isPreconfirmed(receipt)) {
+        // The span ends when the receipt arrived, not when the sealed one was read, so its duration stays the wait's.
+        const arrivedAt = endTimeOf() ?? new Date();
+        endAt = () => arrivedAt;
+        // Its fee may be another transaction's. A flush that cannot wait records it without fees.
+        const preconfirmed = { ...withoutFees(recorded), replacementReason };
+        confirmation.onAbandon((underlying) => underlying.end(preconfirmed, endAt()));
+        const sealed = await sealedReceipt(
+          client,
+          receipt,
+          Math.min(deadline ?? Number.POSITIVE_INFINITY, Date.now() + SEALED_RECEIPT_TIMEOUT_MS),
+        );
+        if (sealed) {
+          receipt = sealed;
+          recorded = toReceiptLike(sealed);
+        } else {
+          diag.warn(
+            'hashspan: no sealed receipt for a preconfirmed transaction; recording it without fees',
+          );
+          recorded = withoutFees(recorded);
+        }
+      }
       let revertReason: string | undefined;
       // A malformed hash is left to the tracker, which does not attribute it.
       if (
@@ -654,26 +729,11 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
             ? abis.get(confirmKey(chainId, hash))
             : undefined);
         // The receipt is known: a flush that cannot wait for the reason records the receipt without it.
-        const mined = receipt;
-        confirmation.onAbandon((underlying) =>
-          underlying.end(
-            {
-              ...toReceiptLike(mined),
-              replacementReason: reported ? replacement.reason : undefined,
-            },
-            endTimeOf(),
-          ),
-        );
+        const mined = { ...recorded, replacementReason };
+        confirmation.onAbandon((underlying) => underlying.end(mined, endAt()));
         revertReason = await revertReasonOf(minedKey, receipt, abi, client);
       }
-      handle.end(
-        {
-          ...toReceiptLike(receipt),
-          revertReason,
-          replacementReason: reported ? replacement.reason : undefined,
-        },
-        endTimeOf(),
-      );
+      handle.end({ ...recorded, revertReason, replacementReason }, endAt());
     } catch (error) {
       diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
       handle.fail(error, endTimeOf());
@@ -693,10 +753,11 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     capture: ReplacementCapture,
     client: unknown,
     endTimeOf: () => TimeInput | undefined = () => undefined,
+    deadline?: number,
   ): Promise<void> => {
     const confirmation = settleOnce(waitingHandle);
     return Promise.race([
-      recordReceipt(chainId, hash, confirmation, wait, capture, client, endTimeOf),
+      recordReceipt(chainId, hash, confirmation, wait, capture, client, endTimeOf, deadline),
       confirmation.ended,
     ]);
   };
@@ -771,7 +832,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       if (backgroundCount < maxBackgroundConfirmations) limitReported = false;
     };
     waited.then(release, release);
-    track(recordConfirmation(chainId, hash, handle, waited, capture, client));
+    track(recordConfirmation(chainId, hash, handle, waited, capture, client, undefined, deadline));
     // Not tracked: flush() waits for the confirm span, not for the caller's callback.
     if (onReceipt) {
       void waited.then(
