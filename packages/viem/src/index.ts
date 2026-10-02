@@ -38,6 +38,13 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.6.0/docs/adr/0005-revert-reason-replay.md.
    */
   decodeRevertReason?: boolean | { timeoutMs?: number | undefined } | undefined;
+  /**
+   * Most background confirmations (`confirm: { mode: 'background' }` and `watch()`) polling at once. A transaction
+   * sent while that many are polling gets no background confirm span, and a `diag` warning is logged; waits of the
+   * caller are not counted and always traced. Default: 256. See
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.6.0/docs/adr/0018-background-confirmation-limit.md.
+   */
+  maxBackgroundConfirmations?: number | undefined;
 }
 
 export interface BackgroundConfirmOptions {
@@ -48,6 +55,7 @@ export interface BackgroundConfirmOptions {
 }
 
 const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
+const DEFAULT_MAX_BACKGROUND_CONFIRMATIONS = 256;
 const DEFAULT_REVERT_REASON_TIMEOUT_MS = 10_000;
 /** How long after a call settled its telemetry still waits for the client's chain id before it is dropped. */
 const CHAIN_ID_GRACE_MS = 30_000;
@@ -408,8 +416,16 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     tracker: providedTracker,
     confirm,
     decodeRevertReason: decodeRevertReasonOption = true,
+    maxBackgroundConfirmations: maxBackgroundOption,
     ...trackerOptions
   } = options;
+  const maxBackgroundConfirmations =
+    typeof maxBackgroundOption === 'number' && maxBackgroundOption >= 0
+      ? maxBackgroundOption
+      : DEFAULT_MAX_BACKGROUND_CONFIRMATIONS;
+  /** Background confirmations polling now, and whether the limit was reported since the count was last below it. */
+  let backgroundCount = 0;
+  let limitReported = false;
   // Guarded so that no tracker, including a user-provided one, can throw into the instrumented call.
   const decodeRevertReason = decodeRevertReasonOption !== false;
   const revertReasonTimeoutMs =
@@ -637,14 +653,26 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     return background;
   };
 
-  /** Starts a confirm span for `hash` and polls for its receipt through `client`, off the caller's path. */
+  /**
+   * Starts a confirm span for `hash` and polls for its receipt through `client`, off the caller's path. Returns false,
+   * recording nothing, when `maxBackgroundConfirmations` are already polling.
+   */
   const confirmThrough = (
     client: ViemClientLike,
     chainId: number,
     hash: string,
     timeoutMs: number,
     onReceipt?: (receipt: TransactionReceipt | undefined) => void,
-  ): void => {
+  ): boolean => {
+    if (backgroundCount >= maxBackgroundConfirmations) {
+      if (!limitReported) {
+        limitReported = true;
+        diag.warn(
+          `hashspan: ${maxBackgroundConfirmations} background confirmations are already polling; not confirming more until one ends (maxBackgroundConfirmations)`,
+        );
+      }
+      return false;
+    }
     const handle = tracker.startConfirm({ chainId, hash });
     const capture: ReplacementCapture = {};
     const background = backgroundClientOf(client);
@@ -671,7 +699,13 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         }
       }
     };
+    backgroundCount++;
     const waited = wait();
+    const release = (): void => {
+      backgroundCount--;
+      if (backgroundCount < maxBackgroundConfirmations) limitReported = false;
+    };
+    waited.then(release, release);
     track(recordConfirmation(chainId, hash, handle, waited, capture, client));
     // Not tracked: flush() waits for the confirm span, not for the caller's callback.
     if (onReceipt) {
@@ -680,6 +714,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         () => onReceipt(undefined),
       );
     }
+    return true;
   };
 
   const watch = (client: ViemClientLike, options: WatchOptions): void => {
@@ -713,7 +748,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       }
       if (options.abi) abis.set(confirmKey(chainId, options.hash), options.abi);
       const timeoutMs = options.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS;
-      confirmThrough(client, chainId, options.hash, timeoutMs, onReceipt);
+      if (!confirmThrough(client, chainId, options.hash, timeoutMs, onReceipt))
+        onReceipt(undefined);
     } catch (error) {
       diag.error(`hashspan: failed to watch a transaction (${errorName(error)})`);
       onReceipt(undefined);
