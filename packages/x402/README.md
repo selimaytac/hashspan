@@ -64,9 +64,10 @@ nonce and `Transfer` from you to `payTo` of exactly the amount. For an `exact` p
 transaction was sent to the x402 proxy you authorized, which emitted its settlement event, and the token emitted
 `Transfer` from you to `payTo` of exactly the amount; for `upto`, the transaction was also sent by the facilitator
 your authorization names, and the transfer is of more than nothing, at most your maximum and the amount the
-settlement reports. All of it is checked from your own payment, not from the settlement. A Permit2 transaction
-carries no nonce, so a transaction already verified for an earlier payment of the same client is `false` for a later
-one. The attribute is absent when no check was possible: no reader, no receipt, a reverted one, or another scheme
+settlement reports. All of it is checked from your own payment, not from the settlement. The logs of a Permit2
+settlement carry no nonce, so each `withHashspan()` remembers, in memory, the last 1000 transactions it verified for
+a Permit2 payment, and one of them reported again for a later payment is `false`. After a restart, in another process
+or another `withHashspan()`, a reused transaction can still be `true`. The attribute is absent when no check was possible: no reader, no receipt, a reverted one, or another scheme
 (such as `batch-settlement`). With a reader, the payment span is exported once
 the receipt is checked; its end time stays when the response came. The revert reason of a reverted settlement, which
 would be text from a contract the server chooses, is only recorded with `decodeRevertReason: true`. See
