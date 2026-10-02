@@ -28,3 +28,12 @@ the first thing needed when an agent's transaction fails.
 - Best effort: earlier transactions in the same block can change the state the transaction saw, and some providers
   do not serve historical state. In those cases the reason may be missing or differ.
 - The `confirm` span duration includes fetching the reason for reverted transactions.
+
+## Amendment (2026-10-03): a contract created in the same block
+
+The testnet lab found that on fast chains (Base fits a whole agent run into one block) the replay on the previous
+block often misses the reason: a contract deployed earlier in the same block has no code there, so the call succeeds.
+When the replay on the previous block does not revert, the transaction is now replayed once more on the state at the
+end of its own block, and what that call reverts with is recorded. That is one more `eth_call`, only for reverted
+transactions whose first replay did not revert. The reason can then reflect transactions later in the block; it stays
+best effort, as above.

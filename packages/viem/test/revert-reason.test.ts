@@ -37,6 +37,45 @@ const confirmReason = async () => {
   return tracing.spanNamed('confirm 8453').attributes['blockchain.tx.revert.reason'];
 };
 
+describe('revert reason of a contract created in the same block', () => {
+  const replayOn = (blocks: string[]) => {
+    const { transport, requests } = mockTransport({
+      receipt: { status: '0x0' },
+      callRevertData: errorString('boom'),
+      callRevertsOn: (tag) => blocks.includes(String(tag)),
+    });
+    const reader = createPublicClient({ chain: base, transport }).extend(withHashspan());
+    const calls = () =>
+      requests.filter((r) => r.method === 'eth_call').map((r) => (r.params as unknown[])[1]);
+    return { reader, calls };
+  };
+
+  it('replays on the block itself when the previous block does not revert', async () => {
+    // The receipt is in block 0x7b; on 0x7a the contract does not exist yet, so the call succeeds.
+    const { reader, calls } = replayOn(['0x7b']);
+    await reader.waitForTransactionReceipt({ hash: HASH });
+    expect(await confirmReason()).toBe('boom');
+    expect(calls()).toEqual(['0x7a', '0x7b']);
+  });
+
+  it('replays once when the previous block reverts', async () => {
+    const { reader, calls } = replayOn(['0x7a', '0x7b']);
+    await reader.waitForTransactionReceipt({ hash: HASH });
+    expect(await confirmReason()).toBe('boom');
+    expect(calls()).toEqual(['0x7a']);
+  });
+
+  it('records no reason when neither replay reverts', async () => {
+    const { reader, calls } = replayOn([]);
+    await reader.waitForTransactionReceipt({ hash: HASH });
+    await vi.waitFor(() =>
+      expect(tracing.spans().some((s) => s.name === 'confirm 8453')).toBe(true),
+    );
+    expect(await confirmReason()).toBeUndefined();
+    expect(calls()).toEqual(['0x7a', '0x7b']);
+  });
+});
+
 describe('revert reason', () => {
   it('decodes Error(string) without an ABI', async () => {
     const reader = createPublicClient({
