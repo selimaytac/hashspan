@@ -21,6 +21,9 @@ where the behaviour is defined. For the setups that were checked, see [integrati
 - **x402 payments are missing.** x402 v1 payments and networks other than `eip155` are not traced, and a hook of
   your own registered before hashspan's can keep it from seeing the outcome
   ([x402 usage](../packages/x402/README.md#usage), [recorded](../packages/x402/README.md#recorded)).
+- **A span processor filters them out.** Langfuse's `LangfuseSpanProcessor` exports by default only GenAI and known
+  LLM spans, and drops hashspan's spans without an agent identity and its JSON-RPC spans, logging that at debug level
+  only ([keep them](backends.md#with-langfusespanprocessor)).
 
 ## Spans in a separate trace from the agent's
 
