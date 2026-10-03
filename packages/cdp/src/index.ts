@@ -14,6 +14,7 @@ import {
 } from '@hashspan/viem';
 import { context, diag } from '@opentelemetry/api';
 import { parseTransaction } from 'viem';
+import { createChainIdFor, createReaderFor } from './chain.js';
 import {
   addressOf,
   cdpErrorType,
@@ -23,8 +24,9 @@ import {
   stringOrUndefined,
   timers,
 } from './helpers.js';
-import { CDP_API_SEND_CHAIN_IDS, chainIdOf } from './networks.js';
+import { CDP_API_SEND_CHAIN_IDS } from './networks.js';
 import { own } from './own.js';
+import { createPending } from './pending.js';
 import { receiptOf } from './receipt.js';
 import { SentUserOperations, userOperationReceiptFromBundle } from './user-operation.js';
 import { type AccountLike, type AnyFn, replace, WRAPPED, wrapFailed } from './wrap.js';
@@ -67,9 +69,6 @@ interface CdpClientLike {
 // The same default as @hashspan/viem's flush().
 const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
 const TRANSFER_SELECTOR = '0xa9059cbb';
-// Unknown network values are named in warnings only when they look like a network name, never an RPC URL.
-const NETWORK_NAME = /^[a-z0-9-]{1,32}$/;
-const MAX_WARNED_NETWORKS = 32;
 const ACCOUNT_FACTORIES = [
   'createAccount',
   'getAccount',
@@ -134,57 +133,9 @@ export function withHashspan(
   // Confirmations reuse the viem adapter's receipt handling, on the same tracker.
   const viem = withViemHashspan({ ...rest, tracker });
 
-  const warnedNetworks = new Set<string>();
-  /** The chain id of a CDP network name; warns once per unknown name, without recording RPC URLs or other values. */
-  const chainIdFor = (network: unknown): number | undefined => {
-    const chainId = chainIdOf(network);
-    if (chainId !== undefined || network === undefined) return chainId;
-    const name = typeof network === 'string' && NETWORK_NAME.test(network) ? network : undefined;
-    const key = name ?? '';
-    if (!warnedNetworks.has(key) && warnedNetworks.size < MAX_WARNED_NETWORKS) {
-      warnedNetworks.add(key);
-      diag.warn(
-        `hashspan: not tracing calls on ${name === undefined ? 'an RPC URL or unknown network' : `the unknown CDP network "${name}"`}`,
-      );
-    }
-    return undefined;
-  };
-
-  // Work this adapter runs itself, outside @hashspan/viem: confirm spans of network-scoped waits without a reader.
-  const pending = new Set<Promise<void>>();
-  const track = (work: Promise<void>): void => {
-    pending.add(work);
-    void work.finally(() => pending.delete(work));
-  };
-  /** Ends a tracked confirm span that is still open as `timeout`, for `flush()` to call when it gives up. */
-  const waiting = new Set<() => void>();
-
-  const flushOwn = async (timeoutMs: number): Promise<boolean> => {
-    const settled = await new Promise<boolean>((resolve) => {
-      const timer = timers.setTimeout(() => resolve(false), timeoutMs);
-      void Promise.all([...pending]).then(() => {
-        timers.clearTimeout(timer);
-        resolve(true);
-      });
-    });
-    if (!settled) for (const abandon of [...waiting]) abandon();
-    return settled;
-  };
-
-  const readerFor = (chainId: number): ViemClientLike | undefined => {
-    try {
-      const client = typeof reader === 'function' ? reader(chainId) : reader;
-      if (client && (client.chain?.id === undefined || client.chain.id === chainId)) return client;
-      if (client) {
-        diag.warn(
-          `hashspan: the reader is on chain ${client.chain?.id}, not ${chainId}; not confirming the transaction`,
-        );
-      }
-    } catch (error) {
-      diag.error(`hashspan: the reader function failed (${errorName(error)})`);
-    }
-    return undefined;
-  };
+  const chainIdFor = createChainIdFor();
+  const { track, waiting, flushOwn } = createPending();
+  const readerFor = createReaderFor({ reader });
 
   /**
    * Runs `send` inside a send span when the chain id is known; the result and errors are passed on unchanged. If
