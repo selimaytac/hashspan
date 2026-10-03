@@ -224,9 +224,17 @@ export function paymentResourceOf(resource: string, mode: PaymentResourceMode): 
   if (mode === 'off' || hidesUserInfo(resource)) return undefined;
   const recorded = mode === 'path' ? sanitizeResource(resource) : originOf(resource);
   if (recorded === undefined) return undefined;
-  return recorded.length > MAX_RESOURCE_LENGTH
-    ? `${recorded.slice(0, MAX_RESOURCE_LENGTH)}...`
-    : recorded;
+  return cutAt(recorded, MAX_RESOURCE_LENGTH);
+}
+
+/**
+ * `text` cut to `max` characters, followed by `...`. A hex value that the cut splits is dropped whole: the part left
+ * is shorter than an address, so the address mode, applied later, would no longer recognise it as one.
+ */
+function cutAt(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const head = text.slice(0, max);
+  return `${/^[0-9a-fA-F]/.test(text.slice(max)) ? head.replace(/0[xX][0-9a-fA-F]*$/, '') : head}...`;
 }
 
 /** Longest `x402.resource` recorded; the value comes from the server that asks for the payment. */

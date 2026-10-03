@@ -87,6 +87,16 @@ describe('revert reason', () => {
     expect(await confirmReason()).toBe('boom');
   });
 
+  it('drops a hex value cut by the length bound whole, so no part of an address is recorded', async () => {
+    const message = `${'a'.repeat(1000)} ${FROM}`;
+    const reader = createPublicClient({
+      chain: base,
+      transport: reverted(errorString(message)).transport,
+    }).extend(withHashspan({ address: 'off' }));
+    await reader.waitForTransactionReceipt({ hash: HASH });
+    expect(await confirmReason()).toBe(`${'a'.repeat(1000)} ...`);
+  });
+
   it('decodes custom errors with the ABI used by writeContract', async () => {
     const { transport } = reverted(insufficient);
     const hashspan = withHashspan();

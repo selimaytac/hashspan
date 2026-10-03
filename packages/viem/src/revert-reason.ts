@@ -24,7 +24,17 @@ export function formatRevertData(data: Hex, abi: Abi | undefined): string | unde
   } catch {
     reason = data.slice(0, 10);
   }
-  return reason.length > MAX_REASON_LENGTH ? `${reason.slice(0, MAX_REASON_LENGTH)}...` : reason;
+  return cutAt(reason, MAX_REASON_LENGTH);
+}
+
+/**
+ * `text` cut to `max` characters, followed by `...`. A hex value that the cut splits is dropped whole: the part left
+ * is shorter than an address, so the address mode, applied later, would no longer recognise it as one.
+ */
+function cutAt(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const head = text.slice(0, max);
+  return `${/^[0-9a-fA-F]/.test(text.slice(max)) ? head.replace(/0[xX][0-9a-fA-F]*$/, '') : head}...`;
 }
 
 function revertDataOf(error: unknown): Hex | undefined {
