@@ -54,12 +54,12 @@
     "@hashspan/viem": "workspace:^"
   },
   "peerDependencies": {
-    "@coinbase/cdp-sdk": "^1.57.0",
+    "@coinbase/cdp-sdk": "^1.57.1",
     "@opentelemetry/api": "^1.9.0",
     "viem": "^2.21.0"
   },
   "devDependencies": {
-    "@coinbase/cdp-sdk": "^1.57.0",
+    "@coinbase/cdp-sdk": "^1.57.1",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/sdk-trace-base": "^2.11.0",
     "@opentelemetry/sdk-trace-node": "^2.11.0",
