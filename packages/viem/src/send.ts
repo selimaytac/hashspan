@@ -1,7 +1,7 @@
 // Tracing a send: the send span around the call, or, while the chain id is unknown, recorded once it is known.
 import { type Context, context, diag } from '@opentelemetry/api';
 import { own } from './arguments.js';
-import { chainIdOrGiveUp } from './confirm/timing.js';
+import { chainIdOrGiveUp, isChainId } from './confirm/timing.js';
 import { errorName } from './safe-tracker.js';
 import type { ViemClientLike } from './types.js';
 
@@ -53,7 +53,11 @@ export function createSendTracing(
     chain?: { id: number } | null | undefined;
   }): number | undefined => {
     const id = own(own(args, 'chain'), 'id');
-    return typeof id === 'number' ? id : client.chain?.id;
+    // A chain the call names with an id that is not one is not replaced by the client's: the span would be recorded
+    // for a chain the call did not send on.
+    if (id !== undefined) return isChainId(id) ? id : undefined;
+    const clientId = client.chain?.id;
+    return isChainId(clientId) ? clientId : undefined;
   };
 
   /**
@@ -68,7 +72,7 @@ export function createSendTracing(
         .then(() => client.request({ method: 'eth_chainId' }))
         .then((hex: string) => {
           const id = Number(hex);
-          if (!Number.isSafeInteger(id)) throw new TypeError('invalid chain id');
+          if (!isChainId(id)) throw new TypeError('invalid chain id');
           return id;
         });
       pendingChainId = query;

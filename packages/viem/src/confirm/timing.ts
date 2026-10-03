@@ -26,9 +26,14 @@ export function settledWithin(work: Promise<unknown>[], ms: number): Promise<boo
 }
 
 /** The chain id a client's node reports, from `eth_chainId`; rejects for an answer that is not one. */
+/** Whether `id` is a chain id: a positive safe integer (ADR 0025). */
+export function isChainId(id: unknown): id is number {
+  return typeof id === 'number' && Number.isSafeInteger(id) && id > 0;
+}
+
 export async function chainIdOfClient(client: ViemClientLike): Promise<number> {
   const id = Number(await client.request({ method: 'eth_chainId' }));
-  if (!Number.isSafeInteger(id) || id <= 0) throw new TypeError('invalid chain id');
+  if (!isChainId(id)) throw new TypeError('invalid chain id');
   return id;
 }
 
