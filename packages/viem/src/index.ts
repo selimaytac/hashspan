@@ -4,15 +4,11 @@ import {
   type CallBatchStatusLike,
   type ConfirmHandle,
   createTxTracker,
-  ERROR_TYPE_VALUE_OTHER,
-  type ReceiptLike,
-  type ReplacementReason,
   type SendInput,
   type TxTracker,
   type TxTrackerOptions,
   type UserOperationConfirmHandle,
   type UserOperationInput,
-  type UserOperationReceiptLike,
 } from '@hashspan/core';
 import { type Context, context, diag, type TimeInput } from '@opentelemetry/api';
 import {
@@ -25,14 +21,66 @@ import {
 // A namespace import: `sendCallsSync` is missing from older viem releases in the peer range, and a named import of it
 // would fail to load there.
 import * as viemActions from 'viem/actions';
+import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
 import {
-  getTransactionReceipt as viemGetTransactionReceipt,
-  waitForTransactionReceipt as viemWaitForTransactionReceipt,
-} from 'viem/actions';
-import { fetchRevertReason, formatRevertData } from './revert-reason.js';
+  abiForTelemetry,
+  addressOf,
+  authorizationsOf,
+  dataOnly,
+  descriptorOf,
+  MAX_ARGUMENTS_COPY_DEPTH,
+  own,
+  selectorOf,
+  shadowing,
+} from './arguments.js';
+import {
+  capturing,
+  isCallsTimeout,
+  isPreconfirmed,
+  isReadable,
+  isReceiptLag,
+  isTimeout,
+  isUserOperationTimeout,
+  nameOf,
+  RECEIPT_LAG_RETRY_MS,
+  type ReplacementCapture,
+  sameHex,
+  sealedReceipt,
+  toReceiptLike,
+  toUserOperationReceiptLike,
+  unreadable,
+  type ViemReceipt,
+  type ViemReplacement,
+  type ViemUserOperationReceipt,
+  withoutFees,
+} from './confirm/receipt.js';
+import { confirmKey, Recent } from './confirm/recent.js';
+import {
+  chainIdOfClient,
+  chainIdOrGiveUp,
+  delay,
+  settledWithin,
+  within,
+} from './confirm/timing.js';
+import { fetchRevertReason } from './revert-reason.js';
 import { errorName, guardTracker } from './safe-tracker.js';
+import type {
+  AnyAction,
+  BackgroundConfirmOptions,
+  FlushOptions,
+  TracedAction,
+  ViemClientLike,
+  WatchOptions,
+} from './types.js';
 
 export { type TraceTransportOptions, traceTransport } from './transport.js';
+export type {
+  BackgroundConfirmOptions,
+  FlushOptions,
+  TracedAction,
+  ViemClientLike,
+  WatchOptions,
+} from './types.js';
 
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
@@ -63,150 +111,12 @@ export interface WithHashspanOptions extends TxTrackerOptions {
   maxBackgroundConfirmations?: number | undefined;
 }
 
-export interface BackgroundConfirmOptions {
-  /** Confirm every transaction sent through the extended clients, whether or not the caller waits for it. */
-  mode: 'background';
-  /** How long to poll for a receipt before ending the confirm span as `timeout`. Default: 120 000 ms. */
-  timeoutMs?: number | undefined;
-}
-
 const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_BACKGROUND_CONFIRMATIONS = 256;
 const DEFAULT_REVERT_REASON_TIMEOUT_MS = 10_000;
-/** How long after a call settled its telemetry still waits for the client's chain id before it is dropped. */
-const CHAIN_ID_GRACE_MS = 30_000;
 const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
 /** How long telemetry waits for the sealed receipt of a preconfirmed transaction before it records it without fees. */
 const SEALED_RECEIPT_TIMEOUT_MS = 30_000;
-
-/** Timers of the JavaScript runtime; `src/` is type-checked without runtime-specific types. */
-const timers = globalThis as unknown as {
-  setTimeout(fn: () => void, ms: number): unknown;
-  clearTimeout(timer: unknown): void;
-};
-
-/**
- * Resolves true once all of `work` has settled, or false after `ms`. Unlike the other internal timers, this one is
- * referenced: `flush()` is awaited before shutting down, so the process must stay alive until it resolves.
- */
-function settledWithin(work: Promise<unknown>[], ms: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const timer = timers.setTimeout(() => resolve(false), ms);
-    void Promise.all(work).then(() => {
-      timers.clearTimeout(timer);
-      resolve(true);
-    });
-  });
-}
-
-/** The chain id a client's node reports, from `eth_chainId`; rejects for an answer that is not one. */
-async function chainIdOfClient(client: ViemClientLike): Promise<number> {
-  const id = Number(await client.request({ method: 'eth_chainId' }));
-  if (!Number.isSafeInteger(id) || id <= 0) throw new TypeError('invalid chain id');
-  return id;
-}
-
-/** Resolves with `value`, or with undefined after `ms`. Never rejects; its timer does not keep the process alive. */
-function within<T>(value: Promise<T>, ms: number, what: string): Promise<T | undefined> {
-  return new Promise((resolve) => {
-    const timer = timers.setTimeout(() => {
-      diag.debug(`hashspan: gave up waiting to ${what} after ${ms} ms`);
-      resolve(undefined);
-    }, ms);
-    (timer as { unref?: () => void }).unref?.();
-    const done = (result: T | undefined): void => {
-      timers.clearTimeout(timer);
-      resolve(result);
-    };
-    value.then(done, () => done(undefined));
-  });
-}
-
-/**
- * Resolves with the chain id, or with undefined if the request fails or is still pending `CHAIN_ID_GRACE_MS` after
- * `settled`. Never rejects, and its timer does not keep the process alive.
- */
-function chainIdOrGiveUp(
-  chainId: Promise<number>,
-  settled: Promise<unknown>,
-): Promise<number | undefined> {
-  return new Promise((resolve) => {
-    let timer: unknown;
-    let finished = false;
-    const done = (id: number | undefined): void => {
-      finished = true;
-      if (timer !== undefined) timers.clearTimeout(timer);
-      resolve(id);
-    };
-    chainId.then(done, (error: unknown) => {
-      diag.debug(`hashspan: could not resolve the chain id (${errorName(error)})`);
-      done(undefined);
-    });
-    const startGrace = (): void => {
-      // The chain id may have arrived before the call settled: then there is nothing to wait for.
-      if (finished) return;
-      timer = timers.setTimeout(() => {
-        diag.debug('hashspan: chain id still unknown after the call settled; not recording it');
-        done(undefined);
-      }, CHAIN_ID_GRACE_MS);
-      (timer as { unref?: () => void }).unref?.();
-    };
-    settled.then(startGrace, startGrace);
-  });
-}
-const RECENT_TTL_MS = 10 * 60 * 1000;
-const MAX_RECENT = 10_000;
-
-/** Per-transaction values kept for a while, keyed by `chainId:hash`. Bounded and time-limited. */
-class Recent<T> {
-  private readonly entries = new Map<string, { value: T; expiresAt: number }>();
-
-  set(key: string, value: T): void {
-    this.entries.delete(key);
-    this.entries.set(key, { value, expiresAt: Date.now() + RECENT_TTL_MS });
-    for (const oldest of this.entries.keys()) {
-      if (this.entries.size <= MAX_RECENT) break;
-      this.entries.delete(oldest);
-    }
-  }
-
-  get(key: string): T | undefined {
-    const entry = this.entries.get(key);
-    if (!entry || entry.expiresAt <= Date.now()) return undefined;
-    return entry.value;
-  }
-}
-
-/**
- * Actions this adapter traces: those of a wallet client, two of a bundler client (`createBundlerClient`), and the
- * EIP-5792 call batch actions of a wallet client.
- */
-export type TracedAction =
-  | 'sendTransaction'
-  | 'writeContract'
-  | 'waitForTransactionReceipt'
-  | 'sendUserOperation'
-  | 'waitForUserOperationReceipt'
-  | 'sendCalls'
-  | 'sendCallsSync'
-  | 'waitForCallsStatus';
-
-// biome-ignore lint/suspicious/noExplicitAny: viem action signatures are preserved via Pick<TClient, ...>.
-type AnyAction = (args: any) => Promise<any>;
-
-/** The subset of a viem client the adapter relies on. */
-export interface ViemClientLike {
-  chain?: { id: number } | undefined;
-  account?: { address: string } | undefined;
-  uid?: string | undefined;
-  // biome-ignore lint/suspicious/noExplicitAny: matches viem's overloaded EIP-1193 request function.
-  request: (...args: any[]) => Promise<any>;
-}
-
-export interface FlushOptions {
-  /** Longest time to wait. Default: 10 000 ms. */
-  timeoutMs?: number | undefined;
-}
 
 /** Client extension returned by {@link withHashspan}: the traced actions present on the client. */
 export interface HashspanExtension {
@@ -229,28 +139,6 @@ export interface HashspanExtension {
   watch(client: ViemClientLike, options: WatchOptions): void;
 }
 
-export interface WatchOptions {
-  /** Transaction hash. */
-  hash: string;
-  /**
-   * EIP-155 chain id; defaults to the client's chain. Without either, nothing is recorded; when it differs from the
-   * client's chain, nothing is recorded either and a `diag` warning is logged. A client without a chain is asked
-   * for its chain id with `eth_chainId` first.
-   */
-  chainId?: number | undefined;
-  /** How long to poll for the receipt before the confirm span ends as `timeout`. Default: 120 000 ms. */
-  timeoutMs?: number | undefined;
-  /** ABI of the called contract, to decode custom errors in the revert reason. */
-  abi?: Abi | undefined;
-  /**
-   * Called once when the watch ends: with the receipt of the mined transaction (of a replacing transaction, if one
-   * was mined instead), or with `undefined` when no receipt was retrieved (timeout, failure, or nothing watched). Its
-   * result and errors are ignored; it never affects the confirm span. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0017-x402-payment-verification.md.
-   */
-  onReceipt?: ((receipt: TransactionReceipt | undefined) => void) | undefined;
-}
-
 interface SendArgs {
   account?: string | { address: string } | null | undefined;
   chain?: { id: number } | null | undefined;
@@ -271,63 +159,6 @@ interface WaitArgs {
   hash: string;
   chain?: { id: number } | null | undefined;
   onReplaced?: ((replacement: ViemReplacement) => void) | undefined;
-}
-
-/** What viem passes to `onReplaced`. */
-interface ViemReplacement {
-  reason: ReplacementReason;
-  replacedTransaction: { to?: string | null | undefined };
-  transaction: { to?: string | null | undefined };
-  transactionReceipt: ViemReceipt;
-}
-
-/** The replacement viem reported to one wait, if any. */
-interface ReplacementCapture {
-  replacement?: ViemReplacement | undefined;
-}
-
-/**
- * `onReplaced` for a wait: stores the replacement first, then calls the caller's callback with the same argument.
- * What the callback throws still rejects the wait, as in plain viem.
- */
-function capturing(
-  capture: ReplacementCapture,
-  onReplaced: ((replacement: ViemReplacement) => void) | undefined,
-): (replacement: ViemReplacement) => void {
-  return (replacement) => {
-    capture.replacement = replacement;
-    onReplaced?.(replacement);
-  };
-}
-
-/** Case-insensitive equality of two hex strings (addresses or hashes); false unless both are strings. */
-function sameHex(a: unknown, b: unknown): boolean {
-  return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
-}
-
-interface ViemReceipt {
-  transactionHash: `0x${string}`;
-  status: 'success' | 'reverted';
-  blockNumber: bigint;
-  gasUsed: bigint;
-  effectiveGasPrice?: bigint | undefined;
-  l1Fee?: bigint | string | null | undefined;
-  blockHash?: string | null | undefined;
-}
-
-/**
- * Whether `receipt` is a preconfirmation: a flashblocks node returns a receipt before its block is sealed, with a zero
- * (or null) block hash, and its `l1Fee` can be that of another transaction. Fees are recorded from the sealed receipt
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0024-sealed-receipt-fees.md).
- */
-function isPreconfirmed(receipt: ViemReceipt): boolean {
-  const { blockHash } = receipt;
-  return blockHash === null || (typeof blockHash === 'string' && /^0x0*$/.test(blockHash));
-}
-
-/** `receipt` without the fields that make up its fee, for a preconfirmed receipt whose sealed one never came. */
-function withoutFees(receipt: ReceiptLike): ReceiptLike {
-  return { ...receipt, effectiveGasPrice: undefined, l1Fee: undefined };
 }
 
 // The suffix of the id viem returns for a batch it sent as plain transactions (`experimental_fallback`): the
@@ -369,266 +200,6 @@ function toCallBatchStatusLike(status: unknown): CallBatchStatusLike {
             : undefined,
       };
     }),
-  };
-}
-
-/**
- * The `name` of `error` if it is an Error with a string name; undefined otherwise, also when reading it throws (a
- * throwing getter or Proxy trap), so classifying a rejection never throws.
- */
-function nameOf(error: unknown): string | undefined {
-  try {
-    if (!(error instanceof Error)) return undefined;
-    const name: unknown = error.name;
-    return typeof name === 'string' ? name : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Whether telemetry can read `error`: core records an Error's name as `error.type`. A rejection whose name cannot be
- * read is recorded without the error, as `error.type` `_OTHER`, so its confirm span still ends.
- */
-function isReadable(error: unknown): boolean {
-  try {
-    if (error instanceof Error) void error.name;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** `fail()` options for a rejection that cannot be read: no error object, `error.type` `_OTHER`. */
-function unreadable(endTime: TimeInput | undefined): { endTime?: TimeInput; errorType: string } {
-  return endTime === undefined
-    ? { errorType: ERROR_TYPE_VALUE_OTHER }
-    : { endTime, errorType: ERROR_TYPE_VALUE_OTHER };
-}
-
-function isCallsTimeout(error: unknown): boolean {
-  return nameOf(error) === 'WaitForCallsStatusTimeoutError';
-}
-
-function isTimeout(error: unknown): boolean {
-  return nameOf(error) === 'WaitForTransactionReceiptTimeoutError';
-}
-
-/** viem gives up waiting for a user operation receipt with this error, on its timeout or after `retryCount` polls. */
-function isUserOperationTimeout(error: unknown): boolean {
-  return nameOf(error) === 'WaitForUserOperationReceiptTimeoutError';
-}
-
-/** What viem's `waitForUserOperationReceipt` returns, as far as the adapter reads it. */
-interface ViemUserOperationReceipt {
-  success?: unknown;
-  actualGasCost?: unknown;
-  actualGasUsed?: unknown;
-  sender?: unknown;
-  nonce?: unknown;
-  paymaster?: unknown;
-  entryPoint?: unknown;
-  reason?: unknown;
-  receipt?: { transactionHash?: unknown; blockNumber?: unknown } | undefined;
-}
-
-const HEX_DATA = /^0x(?:[0-9a-fA-F]{2})*$/;
-
-/**
- * Normalises viem's user operation receipt. The core checks every value, since they come from the bundler. viem
- * types `nonce` as a bigint but passes on the bundler's hex string; the core accepts both. `reason` is the revert
- * data of the operation's call, decoded like a transaction's (without an ABI, a custom error is its selector).
- */
-function toUserOperationReceiptLike(receipt: ViemUserOperationReceipt): UserOperationReceiptLike {
-  const { reason } = receipt;
-  const bundle = receipt.receipt;
-  return {
-    success: receipt.success as boolean | undefined,
-    actualGasCost: receipt.actualGasCost as bigint | undefined,
-    actualGasUsed: receipt.actualGasUsed as bigint | undefined,
-    sender: receipt.sender as string | undefined,
-    nonce: receipt.nonce as bigint | string | undefined,
-    paymaster: receipt.paymaster as string | undefined,
-    entryPoint: receipt.entryPoint as string | undefined,
-    revertReason:
-      receipt.success === false && typeof reason === 'string' && HEX_DATA.test(reason)
-        ? formatRevertData(reason as `0x${string}`, undefined)
-        : undefined,
-    transactionHash: bundle?.transactionHash as string | undefined,
-    blockNumber: bundle?.blockNumber as bigint | undefined,
-  };
-}
-
-/**
- * viem gives up waiting when a node returns a mined transaction before its receipt: it looks for a replacement,
- * finds the transaction itself in the block and fails to fetch its receipt again. Background confirmation waits
- * again after these errors, until its timeout.
- */
-function isReceiptLag(error: unknown): boolean {
-  const name = nameOf(error);
-  return name === 'TransactionReceiptNotFoundError' || name === 'TransactionNotFoundError';
-}
-const RECEIPT_LAG_RETRY_MS = 1_000;
-
-/** Resolves after `ms`; its timer does not keep the process alive. */
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = timers.setTimeout(resolve, ms);
-    (timer as { unref?: () => void }).unref?.();
-  });
-}
-
-/**
- * The sealed receipt of the preconfirmed `receipt`, read through `client` until `deadline`; undefined if none came.
- * Never rejects: a missing receipt, a failed request or another preconfirmation is retried.
- */
-async function sealedReceipt(
-  client: unknown,
-  receipt: ViemReceipt,
-  deadline: number,
-): Promise<ViemReceipt | undefined> {
-  const polling = (client as { pollingInterval?: unknown } | null)?.pollingInterval;
-  const retryMs = typeof polling === 'number' && polling > 0 ? polling : RECEIPT_LAG_RETRY_MS;
-  for (;;) {
-    try {
-      const sealed = (await viemGetTransactionReceipt(client as never, {
-        hash: receipt.transactionHash,
-      })) as ViemReceipt;
-      if (!isPreconfirmed(sealed)) return sealed;
-    } catch (error) {
-      diag.debug(`hashspan: the sealed receipt is not available yet (${errorName(error)})`);
-    }
-    const remaining = deadline - Date.now();
-    if (remaining <= 0) return undefined;
-    await delay(Math.min(retryMs, remaining));
-  }
-}
-
-function selectorOf(data: string | undefined): string | undefined {
-  return data && data.length >= 10 ? data.slice(0, 10) : undefined;
-}
-
-/**
- * The value of `target`'s own data property `key`, or undefined for an accessor, an inherited or a missing
- * property. Telemetry reads the user's call arguments only this way, so it never runs a getter: a getter with side
- * effects, or one that returns a different value per read, would otherwise change what the call sends. A Proxy's
- * `getOwnPropertyDescriptor` trap still runs.
- */
-function own(target: unknown, key: string): unknown {
-  if (target === null || (typeof target !== 'object' && typeof target !== 'function'))
-    return undefined;
-  const descriptor = Object.getOwnPropertyDescriptor(target, key);
-  return descriptor && 'value' in descriptor ? descriptor.value : undefined;
-}
-
-/**
- * The EIP-7702 authorization list of a call, as the core reads it: each entry's delegated address and chain id, read
- * from own data properties. viem names the address `address`; releases before 2.23 named it `contractAddress`.
- * Signatures and nonces are left out, so they never reach telemetry.
- */
-function authorizationsOf(list: unknown): SendInput['authorizations'] {
-  if (!Array.isArray(list)) return undefined;
-  const length = own(list, 'length');
-  if (typeof length !== 'number' || length === 0) return undefined;
-  const entries: { address: string; chainId: number }[] = [];
-  for (let index = 0; index < Math.min(length, MAX_AUTHORIZATIONS); index++) {
-    const entry = own(list, String(index));
-    const address = own(entry, 'address') ?? own(entry, 'contractAddress');
-    // An entry the core cannot read keeps its place in the count.
-    entries.push({ address: address as string, chainId: own(entry, 'chainId') as number });
-  }
-  // The core counts the whole list but reads only its first entries: the rest stay holes, never read or allocated.
-  entries.length = length;
-  return entries;
-}
-
-/** Most authorizations read from a list, as many as the core records. */
-const MAX_AUTHORIZATIONS = 64;
-
-const MAX_ARGUMENTS_COPY_DEPTH = 8;
-// Deep enough for nested tuples, which add two levels each.
-const MAX_ABI_COPY_DEPTH = 32;
-
-/**
- * A copy of `value` made of own data properties only, for code that reads it deeply (viem's ABI matching);
- * accessors become undefined and nothing deeper than `maxDepth` is copied.
- */
-function dataOnly(value: unknown, maxDepth: number, depth = 0): unknown {
-  if (value === null || typeof value !== 'object') return value;
-  if (depth >= maxDepth) return undefined;
-  if (Array.isArray(value)) {
-    const length = own(value, 'length');
-    return Array.from({ length: typeof length === 'number' ? length : 0 }, (_, i) =>
-      dataOnly(own(value, String(i)), maxDepth, depth + 1),
-    );
-  }
-  const copy: Record<string, unknown> = {};
-  for (const key of Object.keys(value)) copy[key] = dataOnly(own(value, key), maxDepth, depth + 1);
-  return copy;
-}
-
-/**
- * The ABI items telemetry needs, copied without accessors: the functions named `functionName`, for the selector,
- * and the errors, to decode revert reasons. viem gets this copy, never the caller's ABI, so no getter in it runs.
- */
-function abiForTelemetry(abi: unknown, functionName: unknown): Abi | undefined {
-  if (!Array.isArray(abi)) return undefined;
-  const length = own(abi, 'length');
-  const items: unknown[] = [];
-  for (let i = 0; i < (typeof length === 'number' ? length : 0); i++) {
-    const item = own(abi, String(i));
-    const type = own(item, 'type');
-    if (type === 'error' || (type === 'function' && own(item, 'name') === functionName)) {
-      items.push(dataOnly(item, MAX_ABI_COPY_DEPTH));
-    }
-  }
-  return items as Abi;
-}
-
-/** The descriptor of `key` on `target` or the first prototype that has it; reading it runs no getter. */
-function descriptorOf(target: object, key: string): PropertyDescriptor | undefined {
-  for (
-    let object: object | null = target;
-    object !== null;
-    object = Object.getPrototypeOf(object)
-  ) {
-    const descriptor = Object.getOwnPropertyDescriptor(object, key);
-    if (descriptor) return descriptor;
-  }
-  return undefined;
-}
-
-/**
- * `target` with `key` shadowed by `value`: an object whose prototype is `target`, so inherited properties read through,
- * that also carries `target`'s own properties as they are (data as data, accessors as accessors, so no getter runs).
- * This works for frozen objects, keeps the number of times a getter runs, and keeps the own properties for code that
- * copies the options with a spread, such as another extension applied before this one.
- */
-function shadowing<T extends object>(target: T, key: string, value: unknown): T {
-  const descriptors = Object.getOwnPropertyDescriptors(target) as PropertyDescriptorMap;
-  delete descriptors[key];
-  return Object.create(target, {
-    ...descriptors,
-    [key]: { value, enumerable: true, writable: true, configurable: true },
-  }) as T;
-}
-
-function addressOf(account: unknown): string | undefined {
-  if (typeof account === 'string') return account;
-  const address = own(account, 'address');
-  return typeof address === 'string' ? address : undefined;
-}
-
-/** Normalises a viem receipt; `l1Fee` is a bigint with the OP-stack formatter, else a raw hex string. */
-function toReceiptLike(receipt: ViemReceipt): ReceiptLike {
-  const { l1Fee } = receipt;
-  return {
-    status: receipt.status,
-    blockNumber: receipt.blockNumber,
-    gasUsed: receipt.gasUsed,
-    effectiveGasPrice: receipt.effectiveGasPrice,
-    l1Fee: typeof l1Fee === 'string' ? BigInt(l1Fee) : l1Fee,
-    transactionHash: receipt.transactionHash,
   };
 }
 
@@ -676,7 +247,6 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   const abis = new Recent<Abi>();
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
   const revertReasons = new Recent<Promise<string | undefined>>();
-  const confirmKey = (chainId: number, hash: string): string => `${chainId}:${hash.toLowerCase()}`;
   /** Tracing work that outlives the traced call, awaited by `flush()`. */
   const pending = new Set<Promise<void>>();
   const track = (work: Promise<void>): void => {
