@@ -160,6 +160,27 @@ describe('confirmation through the reader', () => {
     );
   });
 
+  it('confirms through a reader without a chain only on the chain its node reports', async () => {
+    // The paid server names the network; a reader without a chain could be polled for any of them.
+    const reader = createPublicClient({
+      transport: mockTransport({ chainIdHex: '0x14a34' }).transport,
+    });
+    const { client, pay } = capturingClient();
+    const hashspan = withHashspan(client, { reader });
+    pay(paymentRequired({ network: 'eip155:999999' }), {
+      success: true,
+      transaction: RECEIPT_HASH,
+    }).respond();
+    pay(paymentRequired(), { success: true, transaction: RECEIPT_HASH }).respond();
+    expect(await hashspan.flush()).toBe(true);
+    expect(
+      tracing
+        .spans()
+        .map((s) => s.name)
+        .sort(),
+    ).toEqual(['confirm 84532', 'payment 84532', 'payment 999999']);
+  });
+
   it('is asked for the chain of a settled or pending payment only', () => {
     const reader = vi.fn(() => undefined);
     const { client, pay } = capturingClient();
