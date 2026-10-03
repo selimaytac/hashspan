@@ -193,3 +193,35 @@ describe('clients with a chain', () => {
     expect(span._startTimeProvided).toBe(false);
   });
 });
+
+describe('chain ids that are not one', () => {
+  // A chain id is a positive safe integer (ADR 0025): a node answering 0x0, or a call's chain with an id of 0,
+  // NaN or a negative number, gives no span with that id.
+  it('records nothing for a client whose node answers chain id 0', async () => {
+    const { transport } = mockTransport({ chainIdHex: '0x0' });
+    const wallet = createWalletClient({ account: FROM, transport }).extend(withHashspan());
+
+    await withoutUnhandledRejections(async () => {
+      await expect(wallet.sendTransaction({ to: TO, chain: null })).resolves.toBe(HASH);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(tracing.spans().map((s) => s.attributes['blockchain.chain.id'])).not.toContain(0);
+  });
+
+  it.each([0, -1, Number.NaN, 1.5])('ignores a call chain with id %s', async (id) => {
+    const { transport } = mockTransport();
+    const wallet = createWalletClient({ account: FROM, chain: base, transport }).extend(
+      withHashspan(),
+    );
+
+    await wallet
+      .sendTransaction({
+        to: TO,
+        chain: { ...base, id } as unknown as typeof base,
+      })
+      .catch(() => {});
+    for (const span of tracing.spans()) {
+      expect(span.attributes['blockchain.chain.id']).not.toBe(id);
+    }
+  });
+});
