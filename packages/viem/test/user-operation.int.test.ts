@@ -147,8 +147,8 @@ describe('user operations on Anvil', () => {
       'blockchain.system': 'evm',
       'blockchain.chain.id': 31337,
       'blockchain.operation.name': 'send',
-      'blockchain.user_operation.sender': ACCOUNT,
-      'blockchain.user_operation.entry_point': entryPoint07Address,
+      'blockchain.user_operation.sender': ACCOUNT.toLowerCase(),
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
       'blockchain.user_operation.call_count': 2,
       'blockchain.user_operation.hash': hash,
     });
@@ -161,9 +161,9 @@ describe('user operations on Anvil', () => {
       'blockchain.user_operation.success': true,
       'blockchain.user_operation.gas.used': Number(receipt.actualGasUsed),
       'blockchain.user_operation.gas.cost': receipt.actualGasCost.toString(),
-      'blockchain.user_operation.sender': ACCOUNT,
+      'blockchain.user_operation.sender': ACCOUNT.toLowerCase(),
       'blockchain.user_operation.nonce': nonce.toString(),
-      'blockchain.user_operation.entry_point': entryPoint07Address,
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
       'blockchain.tx.hash': receipt.receipt.transactionHash,
       'blockchain.block.number': Number(receipt.receipt.blockNumber),
     });

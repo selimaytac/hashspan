@@ -186,9 +186,9 @@ describe('an EIP-3009 payment settled by the SDK facilitator', () => {
     const payment = tracing.spanNamed(PAYMENT_SPAN);
     expect(payment.attributes).toMatchObject({
       'blockchain.payment.status': 'settled',
-      'blockchain.payment.payer': agent.address,
-      'blockchain.payment.recipient': PAY_TO,
-      'blockchain.payment.asset': token,
+      'blockchain.payment.payer': agent.address.toLowerCase(),
+      'blockchain.payment.recipient': PAY_TO.toLowerCase(),
+      'blockchain.payment.asset': token.toLowerCase(),
       'blockchain.payment.amount': String(PRICE),
       'x402.scheme': 'exact',
       'x402.resource': 'http://api.test',

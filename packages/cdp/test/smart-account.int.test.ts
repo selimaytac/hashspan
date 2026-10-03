@@ -113,7 +113,7 @@ describe('CDP smart accounts against a local CDP API and Anvil', () => {
     const send = tracing.spanNamed('send 84532');
     expect(send.attributes).toMatchObject({
       'blockchain.user_operation.hash': userOpHash,
-      'blockchain.user_operation.sender': SMART_ACCOUNT,
+      'blockchain.user_operation.sender': SMART_ACCOUNT.toLowerCase(),
       'blockchain.user_operation.call_count': 2,
     });
     const confirm = tracing.spanNamed('confirm 84532');
@@ -122,7 +122,7 @@ describe('CDP smart accounts against a local CDP API and Anvil', () => {
     expect(confirm.attributes).toMatchObject({
       'blockchain.user_operation.hash': userOpHash,
       'blockchain.user_operation.success': true,
-      'blockchain.user_operation.entry_point': entryPoint07Address,
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
       'blockchain.user_operation.nonce': '0',
       'blockchain.tx.hash': result.status === 'complete' ? result.transactionHash : undefined,
     });

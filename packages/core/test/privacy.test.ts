@@ -20,9 +20,9 @@ describe('resolveAddressFormatter', () => {
     expect(warn).toHaveBeenCalled();
   });
 
-  it('defaults to raw and preserves the address as given', () => {
-    expect(resolveAddressFormatter(undefined)(ADDRESS)).toBe(ADDRESS);
-    expect(resolveAddressFormatter('raw')(ADDRESS)).toBe(ADDRESS);
+  it('defaults to raw and records the address in lower case', () => {
+    expect(resolveAddressFormatter(undefined)(ADDRESS)).toBe(ADDRESS.toLowerCase());
+    expect(resolveAddressFormatter('raw')(ADDRESS)).toBe(ADDRESS.toLowerCase());
   });
 
   it('drops addresses in off mode', () => {
