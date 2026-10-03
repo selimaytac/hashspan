@@ -11,8 +11,11 @@ transaction ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/x4
 ## Install
 
 ```sh
-npm install @hashspan/x402 @x402/core @opentelemetry/api viem
+npm install @hashspan/x402 @x402/core @x402/evm @x402/fetch @opentelemetry/api viem
 ```
+
+`@x402/evm` and `@x402/fetch` are the payment scheme and HTTP client of the example below; install the ones your setup
+uses.
 
 Requires Node.js 22.3 or later and `@x402/core` 2.13 or later. Bring your own [OpenTelemetry SDK and exporter](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/).
 
