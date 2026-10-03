@@ -32,10 +32,11 @@ import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
 import { reverterCode } from './entry-point/test-entry-point.js';
+import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const ANVIL_PORT = 18582;
-const ALTO_PORT = 18583;
+const ANVIL_PORT = await freePort();
+const ALTO_PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${ANVIL_PORT}`;
 const BUNDLER_URL = `http://127.0.0.1:${ALTO_PORT}`;
 const TOOLS = new URL('../../../.tools/bundler/node_modules/', import.meta.url).pathname;

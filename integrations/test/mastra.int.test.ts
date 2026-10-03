@@ -15,9 +15,10 @@ import { createWalletClient, type Hex, http, parseEther, publicActions } from 'v
 import { foundry } from 'viem/chains';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { freePort } from '../../packages/viem/test/free-port.js';
 import { offline } from './offline.js';
 
-const PORT = 18603;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc';
 // Anvil's first account, unlocked on the node.

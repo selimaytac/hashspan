@@ -28,12 +28,13 @@ import {
   testAccountCode,
   testEntryPointCode,
 } from '../../packages/viem/test/entry-point/test-entry-point.js';
+import { freePort } from '../../packages/viem/test/free-port.js';
 import { setupTracing, type TestTracing } from '../../packages/viem/test/tracing.js';
 import { testUsdAbi, testUsdBytecode } from '../../packages/x402/test/token/test-usd.js';
 import { multicall3CreationCode } from './multicall3.js';
 import { offline } from './offline.js';
 
-const PORT = 18605;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const SMART_ACCOUNT = '0x00000000000000000000000000000000000A11cE' as const;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;

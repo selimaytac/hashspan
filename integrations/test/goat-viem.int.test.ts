@@ -16,11 +16,12 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { freePort } from '../../packages/viem/test/free-port.js';
 import { setupTracing, type TestTracing } from '../../packages/viem/test/tracing.js';
 import { testUsdAbi, testUsdBytecode } from '../../packages/x402/test/token/test-usd.js';
 import { offline } from './offline.js';
 
-const PORT = 18602;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const chain = foundry;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc';
