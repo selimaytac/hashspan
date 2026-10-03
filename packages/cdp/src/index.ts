@@ -2,9 +2,7 @@ import {
   createTxTracker,
   type SendInput,
   type TxTracker,
-  type UserOperationConfirmHandle,
   type UserOperationInput,
-  type UserOperationReceiptLike,
 } from '@hashspan/core';
 import {
   type FlushOptions,
@@ -12,23 +10,14 @@ import {
   type WithHashspanOptions as ViemOptions,
   withHashspan as withViemHashspan,
 } from '@hashspan/viem';
-import { context, diag } from '@opentelemetry/api';
-import { parseTransaction } from 'viem';
+import { diag } from '@opentelemetry/api';
 import { createChainIdFor, createReaderFor } from './chain.js';
-import {
-  addressOf,
-  cdpErrorType,
-  errorName,
-  isHexString,
-  sendContextOf,
-  stringOrUndefined,
-  timers,
-} from './helpers.js';
+import { addressOf, isHexString } from './helpers.js';
 import { CDP_API_SEND_CHAIN_IDS } from './networks.js';
 import { own } from './own.js';
 import { createPending } from './pending.js';
-import { receiptOf } from './receipt.js';
-import { SentUserOperations, userOperationReceiptFromBundle } from './user-operation.js';
+import { createTransactionSpans, describeTransaction } from './transaction-spans.js';
+import { createUserOperationSpans } from './user-operation-spans.js';
 import { type AccountLike, type AnyFn, replace, WRAPPED, wrapFailed } from './wrap.js';
 
 export { CDP_NETWORK_CHAIN_IDS } from './networks.js';
@@ -83,36 +72,6 @@ const SMART_ACCOUNT_FACTORIES = [
   'getOrCreateSmartAccount',
   'updateSmartAccount',
 ] as const;
-// The user operations whose chain and sender are remembered for later waits.
-const MAX_SENT_USER_OPERATIONS = 4096;
-// The same default as the confirmations through the reader (`confirmTimeoutMs`).
-const DEFAULT_CONFIRM_TIMEOUT_MS = 120_000;
-// How often the reader is asked for a bundle receipt when it has no polling interval of its own.
-const DEFAULT_POLLING_INTERVAL_MS = 1000;
-
-/** Transaction fields for the send span, from a request object or a serialized transaction. */
-function describeTransaction(transaction: unknown): Omit<SendInput, 'chainId'> {
-  let request: object | undefined;
-  if (isHexString(transaction)) {
-    try {
-      request = parseTransaction(transaction);
-    } catch {
-      diag.debug('hashspan: could not parse the serialized transaction');
-    }
-  } else if (transaction !== null && typeof transaction === 'object') {
-    request = transaction;
-  }
-  if (!request) return {};
-  const data = own(request, 'data');
-  const value = own(request, 'value');
-  const nonce = own(request, 'nonce');
-  return {
-    to: stringOrUndefined(own(request, 'to')),
-    value: typeof value === 'bigint' ? value : undefined,
-    nonce: typeof nonce === 'number' ? nonce : undefined,
-    functionSelector: typeof data === 'string' && data.length >= 10 ? data.slice(0, 10) : undefined,
-  };
-}
 
 /**
  * Traces transactions sent by a Coinbase CDP client's EVM server accounts, and user operations of its smart accounts,
@@ -137,363 +96,21 @@ export function withHashspan(
   const { track, waiting, flushOwn } = createPending();
   const readerFor = createReaderFor({ reader });
 
-  /**
-   * Runs `send` inside a send span when the chain id is known; the result and errors are passed on unchanged. If
-   * reading the chain id from the call's options throws, the call is made untraced.
-   */
-  const traced = async (
-    chainIdOf: () => number | undefined,
-    describe: () => Omit<SendInput, 'chainId'>,
-    send: () => Promise<unknown>,
-  ): Promise<unknown> => {
-    let chainId: number | undefined;
-    try {
-      chainId = chainIdOf();
-    } catch (error) {
-      diag.error(
-        `hashspan: failed to read the call options; call not traced (${errorName(error)})`,
-      );
-      return send();
-    }
-    if (chainId === undefined) {
-      diag.debug('hashspan: no known CDP network in the call; not tracing it');
-      return send();
-    }
-    let handle: ReturnType<TxTracker['startSend']> | undefined;
-    try {
-      handle = tracker.startSend({ ...describe(), chainId });
-    } catch (error) {
-      diag.error(`hashspan: failed to start send span (${errorName(error)})`);
-    }
-    let result: unknown;
-    try {
-      // Only the call runs in the send span's context, so the spans it creates nest under the send span; what
-      // follows runs in the caller's (ADR 0015).
-      result = await context.with(sendContextOf(handle), send);
-    } catch (error) {
-      try {
-        handle?.fail(error, undefined, { errorType: cdpErrorType(error) });
-      } catch (thrown) {
-        diag.error(`hashspan: failed to record send failure (${errorName(thrown)})`);
-      }
-      throw error;
-    }
-    try {
-      const hash = own(result, 'transactionHash');
-      if (typeof hash === 'string') {
-        handle?.end(hash);
-        const client = readerFor(chainId);
-        if (client) viem.watch(client, { hash, chainId, timeoutMs: confirmTimeoutMs });
-      } else {
-        handle?.fail(new TypeError('no transactionHash in the CDP result'));
-      }
-    } catch (error) {
-      diag.error(`hashspan: failed to record send span (${errorName(error)})`);
-    }
-    return result;
-  };
-
-  /**
-   * Runs a network-scoped account's `waitForTransactionReceipt` inside a confirm span, for users without a reader.
-   * With a reader, the background confirmation records the receipt with its revert reason, so the wait is passed on
-   * untraced. The result and errors are passed on unchanged.
-   */
-  const confirmed = (
-    chainId: number,
-    options: unknown,
-    wait: () => Promise<unknown>,
-  ): Promise<unknown> => {
-    let hash: unknown;
-    try {
-      hash = stringOrUndefined(own(options, 'hash')) ?? own(options, 'transactionHash');
-    } catch (error) {
-      diag.error(
-        `hashspan: failed to read the call options; call not traced (${errorName(error)})`,
-      );
-      return wait();
-    }
-    if (typeof hash !== 'string' || readerFor(chainId)) return wait();
-    let handle: ReturnType<TxTracker['startConfirm']> | undefined;
-    try {
-      handle = tracker.startConfirm({ chainId, hash });
-    } catch (error) {
-      diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
-    }
-    const call = wait();
-    if (handle) track(recordWait(handle, call));
-    return call;
-  };
-
-  /**
-   * Ends `handle` from the outcome of the user's wait; never rejects. It is tracked, so `flush()` waits for it and
-   * ends it as `timeout` if it cannot wait longer
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.9.1/docs/adr/0010-flush-before-shutdown.md).
-   */
-  const recordWait = (
-    handle: ReturnType<TxTracker['startConfirm']>,
-    call: Promise<unknown>,
-  ): Promise<void> => {
-    let ended = false;
-    const end = (record: () => void, what: string): void => {
-      if (ended) return;
-      ended = true;
-      waiting.delete(abandon);
-      try {
-        record();
-      } catch (error) {
-        diag.error(`hashspan: failed to record ${what} (${errorName(error)})`);
-      }
-    };
-    const abandon = (): void => end(() => handle.timeout(), 'confirmation timeout');
-    waiting.add(abandon);
-    return call.then(
-      (result) => {
-        const receipt = receiptOf(result);
-        end(
-          () =>
-            receipt ? handle.end(receipt) : handle.fail(new TypeError('not a transaction receipt')),
-          'receipt',
-        );
-      },
-      (error: unknown) => {
-        end(
-          () =>
-            error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError'
-              ? handle.timeout()
-              : handle.fail(error),
-          'confirmation failure',
-        );
-      },
-    );
-  };
-
-  const sentUserOperations = new SentUserOperations(MAX_SENT_USER_OPERATIONS);
-  let warnedOldTracker = false;
-  /** Whether the tracker records user operations; one from a core before 0.8 does not (ADR 0014). */
-  const tracesUserOperations = (): boolean => {
-    let able = false;
-    try {
-      able =
-        typeof tracker.startUserOperationSend === 'function' &&
-        typeof tracker.startUserOperationConfirm === 'function';
-    } catch (error) {
-      diag.debug(`hashspan: could not inspect the tracker (${errorName(error)})`);
-    }
-    if (!able && !warnedOldTracker) {
-      warnedOldTracker = true;
-      diag.warn(
-        'hashspan: not tracing user operations: the tracker has no startUserOperationSend; use createTxTracker() from @hashspan/core 0.8 or later',
-      );
-    }
-    return able;
-  };
-
-  /**
-   * Runs `send`, which hands a user operation to CDP, inside a user operation send span when the chain id is known;
-   * the result and errors are passed on unchanged. If reading the call's options throws, the call is made untraced.
-   */
-  const tracedUserOperation = async (
-    chainIdOf: () => number | undefined,
-    describe: () => Omit<UserOperationInput, 'chainId'>,
-    send: () => Promise<unknown>,
-  ): Promise<unknown> => {
-    let chainId: number | undefined;
-    try {
-      chainId = chainIdOf();
-    } catch (error) {
-      diag.error(
-        `hashspan: failed to read the call options; call not traced (${errorName(error)})`,
-      );
-      return send();
-    }
-    if (chainId === undefined) {
-      diag.debug('hashspan: no known CDP network in the call; not tracing it');
-      return send();
-    }
-    if (!tracesUserOperations()) return send();
-    let input: Omit<UserOperationInput, 'chainId'> = {};
-    let handle: ReturnType<TxTracker['startUserOperationSend']> | undefined;
-    try {
-      input = describe();
-      handle = tracker.startUserOperationSend({ ...input, chainId });
-    } catch (error) {
-      diag.error(`hashspan: failed to start send span (${errorName(error)})`);
-    }
-    let result: unknown;
-    try {
-      // As for transactions, only the call runs in the send span's context (ADR 0015).
-      result = await context.with(sendContextOf(handle), send);
-    } catch (error) {
-      try {
-        handle?.fail(error, { errorType: cdpErrorType(error) });
-      } catch (thrown) {
-        diag.error(`hashspan: failed to record send failure (${errorName(thrown)})`);
-      }
-      throw error;
-    }
-    try {
-      const userOpHash = own(result, 'userOpHash');
-      if (typeof userOpHash === 'string') {
-        handle?.end({ userOpHash });
-        const sender = input.sender ?? stringOrUndefined(own(result, 'smartAccountAddress'));
-        sentUserOperations.add(userOpHash, chainId, sender);
-      } else {
-        handle?.fail(new TypeError('no userOpHash in the CDP result'));
-      }
-    } catch (error) {
-      diag.error(`hashspan: failed to record send span (${errorName(error)})`);
-    }
-    return result;
-  };
-
-  /**
-   * Runs a `waitForUserOperation` inside the user operation's confirm span. The wait names no network: the chain is
-   * `chainId` for a network-scoped account, else the one the operation was sent on through this client; a wait for
-   * an operation sent elsewhere is passed on untraced. The result and errors are passed on unchanged.
-   */
-  const confirmedUserOperation = (
-    chainId: number | undefined,
-    smartAccountAddress: () => unknown,
-    options: unknown,
-    wait: () => Promise<unknown>,
-  ): Promise<unknown> => {
-    let userOpHash: unknown;
-    let chain: number | undefined;
-    let sender: string | undefined;
-    try {
-      userOpHash = own(options, 'userOpHash');
-      const sent = typeof userOpHash === 'string' ? sentUserOperations.get(userOpHash) : undefined;
-      chain = chainId ?? sent?.chainId;
-      sender = stringOrUndefined(smartAccountAddress()) ?? sent?.sender;
-    } catch (error) {
-      diag.error(
-        `hashspan: failed to read the call options; call not traced (${errorName(error)})`,
-      );
-      return wait();
-    }
-    if (typeof userOpHash !== 'string') return wait();
-    if (chain === undefined) {
-      diag.debug('hashspan: a user operation sent elsewhere; not tracing its wait');
-      return wait();
-    }
-    if (!tracesUserOperations()) return wait();
-    let handle: UserOperationConfirmHandle | undefined;
-    try {
-      handle = tracker.startUserOperationConfirm({ chainId: chain, userOpHash });
-    } catch (error) {
-      diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
-    }
-    const call = wait();
-    if (handle) track(recordUserOperationWait(handle, call, chain, userOpHash, sender));
-    return call;
-  };
-
-  /**
-   * Ends `handle` from the outcome of the user's `waitForUserOperation`; never rejects. CDP reports `complete` with
-   * the bundle transaction's hash, or `failed` without a reason. With a reader, the bundle receipt's
-   * `UserOperationEvent` adds the operation's success, gas and paymaster; the span still ends when the wait did. It
-   * is tracked, so `flush()` waits for it; if `flush()` gives up, a completed operation ends with what is known, and
-   * one still awaited as `timeout`.
-   */
-  const recordUserOperationWait = (
-    handle: UserOperationConfirmHandle,
-    call: Promise<unknown>,
-    chainId: number,
-    userOpHash: string,
-    sender: string | undefined,
-  ): Promise<void> => {
-    let ended = false;
-    let completed: { receipt: UserOperationReceiptLike; endTime: Date } | undefined;
-    const end = (record: () => void, what: string): void => {
-      if (ended) return;
-      ended = true;
-      waiting.delete(abandon);
-      try {
-        record();
-      } catch (error) {
-        diag.error(`hashspan: failed to record ${what} (${errorName(error)})`);
-      }
-    };
-    const abandon = (): void =>
-      end(
-        () =>
-          completed
-            ? handle.end(completed.receipt, { endTime: completed.endTime })
-            : handle.timeout(),
-        'user operation confirmation',
-      );
-    waiting.add(abandon);
-    const outcome = async (result: unknown): Promise<void> => {
-      const endTime = new Date();
-      const status = own(result, 'status');
-      if (status === 'failed') {
-        end(() => handle.fail(undefined, { errorType: 'failed', endTime }), 'failed operation');
-        return;
-      }
-      const transactionHash = own(result, 'transactionHash');
-      if (status !== 'complete' || typeof transactionHash !== 'string') {
-        end(
-          () => handle.fail(new TypeError('not a user operation result'), { endTime }),
-          'user operation result',
-        );
-        return;
-      }
-      // Without a reader, CDP's answer says nothing about whether the operation's calls succeeded.
-      completed = { receipt: { transactionHash }, endTime };
-      const client = isHexString(transactionHash) ? readerFor(chainId) : undefined;
-      if (client) {
-        const raw = await bundleReceipt(client, transactionHash, () => ended);
-        if (raw) completed.receipt = userOperationReceiptFromBundle(raw, userOpHash, sender);
-      }
-      const { receipt } = completed;
-      end(() => handle.end(receipt, { endTime }), 'user operation receipt');
-    };
-    return call.then(
-      (result) =>
-        outcome(result).catch((error: unknown) => {
-          end(() => handle.fail(error), 'user operation receipt');
-        }),
-      (error: unknown) => {
-        end(
-          () =>
-            // The SDK's wait gives up with a TimeoutError; the operation may still complete.
-            error instanceof Error && error.name === 'TimeoutError'
-              ? handle.timeout()
-              : handle.fail(error),
-          'confirmation failure',
-        );
-      },
-    );
-  };
-
-  /**
-   * The node's raw receipt of a bundle transaction, polled through the reader until it is found, `stopped()`, or
-   * `confirmTimeoutMs` passed. It calls the client's `request` directly, so a reader extended by `@hashspan/viem`
-   * records no transaction confirm span for the bundle, whose fee covers every operation in it (ADR 0021).
-   */
-  const bundleReceipt = async (
-    client: ViemClientLike,
-    hash: string,
-    stopped: () => boolean,
-  ): Promise<unknown> => {
-    const polling = own(client, 'pollingInterval');
-    const interval =
-      typeof polling === 'number' && polling > 0 ? polling : DEFAULT_POLLING_INTERVAL_MS;
-    const deadline = Date.now() + (confirmTimeoutMs ?? DEFAULT_CONFIRM_TIMEOUT_MS);
-    for (;;) {
-      try {
-        const raw: unknown = await client.request({
-          method: 'eth_getTransactionReceipt',
-          params: [hash],
-        });
-        if (raw !== null && typeof raw === 'object') return raw;
-      } catch (error) {
-        diag.debug(`hashspan: could not read the bundle receipt (${errorName(error)})`);
-      }
-      if (stopped() || Date.now() + interval > deadline) return undefined;
-      await new Promise<void>((resolve) => timers.setTimeout(resolve, interval));
-    }
-  };
+  const { traced, confirmed } = createTransactionSpans({
+    tracker,
+    viem,
+    readerFor,
+    track,
+    waiting,
+    confirmTimeoutMs,
+  });
+  const { tracedUserOperation, confirmedUserOperation } = createUserOperationSpans({
+    tracker,
+    readerFor,
+    track,
+    waiting,
+    confirmTimeoutMs,
+  });
 
   /** Wraps a network-scoped account in place; never throws, so a call that returned it never fails. */
   const wrapScopedAccount = (scoped: unknown): unknown => {
