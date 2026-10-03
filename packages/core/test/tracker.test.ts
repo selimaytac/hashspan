@@ -494,6 +494,27 @@ describe('error privacy', () => {
     );
   });
 
+  it('keeps only the origin of URLs in sanitized messages, which can carry API keys in the path or query', () => {
+    const error = new Error(
+      'request to https://user:pw@rpc.example.com:8545/v2/k3y?apikey=s3cret failed, retried wss://ws.example.com/k3y.',
+    );
+    createTxTracker({ errorMessages: 'sanitized' }).startSend({ chainId: CHAIN_ID }).fail(error);
+    createTxTracker({ errorMessages: 'sanitized' })
+      .startSend({ chainId: CHAIN_ID })
+      .fail(new Error('fetch https://user:p?ss@rpc.example.com/k3y failed'));
+    expect(
+      tracing
+        .spans()
+        .map(
+          (span) =>
+            span.events.find((e) => e.name === 'exception')?.attributes?.['exception.message'],
+        ),
+    ).toEqual([
+      'request to https://rpc.example.com:8545 failed, retried wss://ws.example.com',
+      'fetch <url> failed',
+    ]);
+  });
+
   it('hashes addresses in error messages in hashed mode', () => {
     createTxTracker({ address: 'hashed', errorMessages: 'sanitized' })
       .startSend({ chainId: CHAIN_ID })
