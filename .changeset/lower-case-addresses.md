@@ -1,5 +1,5 @@
 ---
-'@hashspan/core': patch
+'@hashspan/core': minor
 ---
 
 Addresses are recorded in lower case in the default `raw` address mode, so one address has one value on every span:

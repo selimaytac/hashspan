@@ -32,3 +32,7 @@ while removing the ability to look the address up in a block explorer.
 - Amended for payments (ADR 0013): the resource an agent paid for is recorded as its URL's origin by default, since
   paths often carry user or account identifiers; its path is opt-in (`paymentResource: 'path'`), and its query
   string, fragment and user info are never recorded.
+- Amended on 2026-10-03: in the default `raw` mode, addresses are recorded in lower case, so one address has one value
+  on every span whatever its source (send arguments are often checksummed, receipts and bundler responses often lower
+  case). `hashed` mode already hashed the lower-cased address. Lower case rather than EIP-55, because a checksum needs
+  keccak-256, which the core does not depend on.
