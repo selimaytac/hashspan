@@ -1,7 +1,7 @@
 /**
  * Attribute keys emitted by hashspan.
  *
- * Stability: development. See https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/semconv.md for
+ * Stability: development. See https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/semconv.md for
  * definitions and value types. These names are a public contract: changes follow the deprecation policy in AGENTS.md.
  */
 export const ATTR_BLOCKCHAIN_SYSTEM = 'blockchain.system' as const;
@@ -34,14 +34,14 @@ export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR =
   'blockchain.contract.function.selector' as const;
 /**
  * Opt-in: decoded call arguments as a JSON array. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0004-privacy-defaults.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0004-privacy-defaults.md.
  */
 export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS =
   'blockchain.contract.function.arguments' as const;
 
 /**
  * Payments settled on chain by a party other than the agent, e.g. an x402 facilitator. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0013-x402-payments.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0013-x402-payments.md.
  */
 export const ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL = 'blockchain.payment.protocol' as const;
 export const ATTR_BLOCKCHAIN_PAYMENT_PAYER = 'blockchain.payment.payer' as const;
@@ -54,7 +54,7 @@ export const ATTR_BLOCKCHAIN_PAYMENT_SETTLED_AMOUNT = 'blockchain.payment.settle
 /**
  * Whether the settlement transaction's receipt carries the payment, as checked by the adapter; absent when no check
  * was possible. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0017-x402-payment-verification.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0017-x402-payment-verification.md.
  */
 export const ATTR_BLOCKCHAIN_PAYMENT_VERIFIED = 'blockchain.payment.verified' as const;
 /** x402's own payment fields. */
@@ -63,7 +63,7 @@ export const ATTR_X402_RESOURCE = 'x402.resource' as const;
 
 /**
  * User operations of ERC-4337 smart accounts. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0021-user-operations.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0021-user-operations.md.
  */
 export const ATTR_BLOCKCHAIN_USER_OPERATION_HASH = 'blockchain.user_operation.hash' as const;
 export const ATTR_BLOCKCHAIN_USER_OPERATION_SENDER = 'blockchain.user_operation.sender' as const;
@@ -83,7 +83,7 @@ export const ATTR_BLOCKCHAIN_USER_OPERATION_PAYMASTER =
 // Call batches of EIP-5792 `sendCalls` (docs/adr/0022-call-batches.md).
 /**
  * The batch id the wallet returned, truncated after 256 characters. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0022-call-batches.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0022-call-batches.md.
  */
 export const ATTR_BLOCKCHAIN_CALL_BATCH_ID = 'blockchain.call_batch.id' as const;
 export const ATTR_BLOCKCHAIN_CALL_BATCH_SENDER = 'blockchain.call_batch.sender' as const;
@@ -133,7 +133,7 @@ export const BLOCKCHAIN_TX_STATUS_VALUE_REVERTED = 'reverted' as const;
 /**
  * @deprecated No longer recorded: a confirm span that gave up waiting records `error.type` `timeout` and no
  * `blockchain.tx.status`. The constant is removed in 1.0. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0016-timeout-is-an-observer-outcome.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0016-timeout-is-an-observer-outcome.md.
  */
 export const BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT = 'timeout' as const;
 export const BLOCKCHAIN_TX_STATUS_VALUE_REPLACED = 'replaced' as const;
