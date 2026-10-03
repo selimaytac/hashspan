@@ -1,5 +1,6 @@
 # Local lab: Jaeger (trace UI + OTLP receiver). Anvil runs as a project-local binary (make anvil).
-# All ports bind to 127.0.0.1 only. Managed via the Makefile (make lab-up / lab-pause / lab-nuke).
+# The `metrics` profile adds Prometheus (OTLP metrics receiver) and Grafana with the hashspan dashboard.
+# All ports bind to 127.0.0.1 only. Managed via the Makefile (make lab-up / lab-metrics / lab-pause / lab-nuke).
 name: hashspan-lab
 
 services:
@@ -13,3 +14,42 @@ services:
       resources:
         limits: { memory: 512m }
 
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    profiles: [metrics]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-otlp-receiver # OTLP metrics on /api/v1/otlp/v1/metrics
+      # A zero sample at each series' start time, so increase() and rate() work for a short-lived process that
+      # exports once, such as the example agent.
+      - --enable-feature=created-timestamp-zero-ingestion
+      - --storage.tsdb.retention.time=2d
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+    deploy:
+      resources:
+        limits: { memory: 256m }
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    profiles: [metrics]
+    environment:
+      # Local only: anonymous viewers see the provisioned dashboard; nothing is reported to Grafana Labs.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/hashspan.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on: [prometheus]
+    deploy:
+      resources:
+        limits: { memory: 512m } # Grafana 13 is killed at 256m while it renders the dashboard

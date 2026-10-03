@@ -1,6 +1,6 @@
 import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { telemetryResource } from '../src/telemetry.js';
+import { startMetrics, telemetryResource } from '../src/telemetry.js';
 
 describe('telemetryResource', () => {
   afterEach(() => {
@@ -27,5 +27,24 @@ describe('telemetryResource', () => {
     const { attributes } = telemetryResource();
     expect(attributes[ATTR_SERVICE_NAME]).toBe('from-attributes');
     expect(attributes['deployment.environment.name']).toBe('staging');
+  });
+});
+
+describe('startMetrics', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('exports no metrics without a metrics endpoint, so Jaeger gets no metric requests', () => {
+    vi.stubEnv('OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', '');
+    expect(startMetrics()).toBeUndefined();
+  });
+
+  it('starts a meter provider when a metrics endpoint is set', async () => {
+    vi.stubEnv('OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', 'http://127.0.0.1:9/v1/metrics');
+    vi.stubEnv('OTEL_METRIC_EXPORT_INTERVAL', '1000');
+    const provider = startMetrics();
+    expect(provider).toBeDefined();
+    await provider?.shutdown({ timeoutMillis: 100 }).catch(() => {});
   });
 });

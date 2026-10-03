@@ -36,7 +36,9 @@ make demo     # starts a local chain, runs the agent, stops the chain
 Open Jaeger, pick the service `treasury-agent` and open the trace. To print spans instead, run
 `OTEL_TRACES_EXPORTER=console make demo`. The setup reads the standard OpenTelemetry variables:
 `OTEL_SERVICE_NAME=my-agent make demo` files the trace under `my-agent`, and `OTEL_EXPORTER_OTLP_ENDPOINT` sends it
-to another backend.
+to another backend. hashspan's send, confirmation and fee histograms are exported too when
+`OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` is set; `make demo` sets it when the lab's Prometheus runs (`make lab-metrics`),
+so the [Grafana dashboard](../../docs/backends.md#grafana-dashboard-for-the-metrics) fills in.
 
 ## Run it on Base Sepolia
 

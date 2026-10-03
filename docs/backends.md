@@ -89,3 +89,26 @@ Use an ingest key from your environment's API keys. The spans land in a dataset 
 `execute_tool withdraw_from_vault`, and the link to its `send` span shows on the span. Honeycomb also recognizes the
 GenAI spans, so the agent span shows its model and token usage. See
 [Honeycomb's OpenTelemetry docs](https://docs.honeycomb.io/send-data/opentelemetry/).
+
+## Grafana dashboard for the metrics
+
+hashspan's tracker records three histograms ([metrics](semconv.md#metrics)): send duration, confirmation duration and
+fee. [`docker/grafana/dashboards/hashspan.json`](../docker/grafana/dashboards/hashspan.json) is a ready Grafana
+dashboard for them, on a Prometheus data source: confirmation and send latency percentiles per chain, fees per chain
+and their distribution, send failures by `error.type`, and confirmation outcomes, with a chain id filter.
+
+![The hashspan dashboard in Grafana after a few runs of the example agent](images/grafana-dashboard.png)
+
+In the local lab, `make lab-metrics` starts Prometheus (with its OTLP receiver) and Grafana with the dashboard
+provisioned; `make demo` then sends the example agent's metrics to Prometheus, and the dashboard is on
+`http://localhost:3000`. Tested with Prometheus 3.15.0 and Grafana 13.2.3. To use the dashboard elsewhere, send the
+metrics over OTLP to a Prometheus-compatible backend and import the file:
+
+- Prometheus needs `--web.enable-otlp-receiver` and turns `blockchain.client.send.duration` (unit `s`) into
+  `blockchain_client_send_duration_seconds` and attributes into labels such as `blockchain_chain_id` and
+  `error_type`, as in [`docker/prometheus.yml`](../docker/prometheus.yml).
+- A process that exports only once before it exits, such as a short script, leaves one sample per series, and
+  `rate()` needs two: the lab enables `--enable-feature=created-timestamp-zero-ingestion`, so Prometheus adds a zero
+  sample at each series' start time. Long-running agents need neither.
+- The dashboard's data source is the one with uid `hashspan-prometheus`; pick yours when you import it.
+

@@ -1,4 +1,6 @@
 import { OpenTelemetry } from '@ai-sdk/otel';
+import { metrics } from '@opentelemetry/api';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import {
   detectResources,
@@ -6,6 +8,7 @@ import {
   type Resource,
   resourceFromAttributes,
 } from '@opentelemetry/resources';
+import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import {
   BatchSpanProcessor,
   ConsoleSpanExporter,
@@ -27,8 +30,30 @@ export function telemetryResource(): Resource {
 }
 
 /**
+ * hashspan's send, confirmation and fee histograms, exported over OTLP when `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` is
+ * set (Prometheus in the local lab with `make lab-metrics`); undefined otherwise, so a trace-only backend such as
+ * Jaeger receives no metric requests. `OTEL_METRIC_EXPORT_INTERVAL` sets the interval in milliseconds.
+ */
+export function startMetrics(): MeterProvider | undefined {
+  if (!process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT) return undefined;
+  const interval = Number(process.env.OTEL_METRIC_EXPORT_INTERVAL);
+  const provider = new MeterProvider({
+    resource: telemetryResource(),
+    readers: [
+      new PeriodicExportingMetricReader({
+        exporter: new OTLPMetricExporter(), // honours OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+        exportIntervalMillis: Number.isInteger(interval) && interval > 0 ? interval : 5_000,
+      }),
+    ],
+  });
+  metrics.setGlobalMeterProvider(provider);
+  return provider;
+}
+
+/**
  * Standard OpenTelemetry setup: spans go to an OTLP endpoint (Jaeger in the local lab), or to the console with
- * `OTEL_TRACES_EXPORTER=console`. hashspan itself only needs `@opentelemetry/api`; any SDK setup works.
+ * `OTEL_TRACES_EXPORTER=console`; metrics too when an endpoint for them is set ({@link startMetrics}). hashspan itself
+ * only needs `@opentelemetry/api`; any SDK setup works.
  */
 export function startTelemetry(): { shutdown: () => Promise<void> } {
   const processor: SpanProcessor =
@@ -44,5 +69,13 @@ export function startTelemetry(): { shutdown: () => Promise<void> } {
   // The AI SDK emits GenAI spans (invoke_agent, execute_tool, ...) through the same provider.
   registerTelemetry(new OpenTelemetry());
 
-  return { shutdown: () => provider.shutdown() };
+  const meterProvider = startMetrics();
+
+  return {
+    shutdown: async () => {
+      // A short-lived process: shutting down exports the last metric samples, after the last spans.
+      await provider.shutdown();
+      await meterProvider?.shutdown();
+    },
+  };
 }
