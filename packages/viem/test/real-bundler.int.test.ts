@@ -35,6 +35,7 @@ import { withHashspan } from '../src/index.js';
 import { reverterCode } from './entry-point/test-entry-point.js';
 import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemAtLeast } from './viem-version.js';
 
 const RUN = Boolean(process.env.CI || process.env.HASHSPAN_REAL_BUNDLER);
 const ANVIL_PORT = await freePort();
@@ -364,9 +365,12 @@ describe.skipIf(!RUN)('user operations through Alto on Anvil', () => {
       .catch((caught: unknown) => caught);
 
     expect((error as Error).name).toBe('UserOperationExecutionError');
-    expect((error as { details?: string }).details).toMatch(
-      /^UserOperation reverted during simulation with reason: 0x08c379a0/,
-    );
+    // viem before 2.21.58 words the bundler's error differently, with or without hashspan.
+    if (viemAtLeast('2.21.58')) {
+      expect((error as { details?: string }).details).toMatch(
+        /^UserOperation reverted during simulation with reason: 0x08c379a0/,
+      );
+    }
     const send = tracing.spanNamed('send 31337');
     expect(send.status.code).toBe(SpanStatusCode.ERROR);
     expect(send.attributes['error.type']).toBe('UserOperationExecutionError');
