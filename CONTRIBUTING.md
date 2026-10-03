@@ -59,7 +59,7 @@ An issue without a priority label has not been triaged yet. Security issues neve
 nvm use                 # Node version from .nvmrc
 corepack enable pnpm
 pnpm install
-make tools              # project-local Anvil in ./.tools for integration tests
+make tools              # project-local Anvil and bundler in ./.tools for integration tests
 pnpm test               # unit tests
 pnpm test:integration   # integration tests against Anvil
 ```

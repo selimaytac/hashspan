@@ -70,7 +70,7 @@ describe('sendUserOperation', () => {
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'send',
       'blockchain.user_operation.sender': SENDER,
-      'blockchain.user_operation.entry_point': entryPoint07Address,
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
       'blockchain.user_operation.call_count': 2,
       'blockchain.user_operation.hash': USER_OP_HASH,
     });
@@ -117,7 +117,7 @@ describe('sendUserOperation', () => {
     });
     expect(tracing.spanNamed(`send ${CHAIN_ID}`).attributes).toMatchObject({
       'blockchain.user_operation.sender': SENDER,
-      'blockchain.user_operation.entry_point': entryPoint07Address,
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
     });
     expect(
       tracing.spanNamed(`send ${CHAIN_ID}`).attributes['blockchain.user_operation.call_count'],
@@ -146,7 +146,7 @@ describe('waitForUserOperationReceipt', () => {
       'blockchain.user_operation.gas.cost': (0x1cbe991a08).toString(),
       'blockchain.user_operation.sender': SENDER,
       'blockchain.user_operation.nonce': NONCE.toString(),
-      'blockchain.user_operation.entry_point': entryPoint07Address,
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
       'blockchain.tx.hash': BUNDLE_HASH,
       'blockchain.block.number': 42,
     });

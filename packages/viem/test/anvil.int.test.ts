@@ -17,9 +17,10 @@ import {
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
+import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = 18545;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const REVERTER = '0x00000000000000000000000000000000000000aa' as const;
 const TOKEN = '0x00000000000000000000000000000000000000bb' as const;

@@ -28,10 +28,11 @@ import {
   testAccountCode,
   testEntryPointCode,
 } from './entry-point/test-entry-point.js';
+import { freePort } from './free-port.js';
 import { testBundler } from './test-bundler.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = 18581;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const ACCOUNT = '0x00000000000000000000000000000000000A11cE' as const;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
@@ -147,8 +148,8 @@ describe('user operations on Anvil', () => {
       'blockchain.system': 'evm',
       'blockchain.chain.id': 31337,
       'blockchain.operation.name': 'send',
-      'blockchain.user_operation.sender': ACCOUNT,
-      'blockchain.user_operation.entry_point': entryPoint07Address,
+      'blockchain.user_operation.sender': ACCOUNT.toLowerCase(),
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
       'blockchain.user_operation.call_count': 2,
       'blockchain.user_operation.hash': hash,
     });
@@ -161,9 +162,9 @@ describe('user operations on Anvil', () => {
       'blockchain.user_operation.success': true,
       'blockchain.user_operation.gas.used': Number(receipt.actualGasUsed),
       'blockchain.user_operation.gas.cost': receipt.actualGasCost.toString(),
-      'blockchain.user_operation.sender': ACCOUNT,
+      'blockchain.user_operation.sender': ACCOUNT.toLowerCase(),
       'blockchain.user_operation.nonce': nonce.toString(),
-      'blockchain.user_operation.entry_point': entryPoint07Address,
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
       'blockchain.tx.hash': receipt.receipt.transactionHash,
       'blockchain.block.number': Number(receipt.receipt.blockNumber),
     });
@@ -187,7 +188,25 @@ describe('user operations on Anvil', () => {
       pollingInterval: 100,
     }).extend(withHashspan());
 
-    const hash = await client.sendUserOperation({ calls: [{ to: REVERTER, data: '0x' }] });
+    // A bundler refuses to estimate an operation whose call reverts (as Alto does, real-bundler.int.test.ts) ...
+    const refused = await client
+      .sendUserOperation({ calls: [{ to: REVERTER, data: '0x' }] })
+      .catch((error: unknown) => error);
+    expect((refused as Error).name).toBe('UserOperationExecutionError');
+    expect((refused as { details?: string }).details).toMatch(
+      /^UserOperation reverted during simulation with reason: 0x08c379a0/,
+    );
+    expect(tracing.spanNamed('send 31337').attributes['error.type']).toBe(
+      'UserOperationExecutionError',
+    );
+    tracing.exporter.reset();
+    // ... so the sender gives the limits.
+    const hash = await client.sendUserOperation({
+      calls: [{ to: REVERTER, data: '0x' }],
+      callGasLimit: 500_000n,
+      verificationGasLimit: 200_000n,
+      preVerificationGas: 50_000n,
+    });
     const receipt = await client.waitForUserOperationReceipt({ hash });
     const bundle = await reader.getTransactionReceipt({ hash: receipt.receipt.transactionHash });
 

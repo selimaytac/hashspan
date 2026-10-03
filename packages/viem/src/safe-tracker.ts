@@ -43,7 +43,12 @@ const NOOP_PAYMENT: PaymentHandle = {
  * include addresses, calldata or API keys.
  */
 export function errorName(error: unknown): string {
-  return error instanceof Error ? error.name : typeof error;
+  try {
+    return error instanceof Error ? error.name : typeof error;
+  } catch {
+    // A name that cannot be read: a throwing getter or Proxy trap.
+    return 'unknown';
+  }
 }
 
 /** Runs `fn`, logging instead of throwing. Only the error name is logged: it may come from any tracker. */

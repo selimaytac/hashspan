@@ -4,9 +4,10 @@ import { createPublicClient, createWalletClient, http } from 'viem';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
+import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = 18572;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 // Anvil's first test account, which Anvil signs for.
 const ACCOUNT = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';

@@ -4,11 +4,12 @@ import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { freePort } from '../../viem/test/free-port.js';
 import { withHashspan } from '../src/index.js';
 import { PAY_TO, paidApi, settledWith, testClient } from './fake-x402.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = 18563;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 
 const instance = Instance.anvil({

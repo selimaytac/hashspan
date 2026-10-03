@@ -12,6 +12,14 @@ export const ATTR_BLOCKCHAIN_TX_FROM = 'blockchain.tx.from' as const;
 export const ATTR_BLOCKCHAIN_TX_TO = 'blockchain.tx.to' as const;
 export const ATTR_BLOCKCHAIN_TX_VALUE = 'blockchain.tx.value' as const;
 export const ATTR_BLOCKCHAIN_TX_NONCE = 'blockchain.tx.nonce' as const;
+/** Number of EIP-7702 authorizations a type 4 transaction carries. */
+export const ATTR_BLOCKCHAIN_TX_AUTHORIZATION_COUNT = 'blockchain.tx.authorization.count' as const;
+/** Delegated contract address of each well-formed EIP-7702 authorization, per the address mode; at most 64. */
+export const ATTR_BLOCKCHAIN_TX_AUTHORIZATION_ADDRESSES =
+  'blockchain.tx.authorization.addresses' as const;
+/** Chain id of each well-formed EIP-7702 authorization, aligned with the addresses; 0 means every chain. */
+export const ATTR_BLOCKCHAIN_TX_AUTHORIZATION_CHAIN_IDS =
+  'blockchain.tx.authorization.chain_ids' as const;
 export const ATTR_BLOCKCHAIN_TX_STATUS = 'blockchain.tx.status' as const;
 export const ATTR_BLOCKCHAIN_TX_GAS_USED = 'blockchain.tx.gas.used' as const;
 export const ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE = 'blockchain.tx.effective_gas_price' as const;

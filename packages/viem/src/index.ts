@@ -4,6 +4,7 @@ import {
   type CallBatchStatusLike,
   type ConfirmHandle,
   createTxTracker,
+  ERROR_TYPE_VALUE_OTHER,
   type ReceiptLike,
   type ReplacementReason,
   type SendInput,
@@ -46,7 +47,8 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    */
   confirm?: BackgroundConfirmOptions | undefined;
   /**
-   * Replay reverted transactions to record their revert reason (two extra RPC requests per reverted transaction).
+   * Replay reverted transactions to record their revert reason (two extra RPC requests per reverted transaction, three
+   * when the first replay does not revert).
    * `{ timeoutMs }` bounds the replay; if the provider has not answered by then, the receipt is recorded without a
    * reason. Default: true, with a 10 000 ms bound. See
    * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0005-revert-reason-replay.md.
@@ -362,17 +364,51 @@ function toCallBatchStatusLike(status: unknown): CallBatchStatusLike {
   };
 }
 
+/**
+ * The `name` of `error` if it is an Error with a string name; undefined otherwise, also when reading it throws (a
+ * throwing getter or Proxy trap), so classifying a rejection never throws.
+ */
+function nameOf(error: unknown): string | undefined {
+  try {
+    if (!(error instanceof Error)) return undefined;
+    const name: unknown = error.name;
+    return typeof name === 'string' ? name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether telemetry can read `error`: core records an Error's name as `error.type`. A rejection whose name cannot be
+ * read is recorded without the error, as `error.type` `_OTHER`, so its confirm span still ends.
+ */
+function isReadable(error: unknown): boolean {
+  try {
+    if (error instanceof Error) void error.name;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** `fail()` options for a rejection that cannot be read: no error object, `error.type` `_OTHER`. */
+function unreadable(endTime: TimeInput | undefined): { endTime?: TimeInput; errorType: string } {
+  return endTime === undefined
+    ? { errorType: ERROR_TYPE_VALUE_OTHER }
+    : { endTime, errorType: ERROR_TYPE_VALUE_OTHER };
+}
+
 function isCallsTimeout(error: unknown): boolean {
-  return error instanceof Error && error.name === 'WaitForCallsStatusTimeoutError';
+  return nameOf(error) === 'WaitForCallsStatusTimeoutError';
 }
 
 function isTimeout(error: unknown): boolean {
-  return error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError';
+  return nameOf(error) === 'WaitForTransactionReceiptTimeoutError';
 }
 
 /** viem gives up waiting for a user operation receipt with this error, on its timeout or after `retryCount` polls. */
 function isUserOperationTimeout(error: unknown): boolean {
-  return error instanceof Error && error.name === 'WaitForUserOperationReceiptTimeoutError';
+  return nameOf(error) === 'WaitForUserOperationReceiptTimeoutError';
 }
 
 /** What viem's `waitForUserOperationReceipt` returns, as far as the adapter reads it. */
@@ -421,10 +457,8 @@ function toUserOperationReceiptLike(receipt: ViemUserOperationReceipt): UserOper
  * again after these errors, until its timeout.
  */
 function isReceiptLag(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.name === 'TransactionReceiptNotFoundError' || error.name === 'TransactionNotFoundError')
-  );
+  const name = nameOf(error);
+  return name === 'TransactionReceiptNotFoundError' || name === 'TransactionNotFoundError';
 }
 const RECEIPT_LAG_RETRY_MS = 1_000;
 
@@ -477,6 +511,25 @@ function own(target: unknown, key: string): unknown {
     return undefined;
   const descriptor = Object.getOwnPropertyDescriptor(target, key);
   return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+}
+
+/**
+ * The EIP-7702 authorization list of a call, as the core reads it: each entry's delegated address and chain id, read
+ * from own data properties. viem names the address `address`; releases before 2.23 named it `contractAddress`.
+ * Signatures and nonces are left out, so they never reach telemetry.
+ */
+function authorizationsOf(list: unknown): SendInput['authorizations'] {
+  if (!Array.isArray(list)) return undefined;
+  const length = own(list, 'length');
+  if (typeof length !== 'number' || length === 0) return undefined;
+  const entries: { address: string; chainId: number }[] = [];
+  for (let index = 0; index < length; index++) {
+    const entry = own(list, String(index));
+    const address = own(entry, 'address') ?? own(entry, 'contractAddress');
+    // An entry the core cannot read keeps its place in the count.
+    entries.push({ address: address as string, chainId: own(entry, 'chainId') as number });
+  }
+  return entries;
 }
 
 const MAX_ARGUMENTS_COPY_DEPTH = 8;
@@ -738,7 +791,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       // viem rejects after reporting a replacement only if the caller's onReplaced threw: the transaction was mined.
       const reported = capture.replacement?.transactionReceipt;
       if (!reported) {
-        if (isTimeout(error)) handle.timeout(endTimeOf());
+        if (!isReadable(error)) handle.fail(undefined, unreadable(endTimeOf()));
+        else if (isTimeout(error)) handle.timeout(endTimeOf());
         else handle.fail(error, endTimeOf());
         return;
       }
@@ -1098,6 +1152,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       to: typeof to === 'string' ? to : undefined,
       value: own(args, 'value') as SendInput['value'],
       nonce: own(args, 'nonce') as SendInput['nonce'],
+      authorizations: authorizationsOf(own(args, 'authorizationList')),
     });
 
     /**
@@ -1341,7 +1396,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
           try {
             receipt = await wait;
           } catch (error) {
-            if (isUserOperationTimeout(error)) handle.timeout(options());
+            if (!isReadable(error)) handle.fail(undefined, unreadable(options()?.endTime));
+            else if (isUserOperationTimeout(error)) handle.timeout(options());
             else handle.fail(error, options());
             return;
           }
@@ -1519,7 +1575,11 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
             status = await wait;
           } catch (error) {
             // With throwOnFailure, a failed batch rejects with its status: recorded as that status.
-            if (error instanceof Error && error.name === 'BundleFailedError') {
+            if (!isReadable(error)) {
+              handle.fail(undefined, unreadable(options()?.endTime));
+              return;
+            }
+            if (nameOf(error) === 'BundleFailedError') {
               try {
                 status = own(error, 'result');
               } catch {

@@ -48,7 +48,8 @@ export function resolveAddressFormatter(
     typeof option === 'object' ? option : { mode: option ?? 'raw', hash: undefined };
   switch (mode) {
     case 'raw':
-      return formatter((address) => address, false);
+      // One form for every source: send arguments are often EIP-55 checksummed, receipts often lower case.
+      return formatter((address) => address.toLowerCase(), false);
     case 'off':
       return OFF_ADDRESS_FORMATTER;
     case 'hashed': {

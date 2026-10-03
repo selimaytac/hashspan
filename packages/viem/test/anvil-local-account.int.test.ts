@@ -15,9 +15,10 @@ import { mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { type WithHashspanOptions, withHashspan } from '../src/index.js';
+import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = 18547;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 /** Anvil's public default mnemonic; its first account is funded on every Anvil chain. */
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -139,8 +140,8 @@ describe('a local account', () => {
 
     expect(tracing.spanNamed('send 31337').attributes).toMatchObject({
       'blockchain.tx.hash': hash,
-      'blockchain.tx.from': signer.address,
-      'blockchain.tx.to': RECIPIENT,
+      'blockchain.tx.from': signer.address.toLowerCase(),
+      'blockchain.tx.to': RECIPIENT.toLowerCase(),
     });
     expect(tracing.spanNamed('confirm 31337').attributes['blockchain.tx.status']).toBe('success');
   });
@@ -196,5 +197,44 @@ describe('revert reasons decoded through viem', () => {
   it('truncates a reason longer than 1024 characters', async () => {
     const confirm = await revertOf(({ wallet }) => wallet.sendTransaction({ to: RAMBLES, gas }));
     expect(confirm.attributes['blockchain.tx.revert.reason']).toBe(`${'x'.repeat(1_024)}...`);
+  });
+});
+
+describe('EIP-7702 authorizations', () => {
+  it('records a signed delegation on the send span of its type 4 transaction', async () => {
+    const c = clients();
+    const authorization = await c.wallet.signAuthorization({
+      account: signer,
+      contractAddress: RECIPIENT,
+      executor: 'self',
+    });
+    const hash = await c.wallet.sendTransaction({
+      to: signer.address,
+      authorizationList: [authorization],
+    });
+    await c.reader.waitForTransactionReceipt({ hash });
+    await c.hashspan.flush();
+
+    // The delegation took effect: the account's code is the EIP-7702 designator of RECIPIENT.
+    expect(await c.reader.getCode({ address: signer.address })).toBe(
+      `0xef0100${RECIPIENT.slice(2)}`,
+    );
+    const send = tracing.spanNamed(`send ${anvil.id}`);
+    expect(send.attributes['blockchain.tx.hash']).toBe(hash);
+    expect(send.attributes['blockchain.tx.authorization.count']).toBe(1);
+    expect(send.attributes['blockchain.tx.authorization.addresses']).toEqual([RECIPIENT]);
+    expect(send.attributes['blockchain.tx.authorization.chain_ids']).toEqual([anvil.id]);
+    expect(JSON.stringify(send.attributes)).not.toContain(authorization.r.slice(2));
+
+    // Clear the delegation, so the other tests send from a plain account.
+    const clear = await c.wallet.signAuthorization({
+      account: signer,
+      contractAddress: '0x0000000000000000000000000000000000000000',
+      executor: 'self',
+    });
+    await c.reader.waitForTransactionReceipt({
+      hash: await c.wallet.sendTransaction({ to: signer.address, authorizationList: [clear] }),
+    });
+    expect(await c.reader.getCode({ address: signer.address })).toBeUndefined();
   });
 });

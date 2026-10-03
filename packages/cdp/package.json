@@ -4,7 +4,7 @@
   "description": "Coinbase CDP adapter for @hashspan/core: traces transactions of CDP server accounts and user operations of smart accounts.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",
-  "homepage": "https://github.com/selimaytac/hashspan/tree/main/packages/cdp#readme",
+  "homepage": "https://hashspan.dev",
   "bugs": {
     "url": "https://github.com/selimaytac/hashspan/issues"
   },

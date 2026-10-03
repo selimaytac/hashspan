@@ -81,6 +81,15 @@ A receipt with `success: false` ends the span with `error.type` `reverted`; the 
 are not recorded, since they cover every operation in the bundle
 ([ADR 0021](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0021-user-operations.md)).
 
+`tracker.startCallBatchSend({ chainId, sender, callCount })` records a batch of calls handed to a wallet with
+EIP-5792 `wallet_sendCalls` as a `send {chainId}` span; end it with `end({ id })`, the batch id the wallet returned, or
+`fail(error)`. `end({ id, transactionHashes })` also links the transactions an account sent itself for the batch.
+`tracker.startCallBatchConfirm({ chainId, id })` joins its confirm span, and `end(status)` takes the batch status:
+`statusCode`, `atomic`, and `receipts` with their `transactionHash` and `blockNumber`. The status code sets the
+outcome, and no fee is recorded; see the call batch rows of the
+[semantic conventions](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/semconv.md) and
+[ADR 0022](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0022-call-batches.md).
+
 All of these calls accept an explicit parent `Context` as a second argument. An integration that learns about a call only
 after it started can record it after the fact: pass `startTime` in the input and `endTime` in the options of the
 handle method, e.g. `send.end({ hash }, { endTime })` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
@@ -95,7 +104,7 @@ releases, `send.end(hash, endTime)` and `send.fail(error, endTime, { errorType }
 | `tracerProvider` | global provider | Tracer provider to use |
 | `meterProvider` | global provider | Meter provider for the [metrics](#metrics) |
 | `address` | `'raw'` | `'raw'`, `'hashed'`, `'off'`, or `{ mode: 'hashed', hash: (address) => string }` |
-| `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, at most 256 characters, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace). `'raw'` can record RPC URLs that include API keys, as some libraries put the request URL in the message; `'sanitized'` keeps only the first line (viem puts the URL on a later line), which is best effort. See [ADR 0006](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0006-error-privacy.md) |
+| `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, cut to 256 characters and `...`, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace). `'raw'` can record RPC URLs that include API keys, as some libraries put the request URL in the message; `'sanitized'` keeps only the first line (viem puts the URL on a later line), which is best effort. See [ADR 0006](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0006-error-privacy.md) |
 | `paymentResource` | `'origin'` | How much of a paid resource's URL `x402.resource` records: `'origin'` (scheme, host and port; nothing for a resource that is not a URL), `'path'` (also the path, never the query string, fragment or user info) or `'off'`. Paths often carry user or account identifiers. At most 512 characters are recorded |
 | `recordFunctionArguments` | `false` | Record `functionArguments` as a JSON array in `blockchain.contract.function.arguments`: bigints as decimal strings, addresses per `address` mode (longer hex values become `<hex>` in `hashed` and `off` mode), at most 4096 characters. Reads only own enumerable data properties: `toJSON()` and getters are never called, so a `Date` records as `{}`; a Proxy's traps still run |
 | `agent` | none | Agent `{ id, name }`; a field set here always wins, unset fields come from the Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` |
@@ -110,7 +119,8 @@ Chain id, transaction hash, sender/recipient (per `address` mode), value, nonce,
 on confirmation, status, block number, gas used, effective gas price, L1 fee, total fee and revert reason. For user operations: their hash,
 smart account, EntryPoint, number of calls, success, gas used, cost, nonce and paymaster. For payments: payer,
 recipient, asset, amount, settled amount, status and whether the settlement was verified, and for x402 the scheme and
-resource. For a replaced transaction: the replacing hash and the reason. On every span: the agent identity. Decoded
+resource. For a replaced transaction: the replacing hash and the reason. For call batches: the batch id, sender, number of
+calls, outcome, status code, atomicity and transaction hashes. On every span: the agent identity. Decoded
 call arguments are recorded only with `recordFunctionArguments`, and error messages only with `errorMessages`.
 Attribute definitions:
 [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/semconv.md).

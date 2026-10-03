@@ -1,10 +1,12 @@
-// An in-process stand-in for an ERC-4337 bundler, for the user operation tests on Anvil. The common bundlers are
-// GPL or LGPL licensed, which the repository's license check rejects even for dev dependencies (docs/adr/0021,
-// Implementation notes). It answers the bundler methods viem's `sendUserOperation` and
-// `waitForUserOperationReceipt` use, puts each operation into its own bundle transaction (`handleOps` on the
-// EntryPoint, sent from a bundler account) and builds receipts from that transaction's logs, as a bundler does.
+// An in-process stand-in for an ERC-4337 bundler, for the user operation tests on Anvil that need no real EntryPoint.
+// It answers the bundler methods viem's `sendUserOperation` and `waitForUserOperationReceipt` use, puts each operation
+// into its own bundle transaction (`handleOps` on the EntryPoint, sent from a bundler account) and builds receipts
+// from that transaction's logs, as a bundler does. real-bundler.int.test.ts checks the same paths through Alto, a real
+// bundler installed outside the workspace (docs/adr/0021, Implementation notes); the receipts here are shaped like
+// Alto's.
 import {
   type Address,
+  type BaseError,
   custom,
   decodeEventLog,
   type Hex,
@@ -88,10 +90,11 @@ export function testBundler(reader: PublicClient, executor: WalletClient): TestB
     if (operation?.eventName !== 'UserOperationEvent') return null;
     const revert = events.find((event) => event.eventName === 'UserOperationRevertReason');
     const { args } = operation;
-    // Shaped like Alto's answer: the nonce as a hex string, no paymaster when none paid.
+    // Shaped like Alto's answer (real-bundler.int.test.ts): the nonce as a hex string, the EntryPoint lower-cased, no
+    // paymaster when none paid.
     return {
       userOpHash,
-      entryPoint: entryPoint07Address,
+      entryPoint: entryPoint07Address.toLowerCase(),
       sender: args.sender,
       nonce: toHex(args.nonce),
       actualGasCost: toHex(args.actualGasCost),
@@ -106,6 +109,27 @@ export function testBundler(reader: PublicClient, executor: WalletClient): TestB
     };
   };
 
+  // Like Alto, estimation runs the operation's call and refuses one that reverts, with the revert data in the
+  // message and ERC-7769's code for a reverted operation; a sender gives limits of its own to send it anyway.
+  const simulate = async (operation: { sender: Address; callData: Hex }, entryPoint: Address) => {
+    try {
+      await reader.request({
+        method: 'eth_call',
+        params: [{ from: entryPoint, to: operation.sender, data: operation.callData }, 'latest'],
+      });
+    } catch (error) {
+      const reverted = (error as BaseError).walk(
+        (cause) => typeof (cause as { data?: unknown }).data === 'string',
+      ) as { data?: Hex } | null;
+      throw Object.assign(
+        new Error(
+          `UserOperation reverted during simulation with reason: ${reverted?.data ?? '0x'}`,
+        ),
+        { code: -32521 },
+      );
+    }
+  };
+
   const transport = custom({
     async request({ method, params }: { method: string; params?: unknown }) {
       const args = (params ?? []) as unknown[];
@@ -115,6 +139,7 @@ export function testBundler(reader: PublicClient, executor: WalletClient): TestB
         case 'eth_supportedEntryPoints':
           return [entryPoint07Address];
         case 'eth_estimateUserOperationGas':
+          await simulate(args[0] as { sender: Address; callData: Hex }, args[1] as Address);
           return {
             preVerificationGas: toHex(50_000),
             verificationGasLimit: toHex(200_000),

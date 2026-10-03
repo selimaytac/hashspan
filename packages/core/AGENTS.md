@@ -1,7 +1,7 @@
 # packages/core
 
-The transaction lifecycle tracker: send, confirm, payment and user operation spans, links, fees, privacy modes and
-metrics. It makes no network calls; adapters pass it hashes, metadata and receipts. Root rules:
+The transaction lifecycle tracker: send, confirm, payment, user operation and call batch spans, links, fees,
+privacy modes and metrics. It makes no network calls; adapters pass it hashes, metadata and receipts. Root rules:
 [AGENTS.md](../../AGENTS.md).
 
 - `src/tracker.ts` public `createTxTracker()`; `src/attributes.ts` attribute keys (mirror of docs/semconv.md, checked

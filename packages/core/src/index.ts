@@ -10,6 +10,7 @@ export type {
   AddressMode,
   AddressOptions,
   AgentIdentity,
+  AuthorizationInput,
   CallBatchConfirmHandle,
   CallBatchConfirmInput,
   CallBatchInput,

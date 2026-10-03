@@ -12,7 +12,7 @@ gas and fees.
 npm install @hashspan/viem @opentelemetry/api viem
 ```
 
-Bring your own [OpenTelemetry SDK and exporter](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/).
+Requires Node.js 22.3 or later. Bring your own [OpenTelemetry SDK and exporter](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/).
 
 ## Usage
 
@@ -39,7 +39,7 @@ agent identity, redaction hook) plus:
 
 | Option | Default | Description |
 |---|---|---|
-| `tracker` | new tracker | A tracker from `createTxTracker()`, to share one between adapters |
+| `tracker` | new tracker | A tracker from `createTxTracker()`, to share one between adapters; the core options then configure nothing, since they are the tracker's. A tracker from an older `@hashspan/core` records only what that core supports: user operations and call batches are then passed on untraced |
 | `confirm` | none | `{ mode: 'background', timeoutMs? }` confirms every sent transaction without an explicit wait |
 | `decodeRevertReason` | `true` | Replay reverted transactions to record their revert reason; `{ timeoutMs }` bounds the replay (default 10 000 ms) |
 | `maxBackgroundConfirmations` | `256` | Most background confirmations (background mode and `watch()`) polling at once; see [Background confirmation](#background-confirmation) |
@@ -66,8 +66,9 @@ with `undefined` when none was retrieved; it never affects the confirm span. `wa
 
 ## Shutting down
 
-Some spans end after the traced call returned: background confirmations, and confirmations of reverted
-transactions, which wait for the revert reason. In scripts, CLI agents and serverless functions, flush them before
+Some spans end after the traced call returned: background confirmations, confirmations of reverted transactions,
+which wait for the revert reason, and confirmations of [preconfirmed receipts](#preconfirmed-receipts-flashblocks),
+which wait for the sealed receipt. In scripts, CLI agents and serverless functions, flush them before
 shutting the OpenTelemetry SDK down, or they are lost:
 
 ```ts
@@ -77,7 +78,8 @@ await provider.shutdown();
 
 `flush()` resolves `true` when all pending work finished and `false` on timeout; it never rejects, and it keeps the
 process alive while it waits. On timeout, confirm spans still waiting are ended and exported: with the receipt if
-only the revert reason was still pending, otherwise as an error with `error.type` `timeout`. Background
+only the revert reason was still pending, without fees if only the sealed receipt was, otherwise as an error with
+`error.type` `timeout`. Background
 confirmations keep polling until their own `timeoutMs`, so short-lived processes should keep that short. The timeout also ends the spans of
 your own `waitForTransactionReceipt` calls that are still waiting, and a receipt they return later is not recorded:
 call `flush()` only when the process is shutting down. Long-running services do not need
@@ -125,6 +127,22 @@ that paid them.
   throws, the wait rejects with its error as in plain viem; the replacement is recorded anyway.
 - `checkReplacement: false` turns off viem's detection, and with it this attribution.
 - A replaced transaction is not an error: whether a cancellation is a failure is up to your application.
+
+## Preconfirmed receipts (flashblocks)
+
+Some RPC nodes, such as Base's, answer `eth_getTransactionReceipt` before the block is sealed, with a receipt whose
+block hash is zero. Its status, block and gas are those of the sealed receipt, but its L1 fee can be another
+transaction's. hashspan therefore records fees from the sealed receipt:
+
+- A receipt with a zero or null block hash is treated as a preconfirmation. The adapter reads the receipt again,
+  off your call's path, once per polling interval (1 s without one), for at most 30 s and never past a background
+  confirmation's `timeoutMs`, and records the sealed receipt. The span keeps the time the preconfirmation arrived as
+  its end time.
+- If no sealed receipt comes in time, or `flush()` cannot wait for it, the span records the preconfirmation without
+  `effective_gas_price`, `l1_fee` and `fee`, since a fee without its L1 part would look valid and be too low.
+- Your `waitForTransactionReceipt` still returns what the node returned, and `watch()`'s `onReceipt` gets the receipt
+  viem resolved with.
+- See [ADR 0024](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0024-sealed-receipt-fees.md).
 
 ## Background confirmation
 
@@ -259,9 +277,9 @@ const wallet = createWalletClient({
 
 | Action | Span | Recorded |
 |---|---|---|
-| `sendTransaction` | `send` | chain id, from, to, value, nonce (when the call passes one), function selector, hash |
+| `sendTransaction` | `send` | chain id, from, to, value, nonce (when the call passes one), function selector, hash, and the EIP-7702 authorizations of a type 4 transaction (count, delegated addresses, chain ids; never signatures) |
 | `writeContract` | `send` | as above, plus the function name, and the call arguments with `recordFunctionArguments: true` |
-| `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack), total fee |
+| `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack) and total fee from the sealed receipt ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)), revert reason, replacement |
 | `sendUserOperation` | `send` | chain id, smart account, EntryPoint, number of calls, user operation hash; see [Smart accounts](#smart-accounts-erc-4337) |
 | `waitForUserOperationReceipt` | `confirm` | success, gas used, cost, nonce, paymaster, revert reason, bundle transaction hash and block |
 | `sendCalls` | `send` | chain id, account, number of calls, batch id; see [Call batches](#call-batches-eip-5792) |

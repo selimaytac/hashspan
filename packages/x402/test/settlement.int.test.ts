@@ -18,13 +18,14 @@ import { type Address, createPublicClient, createWalletClient, http, publicActio
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { freePort } from '../../viem/test/free-port.js';
 import { withHashspan } from '../src/index.js';
 import { testUsdAbi, testUsdBytecode } from './token/test-usd.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
 // Settles real EIP-3009 payments on Anvil through the SDK's own resource server, facilitator and client, all in
 // this process; nothing leaves localhost.
-const PORT = 18564;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const NETWORK = `eip155:${foundry.id}` as const;
 const PRICE = 10_000n;
@@ -186,9 +187,9 @@ describe('an EIP-3009 payment settled by the SDK facilitator', () => {
     const payment = tracing.spanNamed(PAYMENT_SPAN);
     expect(payment.attributes).toMatchObject({
       'blockchain.payment.status': 'settled',
-      'blockchain.payment.payer': agent.address,
-      'blockchain.payment.recipient': PAY_TO,
-      'blockchain.payment.asset': token,
+      'blockchain.payment.payer': agent.address.toLowerCase(),
+      'blockchain.payment.recipient': PAY_TO.toLowerCase(),
+      'blockchain.payment.asset': token.toLowerCase(),
       'blockchain.payment.amount': String(PRICE),
       'x402.scheme': 'exact',
       'x402.resource': 'http://api.test',

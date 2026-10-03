@@ -4,7 +4,7 @@
   "description": "Transaction lifecycle tracing for on-chain actions of AI agents, built on OpenTelemetry.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",
-  "homepage": "https://github.com/selimaytac/hashspan/tree/main/packages/core#readme",
+  "homepage": "https://hashspan.dev",
   "bugs": {
     "url": "https://github.com/selimaytac/hashspan/issues"
   },

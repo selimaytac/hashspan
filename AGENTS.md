@@ -10,7 +10,7 @@ OpenTelemetry tracing for on-chain transactions sent by AI agents: every transac
 - Node version: see `.nvmrc` (`nvm use`); package manager: pnpm via corepack (`corepack enable pnpm`)
 - Install deps: `pnpm install`
 - Build: `pnpm build`
-- Test (unit / integration): `pnpm test` / `pnpm test:integration` (needs Anvil: `make tools`)
+- Test (unit / integration): `pnpm test` / `pnpm test:integration` (needs Anvil and Alto: `make tools`)
   - Tests import workspace packages from source (`vitest.config.ts` alias), so no build is needed first
 - Third-party integration tests: `pnpm --dir integrations install`, then `pnpm test:integrations` (typecheck and
   tests, needs Anvil)

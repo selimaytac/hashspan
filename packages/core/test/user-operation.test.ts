@@ -77,7 +77,7 @@ describe('user operation send span', () => {
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'send',
       'blockchain.user_operation.sender': SENDER,
-      'blockchain.user_operation.entry_point': ENTRY_POINT,
+      'blockchain.user_operation.entry_point': ENTRY_POINT.toLowerCase(),
       'blockchain.user_operation.call_count': 2,
       'blockchain.user_operation.hash': USER_OP_HASH,
     });
@@ -175,7 +175,7 @@ describe('user operation confirm span', () => {
       'blockchain.user_operation.gas.cost': '123456789000',
       'blockchain.user_operation.sender': SENDER,
       'blockchain.user_operation.nonce': NONCE.toString(),
-      'blockchain.user_operation.entry_point': ENTRY_POINT,
+      'blockchain.user_operation.entry_point': ENTRY_POINT.toLowerCase(),
       'blockchain.tx.hash': BUNDLE_HASH,
       'blockchain.block.number': 42,
     });
