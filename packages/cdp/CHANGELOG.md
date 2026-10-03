@@ -1,5 +1,15 @@
 # @hashspan/cdp
 
+## 0.9.1
+
+### Patch Changes
+
+- [#259](https://github.com/selimaytac/hashspan/pull/259) [`4b700e2`](https://github.com/selimaytac/hashspan/commit/4b700e262c45d68848647f7681cd2413919fdcf6) Thanks [@selimaytac](https://github.com/selimaytac)! - A network name that matches an `Object.prototype` member, such as `constructor`, is no longer taken for a known
+  network, so no span starts with a non-numeric chain id. The methods `withHashspan()` wraps in place keep the
+  enumerability of the original property and are not enumerable where the SDK's were inherited, so `Object.keys`,
+  object spread and `JSON.stringify` of `cdp.evm` and of accounts are the same as before wrapping; a read-only or
+  accessor property is left as it is.
+
 ## 0.9.0
 
 ### Patch Changes
