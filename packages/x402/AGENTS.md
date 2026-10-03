@@ -14,3 +14,6 @@ Adapter for x402 payments (ADR 0013). Root rules: [AGENTS.md](../../AGENTS.md).
 - `test/permit2-settlement.int.test.ts` settles real Permit2 `exact` and `upto` payments with the same token, with
   Permit2 and the x402 proxies installed from `test/permit2/contracts.ts` (copied from Base Sepolia by
   `test/permit2/fetch.mjs`, never run in tests)
+- `test/hostile-input.test.ts` applies the hostile-input table (`../core/test/hostile.ts`, ADR 0025) to the hooks, with
+  hostile requirements, payloads, settlement responses and receipts, and to the options and the client; a new hook adds
+  rows there

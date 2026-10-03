@@ -17,3 +17,7 @@ privacy modes and metrics. It makes no network calls; adapters pass it hashes, m
   per transaction; `src/agent.ts` agent identity; `src/metrics.ts` the histograms (ADR 0020)
 - `test/helpers.ts` registers an in-memory tracer provider for span assertions
 - `test/docs.test.ts` checks the repository's documentation (links, ADR index, package table, scopes, code examples)
+- `test/hostile.ts` the hostile-input table of ADR 0025 (hostile values, documented bounds, the checks of rules 1 to 6
+  and the untraced-versus-traced runner of the adapters), imported by every package's `test/hostile-input.test.ts`;
+  `test/hostile-input.test.ts` applies it to every `TxTracker` method, handle method and option. A new entry point adds
+  rows there; a rule that does not hold yet is an `it.fails` row tagged `// finding: <tag>`
