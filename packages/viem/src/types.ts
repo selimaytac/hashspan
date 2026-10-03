@@ -25,6 +25,9 @@ export type TracedAction =
 // biome-ignore lint/suspicious/noExplicitAny: viem action signatures are preserved via Pick<TClient, ...>.
 export type AnyAction = (args: any) => Promise<any>;
 
+/** The client's own actions `K`, as a send path wraps them; absent from a client that lacks them. */
+export type BaseActions<K extends TracedAction> = { [P in K]?: AnyAction | undefined };
+
 /** The subset of a viem client the adapter relies on. */
 export interface ViemClientLike {
   chain?: { id: number } | undefined;
