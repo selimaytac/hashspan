@@ -284,7 +284,7 @@ export interface PaymentSettlement {
   status: PaymentStatus;
   /** Hash of the settling transaction; with it, a confirm span for this hash links to the payment span. */
   hash?: string | undefined;
-  /** Address that paid, when the settlement reports it; recorded instead of the input's. */
+  /** Address that paid, when the settlement reports it; recorded only when the payment's input had no payer. */
   payer?: string | undefined;
   /**
    * Amount settled, when the settlement reports it, recorded as `blockchain.payment.settled_amount`; also as

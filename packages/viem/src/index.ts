@@ -46,7 +46,8 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    */
   confirm?: BackgroundConfirmOptions | undefined;
   /**
-   * Replay reverted transactions to record their revert reason (two extra RPC requests per reverted transaction).
+   * Replay reverted transactions to record their revert reason (two extra RPC requests per reverted transaction, three
+   * when the first replay does not revert).
    * `{ timeoutMs }` bounds the replay; if the provider has not answered by then, the receipt is recorded without a
    * reason. Default: true, with a 10 000 ms bound. See
    * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.8.2/docs/adr/0005-revert-reason-replay.md.
