@@ -523,14 +523,19 @@ function authorizationsOf(list: unknown): SendInput['authorizations'] {
   const length = own(list, 'length');
   if (typeof length !== 'number' || length === 0) return undefined;
   const entries: { address: string; chainId: number }[] = [];
-  for (let index = 0; index < length; index++) {
+  for (let index = 0; index < Math.min(length, MAX_AUTHORIZATIONS); index++) {
     const entry = own(list, String(index));
     const address = own(entry, 'address') ?? own(entry, 'contractAddress');
     // An entry the core cannot read keeps its place in the count.
     entries.push({ address: address as string, chainId: own(entry, 'chainId') as number });
   }
+  // The core counts the whole list but reads only its first entries: the rest stay holes, never read or allocated.
+  entries.length = length;
   return entries;
 }
+
+/** Most authorizations read from a list, as many as the core records. */
+const MAX_AUTHORIZATIONS = 64;
 
 const MAX_ARGUMENTS_COPY_DEPTH = 8;
 // Deep enough for nested tuples, which add two levels each.
