@@ -4,6 +4,7 @@ import {
   type CallBatchStatusLike,
   type ConfirmHandle,
   createTxTracker,
+  ERROR_TYPE_VALUE_OTHER,
   type ReceiptLike,
   type ReplacementReason,
   type SendInput,
@@ -362,17 +363,51 @@ function toCallBatchStatusLike(status: unknown): CallBatchStatusLike {
   };
 }
 
+/**
+ * The `name` of `error` if it is an Error with a string name; undefined otherwise, also when reading it throws (a
+ * throwing getter or Proxy trap), so classifying a rejection never throws.
+ */
+function nameOf(error: unknown): string | undefined {
+  try {
+    if (!(error instanceof Error)) return undefined;
+    const name: unknown = error.name;
+    return typeof name === 'string' ? name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Whether telemetry can read `error`: core records an Error's name as `error.type`. A rejection whose name cannot be
+ * read is recorded without the error, as `error.type` `_OTHER`, so its confirm span still ends.
+ */
+function isReadable(error: unknown): boolean {
+  try {
+    if (error instanceof Error) void error.name;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** `fail()` options for a rejection that cannot be read: no error object, `error.type` `_OTHER`. */
+function unreadable(endTime: TimeInput | undefined): { endTime?: TimeInput; errorType: string } {
+  return endTime === undefined
+    ? { errorType: ERROR_TYPE_VALUE_OTHER }
+    : { endTime, errorType: ERROR_TYPE_VALUE_OTHER };
+}
+
 function isCallsTimeout(error: unknown): boolean {
-  return error instanceof Error && error.name === 'WaitForCallsStatusTimeoutError';
+  return nameOf(error) === 'WaitForCallsStatusTimeoutError';
 }
 
 function isTimeout(error: unknown): boolean {
-  return error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError';
+  return nameOf(error) === 'WaitForTransactionReceiptTimeoutError';
 }
 
 /** viem gives up waiting for a user operation receipt with this error, on its timeout or after `retryCount` polls. */
 function isUserOperationTimeout(error: unknown): boolean {
-  return error instanceof Error && error.name === 'WaitForUserOperationReceiptTimeoutError';
+  return nameOf(error) === 'WaitForUserOperationReceiptTimeoutError';
 }
 
 /** What viem's `waitForUserOperationReceipt` returns, as far as the adapter reads it. */
@@ -421,10 +456,8 @@ function toUserOperationReceiptLike(receipt: ViemUserOperationReceipt): UserOper
  * again after these errors, until its timeout.
  */
 function isReceiptLag(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.name === 'TransactionReceiptNotFoundError' || error.name === 'TransactionNotFoundError')
-  );
+  const name = nameOf(error);
+  return name === 'TransactionReceiptNotFoundError' || name === 'TransactionNotFoundError';
 }
 const RECEIPT_LAG_RETRY_MS = 1_000;
 
@@ -738,7 +771,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       // viem rejects after reporting a replacement only if the caller's onReplaced threw: the transaction was mined.
       const reported = capture.replacement?.transactionReceipt;
       if (!reported) {
-        if (isTimeout(error)) handle.timeout(endTimeOf());
+        if (!isReadable(error)) handle.fail(undefined, unreadable(endTimeOf()));
+        else if (isTimeout(error)) handle.timeout(endTimeOf());
         else handle.fail(error, endTimeOf());
         return;
       }
@@ -1341,7 +1375,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
           try {
             receipt = await wait;
           } catch (error) {
-            if (isUserOperationTimeout(error)) handle.timeout(options());
+            if (!isReadable(error)) handle.fail(undefined, unreadable(options()?.endTime));
+            else if (isUserOperationTimeout(error)) handle.timeout(options());
             else handle.fail(error, options());
             return;
           }
@@ -1519,7 +1554,11 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
             status = await wait;
           } catch (error) {
             // With throwOnFailure, a failed batch rejects with its status: recorded as that status.
-            if (error instanceof Error && error.name === 'BundleFailedError') {
+            if (!isReadable(error)) {
+              handle.fail(undefined, unreadable(options()?.endTime));
+              return;
+            }
+            if (nameOf(error) === 'BundleFailedError') {
               try {
                 status = own(error, 'result');
               } catch {
