@@ -107,8 +107,12 @@ metrics over OTLP to a Prometheus-compatible backend and import the file:
 - Prometheus needs `--web.enable-otlp-receiver` and turns `blockchain.client.send.duration` (unit `s`) into
   `blockchain_client_send_duration_seconds` and attributes into labels such as `blockchain_chain_id` and
   `error_type`, as in [`docker/prometheus.yml`](../docker/prometheus.yml).
-- A process that exports only once before it exits, such as a short script, leaves one sample per series, and
-  `rate()` needs two: the lab enables `--enable-feature=created-timestamp-zero-ingestion`, so Prometheus adds a zero
-  sample at each series' start time. Long-running agents need neither.
+- The counts for the selected range (sends, failures, outcomes, the fee distribution) are the rise of each counter
+  within the range, without the extrapolation of `increase()`, which turns a short run into fractional or inflated
+  counts. They are exact when each process is a series of its own that starts at zero: give each run its own
+  `service.instance.id`, as the example agent does, and, for a process that exports only once before it exits, let
+  Prometheus add a zero sample at each series' start (`--enable-feature=created-timestamp-zero-ingestion`, enabled in
+  the lab). A long-running process restarted under the same `service.instance.id` resets its counters, and the counts
+  then miss the sends before the restart.
 - The dashboard's data source is the one with uid `hashspan-prometheus`; pick yours when you import it.
 

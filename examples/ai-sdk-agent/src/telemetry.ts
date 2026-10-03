@@ -22,11 +22,14 @@ import { registerTelemetry } from 'ai';
 /**
  * The service the spans belong to: `treasury-agent`, unless `OTEL_SERVICE_NAME` or `OTEL_RESOURCE_ATTRIBUTES` say
  * otherwise. A `NodeTracerProvider` does not read those variables by itself (`NodeSDK` does), so they are detected here.
+ * Each run gets its own `service.instance.id`, unless the environment sets one: its metrics are then a series of their
+ * own that starts at zero, so a backend can count one run's sends exactly instead of across restarts.
  */
 export function telemetryResource(): Resource {
-  return resourceFromAttributes({ [ATTR_SERVICE_NAME]: 'treasury-agent' }).merge(
-    detectResources({ detectors: [envDetector] }),
-  );
+  return resourceFromAttributes({
+    [ATTR_SERVICE_NAME]: 'treasury-agent',
+    'service.instance.id': crypto.randomUUID(),
+  }).merge(detectResources({ detectors: [envDetector] }));
 }
 
 /**

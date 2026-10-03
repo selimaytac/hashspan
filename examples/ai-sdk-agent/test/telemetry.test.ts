@@ -28,6 +28,16 @@ describe('telemetryResource', () => {
     expect(attributes[ATTR_SERVICE_NAME]).toBe('from-attributes');
     expect(attributes['deployment.environment.name']).toBe('staging');
   });
+
+  it('gives each run its own service.instance.id unless the environment sets one', () => {
+    vi.stubEnv('OTEL_RESOURCE_ATTRIBUTES', '');
+    const first = telemetryResource().attributes['service.instance.id'];
+    const second = telemetryResource().attributes['service.instance.id'];
+    expect(first).toMatch(/^[0-9a-f-]{36}$/);
+    expect(second).not.toBe(first);
+    vi.stubEnv('OTEL_RESOURCE_ATTRIBUTES', 'service.instance.id=fixed');
+    expect(telemetryResource().attributes['service.instance.id']).toBe('fixed');
+  });
 });
 
 describe('startMetrics', () => {
