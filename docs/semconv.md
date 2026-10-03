@@ -224,7 +224,8 @@ Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-
 The address mode also applies to addresses inside `blockchain.tx.revert.reason`,
 `blockchain.contract.function.arguments`, `x402.resource`, `error.type` and sanitized error messages (`<address>` in `off` mode).
 In `hashed` and `off` mode, hex values longer than an address are recorded as `<hex>` in those attributes, because a
-padded `bytes32` or ABI-encoded `bytes` value can embed an address. The redaction hook also runs on `error.type` and on `exception` event
+padded `bytes32` or ABI-encoded `bytes` value can embed an address. When a value is cut to its length bound, a hex
+value that the cut would split is dropped whole, so no part of an address is left. The redaction hook also runs on `error.type` and on `exception` event
 attributes; if it throws, only `exception.type` is kept on the event.
 
 Payment values usually come from a remote party (the paid server or the settling party): addresses that are not

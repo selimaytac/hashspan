@@ -382,6 +382,14 @@ describe('payment privacy', () => {
     expect(recorded as string).toMatch(/^https:\/\/api\.example\.com\/a+\.\.\.$/);
   });
 
+  it('drops a hex value cut by the length bound whole, so no part of an address is recorded', () => {
+    const path = `https://api.example.com/${'a'.repeat(470)}/`;
+    createTxTracker({ address: 'off', paymentResource: 'path' })
+      .startPayment({ ...payment, x402: { resource: `${path}${PAYER}` } })
+      .end({ status: 'settled' });
+    expect(tracing.spans()[0]?.attributes['x402.resource']).toBe(`${path}...`);
+  });
+
   it('records addresses in the resource per the address mode', () => {
     const resource = `https://api.example.com/balance/${PAYER}`;
     createTxTracker({ address: 'off', paymentResource: 'path' })
