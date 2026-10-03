@@ -125,7 +125,18 @@ framework's tool-call span is that span depends on its instrumentation:
 - **LangChain JS and the OpenAI Agents SDK:** OpenInference's instrumentations
   (`@arizeai/openinference-instrumentation-langchain` 4.1.4, `@arizeai/openinference-instrumentation-openai-agents`
   0.3.2) record tool spans but do not make them active, so hashspan's spans attach to whatever span was active
-  before the agent ran. To group a tool's transactions, run the tool's function in an active span of your own:
+  before the agent ran (upstream:
+  [Arize-ai/openinference#3925](https://github.com/Arize-ai/openinference/issues/3925) for the OpenAI Agents SDK,
+  [#1103](https://github.com/Arize-ai/openinference/issues/1103) for LangChain JS). When the agent runs inside an
+  active span of your own, hashspan's spans and OpenInference's spans are in that span's trace. CI runs both
+  instrumentations against Anvil with a scripted model (`langchain` 1.5.15 and `@openai/agents` 0.18.0), with and
+  without the workaround below, in
+  [`integrations/test/openinference-langchain.int.test.ts`](../integrations/test/openinference-langchain.int.test.ts)
+  and
+  [`integrations/test/openinference-openai-agents.int.test.ts`](../integrations/test/openinference-openai-agents.int.test.ts).
+  The OpenAI Agents SDK turns its tracing off when `NODE_ENV` is `test`, so OpenInference records nothing there
+  until `setTracingDisabled(false)` is called. To group a tool's transactions, run the tool's function in an active
+  span of your own; that span is a sibling of OpenInference's tool span, not its child:
 
 ```ts
 const tracer = trace.getTracer('treasury-agent');
