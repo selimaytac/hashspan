@@ -48,6 +48,10 @@ jobs:
       - run: ./scripts/install-anvil.sh
       # Alto and the EntryPoint artifacts for the real-bundler test, pinned by scripts/bundler/package-lock.json.
       - run: ./scripts/install-bundler.sh
+      # Report only: Alto's tree runs in this test job alone and never ships; its advisories are listed for review.
+      - name: Report advisories of the test bundler's dependencies
+        continue-on-error: true
+        run: npm audit --prefix scripts/bundler
       - name: Unit and integration tests with coverage thresholds
         run: pnpm test:coverage
 
