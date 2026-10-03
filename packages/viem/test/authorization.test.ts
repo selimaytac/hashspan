@@ -8,7 +8,7 @@ import { setupTracing, type TestTracing } from './tracing.js';
 // The send span of an EIP-7702 transaction records its authorization list: how many, and each delegated address with
 // its chain id. Signatures and nonces never reach telemetry, and no getter of the caller's runs.
 
-const DELEGATE = '0x63c0c19a282a1B52b07dD5a65b58948A07DAE32B';
+const DELEGATE = '0x63c0c19a282a1B52b07dD5a65b58948A07DAE32B' as const;
 const R = `0x${'11'.repeat(32)}` as const;
 const S = `0x${'22'.repeat(32)}` as const;
 
@@ -79,4 +79,24 @@ it('reads the list without running a getter of the caller', async () => {
   const send = tracing.spanNamed(`send ${base.id}`);
   expect(send.attributes['blockchain.tx.authorization.count']).toBe(1);
   expect(send.attributes['blockchain.tx.authorization.addresses']).toBeUndefined();
+});
+
+it('reads at most 64 entries of a long list, and still counts them all', async () => {
+  const entry = { address: DELEGATE, chainId: base.id, nonce: 3, r: R, s: S, yParity: 1 };
+  const read = new Set<string>();
+  const list = new Proxy(
+    Array.from({ length: 1_000 }, () => entry),
+    {
+      getOwnPropertyDescriptor(target, key) {
+        if (typeof key === 'string' && /^[0-9]+$/.test(key)) read.add(key);
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+    },
+  );
+  await wallet().sendTransaction({ to: TO, authorizationList: list });
+
+  const send = tracing.spanNamed(`send ${base.id}`);
+  expect(send.attributes['blockchain.tx.authorization.count']).toBe(1_000);
+  expect(send.attributes['blockchain.tx.authorization.addresses']).toHaveLength(64);
+  expect(read.size).toBe(64);
 });
