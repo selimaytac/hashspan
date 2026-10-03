@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'v
 import { withHashspan } from '../src/index.js';
 import { FROM, HASH, mockTransport, TO } from './mock-transport.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemHasAction } from './viem-version.js';
 
 const erc20 = parseAbi(['function transfer(address to, uint256 amount) returns (bool)']);
 
@@ -89,10 +90,14 @@ describe('sendTransaction', () => {
       chain: base,
       transport: (opts) => {
         const t = transport(opts);
+        // Only the replay's lookup fails, after the receipt: viem before 2.33.0 looks the transaction up itself
+        // before it asks for the receipt, and retries a failing lookup for seconds.
+        let receiptAsked = false;
         return {
           ...t,
           request: (async (args: { method: string }) => {
-            if (args.method === 'eth_getTransactionByHash') {
+            if (args.method === 'eth_getTransactionReceipt') receiptAsked = true;
+            if (args.method === 'eth_getTransactionByHash' && receiptAsked) {
               throw new Error(`lookup failed for ${FROM} at https://rpc.example/secret-key`);
             }
             return t.request(args as never);
@@ -292,22 +297,26 @@ describe('robustness', () => {
     await expect(wallet.sendTransaction({ to: TO })).resolves.toBe(HASH);
   });
 
-  it('returns the call batch status when the tracker throws while recording the batch', async () => {
-    vi.spyOn(diag, 'error').mockImplementation(() => {});
-    const hashspan = withHashspan({ tracker: throwingHandles() });
-    const wallet = createWalletClient({
-      account: FROM,
-      chain: base,
-      transport: mockTransport().transport,
-      pollingInterval: 10,
-    }).extend(hashspan);
-    await withoutUnhandledRejections(async () => {
-      await expect(wallet.sendCallsSync({ calls: [{ to: TO }] })).resolves.toMatchObject({
-        status: 'success',
+  // sendCallsSync came with viem 2.38.0.
+  it.skipIf(!viemHasAction('sendCallsSync'))(
+    'returns the call batch status when the tracker throws while recording the batch',
+    async () => {
+      vi.spyOn(diag, 'error').mockImplementation(() => {});
+      const hashspan = withHashspan({ tracker: throwingHandles() });
+      const wallet = createWalletClient({
+        account: FROM,
+        chain: base,
+        transport: mockTransport().transport,
+        pollingInterval: 10,
+      }).extend(hashspan);
+      await withoutUnhandledRejections(async () => {
+        await expect(wallet.sendCallsSync({ calls: [{ to: TO }] })).resolves.toMatchObject({
+          status: 'success',
+        });
+        await hashspan.flush();
       });
-      await hashspan.flush();
-    });
-  });
+    },
+  );
 
   it('rethrows the original send error when the tracker throws while recording it', async () => {
     vi.spyOn(diag, 'error').mockImplementation(() => {});

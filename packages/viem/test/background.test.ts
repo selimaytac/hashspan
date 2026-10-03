@@ -143,7 +143,9 @@ describe("background confirmation and the caller's own wait on the same client",
     let mined = false;
     const wallet = sameClient({ timeoutMs: 30 }, () => mined);
     const hash = await wallet.sendTransaction({ to: TO });
-    const wait = wallet.waitForTransactionReceipt({ hash, timeout: 1_000 });
+    // retryCount: viem before 2.21.15 gives up after that many polls (6 by default), here before the transaction is
+    // mined, with or without hashspan.
+    const wait = wallet.waitForTransactionReceipt({ hash, timeout: 1_000, retryCount: 100 });
     setTimeout(() => {
       mined = true;
     }, 80);
@@ -195,7 +197,11 @@ describe('confirmations shared through one tracker', () => {
     }).extend(hashspan);
 
     const hash = await wallet.sendTransaction({ to: TO });
-    const wait = wallet.extend(publicActions).extend(hashspan).waitForTransactionReceipt({ hash });
+    // retryCount: viem before 2.21.15 gives up after that many polls (6 by default), with or without hashspan.
+    const wait = wallet
+      .extend(publicActions)
+      .extend(hashspan)
+      .waitForTransactionReceipt({ hash, retryCount: 100 });
     // Sequencing, not an assertion: lets the 30 ms background confirmation time out before the transaction is mined.
     // flush() cannot be used here, as a timed-out flush would also end the caller's own wait.
     await new Promise((resolve) => setTimeout(resolve, 80));

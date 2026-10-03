@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
 import { FROM, HASH, mockTransport, TO } from './mock-transport.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemAtLeast } from './viem-version.js';
 
 const payroll = parseAbi(['function pay((address to, uint256 amount) order)']);
 
@@ -185,7 +186,9 @@ describe('wait options the adapter forwards', () => {
         blockIncludesTransaction: true,
         mined: (() => {
           let calls = 0;
-          return () => ++calls > 2;
+          // From viem 2.33.0, a wait asks for the receipt once before it starts polling: one request more.
+          const misses = viemAtLeast('2.33.0') ? 2 : 1;
+          return () => ++calls > misses;
         })(),
       });
       const plain = createPublicClient({

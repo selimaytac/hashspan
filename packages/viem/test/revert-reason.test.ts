@@ -142,21 +142,26 @@ describe('revert reason', () => {
   });
 
   it('makes no extra requests for successful transactions', async () => {
+    // Compared with an untraced wait: viem before 2.33.0 looks the transaction up itself.
+    const untraced = mockTransport();
+    await createPublicClient({
+      chain: base,
+      transport: untraced.transport,
+    }).waitForTransactionReceipt({ hash: HASH });
     const { transport, calls } = mockTransport();
     const reader = createPublicClient({ chain: base, transport }).extend(withHashspan());
     await reader.waitForTransactionReceipt({ hash: HASH });
     await vi.waitFor(() => expect(tracing.spans()).toHaveLength(1));
     expect(calls).not.toContain('eth_call');
-    expect(calls).not.toContain('eth_getTransactionByHash');
+    expect(calls).toEqual(untraced.calls);
   });
 });
 
 describe('revert reason replay timeout', () => {
   it('ends the confirm span without a reason when the provider does not answer the replay', async () => {
-    const { transport } = mockTransport({
-      receipt: { status: '0x0' },
-      hangOn: ['eth_getTransactionByHash'],
-    });
+    // The replay's eth_call never answers; viem before 2.33.0 also asks for the transaction in its own wait, so a
+    // lookup that never answers would hang the wait itself.
+    const { transport } = mockTransport({ receipt: { status: '0x0' }, callHangs: true });
     const reader = createPublicClient({ chain: base, transport }).extend(
       withHashspan({ decodeRevertReason: { timeoutMs: 50 } }),
     );

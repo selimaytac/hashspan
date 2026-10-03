@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { withHashspan } from '../src/index.js';
 import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemHasAction } from './viem-version.js';
 
 const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
@@ -83,49 +84,55 @@ function standInWallet() {
   });
 }
 
-describe('call batches on Anvil', () => {
-  it("traces viem's fallback as a batch whose transactions are confirmed as transactions", async () => {
-    // Without background confirmation: the fallback's transactions are confirmed anyway.
-    const hashspan = withHashspan();
-    const wallet = createWalletClient({
-      account: LOCAL_ACCOUNT,
-      chain: anvil,
-      transport: http(RPC_URL),
-      pollingInterval: 50,
-    }).extend(hashspan);
+// A wallet client's sendCalls and waitForCallsStatus came with viem 2.28.0, sendCallsSync with 2.38.0.
+describe.skipIf(!viemHasAction('waitForCallsStatus'))('call batches on Anvil', () => {
+  it.skipIf(!viemHasAction('sendCallsSync'))(
+    "traces viem's fallback as a batch whose transactions are confirmed as transactions",
+    async () => {
+      // Without background confirmation: the fallback's transactions are confirmed anyway.
+      const hashspan = withHashspan();
+      const wallet = createWalletClient({
+        account: LOCAL_ACCOUNT,
+        chain: anvil,
+        transport: http(RPC_URL),
+        pollingInterval: 50,
+      }).extend(hashspan);
 
-    const status = await wallet.sendCallsSync({
-      calls: [
-        { to: RECIPIENT, value: 1n },
-        { to: OTHER, value: 2n },
-      ],
-      experimental_fallback: true,
-    });
-    await expect(hashspan.flush()).resolves.toBe(true);
+      const status = await wallet.sendCallsSync({
+        calls: [
+          { to: RECIPIENT, value: 1n },
+          { to: OTHER, value: 2n },
+        ],
+        experimental_fallback: true,
+      });
+      await expect(hashspan.flush()).resolves.toBe(true);
 
-    expect(status.status).toBe('success');
-    const hashes = status.receipts?.map((receipt) => receipt.transactionHash);
-    expect(hashes).toHaveLength(2);
-    const [send] = sends();
-    expect(send?.attributes['blockchain.call_batch.call_count']).toBe(2);
+      expect(status.status).toBe('success');
+      const hashes = status.receipts?.map((receipt) => receipt.transactionHash);
+      expect(hashes).toHaveLength(2);
+      const [send] = sends();
+      expect(send?.attributes['blockchain.call_batch.call_count']).toBe(2);
 
-    const batch = confirms().find((s) => s.attributes['blockchain.call_batch.id'] !== undefined);
-    expect(batch?.attributes).toMatchObject({
-      'blockchain.call_batch.status': 'success',
-      'blockchain.call_batch.status_code': 200,
-      'blockchain.call_batch.transaction_hashes': hashes,
-    });
-    expect(batch?.attributes).not.toHaveProperty('blockchain.tx.fee');
-    // Each transaction has its own confirm span with its fee, linked to the batch's send span.
-    const transactions = confirms().filter((s) => s.attributes['blockchain.tx.hash'] !== undefined);
-    expect(transactions.map((s) => s.attributes['blockchain.tx.hash']).sort()).toEqual(
-      [...(hashes ?? [])].sort(),
-    );
-    for (const span of transactions) {
-      expect(span.attributes['blockchain.tx.fee']).toBeDefined();
-      expect(span.links[0]?.context.spanId).toBe(send?.spanContext().spanId);
-    }
-  });
+      const batch = confirms().find((s) => s.attributes['blockchain.call_batch.id'] !== undefined);
+      expect(batch?.attributes).toMatchObject({
+        'blockchain.call_batch.status': 'success',
+        'blockchain.call_batch.status_code': 200,
+        'blockchain.call_batch.transaction_hashes': hashes,
+      });
+      expect(batch?.attributes).not.toHaveProperty('blockchain.tx.fee');
+      // Each transaction has its own confirm span with its fee, linked to the batch's send span.
+      const transactions = confirms().filter(
+        (s) => s.attributes['blockchain.tx.hash'] !== undefined,
+      );
+      expect(transactions.map((s) => s.attributes['blockchain.tx.hash']).sort()).toEqual(
+        [...(hashes ?? [])].sort(),
+      );
+      for (const span of transactions) {
+        expect(span.attributes['blockchain.tx.fee']).toBeDefined();
+        expect(span.links[0]?.context.spanId).toBe(send?.spanContext().spanId);
+      }
+    },
+  );
 
   it('traces a batch a wallet answers, from wallet_sendCalls to its status', async () => {
     const hashspan = withHashspan();

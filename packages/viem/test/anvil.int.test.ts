@@ -19,6 +19,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { withHashspan } from '../src/index.js';
 import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemAtLeast } from './viem-version.js';
 
 const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
@@ -598,7 +599,8 @@ describe('replaced transactions on Anvil', () => {
       });
       const wait = client.waitForTransactionReceipt({ hash: original });
       await fetched(original);
-      // Same contract, different call data: viem reports `replaced`.
+      // Same contract, different call data: viem reports `replaced`; before 2.22.4 it compared no call data and
+      // reported `repriced`, which the attribute passes on.
       const replacing = await wallet.sendTransaction({
         to: REVERT_WITH_CUSTOM_ERROR,
         data: '0x12345678',
@@ -611,7 +613,7 @@ describe('replaced transactions on Anvil', () => {
       expect((await wait).status).toBe('reverted');
       await vi.waitFor(() => expect(confirmOf(replacing)).toHaveLength(1));
       expect(confirmOf(original)[0]?.attributes['blockchain.tx.replacement.reason']).toBe(
-        'replaced',
+        viemAtLeast('2.22.4') ? 'replaced' : 'repriced',
       );
       expect(confirmOf(replacing)[0]?.attributes).toMatchObject({
         'blockchain.tx.status': 'reverted',
