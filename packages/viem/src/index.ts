@@ -11,17 +11,10 @@ import {
   type UserOperationInput,
 } from '@hashspan/core';
 import { type Context, context, diag, type TimeInput } from '@opentelemetry/api';
-import {
-  type Abi,
-  getAbiItem,
-  type TransactionReceipt,
-  toFunctionSelector,
-  WaitForTransactionReceiptTimeoutError,
-} from 'viem';
+import { type Abi, getAbiItem, toFunctionSelector } from 'viem';
 // A namespace import: `sendCallsSync` is missing from older viem releases in the peer range, and a named import of it
 // would fail to load there.
 import * as viemActions from 'viem/actions';
-import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
 import {
   abiForTelemetry,
   addressOf,
@@ -33,36 +26,24 @@ import {
   selectorOf,
   shadowing,
 } from './arguments.js';
+import { createConfirmation, DEFAULT_BACKGROUND_TIMEOUT_MS } from './confirm/confirmation.js';
+import { createPending } from './confirm/pending.js';
 import {
   capturing,
   isCallsTimeout,
-  isPreconfirmed,
   isReadable,
-  isReceiptLag,
-  isTimeout,
   isUserOperationTimeout,
   nameOf,
-  RECEIPT_LAG_RETRY_MS,
   type ReplacementCapture,
-  sameHex,
-  sealedReceipt,
-  toReceiptLike,
   toUserOperationReceiptLike,
   unreadable,
   type ViemReceipt,
   type ViemReplacement,
   type ViemUserOperationReceipt,
-  withoutFees,
 } from './confirm/receipt.js';
 import { confirmKey, Recent } from './confirm/recent.js';
-import {
-  chainIdOfClient,
-  chainIdOrGiveUp,
-  delay,
-  settledWithin,
-  within,
-} from './confirm/timing.js';
-import { fetchRevertReason } from './revert-reason.js';
+import { chainIdOrGiveUp } from './confirm/timing.js';
+import { createWatch } from './confirm/watch.js';
 import { errorName, guardTracker } from './safe-tracker.js';
 import type {
   AnyAction,
@@ -111,12 +92,8 @@ export interface WithHashspanOptions extends TxTrackerOptions {
   maxBackgroundConfirmations?: number | undefined;
 }
 
-const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
 const DEFAULT_MAX_BACKGROUND_CONFIRMATIONS = 256;
 const DEFAULT_REVERT_REASON_TIMEOUT_MS = 10_000;
-const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
-/** How long telemetry waits for the sealed receipt of a preconfirmed transaction before it records it without fees. */
-const SEALED_RECEIPT_TIMEOUT_MS = 30_000;
 
 /** Client extension returned by {@link withHashspan}: the traced actions present on the client. */
 export interface HashspanExtension {
@@ -203,9 +180,6 @@ function toCallBatchStatusLike(status: unknown): CallBatchStatusLike {
   };
 }
 
-/** A confirm handle of a transaction or of a user operation. */
-type AnyConfirmHandle = ConfirmHandle | UserOperationConfirmHandle | CallBatchConfirmHandle;
-
 /**
  * A started send span, of a transaction, a user operation or a call batch, as `traceSend` ends it; `R` is what the
  * call returned: a hash, or a call batch's result.
@@ -233,9 +207,6 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     typeof maxBackgroundOption === 'number' && maxBackgroundOption >= 0
       ? maxBackgroundOption
       : DEFAULT_MAX_BACKGROUND_CONFIRMATIONS;
-  /** Background confirmations polling now, and whether the limit was reported since the count was last below it. */
-  let backgroundCount = 0;
-  let limitReported = false;
   // Guarded so that no tracker, including a user-provided one, can throw into the instrumented call.
   const decodeRevertReason = decodeRevertReasonOption !== false;
   const revertReasonTimeoutMs =
@@ -247,350 +218,18 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   const abis = new Recent<Abi>();
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
   const revertReasons = new Recent<Promise<string | undefined>>();
-  /** Tracing work that outlives the traced call, awaited by `flush()`. */
-  const pending = new Set<Promise<void>>();
-  const track = (work: Promise<void>): void => {
-    const settled = work.catch(() => {});
-    pending.add(settled);
-    void settled.finally(() => pending.delete(settled));
-  };
-  /** Ends a confirm handle that is still waiting as `timeout`, for `flush()` to call when it cannot wait longer. */
-  const waiting = new Set<() => void>();
-  const flush = async ({
-    timeoutMs = DEFAULT_FLUSH_TIMEOUT_MS,
-  }: FlushOptions = {}): Promise<boolean> => {
-    const deadline = Date.now() + timeoutMs;
-    // Loop, because finishing work can start more (e.g. a late send starting a background confirmation).
-    while (pending.size > 0) {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0 || !(await settledWithin([...pending], remaining))) {
-        // End what is left, so its spans are exported with the rest (docs/adr/0010).
-        for (const abandon of [...waiting]) {
-          try {
-            abandon();
-          } catch (error) {
-            diag.error(`hashspan: failed to end a pending confirm span (${errorName(error)})`);
-          }
-        }
-        diag.debug(`hashspan: flush gave up after ${timeoutMs} ms`);
-        return false;
-      }
-    }
-    return true;
-  };
-
-  interface PendingConfirmation<H extends AnyConfirmHandle = ConfirmHandle> {
-    /** Ends the wrapped handle at most once; later calls are ignored. */
-    handle: H;
-    /** Resolves once the handle has ended, by any path. */
-    ended: Promise<void>;
-    /** How `flush()` ends the underlying handle if it cannot wait any longer; `timeout` until replaced. */
-    onAbandon(abandon: (handle: H) => void): void;
-  }
-
-  /** Wraps `handle` so it ends at most once, and registers it with `flush()` until it has ended. */
-  const settleOnce = <H extends AnyConfirmHandle>(handle: H): PendingConfirmation<H> => {
-    let settled = false;
-    let resolveEnded: () => void = () => {};
-    const ended = new Promise<void>((resolve) => {
-      resolveEnded = resolve;
-    });
-    const settle = (end: () => void): void => {
-      if (settled) return;
-      settled = true;
-      waiting.delete(abandon);
-      try {
-        end();
-      } finally {
-        resolveEnded();
-      }
-    };
-    let onAbandon = (underlying: H): void => underlying.timeout();
-    const abandon = (): void => settle(() => onAbandon(handle));
-    waiting.add(abandon);
-    return {
-      handle: {
-        end: (...args: unknown[]) => settle(() => Reflect.apply(handle.end, handle, args)),
-        timeout: (...args: unknown[]) => settle(() => Reflect.apply(handle.timeout, handle, args)),
-        fail: (...args: unknown[]) => settle(() => Reflect.apply(handle.fail, handle, args)),
-      } as H,
-      ended,
-      onAbandon: (abandonWith) => {
-        onAbandon = abandonWith;
-      },
-    };
-  };
-
-  /** Revert reason of a mined transaction, fetched once per transaction (keyed by its hash). */
-  const revertReasonOf = (
-    key: string,
-    receipt: ViemReceipt,
-    abi: Abi | undefined,
-    client: unknown,
-  ): Promise<string | undefined> => {
-    let reason = revertReasons.get(key);
-    if (!reason) {
-      const fetched = fetchRevertReason(
-        client,
-        receipt.transactionHash,
-        receipt.blockNumber,
-        abi,
-      ).catch((error: unknown) => {
-        diag.debug(`hashspan: could not fetch revert reason (${errorName(error)})`);
-        return undefined;
-      });
-      // Bounded, so that an unresponsive provider cannot keep the confirm span open.
-      reason = within(fetched, revertReasonTimeoutMs, 'fetch the revert reason');
-      revertReasons.set(key, reason);
-    }
-    return reason;
-  };
-
-  /**
-   * Ends `handle` from the outcome of `wait`; never rejects. The tracker joins handles for one transaction into one
-   * confirm span
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0007-confirmation-ownership.md) and
-   * attributes the receipt of a replacing transaction to that transaction
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0008-replaced-transactions.md). For
-   * reverted receipts, the span ends after the revert reason was fetched with `client`. For a preconfirmed receipt, it
-   * ends with the sealed receipt, read with `client` until `deadline` at the latest
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0024-sealed-receipt-fees.md).
-   */
-  const recordReceipt = async (
-    chainId: number,
-    hash: string,
-    confirmation: PendingConfirmation,
-    wait: Promise<ViemReceipt>,
-    capture: ReplacementCapture,
-    client: unknown,
-    endTimeOf: () => TimeInput | undefined = () => undefined,
-    deadline?: number,
-  ): Promise<void> => {
-    const { handle } = confirmation;
-    let receipt: ViemReceipt;
-    try {
-      receipt = await wait;
-    } catch (error) {
-      // viem rejects after reporting a replacement only if the caller's onReplaced threw: the transaction was mined.
-      const reported = capture.replacement?.transactionReceipt;
-      if (!reported) {
-        if (!isReadable(error)) handle.fail(undefined, unreadable(endTimeOf()));
-        else if (isTimeout(error)) handle.timeout(endTimeOf());
-        else handle.fail(error, endTimeOf());
-        return;
-      }
-      receipt = reported;
-    }
-    try {
-      const { replacement } = capture;
-      const reported =
-        replacement !== undefined &&
-        sameHex(replacement.transactionReceipt.transactionHash, receipt.transactionHash);
-      const replacementReason = reported ? replacement.reason : undefined;
-      let recorded = toReceiptLike(receipt);
-      let endAt = endTimeOf;
-      if (isPreconfirmed(receipt)) {
-        // The span ends when the receipt arrived, not when the sealed one was read, so its duration stays the wait's.
-        const arrivedAt = endTimeOf() ?? new Date();
-        endAt = () => arrivedAt;
-        // Its fee may be another transaction's. A flush that cannot wait records it without fees.
-        const preconfirmed = { ...withoutFees(recorded), replacementReason };
-        confirmation.onAbandon((underlying) => underlying.end(preconfirmed, endAt()));
-        const sealed = await sealedReceipt(
-          client,
-          receipt,
-          Math.min(deadline ?? Number.POSITIVE_INFINITY, Date.now() + SEALED_RECEIPT_TIMEOUT_MS),
-        );
-        if (sealed) {
-          receipt = sealed;
-          recorded = toReceiptLike(sealed);
-        } else {
-          diag.warn(
-            'hashspan: no sealed receipt for a preconfirmed transaction; recording it without fees',
-          );
-          recorded = withoutFees(recorded);
-        }
-      }
-      let revertReason: string | undefined;
-      // A malformed hash is left to the tracker, which does not attribute it.
-      if (
-        receipt.status === 'reverted' &&
-        decodeRevertReason &&
-        typeof receipt.transactionHash === 'string'
-      ) {
-        const minedKey = confirmKey(chainId, receipt.transactionHash);
-        // Errors are matched by selector, so the original call's ABI fits a replacing call to the same contract.
-        const abi =
-          abis.get(minedKey) ??
-          (minedKey === confirmKey(chainId, hash) ||
-          (reported && sameHex(replacement.transaction.to, replacement.replacedTransaction.to))
-            ? abis.get(confirmKey(chainId, hash))
-            : undefined);
-        // The receipt is known: a flush that cannot wait for the reason records the receipt without it.
-        const mined = { ...recorded, replacementReason };
-        confirmation.onAbandon((underlying) => underlying.end(mined, endAt()));
-        revertReason = await revertReasonOf(minedKey, receipt, abi, client);
-      }
-      handle.end({ ...recorded, revertReason, replacementReason }, endAt());
-    } catch (error) {
-      diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
-      handle.fail(error, endTimeOf());
-    }
-  };
-  /**
-   * Records the outcome of `wait` on `waitingHandle`; never rejects. Resolves as soon as the handle has ended,
-   * including when a flush that gave up ended it
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0010-flush-before-shutdown.md), so the
-   * tracked work drains.
-   */
-  const recordConfirmation = (
-    chainId: number,
-    hash: string,
-    waitingHandle: ConfirmHandle,
-    wait: Promise<ViemReceipt>,
-    capture: ReplacementCapture,
-    client: unknown,
-    endTimeOf: () => TimeInput | undefined = () => undefined,
-    deadline?: number,
-  ): Promise<void> => {
-    const confirmation = settleOnce(waitingHandle);
-    return Promise.race([
-      recordReceipt(chainId, hash, confirmation, wait, capture, client, endTimeOf, deadline),
-      confirmation.ended,
-    ]);
-  };
-
-  /**
-   * Each client under its own `uid`, for background confirmation. viem joins concurrent `waitForTransactionReceipt`
-   * calls with the same client `uid` and hash into one poll that runs with the first call's options: sharing it would
-   * apply the background timeout and confirmations to the caller's own wait. One `uid` per client, since viem also
-   * caches by `uid`.
-   */
-  const backgroundClients = new WeakMap<object, ViemClientLike>();
-  const backgroundClientOf = (client: ViemClientLike): ViemClientLike => {
-    let background = backgroundClients.get(client);
-    if (!background) {
-      background =
-        typeof client.uid === 'string' ? { ...client, uid: `${client.uid}:hashspan` } : client;
-      backgroundClients.set(client, background);
-    }
-    return background;
-  };
-
-  /**
-   * Starts a confirm span for `hash` and polls for its receipt through `client`, off the caller's path. Returns false,
-   * recording nothing, when `maxBackgroundConfirmations` are already polling.
-   */
-  const confirmThrough = (
-    client: ViemClientLike,
-    chainId: number,
-    hash: string,
-    timeoutMs: number,
-    onReceipt?: (receipt: TransactionReceipt | undefined) => void,
-  ): boolean => {
-    if (backgroundCount >= maxBackgroundConfirmations) {
-      if (!limitReported) {
-        limitReported = true;
-        diag.warn(
-          `hashspan: ${maxBackgroundConfirmations} background confirmations are already polling; not confirming more until one ends (maxBackgroundConfirmations)`,
-        );
-      }
-      return false;
-    }
-    const handle = tracker.startConfirm({ chainId, hash });
-    const capture: ReplacementCapture = {};
-    const background = backgroundClientOf(client);
-    const polling = (client as { pollingInterval?: unknown }).pollingInterval;
-    const retryMs = typeof polling === 'number' && polling > 0 ? polling : RECEIPT_LAG_RETRY_MS;
-    const deadline = Date.now() + timeoutMs;
-    const wait = async (): Promise<ViemReceipt> => {
-      for (;;) {
-        try {
-          return (await viemWaitForTransactionReceipt(background as never, {
-            hash: hash as `0x${string}`,
-            timeout: Math.max(deadline - Date.now(), 1),
-            onReplaced: capturing(capture, undefined) as never,
-          })) as ViemReceipt;
-        } catch (error) {
-          if (!isReceiptLag(error) || capture.replacement) throw error;
-          const remaining = deadline - Date.now();
-          if (remaining <= 0)
-            throw new WaitForTransactionReceiptTimeoutError({ hash: hash as `0x${string}` });
-          diag.debug(
-            'hashspan: the node returned the transaction before its receipt; waiting again',
-          );
-          await delay(Math.min(retryMs, remaining));
-        }
-      }
-    };
-    backgroundCount++;
-    const waited = wait();
-    const release = (): void => {
-      backgroundCount--;
-      if (backgroundCount < maxBackgroundConfirmations) limitReported = false;
-    };
-    waited.then(release, release);
-    track(recordConfirmation(chainId, hash, handle, waited, capture, client, undefined, deadline));
-    // Not tracked: flush() waits for the confirm span, not for the caller's callback.
-    if (onReceipt) {
-      void waited.then(
-        (receipt) => onReceipt(receipt as unknown as TransactionReceipt),
-        () => onReceipt(undefined),
-      );
-    }
-    return true;
-  };
-
-  const watch = (client: ViemClientLike, options: WatchOptions): void => {
-    let called = false;
-    /** Calls the caller's `onReceipt` once, never throwing into the watch. */
-    const onReceipt = (receipt: TransactionReceipt | undefined): void => {
-      if (called) return;
-      called = true;
-      try {
-        const callback: unknown = options.onReceipt;
-        if (typeof callback === 'function') callback(receipt);
-      } catch (error) {
-        diag.error(`hashspan: the onReceipt callback of watch() failed (${errorName(error)})`);
-      }
-    };
-    try {
-      const chainId = options.chainId ?? client.chain?.id;
-      if (chainId === undefined) {
-        diag.debug('hashspan: watch() needs a chain id or a client with a chain; not recording it');
-        onReceipt(undefined);
-        return;
-      }
-      const timeoutMs = options.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS;
-      /** Polling another chain would only end in a timeout, or a receipt recorded for the wrong chain. */
-      const confirmOn = (clientChainId: number | undefined): void => {
-        if (clientChainId !== chainId) {
-          if (clientChainId !== undefined) {
-            diag.warn(
-              `hashspan: watch() got chain ${chainId} and a client on chain ${clientChainId}; not recording it`,
-            );
-          }
-          onReceipt(undefined);
-          return;
-        }
-        if (options.abi) abis.set(confirmKey(chainId, options.hash), options.abi);
-        if (!confirmThrough(client, chainId, options.hash, timeoutMs, onReceipt))
-          onReceipt(undefined);
-      };
-      if (client.chain?.id !== undefined) {
-        confirmOn(client.chain.id);
-        return;
-      }
-      // A client without a chain can be on any chain, and the chain id asked for can come from elsewhere, such as
-      // the server of an x402 payment: ask the client, within the watch's timeout.
-      track(
-        within(chainIdOfClient(client), timeoutMs, 'ask a client for its chain id').then(confirmOn),
-      );
-    } catch (error) {
-      diag.error(`hashspan: failed to watch a transaction (${errorName(error)})`);
-      onReceipt(undefined);
-    }
-  };
+  const { track, flush, settleOnce } = createPending();
+  const { recordConfirmation, confirmThrough } = createConfirmation({
+    tracker,
+    decodeRevertReason,
+    revertReasonTimeoutMs,
+    maxBackgroundConfirmations,
+    abis,
+    revertReasons,
+    track,
+    settleOnce,
+  });
+  const watch = createWatch({ abis, confirmThrough, track });
 
   const extension = (client: ViemClientLike & Partial<Record<TracedAction, AnyAction>>) => {
     const knownChainId = (args: {
