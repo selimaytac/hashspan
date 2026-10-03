@@ -92,7 +92,9 @@ What the x402 SDK (`@x402/core` 2.13 to 2.28, the range `@hashspan/x402` support
   - outcome never learned: no settle or cancel before the requirements' `maxTimeoutSeconds` plus a grace period,
     when too many payments are open, or when `flush()` gives up: error status, `error.type` `timeout`, as on the
     payer's side. This includes a payment that a hook registered after hashspan's aborts in `onBeforeSettle`, since
-    the SDK calls no hook after the abort.
+    the SDK calls no hook after the abort. At most 1000 payments are open at once per `withHashspanServer()` result,
+    counting the state captured in `onBeforeVerify`, and the oldest ends as `timeout` when a new one would exceed
+    it, as on the payer's side: callers decide how many payments start, so this state must stay bounded.
 
   `error.type` from the facilitator follows ADR 0013's rule: a short identifier, else `_OTHER`. Verification and
   settlement are recorded as span events, `x402.verify` when the verification result arrives and `x402.settle` when
@@ -102,7 +104,9 @@ What the x402 SDK (`@x402/core` 2.13 to 2.28, the range `@hashspan/x402` support
 - **The payer's and the payee's spans share their name and attributes.** The new attribute
   `blockchain.payment.role` tells them apart. The payee span records, as the payer span does:
   `blockchain.payment.protocol` `x402`, the payer (from the signed payload's authorization, which the server holds
-  itself, else the facilitator's result, as ADR 0013 prefers what a party holds over what another reports), the
+  itself, else the facilitator's result, as ADR 0013 prefers what a party holds over what another reports; only once
+  verification succeeded or a settlement reports it: before that the payload is whatever an unauthenticated caller
+  sent, so an invalid payment records no payer), the
   recipient (`payTo`), asset and amount of the requirements, `blockchain.payment.settled_amount` and
   `blockchain.tx.hash` from the settle result, `x402.scheme` and `x402.resource`. Status and settled amount are the
   facilitator's report.
@@ -133,16 +137,19 @@ What the x402 SDK (`@x402/core` 2.13 to 2.28, the range `@hashspan/x402` support
   as `send` and `confirm` (see Context); the implementation adds this as a test. Hook-based facilitator spans need
   every hook guarded against the facilitator breaking its response, and are a separate decision.
 
-## Open questions
+## Resolved questions (2026-10-03)
 
-These choices are written into the decision above but are not yet confirmed; they are settled before this record is
-accepted:
+The choices that were open when this record was proposed, as decided above:
 
-- the route pattern as the default `x402.resource` on payee spans;
-- the payer's address from the signed payload first, then the facilitator's result;
-- the event names `x402.verify` and `x402.settle`;
-- payer spans recording `blockchain.payment.role` `payer`, a change to released spans;
-- `escrow` payments passed through untraced.
+- the route pattern is the default `x402.resource` on payee spans: it names the resource without request data;
+- the payer's address comes from the signed payload, else the facilitator's result, and only after verification
+  succeeded or a settlement reported it, so callers cannot write arbitrary addresses into a seller's traces;
+- the event names are `x402.verify` and `x402.settle`;
+- payer spans record `blockchain.payment.role` `payer`: an added attribute, a minor change;
+- `escrow` payments are passed through untraced, with a `diag` message, and listed as a known limit in the README.
+
+The implementation waits for a user or integration that asks for it (docs/roadmap.md, Candidates), so this record
+stays proposed until then.
 
 ## Consequences
 
