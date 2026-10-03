@@ -32,5 +32,12 @@
     "viem": "^2.57.2",
     "vitest": "^5.0.3",
     "zod": "^4.6.5"
+  },
+  "pnpm": {
+    "//": "tar: prool pins tar@7.2.0 but never imports it, as at the root. ws: the advisory covers 8.x before 8.21.0; the lockfile also has ws 7 (WalletConnect), which a plain override would move a major.",
+    "overrides": {
+      "tar": ">=7.5.21",
+      "ws@>=8.0.0 <8.21.0": "^8.21.0"
+    }
   }
 }

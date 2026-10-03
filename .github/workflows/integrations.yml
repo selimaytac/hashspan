@@ -42,6 +42,15 @@ jobs:
       # The tests import hashspan from its sources, whose dependencies come from the main install.
       - run: pnpm install --frozen-lockfile
       - run: pnpm --dir integrations install --frozen-lockfile
+      # Report only: these packages never ship and run offline against Anvil, so their advisories and licenses are
+      # listed here for review rather than failing the job (the published packages are checked in ci.yml).
+      - name: Report advisories of the integrations' dependencies
+        continue-on-error: true
+        run: pnpm --dir integrations audit
+      - name: Report licenses of the integrations' dependencies outside the allowlist
+        continue-on-error: true
+        working-directory: integrations
+        run: node ../scripts/check-licenses.mjs
       # Within the ranges in integrations/package.json, so a new major is a deliberate change rather than a failing job.
       - name: Update the integrations' dependencies within their ranges
         if: github.event_name != 'pull_request'

@@ -9,3 +9,6 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+  # integrations/ (a workspace of its own, never published) has no entry: .github/workflows/integrations.yml updates
+  # every dependency there to the newest release within its range each week and runs the tests, so version update
+  # pull requests would duplicate that.
