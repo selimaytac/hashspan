@@ -46,6 +46,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: ./scripts/install-anvil.sh
+      # Alto and the EntryPoint artifacts for the real-bundler test, pinned by scripts/bundler/package-lock.json.
+      - run: ./scripts/install-bundler.sh
       - name: Unit and integration tests with coverage thresholds
         run: pnpm test:coverage
 

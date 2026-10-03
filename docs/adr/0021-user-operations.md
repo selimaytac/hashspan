@@ -94,10 +94,13 @@ What the SDKs give (viem 2.57, `@coinbase/cdp-sdk` 1.57):
   and `sender` topics match; the span ends when the wait did. `failed` ends with `error.type` `failed`, the SDK's
   `TimeoutError` as `timeout`. Without a wait, only the send span is recorded. Revert reasons
   (`UserOperationRevertReason`) are not decoded yet.
-- **Tests.** The Anvil test does not use the canonical EntryPoint or an external bundler: the common bundlers (Alto
+- **Tests.** The first Anvil test does not use the canonical EntryPoint or an external bundler: the common bundlers (Alto
   is GPL-3.0-or-later) and the EntryPoint package (`@account-abstraction/contracts` depends on
   `@uniswap/v3-periphery`, GPL-2.0-or-later) fail the license check, which covers dev dependencies too. A stand-in
   EntryPoint at the v0.7 address, with the v0.7 user operation hash, nonces and events, and an in-process bundler
   that sends one `handleOps` transaction per operation, run viem's real bundler actions against Anvil, including an
-  operation that reverts inside a successful bundle. Not exercised: signature validation, gas accounting and
-  prefunds of a real EntryPoint, paymaster contracts, and a bundler's simulation.
+  operation that reverts inside a successful bundle. A second Anvil test runs the same paths through a real bundler:
+  Alto, against the canonical EntryPoint v0.7 deployed through the deterministic deployer at its canonical address,
+  with SimpleAccount smart accounts. Both are installed by `scripts/install-bundler.sh` from a lockfile of their own,
+  outside the pnpm workspace, so the license check of the workspace still holds; like Anvil, they are tools the tests
+  run, never a dependency of a published package. Not exercised: paymaster contracts.

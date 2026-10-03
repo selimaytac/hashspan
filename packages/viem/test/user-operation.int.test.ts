@@ -187,7 +187,25 @@ describe('user operations on Anvil', () => {
       pollingInterval: 100,
     }).extend(withHashspan());
 
-    const hash = await client.sendUserOperation({ calls: [{ to: REVERTER, data: '0x' }] });
+    // A bundler refuses to estimate an operation whose call reverts (as Alto does, real-bundler.int.test.ts) ...
+    const refused = await client
+      .sendUserOperation({ calls: [{ to: REVERTER, data: '0x' }] })
+      .catch((error: unknown) => error);
+    expect((refused as Error).name).toBe('UserOperationExecutionError');
+    expect((refused as { details?: string }).details).toMatch(
+      /^UserOperation reverted during simulation with reason: 0x08c379a0/,
+    );
+    expect(tracing.spanNamed('send 31337').attributes['error.type']).toBe(
+      'UserOperationExecutionError',
+    );
+    tracing.exporter.reset();
+    // ... so the sender gives the limits.
+    const hash = await client.sendUserOperation({
+      calls: [{ to: REVERTER, data: '0x' }],
+      callGasLimit: 500_000n,
+      verificationGasLimit: 200_000n,
+      preVerificationGas: 50_000n,
+    });
     const receipt = await client.waitForUserOperationReceipt({ hash });
     const bundle = await reader.getTransactionReceipt({ hash: receipt.receipt.transactionHash });
 
