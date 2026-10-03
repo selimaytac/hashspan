@@ -181,7 +181,7 @@ describe('AgentKit CdpEvmWalletProvider', () => {
     const sendSpans = spansNamed('send 84532');
     expect(sendSpans.map((span) => span.attributes['blockchain.tx.hash']).sort()).toEqual(hashes);
     for (const span of sendSpans)
-      expect(span.attributes['blockchain.tx.from']).toBe(walletProvider.getAddress());
+      expect(span.attributes['blockchain.tx.from']).toBe(walletProvider.getAddress().toLowerCase());
     const confirmSpans = spansNamed('confirm 84532');
     expect(confirmSpans.map((span) => span.attributes['blockchain.tx.hash']).sort()).toEqual(
       hashes,
@@ -212,7 +212,7 @@ describe('AgentKit CdpSmartWalletProvider', () => {
     const send = tracing.spanNamed('send 84532');
     expect(send.attributes).toMatchObject({
       'blockchain.user_operation.hash': userOpHash,
-      'blockchain.user_operation.sender': SMART_ACCOUNT,
+      'blockchain.user_operation.sender': SMART_ACCOUNT.toLowerCase(),
       'blockchain.user_operation.call_count': 1,
     });
     const confirm = tracing.spanNamed('confirm 84532');
@@ -220,7 +220,7 @@ describe('AgentKit CdpSmartWalletProvider', () => {
     expect(confirm.attributes).toMatchObject({
       'blockchain.user_operation.hash': userOpHash,
       'blockchain.user_operation.success': true,
-      'blockchain.user_operation.entry_point': entryPoint07Address,
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
       'blockchain.tx.hash': receipt.transactionHash,
     });
   });
