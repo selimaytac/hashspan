@@ -18,14 +18,6 @@ import {
   ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE,
   ATTR_BLOCKCHAIN_CALL_BATCH_TRANSACTION_HASHES,
   ATTR_BLOCKCHAIN_OPERATION_SUBJECT,
-  ATTR_BLOCKCHAIN_PAYMENT_AMOUNT,
-  ATTR_BLOCKCHAIN_PAYMENT_ASSET,
-  ATTR_BLOCKCHAIN_PAYMENT_PAYER,
-  ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL,
-  ATTR_BLOCKCHAIN_PAYMENT_RECIPIENT,
-  ATTR_BLOCKCHAIN_PAYMENT_SETTLED_AMOUNT,
-  ATTR_BLOCKCHAIN_PAYMENT_STATUS,
-  ATTR_BLOCKCHAIN_PAYMENT_VERIFIED,
   ATTR_BLOCKCHAIN_TX_HASH,
   ATTR_BLOCKCHAIN_TX_REVERT_REASON,
   ATTR_BLOCKCHAIN_USER_OPERATION_CALL_COUNT,
@@ -38,19 +30,13 @@ import {
   ATTR_BLOCKCHAIN_USER_OPERATION_SENDER,
   ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS,
   ATTR_ERROR_TYPE,
-  ATTR_X402_RESOURCE,
-  ATTR_X402_SCHEME,
   BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_PARTIALLY_REVERTED,
   BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_REVERTED,
   BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_SUCCESS,
   BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
-  BLOCKCHAIN_OPERATION_NAME_VALUE_PAYMENT,
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
   BLOCKCHAIN_OPERATION_SUBJECT_VALUE_CALL_BATCH,
   BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION,
-  BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED,
-  BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
-  BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
   BLOCKCHAIN_TX_STATUS_VALUE_REVERTED,
   ERROR_TYPE_VALUE_OTHER,
 } from './attributes.js';
@@ -61,7 +47,6 @@ import {
   type AddressFormatter,
   formatAddressesIn,
   OFF_ADDRESS_FORMATTER,
-  paymentResourceOf,
   resolveAddressFormatter,
   resolveErrorMessageMode,
   resolvePaymentResourceMode,
@@ -71,11 +56,11 @@ import {
   errorType,
   type HandleOptions,
   handleOptions,
-  identifier,
   OBSERVER_TIMEOUT,
   reportedErrorType,
   safely,
 } from './tracker/handles.js';
+import { createPaymentSpans, NOOP_PAYMENT } from './tracker/payment.js';
 import { createSpanRecording, metricAttributes, secondsSince } from './tracker/spans.js';
 import {
   type ConfirmSpan,
@@ -83,7 +68,7 @@ import {
   NOOP_CONFIRM,
   noopSend,
 } from './tracker/transaction.js';
-import { ADDRESS, amount, quantity, smallQuantity, TX_HASH } from './tracker/values.js';
+import { quantity, smallQuantity, TX_HASH } from './tracker/values.js';
 import type {
   CallBatchConfirmHandle,
   CallBatchConfirmInput,
@@ -94,7 +79,6 @@ import type {
   ConfirmInput,
   PaymentHandle,
   PaymentInput,
-  PaymentSettlement,
   SendHandle,
   SendInput,
   TxTrackerOptions,
@@ -124,24 +108,11 @@ const MAX_CALL_BATCH_TRANSACTION_HASHES = 64;
 /** EIP-5792 status code of a batch that is still pending. */
 const CALL_BATCH_PENDING = 100;
 
-const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
-  BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
-  BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
-  BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED,
-]);
-
 const noopUserOperationSend = (parent: Context): UserOperationSendHandle => ({
   context: parent,
   end: () => {},
   fail: () => {},
 });
-
-const NOOP_PAYMENT: PaymentHandle = {
-  end: () => {},
-  fail: () => {},
-  timeout: () => {},
-  link: () => {},
-};
 
 const NOOP_USER_OPERATION_CONFIRM: UserOperationConfirmHandle = {
   end: () => {},
@@ -321,102 +292,13 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     getTracer,
     recording,
   });
-
-  const startPayment = (input: PaymentInput, parentCtx?: Context): PaymentHandle => {
-    const parent = parentCtx ?? context.active();
-    const attributes = baseAttributes(
-      input.chainId,
-      BLOCKCHAIN_OPERATION_NAME_VALUE_PAYMENT,
-      parent,
-    );
-    const protocol = identifier(input.protocol);
-    if (protocol !== undefined) attributes[ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL] = protocol;
-    setRemoteAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_PAYER, input.payer);
-    const knownPayer = typeof input.payer === 'string' && ADDRESS.test(input.payer);
-    setRemoteAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_RECIPIENT, input.recipient);
-    setRemoteAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_ASSET, input.asset);
-    const paid = amount(input.amount);
-    if (paid !== undefined) attributes[ATTR_BLOCKCHAIN_PAYMENT_AMOUNT] = paid;
-    const scheme = identifier(input.x402?.scheme);
-    if (scheme !== undefined) attributes[ATTR_X402_SCHEME] = scheme;
-    const resource = input.x402?.resource;
-    const recorded =
-      typeof resource === 'string' ? paymentResourceOf(resource, paymentResource) : undefined;
-    if (recorded) attributes[ATTR_X402_RESOURCE] = formatAddressesIn(recorded, formatAddress);
-
-    const span = getTracer().startSpan(
-      `payment ${input.chainId}`,
-      {
-        kind: SpanKind.CLIENT,
-        attributes: redact(attributes),
-        ...(input.startTime !== undefined ? { startTime: input.startTime } : {}),
-      },
-      parent,
-    );
-    const finish = finisher(span);
-
-    /** Links the confirm span of `hash` to this payment span, unless the tracker already links that hash. */
-    const linkHash = (hash: unknown): hash is string => {
-      if (typeof hash !== 'string' || !TX_HASH.test(hash)) return false;
-      // A hash this tracker already links, such as one of its own sends, keeps that link.
-      if (!links.get(input.chainId, hash)) {
-        links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
-      }
-      return true;
-    };
-
-    const recordSettlement = (settlement: PaymentSettlement): void => {
-      const status = settlement.status;
-      if (!PAYMENT_STATUSES.has(status)) {
-        diag.debug('hashspan: ignoring a payment settlement with an unknown status');
-        return;
-      }
-      // The settlement comes from the settling party, which the payer does not control: it never replaces what the
-      // payer knew itself (docs/adr/0013-x402-payments.md).
-      const settled: Attributes = { [ATTR_BLOCKCHAIN_PAYMENT_STATUS]: status };
-      const hash: unknown = settlement.hash;
-      if (linkHash(hash)) {
-        settled[ATTR_BLOCKCHAIN_TX_HASH] = hash;
-      }
-      if (!knownPayer) setRemoteAddress(settled, ATTR_BLOCKCHAIN_PAYMENT_PAYER, settlement.payer);
-      // Recorded as reported, next to the amount the payer knew, which it never replaces.
-      const settledAmount = amount(settlement.amount);
-      if (settledAmount !== undefined) {
-        settled[ATTR_BLOCKCHAIN_PAYMENT_SETTLED_AMOUNT] = settledAmount;
-        if (paid === undefined) settled[ATTR_BLOCKCHAIN_PAYMENT_AMOUNT] = settledAmount;
-      }
-      const verified: unknown = settlement.verified;
-      if (typeof verified === 'boolean') settled[ATTR_BLOCKCHAIN_PAYMENT_VERIFIED] = verified;
-      span.setAttributes(redact(settled));
-      if (status === BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED) {
-        markError(span, identifier(settlement.errorReason) ?? ERROR_TYPE_VALUE_OTHER);
-      }
-    };
-
-    return {
-      end: (settlement, options) =>
-        finish(
-          'record payment settlement',
-          () => recordSettlement(settlement),
-          handleOptions(options).endTime,
-        ),
-      fail: (error, options) => {
-        const read = handleOptions(options);
-        finish(
-          'record payment failure',
-          () => markError(span, reportedErrorType(error, read), error, errorType(error)),
-          read.endTime,
-        );
-      },
-      timeout: (options) =>
-        finish(
-          'record payment timeout',
-          () => markError(span, OBSERVER_TIMEOUT),
-          handleOptions(options).endTime,
-        ),
-      link: (hash) => safely('link the payment span', () => void linkHash(hash), undefined),
-    };
-  };
+  const { startPayment } = createPaymentSpans({
+    links,
+    formatAddress,
+    paymentResource,
+    getTracer,
+    recording,
+  });
 
   const startUserOperationSend = (
     input: UserOperationInput,
