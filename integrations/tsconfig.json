@@ -6,7 +6,8 @@
     "declaration": false,
     "paths": {
       "@hashspan/core": ["../packages/core/src/index.ts"],
-      "@hashspan/viem": ["../packages/viem/src/index.ts"]
+      "@hashspan/viem": ["../packages/viem/src/index.ts"],
+      "@hashspan/cdp": ["../packages/cdp/src/index.ts"]
     }
   },
   "include": ["test", "vitest.config.ts"]

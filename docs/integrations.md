@@ -64,14 +64,20 @@ const hashspan = withHashspan(walletProvider.getClient(), {
 });
 ```
 
-The provider calls `cdp.evm.sendTransaction`, which the wrapper traces. This setup was checked against the
-provider's source, not run: the provider creates its `CdpClient` without options that would let a test point it at
-a local API.
+The provider calls `cdp.evm.sendTransaction`, which the wrapper traces; `sendTransaction`, `nativeTransfer` and the
+action providers that send through the wallet provider then record a `send` and a `confirm` span per transaction.
 
 The same setup covers `CdpSmartWalletProvider`, which also has `getClient()` and `getPublicClient()`: it sends ERC-4337
 user operations with `cdp.evm.sendUserOperation` and waits with `cdp.evm.waitForUserOperation`, which the wrapper
-records as user operation spans ([smart accounts](../packages/cdp/README.md#smart-accounts)). This too was checked
-against the provider's source.
+records as user operation spans ([smart accounts](../packages/cdp/README.md#smart-accounts)).
+
+CI runs both providers against a local stand-in for the CDP API and Anvil, in
+[`integrations/test/agentkit-cdp.int.test.ts`](../integrations/test/agentkit-cdp.int.test.ts): `sendTransaction`,
+`nativeTransfer` and the ERC-20 `approve` action of `CdpEvmWalletProvider`, and `sendTransaction` and
+`waitForTransactionReceipt` of `CdpSmartWalletProvider`. `configureWithWallet()` itself is not run: it creates its
+`CdpClient` from the API key and wallet secret only, its config in AgentKit 0.10.4 has no field for the client's
+`basePath` option, and the CDP SDK reads no environment variable for the API's base URL. The test builds each
+provider with the constructor that `configureWithWallet()` ends with, around a `CdpClient` created with `basePath`.
 
 ### Other wallet providers
 
