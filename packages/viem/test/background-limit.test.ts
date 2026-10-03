@@ -45,7 +45,12 @@ it('confirms no more than maxBackgroundConfirmations at once, warning once', asy
   expect(limitWarnings(warn)).toHaveLength(1);
 
   await hashspan.flush({ timeoutMs: 2_000 });
-  expect(confirmSpans().map((s) => s.attributes['blockchain.tx.hash'])).toEqual([hash(1), hash(2)]);
+  // The two within the limit are confirmed; they may end in either order.
+  expect(
+    confirmSpans()
+      .map((s) => s.attributes['blockchain.tx.hash'])
+      .sort(),
+  ).toEqual([hash(1), hash(2)]);
 });
 
 it('confirms again once a background confirmation ended', async () => {

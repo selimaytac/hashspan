@@ -15,8 +15,10 @@ export function createPending(): Pending {
   // Work this adapter runs itself, outside @hashspan/viem: confirm spans of network-scoped waits without a reader.
   const pending = new Set<Promise<void>>();
   const track = (work: Promise<void>): void => {
-    pending.add(work);
-    void work.finally(() => pending.delete(work));
+    // Settles either way, so a rejection never reaches the user's process as unhandled and flush() still resolves.
+    const settled = work.catch(() => {});
+    pending.add(settled);
+    void settled.then(() => pending.delete(settled));
   };
   /** Ends a tracked confirm span that is still open as `timeout`, for `flush()` to call when it gives up. */
   const waiting = new Set<() => void>();
