@@ -258,6 +258,27 @@ describe('repository docs', () => {
     expect(packages.filter(({ dir }) => !agents.includes(`- \`packages/${dir}\` →`))).toEqual([]);
   });
 
+  it('gives every package, example and integrations/ an AGENTS.md, each imported by a CLAUDE.md next to it', () => {
+    const examples = readdirSync(join(root, 'examples')).filter((dir) =>
+      existsSync(join(root, 'examples', dir, 'package.json')),
+    );
+    const dirs = [
+      '',
+      ...packages.map(({ dir }) => `packages/${dir}`),
+      ...examples.map((dir) => `examples/${dir}`),
+      // A workspace of its own, not a member of the root one.
+      ...(existsSync(join(root, 'integrations', 'package.json')) ? ['integrations'] : []),
+    ];
+    const agentsFiles = markdownFiles().filter((file) => file.endsWith('AGENTS.md'));
+    expect(dirs.filter((dir) => !existsSync(join(root, dir, 'AGENTS.md')))).toEqual([]);
+    expect(
+      agentsFiles.filter((file) => {
+        const claude = join(root, dirname(file), 'CLAUDE.md');
+        return !existsSync(claude) || readFileSync(claude, 'utf8') !== '@AGENTS.md\n';
+      }),
+    ).toEqual([]);
+  });
+
   it('lists the same commit scopes in AGENTS.md and CONTRIBUTING.md: one per package plus the shared ones', () => {
     const expected = [...packages.map(({ dir }) => dir), 'examples', 'docs', 'ci', 'lab'].sort();
     for (const file of ['AGENTS.md', 'CONTRIBUTING.md']) {

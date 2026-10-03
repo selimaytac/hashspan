@@ -25,68 +25,27 @@ OpenTelemetry tracing for on-chain transactions sent by AI agents: every transac
   `make lab-nuke`
 Run lint, typecheck and tests before proposing a change.
 
+### Fast paths while iterating
+- One test file: `pnpm vitest run packages/viem/test/transport.test.ts` (an `.int.test.ts` file needs Anvil)
+- One package's unit tests: `pnpm vitest run --project unit packages/core`
+- Tests by name: `pnpm vitest run packages/core -t "metrics"`
+- One package's types: `pnpm --filter @hashspan/x402 typecheck`, after one `pnpm build` (adapters read the built core)
+- Under a coding agent vitest prints a short summary on its own; set `AI_AGENT=<name>` if it does not detect yours.
+
 ## Architecture
-- `packages/core` → transaction lifecycle tracker (spans, links, fees, privacy modes)
-  - `src/tracker.ts` public `createTxTracker()`; `src/attributes.ts` attribute keys (mirror of docs/semconv.md);
-    `src/privacy.ts` address modes; `src/link-store.ts` send→confirm links;
-    `src/confirm-registry.ts` one confirm span per transaction; `src/agent.ts` agent identity
-  - `test/helpers.ts` registers an in-memory tracer provider for span assertions
-- `packages/viem` → capture adapter for viem clients
-  - `src/index.ts` `withHashspan()`: a `client.extend()` extension wrapping `sendTransaction`, `writeContract` and
-    `waitForTransactionReceipt`, and a bundler client's `sendUserOperation` and `waitForUserOperationReceipt`
-    (ADR 0021); it calls the base client's actions, so internal viem calls are not traced twice.
-    State shared by every client extended with one `withHashspan()` result (tracker, ABIs, revert reasons) lives in
-    that call's closure; confirm deduplication lives in the tracker (ADR 0007); background confirmation must
-    never delay or fail the user's call, and nothing the telemetry needs is awaited before the call it traces
-    (ADR 0009). Work that outlives a traced call must be passed to `track()`, so `flush()` can await it (ADR 0010)
-  - `src/revert-reason.ts` replays reverted transactions and decodes the revert data (ADR 0005)
-  - `test/mock-transport.ts` EIP-1193 mock for unit tests (`test/mock-bundler.ts` for bundler clients);
-    `test/*.int.test.ts` run against Anvil via prool; user operations go through `test/test-bundler.ts`, an
-    in-process bundler, to a stand-in EntryPoint (`test/entry-point/`, compiled into `test-entry-point.ts`);
-    `test/real-bundler.int.test.ts` sends them through Alto, a real bundler, to the canonical EntryPoint v0.7, both
-    installed outside the workspace by `scripts/install-bundler.sh` (GPL, pinned by `scripts/bundler/package-lock.json`);
-    it runs in CI or with `HASHSPAN_REAL_BUNDLER=1`, since Alto listens on every network interface
-- `packages/cdp` → capture adapter for the Coinbase CDP SDK (ADR 0012)
-  - `src/index.ts` `withHashspan(cdp, { reader })` wraps `cdp.evm` and the accounts its factories return, in place;
-    confirmations go through `@hashspan/viem`'s `watch()`; `src/networks.ts` maps CDP network names to chain ids;
-    `src/user-operation.ts` user operations of smart accounts (ADR 0021), completed from the bundle receipt's
-    `UserOperationEvent` with a reader; `src/own.ts` reads arguments without running getters
-  - `test/mock-cdp-api.ts` local stand-in for the CDP API that broadcasts on Anvil; tests never leave localhost
-  - `test/sdk-drift.test.ts` compares the adapter's copies of SDK rules with the installed SDK;
-    `.github/workflows/cdp-sdk-latest.yml` runs the cdp tests weekly against the newest SDK in the peer range
-- `packages/x402` → adapter for x402 payments (ADR 0013)
-  - `src/index.ts` `withHashspan(client, { reader })` registers hooks on an `x402Client`: each payment becomes a
-    `payment` span (no send span: the facilitator sends); confirmations go through `@hashspan/viem`'s `watch()`.
-    Hooks never throw or return a value; payments without a response end as `timeout`, bounded in time and number
-  - `test/fake-x402.ts` a real `x402Client` with a signing-free scheme and a fake paid API, offline; the identities
-    of SDK objects across hooks, which the adapter relies on, are asserted in `test/adapter.test.ts`
-  - `test/settlement.int.test.ts` settles real EIP-3009 payments on Anvil through the SDK's resource server and
-    facilitator, with `test/token/TestUsd.sol` (compiled into `test-usd.ts` by `test/token/compile.mjs`);
-    `.github/workflows/x402-sdk.yml` runs the x402 tests weekly against both ends of the SDK peer range
-  - `test/permit2-settlement.int.test.ts` settles real Permit2 `exact` and `upto` payments with the same token, with
-    Permit2 and the x402 proxies installed from `test/permit2/contracts.ts` (copied from Base Sepolia by
-    `test/permit2/fetch.mjs`, never run in tests)
-- `examples/` → runnable agent integrations
-  - `ai-sdk-agent`: AI SDK agent with a scripted model (no API key), run by `make demo`; its
-    `test/*.int.test.ts` runs the agent against Anvil in CI, so the example cannot silently break;
-    `src/base-sepolia.ts` (behind `make demo-base-sepolia`) runs it on the testnet with a key from the environment,
-    tested against an Anvil that reports chain id 84532
-- `integrations/` → private tests that run the setups of docs/integrations.md with the third-party libraries they
-  name, against Anvil
-  - a workspace of its own with its own lockfile, so those libraries stay out of the main install and of the
-    dependency audit and license check; it imports hashspan from source (`integrations/vitest.config.ts` alias), so
-    the main install comes first
-  - `test/offline.ts` a setup file that lets only loopback requests through `fetch` and answers AgentKit's analytics
-    requests; `test/agentkit-viem.int.test.ts` the AgentKit `ViemWalletProvider` setup;
-    `test/agentkit-cdp.int.test.ts` the AgentKit CDP wallet providers, against `packages/cdp/test/mock-cdp-api.ts`;
-    `test/goat-viem.int.test.ts` the GOAT `viem()` wallet setup;
-    `test/mastra.int.test.ts` the Mastra OpenTelemetry bridge setup, with a scripted model
-  - `.github/workflows/integrations.yml` runs them on pull requests that touch `packages/` or `integrations/`, and
-    weekly with every dependency of `integrations/` updated to the newest release within its range
-- `docker/`, `scripts/`, `Makefile` → local lab; `scripts/demo.sh` (behind `make demo`) starts a fresh Anvil or
-  fails, waiting for Anvil's own "Listening on" line rather than probing the port, and is tested from
-  `examples/ai-sdk-agent/test/demo-script.test.ts`; `scripts/publish-in-order.mjs` (behind `pnpm release`) publishes
-  one dependency layer at a time and waits for the registry between layers (see docs/releasing.md)
+Each package, example and `integrations/` has its own `AGENTS.md` with its files, test setup and rules: read it
+before changing there.
+- `packages/core` → transaction lifecycle tracker: send, confirm, payment and user operation spans, links, fees,
+  privacy modes, metrics ([AGENTS.md](packages/core/AGENTS.md))
+- `packages/viem` → capture adapter for viem clients ([AGENTS.md](packages/viem/AGENTS.md))
+- `packages/cdp` → capture adapter for the Coinbase CDP SDK ([AGENTS.md](packages/cdp/AGENTS.md))
+- `packages/x402` → adapter for x402 payments ([AGENTS.md](packages/x402/AGENTS.md))
+- `examples/` → runnable agent integrations ([ai-sdk-agent](examples/ai-sdk-agent/AGENTS.md))
+- `integrations/` → private tests of the setups in docs/integrations.md with the third-party libraries they name, a
+  workspace of its own ([AGENTS.md](integrations/AGENTS.md))
+- `docker/`, `scripts/`, `Makefile` → local lab and release tooling; `scripts/demo.sh` (behind `make demo`) starts a
+  fresh Anvil or fails, and `scripts/publish-in-order.mjs` (behind `pnpm release`) publishes one dependency layer at
+  a time (see docs/releasing.md)
 See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and the ADR index,
 [docs/adr/README.md](docs/adr/README.md), with each decision in one line.
 
@@ -100,7 +59,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 - Tests first: every behaviour change comes with a unit test; anything touching RPC or receipts also gets an Anvil
   integration test. Tests never depend on a public network.
 - Public API, span names and attribute names (docs/semconv.md) are stable contracts: deprecate before removing;
-  add a changeset (`pnpm changeset`) and note it in CHANGELOG.md.
+  add a changeset (`pnpm changeset`), from which the generated CHANGELOG.md is written.
 - Changesets describe released behaviour: a follow-up change to a feature that has not been published yet updates
   that feature's changeset instead of adding a new one.
 - `TxTracker` and its handles are produced by `createTxTracker()` only; adding members to them is a minor change.
@@ -113,10 +72,11 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
   tests use `tsconfig.test.json`). Exported functions need explicit return types (`isolatedDeclarations`).
 - Package versions live in `package.json`; `src/version.ts` is synced by `pnpm version-packages`; don't edit it.
 - Docs are checked by `packages/core/test/docs.test.ts` (links and anchors, ADR index, package table, scopes, Node
-  versions, code examples) and `semconv-doc.test.ts`. Each `ts` block in a README is the `#region readme` of a file
-  in `packages/*/test/readme/`, compiled by `pnpm typecheck`; change both together. State each fact in one place
+  versions, code examples) and `semconv-doc.test.ts`. Each `ts` block in a markdown file is the `#region readme` of a
+  file in `packages/*/test/readme/`, compiled by `pnpm typecheck`; change both together. State each fact in one place
   and link to it. Package READMEs and `/** */` comments ship to npm alone: link to the docs by absolute URL on the
   package's release tag (see docs/releasing.md); `//` comments may use repository paths.
+- Each `AGENTS.md` has a `CLAUDE.md` next to it that only imports it (`@AGENTS.md`), for tools that read `CLAUDE.md`.
 - Significant design changes get a short ADR in `docs/adr/NNNN-title.md` (see `0000-template.md`) and a row in
   `docs/adr/README.md`. New ADRs start as `proposed` and move to `accepted` only after the implementation was
   compared with them.
