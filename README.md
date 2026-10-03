@@ -53,7 +53,14 @@ Requires Node.js 22.3 or later.
 
 ```sh
 npm install @hashspan/viem @opentelemetry/api viem
+npm install @opentelemetry/sdk-node   # unless your app already sets up an OpenTelemetry SDK
 ```
+
+hashspan records spans through `@opentelemetry/api`, so nothing is exported, and nothing is reported, until an
+OpenTelemetry SDK is registered. For a first run, start one before the code below:
+`new NodeSDK({ serviceName: 'my-agent' }).start()` from `@opentelemetry/sdk-node` exports over OTLP to
+`http://localhost:4318`, where the [local lab](#local-lab)'s Jaeger listens; [backends](docs/backends.md) lists other
+setups.
 
 ```ts
 import { createPublicClient, createWalletClient, http } from 'viem';
@@ -69,8 +76,9 @@ const hash = await wallet.sendTransaction({ to, value });
 await reader.waitForTransactionReceipt({ hash });
 ```
 
-See [`@hashspan/viem`](packages/viem) for details and [`@hashspan/core`](packages/core) to instrument other send
-paths.
+A script that exits right after its last transaction should `await hashspan.flush()` and shut the SDK down first,
+or its last spans are lost ([shutting down](packages/viem/README.md#shutting-down)). See
+[`@hashspan/viem`](packages/viem) for details and [`@hashspan/core`](packages/core) to instrument other send paths.
 
 ## Try it
 
