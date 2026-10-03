@@ -3,11 +3,12 @@ import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { freePort } from '../../viem/test/free-port.js';
 import { withHashspan } from '../src/index.js';
 import { startMockCdpApi, throwawayCredentials } from './mock-cdp-api.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = 18561;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 

@@ -15,9 +15,10 @@ import { mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { type WithHashspanOptions, withHashspan } from '../src/index.js';
+import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = 18547;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 /** Anvil's public default mnemonic; its first account is funded on every Anvil chain. */
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';

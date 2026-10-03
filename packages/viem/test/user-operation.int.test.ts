@@ -28,10 +28,11 @@ import {
   testAccountCode,
   testEntryPointCode,
 } from './entry-point/test-entry-point.js';
+import { freePort } from './free-port.js';
 import { testBundler } from './test-bundler.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = 18581;
+const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
 const ACCOUNT = '0x00000000000000000000000000000000000A11cE' as const;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
