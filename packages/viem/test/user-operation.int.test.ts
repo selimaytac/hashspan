@@ -31,6 +31,7 @@ import {
 import { freePort } from './free-port.js';
 import { testBundler } from './test-bundler.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemAtLeast } from './viem-version.js';
 
 const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
@@ -193,9 +194,12 @@ describe('user operations on Anvil', () => {
       .sendUserOperation({ calls: [{ to: REVERTER, data: '0x' }] })
       .catch((error: unknown) => error);
     expect((refused as Error).name).toBe('UserOperationExecutionError');
-    expect((refused as { details?: string }).details).toMatch(
-      /^UserOperation reverted during simulation with reason: 0x08c379a0/,
-    );
+    // viem before 2.21.58 words the bundler's error differently, with or without hashspan.
+    if (viemAtLeast('2.21.58')) {
+      expect((refused as { details?: string }).details).toMatch(
+        /^UserOperation reverted during simulation with reason: 0x08c379a0/,
+      );
+    }
     expect(tracing.spanNamed('send 31337').attributes['error.type']).toBe(
       'UserOperationExecutionError',
     );
@@ -223,23 +227,27 @@ describe('user operations on Anvil', () => {
     expect(confirm.attributes['blockchain.tx.status']).toBeUndefined();
   });
 
-  it('records the spans of a bundler client without a chain once the chain id is known', async () => {
-    const account = await smartAccount();
-    const hashspan = withHashspan();
-    const client = createBundlerClient({
-      account,
-      transport: bundler.transport,
-      pollingInterval: 100,
-    }).extend(hashspan);
+  // A bundler client with neither a chain nor a client prepares operations from viem 2.21.18 on.
+  it.skipIf(!viemAtLeast('2.21.18'))(
+    'records the spans of a bundler client without a chain once the chain id is known',
+    async () => {
+      const account = await smartAccount();
+      const hashspan = withHashspan();
+      const client = createBundlerClient({
+        account,
+        transport: bundler.transport,
+        pollingInterval: 100,
+      }).extend(hashspan);
 
-    const hash = await client.sendUserOperation({ calls: [{ to: RECIPIENT, value: 1n }] });
-    await client.waitForUserOperationReceipt({ hash });
-    expect(await hashspan.flush()).toBe(true);
+      const hash = await client.sendUserOperation({ calls: [{ to: RECIPIENT, value: 1n }] });
+      await client.waitForUserOperationReceipt({ hash });
+      expect(await hashspan.flush()).toBe(true);
 
-    const send = tracing.spanNamed('send 31337');
-    const confirm = tracing.spanNamed('confirm 31337');
-    expect(send.attributes['blockchain.user_operation.hash']).toBe(hash);
-    expect(confirm.links[0]?.context.spanId).toBe(send.spanContext().spanId);
-    expect(confirm.attributes['blockchain.user_operation.success']).toBe(true);
-  });
+      const send = tracing.spanNamed('send 31337');
+      const confirm = tracing.spanNamed('confirm 31337');
+      expect(send.attributes['blockchain.user_operation.hash']).toBe(hash);
+      expect(confirm.links[0]?.context.spanId).toBe(send.spanContext().spanId);
+      expect(confirm.attributes['blockchain.user_operation.success']).toBe(true);
+    },
+  );
 });

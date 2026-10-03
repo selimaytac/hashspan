@@ -6,6 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
 import { FROM, HASH, mockTransport, TO } from './mock-transport.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemAtLeast, viemHasAction } from './viem-version.js';
+
+// A wallet client's sendCalls and waitForCallsStatus came with viem 2.28.0 (before, sendCalls was an experimental
+// extension, docs/adr/0022-call-batches.md), sendCallsSync with 2.38.0.
+const withoutCallBatches = !viemHasAction('waitForCallsStatus');
+const withoutSendCallsSync = !viemHasAction('sendCallsSync');
 
 let tracing: TestTracing;
 beforeEach(() => {
@@ -35,7 +41,7 @@ function wallet(options: Parameters<typeof mockTransport>[0] = {}, hashspan = wi
   return { client, node, hashspan };
 }
 
-describe('sendCalls', () => {
+describe.skipIf(withoutCallBatches)('sendCalls', () => {
   it('records a send span with the sender, call count and batch id, and returns the result unchanged', async () => {
     const { client } = wallet();
     const result = await client.sendCalls({ calls });
@@ -73,7 +79,7 @@ describe('sendCalls', () => {
   });
 });
 
-describe('waitForCallsStatus', () => {
+describe.skipIf(withoutCallBatches)('waitForCallsStatus', () => {
   it('records a confirm span linked to the send span, with the status code and transaction hashes', async () => {
     const { client, hashspan } = wallet({
       callsStatus: (call) => (call === 1 ? { status: 100, receipts: [] } : {}),
@@ -151,19 +157,23 @@ describe('waitForCallsStatus', () => {
     expect(confirms()).toHaveLength(1);
   });
 
-  it('records the status a BundleFailedError carries, and passes the error on unchanged', async () => {
-    const { client, hashspan } = wallet({ callsStatus: () => ({ status: 500 }) });
-    await expect(
-      client.waitForCallsStatus({ id: BATCH_ID, throwOnFailure: true, retryCount: 0 }),
-    ).rejects.toMatchObject({ name: 'BundleFailedError' });
-    await hashspan.flush();
+  // throwOnFailure came with viem 2.33.2.
+  it.skipIf(!viemAtLeast('2.33.2'))(
+    'records the status a BundleFailedError carries, and passes the error on unchanged',
+    async () => {
+      const { client, hashspan } = wallet({ callsStatus: () => ({ status: 500 }) });
+      await expect(
+        client.waitForCallsStatus({ id: BATCH_ID, throwOnFailure: true, retryCount: 0 }),
+      ).rejects.toMatchObject({ name: 'BundleFailedError' });
+      await hashspan.flush();
 
-    expect(confirms()[0]?.attributes).toMatchObject({
-      'error.type': 'reverted',
-      'blockchain.call_batch.status': 'reverted',
-      'blockchain.call_batch.status_code': 500,
-    });
-  });
+      expect(confirms()[0]?.attributes).toMatchObject({
+        'error.type': 'reverted',
+        'blockchain.call_batch.status': 'reverted',
+        'blockchain.call_batch.status_code': 500,
+      });
+    },
+  );
 
   it('ends without an outcome when the caller accepts a pending status', async () => {
     const { client, hashspan } = wallet({ callsStatus: () => ({ status: 100, receipts: [] }) });
@@ -199,7 +209,7 @@ describe('waitForCallsStatus', () => {
   });
 });
 
-describe('a status request that fails', () => {
+describe.skipIf(withoutCallBatches)('a status request that fails', () => {
   it('ends the confirm span with an error and rethrows', async () => {
     const { client, hashspan } = wallet({ failOn: ['wallet_getCallsStatus'] });
     await expect(client.waitForCallsStatus({ id: BATCH_ID, retryCount: 0 })).rejects.toThrow();
@@ -220,7 +230,7 @@ describe('a status request that fails', () => {
   });
 });
 
-describe('arguments that throw when telemetry reads them', () => {
+describe.skipIf(withoutCallBatches)('arguments that throw when telemetry reads them', () => {
   it('leave the wait untraced, and the call works', async () => {
     vi.spyOn(diag, 'error').mockImplementation(() => {});
     const { client, hashspan } = wallet();
@@ -287,7 +297,7 @@ describe('a wallet answer that throws when telemetry reads it', () => {
   });
 });
 
-describe('waits for one batch through two clients', () => {
+describe.skipIf(withoutCallBatches)('waits for one batch through two clients', () => {
   it('end the shared span with the final status, not with a pending one', async () => {
     const hashspan = withHashspan();
     const client = (status: number) =>
@@ -309,7 +319,7 @@ describe('waits for one batch through two clients', () => {
   });
 });
 
-describe('sendCallsSync', () => {
+describe.skipIf(withoutSendCallsSync)('sendCallsSync', () => {
   it("records both spans on the chain the call names, not the client's", async () => {
     const { client, hashspan } = wallet({ chainIdHex: '0x14a34' });
     await client.sendCallsSync({ calls, chain: baseSepolia });
@@ -332,7 +342,7 @@ describe('sendCallsSync', () => {
   });
 });
 
-describe("viem's fallback to eth_sendTransaction", () => {
+describe.skipIf(withoutCallBatches)("viem's fallback to eth_sendTransaction", () => {
   it('records the batch and confirms its transactions, linked to the batch, without background confirmation', async () => {
     const { client, hashspan } = wallet({
       sendCalls: { error: { code: -32601, message: 'Method not found' } },
@@ -351,7 +361,9 @@ describe("viem's fallback to eth_sendTransaction", () => {
   });
 });
 
-describe("viem's fallback with a call that fails to send", () => {
+// Before viem 2.51.2, the fallback leaves the rejection of a call that failed to send unhandled while it sends the next
+// one, with or without hashspan.
+describe.skipIf(!viemAtLeast('2.51.2'))("viem's fallback with a call that fails to send", () => {
   it('records the batch and confirms only the transaction that was sent', async () => {
     const { client, hashspan } = wallet({
       sendCalls: { error: { code: -32601, message: 'Method not found' } },
@@ -368,7 +380,7 @@ describe("viem's fallback with a call that fails to send", () => {
   });
 });
 
-describe('with a tracker from a core without call batches', () => {
+describe.skipIf(withoutSendCallsSync)('with a tracker from a core without call batches', () => {
   it('records no call batch spans, and the calls work', async () => {
     const full = createTxTracker();
     const older = {

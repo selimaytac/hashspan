@@ -17,6 +17,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { type WithHashspanOptions, withHashspan } from '../src/index.js';
 import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemHasAction } from './viem-version.js';
 
 const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
@@ -200,7 +201,8 @@ describe('revert reasons decoded through viem', () => {
   });
 });
 
-describe('EIP-7702 authorizations', () => {
+// signAuthorization came with viem 2.24.0 (before, EIP-7702 was an experimental extension).
+describe.skipIf(!viemHasAction('signAuthorization'))('EIP-7702 authorizations', () => {
   it('records a signed delegation on the send span of its type 4 transaction', async () => {
     const c = clients();
     const authorization = await c.wallet.signAuthorization({

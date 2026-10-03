@@ -28,6 +28,9 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
   `test/*.int.test.ts` run against Anvil via prool; user operations go through `test/test-bundler.ts`, an
   in-process bundler, to a stand-in EntryPoint (`test/entry-point/`, compiled into `test-entry-point.ts`); every
   Anvil test starts on a free port (`test/free-port.ts`)
+- `.github/workflows/viem-range.yml` runs the viem tests weekly against both ends of the viem peer range; a test that
+  needs an action or a behaviour of a newer viem than the floor is gated by `test/viem-version.ts` (`viemHasAction()`,
+  `viemAtLeast()`), with a comment naming the release that introduced it
 - `test/real-bundler.int.test.ts` sends user operations through Alto, a real bundler, to the canonical EntryPoint
   v0.7, both installed outside the workspace by `scripts/install-bundler.sh` (GPL, pinned by
   `scripts/bundler/package-lock.json`); it runs in CI or with `HASHSPAN_REAL_BUNDLER=1`, since Alto listens on every

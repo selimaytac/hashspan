@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
 import { FROM, HASH, mockTransport, TO } from './mock-transport.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemAtLeast } from './viem-version.js';
 
 let tracing: TestTracing;
 beforeEach(() => {
@@ -73,7 +74,8 @@ describe('a node that returns the receipt late', () => {
 
   it('records a plain success when viem reports the transaction as its own replacement', async () => {
     // The receipt appears on the request viem makes for the "replacement" it found: the transaction itself.
-    const node = laggingNode(2);
+    // From viem 2.33.0, a wait asks for the receipt once before it starts polling: one request more.
+    const node = laggingNode(viemAtLeast('2.33.0') ? 2 : 1);
     const onReplaced = vi.fn();
     const hashspan = withHashspan();
     const reader = createPublicClient({
