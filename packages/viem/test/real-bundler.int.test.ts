@@ -309,7 +309,10 @@ describe('user operations through Alto on Anvil', () => {
       'blockchain.block.number': Number(receipt.receipt.blockNumber),
     });
     // One form for each address on both spans, although viem gives the EntryPoint checksummed and Alto lower-cased.
-    for (const key of ['blockchain.user_operation.sender', 'blockchain.user_operation.entry_point']) {
+    for (const key of [
+      'blockchain.user_operation.sender',
+      'blockchain.user_operation.entry_point',
+    ]) {
       expect(confirm.attributes[key]).toBe(send.attributes[key]);
     }
     // The operation's own cost, from its UserOperationEvent, not the fee of the bundle transaction.
