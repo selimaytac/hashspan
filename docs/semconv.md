@@ -70,8 +70,8 @@ no span; after a timeout or failure, a retry gets a new span. The same holds for
 
 | Situation | Span | Status | `error.type` | `blockchain.tx.status` |
 |---|---|---|---|---|
-| Transaction hash returned | send | unset | none | none |
-| Signing, simulation or broadcast failed | send | error | the library's error code when the adapter reports one (see below), else error class name, else `_OTHER` | none |
+| Transaction hash, user operation hash or call batch id returned | send | unset | none | none |
+| Signing, simulation, broadcast or handing to a bundler or wallet failed | send | error | the library's error code when the adapter reports one (see below), else error class name, else `_OTHER` | none |
 | Receipt with status success | confirm | unset | none | `success` |
 | Receipt with status reverted | confirm | error | `reverted` | `reverted` |
 | Gave up waiting for the receipt (its timeout, or `flush()` gave up) | confirm | error | `timeout` | none; see below |
@@ -105,7 +105,8 @@ adapter records the CDP API's error type, e.g. `insufficient_balance`.
 
 Failures with an error object add an `exception` event following the OpenTelemetry exception conventions. By
 default it carries only `exception.type`; `exception.message` and `exception.stacktrace` depend on the tracker's
-`errorMessages` mode (`off` | `sanitized` | `raw`), and the span status description is the recorded
+`errorMessages` mode (`off` | `sanitized` | `raw`; `sanitized` keeps the first line, at most 256 characters), and the
+span status description is the recorded
 `exception.message`, if any. See [ADR 0006](adr/0006-error-privacy.md).
 
 **JSON-RPC spans.** With the viem adapter's `traceTransport()`, each provider request is a `CLIENT` span named
@@ -159,7 +160,7 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.call_batch.transaction_hashes` | string[] | confirm | on | hashes of the transactions whose receipts the wallet reported for the batch, de-duplicated, at most 64 |
 | `blockchain.operation.subject` | string | none (metrics only) | on | on [metrics](#metrics) of user operations: `user_operation`; of call batches: `call_batch`; absent on those of transactions |
 | `blockchain.payment.protocol` | string | payment | on | `x402` |
-| `blockchain.payment.payer` | string | payment | raw | address that pays, subject to address mode |
+| `blockchain.payment.payer` | string | payment | raw | address that pays, subject to address mode; the settlement's payer only when the payer knew none |
 | `blockchain.payment.recipient` | string | payment | raw | address that is paid, subject to address mode |
 | `blockchain.payment.asset` | string | payment | raw | contract address of the token paid with, subject to address mode |
 | `blockchain.payment.amount` | string | payment | on | amount in the asset's smallest unit, decimal string; the settlement's amount only when the payer knew none |
@@ -189,15 +190,16 @@ recorded on metrics, and batches record no fee ([ADR 0022](adr/0022-call-batches
 
 | Metric | Instrument | Unit | Attributes | Recorded when |
 |---|---|---|---|---|
-| `blockchain.client.send.duration` | histogram | `s` | chain; `error.type` if the send failed | a send span ends: from the start of the sending call until the hash is known or the call failed |
-| `blockchain.client.confirmation.duration` | histogram | `s` | chain; `blockchain.tx.status` from chain data (for a call batch, `blockchain.call_batch.status`), else `error.type` (`timeout`, an error class) | a confirm span ends: from the start of the wait until the receipt or batch status, a replacement, a timeout or a failure; not for a call batch that ended while still pending |
+| `blockchain.client.send.duration` | histogram | `s` | chain; `error.type` if the send failed | a send span ends with a hash or id, or fails: from the start of the sending call until then |
+| `blockchain.client.confirmation.duration` | histogram | `s` | chain; `blockchain.tx.status` from chain data (for a call batch, `blockchain.call_batch.status`), else `error.type` (`timeout`, an adapter's error type, an error class name, or `_OTHER`) | a confirm span ends: from the start of the wait until the receipt or batch status, a replacement, a timeout or a failure; not for a call batch that ended while still pending |
 | `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.tx.status` | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number; for a user operation, a receipt with its cost: `blockchain.user_operation.gas.cost` |
 
 Bucket boundaries are given as advice: 0.05 s to 300 s for durations, and one bucket per power of ten from 10^8 to
 10^18 wei for fees. Fees above 2^53 wei lose precision as numbers; the span attribute keeps the exact value.
 
-On metrics, `error.type` is kept only when it is an error class name of letters (such as `TransactionExecutionError`)
-or a lower-case code (such as `timeout` or `insufficient_balance`); any other value, which could carry an identifier,
+On metrics, `error.type` is kept only when it is an error class name of letters ending in `Error` (such as
+`TransactionExecutionError`) or a lower-case code of letters and underscores (such as `timeout` or
+`insufficient_balance`); any other value, which could carry an identifier,
 an address or a number, is recorded as `_OTHER`. The span keeps its own `error.type`.
 
 ## Privacy
@@ -208,7 +210,7 @@ lower case), `hashed` (`sha256:` + first 32 hex characters of SHA-256 of the low
 function) or `off`. Neither depends on how the source wrote the address, so one address has one value on every
 span, whether it came checksummed from the call's arguments or lower-cased from a receipt.
 A redaction hook runs last on every attribute set of the tracker's spans, not on metrics or JSON-RPC spans; if it
-throws, only `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
+throws or returns something other than an attributes object, only `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
 `blockchain.tx.replacement.reason`, `blockchain.payment.protocol`, `blockchain.payment.status`,
 `blockchain.payment.verified`, `blockchain.user_operation.hash`, `blockchain.user_operation.success`,
 `blockchain.call_batch.id`, `blockchain.call_batch.status` and `error.type` are recorded.
