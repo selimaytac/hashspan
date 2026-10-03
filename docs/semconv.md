@@ -129,6 +129,9 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.tx.to` | string | send | raw | recipient / contract address, subject to address mode |
 | `blockchain.tx.value` | string | send | on | value in wei, decimal string |
 | `blockchain.tx.nonce` | int | send | on | sender nonce, when the sending call passes one (a nonce the wallet or viem picks is not known to the adapter) |
+| `blockchain.tx.authorization.count` | int | send | on | number of EIP-7702 authorizations a type 4 transaction carries |
+| `blockchain.tx.authorization.addresses` | string[] | send | raw | delegated contract address of each well-formed authorization, subject to address mode, at most 64; `0x000...0` clears a delegation |
+| `blockchain.tx.authorization.chain_ids` | int[] | send | on | chain id of each well-formed authorization, in the order of the addresses, at most 64; `0` means valid on every chain |
 | `blockchain.contract.function.name` | string | send | on | decoded function name when an ABI is known |
 | `blockchain.contract.function.selector` | string | send | on | 4-byte selector, e.g. `0xa9059cbb` |
 | `blockchain.contract.function.arguments` | string | send | off (opt-in) | decoded call arguments as a JSON array, e.g. `["0x2222...2222","1000000"]`: bigints as decimal strings, addresses per address mode, truncated after 4096 characters. Only own enumerable data properties are serialized; `toJSON()` and getters are never called |
@@ -203,7 +206,8 @@ an address or a number, is recorded as `_OTHER`. The span keeps its own `error.t
 ## Privacy
 
 `blockchain.tx.from`, `blockchain.tx.to`, the `blockchain.payment.*` addresses, the user operation's sender,
-EntryPoint and paymaster, and `blockchain.call_batch.sender` follow the address mode: `raw` (default, the address in
+EntryPoint and paymaster, `blockchain.call_batch.sender` and `blockchain.tx.authorization.addresses` follow the
+address mode: `raw` (default, the address in
 lower case), `hashed` (`sha256:` + first 32 hex characters of SHA-256 of the lower-cased address, or a custom
 function) or `off`. Neither depends on how the source wrote the address, so one address has one value on every
 span, whether it came checksummed from the call's arguments or lower-cased from a receipt.
@@ -228,6 +232,11 @@ APIs often carry user or account identifiers, so `x402.resource` records only th
 `paymentResource: 'path'` it records the path too, never the query string, fragment or user info, which can carry
 credentials ([ADR 0004](adr/0004-privacy-defaults.md)). A user operation's hash and receipt come from the bundler and are checked the
 same way; its nonce, gas and cost may also be `0x` hex quantities.
+
+The EIP-7702 attributes describe what the sent transaction asks for, not what took effect: the protocol skips an
+authorization whose signature, nonce or chain id does not hold, without failing the transaction. The account that
+signed each authorization (its authority) is not recorded; it is often the sender, but not in a sponsored
+transaction. The signatures and the authorities' nonces are never recorded.
 
 ## Change policy
 

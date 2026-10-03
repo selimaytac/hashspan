@@ -124,12 +124,25 @@ export interface SendInput {
   /** Decoded call arguments; recorded only with the `recordFunctionArguments` tracker option. */
   functionArguments?: readonly unknown[] | undefined;
   /**
+   * The EIP-7702 authorization list of a type 4 transaction. Its length is recorded as
+   * `blockchain.tx.authorization.count`; for each well-formed entry (at most 64), its delegated address per the
+   * address mode and its chain id. Signatures and nonces are never recorded.
+   */
+  authorizations?: readonly AuthorizationInput[] | undefined;
+  /**
    * When the send started, for adapters that record it after the fact
    * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.8.0/docs/adr/0009-telemetry-off-the-call-path.md).
    * Omit it otherwise: with an explicit start time, the SDK measures the span by the wall clock, so pass the end time
    * to the handle too.
    */
   startTime?: TimeInput | undefined;
+}
+
+/** One EIP-7702 authorization: the contract the account delegates to, and the chain it is valid on (0: every chain). */
+export interface AuthorizationInput {
+  /** The delegated contract address; `0x000...0` clears a delegation. */
+  address: string;
+  chainId: number;
 }
 
 /**

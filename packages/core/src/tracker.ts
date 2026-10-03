@@ -36,6 +36,9 @@ import {
   ATTR_BLOCKCHAIN_PAYMENT_STATUS,
   ATTR_BLOCKCHAIN_PAYMENT_VERIFIED,
   ATTR_BLOCKCHAIN_SYSTEM,
+  ATTR_BLOCKCHAIN_TX_AUTHORIZATION_ADDRESSES,
+  ATTR_BLOCKCHAIN_TX_AUTHORIZATION_CHAIN_IDS,
+  ATTR_BLOCKCHAIN_TX_AUTHORIZATION_COUNT,
   ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE,
   ATTR_BLOCKCHAIN_TX_FEE,
   ATTR_BLOCKCHAIN_TX_FROM,
@@ -155,6 +158,13 @@ const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
 const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const ZERO_ADDRESS = /^0x0{40}$/;
+
+/** The value of an own data property of `target`; undefined for an accessor, so no getter of the caller runs. */
+function ownValue(target: unknown, key: string): unknown {
+  if (typeof target !== 'object' || target === null) return undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(target, key);
+  return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
+}
 /** A non-negative integer that fits in 256 bits. */
 const AMOUNT = /^(0|[1-9][0-9]{0,77})$/;
 /** A `0x` hex quantity of at most 256 bits, as JSON-RPC encodes integers. */
@@ -171,6 +181,8 @@ const CALL_BATCH_ID = /^0x[0-9a-fA-F]{1,8192}$/;
 const MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH = 256;
 /** Most transaction hashes recorded for one call batch. */
 const MAX_CALL_BATCH_TRANSACTION_HASHES = 64;
+/** Most EIP-7702 authorizations listed on a send span; the count covers all of them. */
+const MAX_AUTHORIZATIONS = 64;
 /** EIP-5792 status code of a batch that is still pending. */
 const CALL_BATCH_PENDING = 100;
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
@@ -645,6 +657,29 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     if (formatted !== undefined) attributes[key] = formatted;
   };
 
+  /**
+   * Records an EIP-7702 authorization list: its length, and for each well-formed entry (an address and a non-negative
+   * integer chain id, read from own data properties only) its address per the address mode and its chain id, at most
+   * {@link MAX_AUTHORIZATIONS}. The two lists stay aligned: an entry is listed in both or in neither.
+   */
+  const setAuthorizations = (attributes: Attributes, list: unknown): void => {
+    if (!Array.isArray(list) || list.length === 0) return;
+    attributes[ATTR_BLOCKCHAIN_TX_AUTHORIZATION_COUNT] = list.length;
+    const addresses: string[] = [];
+    const chainIds: number[] = [];
+    for (const entry of list.slice(0, MAX_AUTHORIZATIONS)) {
+      const address = ownValue(entry, 'address');
+      const chainId = ownValue(entry, 'chainId');
+      if (typeof address !== 'string' || !ADDRESS.test(address)) continue;
+      if (typeof chainId !== 'number' || !Number.isSafeInteger(chainId) || chainId < 0) continue;
+      const formatted = formatAddress(address);
+      if (formatted !== undefined) addresses.push(formatted);
+      chainIds.push(chainId);
+    }
+    if (addresses.length > 0) attributes[ATTR_BLOCKCHAIN_TX_AUTHORIZATION_ADDRESSES] = addresses;
+    if (chainIds.length > 0) attributes[ATTR_BLOCKCHAIN_TX_AUTHORIZATION_CHAIN_IDS] = chainIds;
+  };
+
   /** Records `address` only if it is one: payment and user operation addresses come from remote parties. */
   const setRemoteAddress = (attributes: Attributes, key: string, address: unknown): void => {
     if (typeof address === 'string' && ADDRESS.test(address)) setAddress(attributes, key, address);
@@ -664,6 +699,11 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     setAddress(attributes, ATTR_BLOCKCHAIN_TX_TO, input.to);
     if (input.value !== undefined) attributes[ATTR_BLOCKCHAIN_TX_VALUE] = input.value.toString();
     if (input.nonce !== undefined) attributes[ATTR_BLOCKCHAIN_TX_NONCE] = input.nonce;
+    try {
+      setAuthorizations(attributes, input.authorizations);
+    } catch (error) {
+      diag.debug(`hashspan: could not record authorizations (${errorType(error)})`);
+    }
     if (input.functionName !== undefined) {
       attributes[ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME] = input.functionName;
     }

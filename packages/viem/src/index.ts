@@ -513,6 +513,25 @@ function own(target: unknown, key: string): unknown {
   return descriptor && 'value' in descriptor ? descriptor.value : undefined;
 }
 
+/**
+ * The EIP-7702 authorization list of a call, as the core reads it: each entry's delegated address and chain id, read
+ * from own data properties. viem names the address `address`; releases before 2.23 named it `contractAddress`.
+ * Signatures and nonces are left out, so they never reach telemetry.
+ */
+function authorizationsOf(list: unknown): SendInput['authorizations'] {
+  if (!Array.isArray(list)) return undefined;
+  const length = own(list, 'length');
+  if (typeof length !== 'number' || length === 0) return undefined;
+  const entries: { address: string; chainId: number }[] = [];
+  for (let index = 0; index < length; index++) {
+    const entry = own(list, String(index));
+    const address = own(entry, 'address') ?? own(entry, 'contractAddress');
+    // An entry the core cannot read keeps its place in the count.
+    entries.push({ address: address as string, chainId: own(entry, 'chainId') as number });
+  }
+  return entries;
+}
+
 const MAX_ARGUMENTS_COPY_DEPTH = 8;
 // Deep enough for nested tuples, which add two levels each.
 const MAX_ABI_COPY_DEPTH = 32;
@@ -1133,6 +1152,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       to: typeof to === 'string' ? to : undefined,
       value: own(args, 'value') as SendInput['value'],
       nonce: own(args, 'nonce') as SendInput['nonce'],
+      authorizations: authorizationsOf(own(args, 'authorizationList')),
     });
 
     /**

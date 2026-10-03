@@ -8,7 +8,7 @@ const doc = readFileSync(new URL('../../../docs/semconv.md', import.meta.url), '
 const documented = new Set(
   [
     ...doc.matchAll(
-      /^\| `([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)` \| (?:string|int|boolean|string\[\]) \|/gm,
+      /^\| `([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)` \| (?:string|int|boolean|string\[\]|int\[\]) \|/gm,
     ),
   ].map((m) => m[1] as string),
 );
