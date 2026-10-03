@@ -76,8 +76,8 @@ Tracked in the [0.9 milestone](https://github.com/selimaytac/hashspan/milestone/
 
 - [ ] Every documented integration runs in CI on Anvil
 - [x] Published packages checked on every supported Node.js version (#34)
-- [ ] User operations tested through a real bundler
-- [ ] Mutation testing of fee and receipt matching
+- [x] User operations tested through a real bundler (#206)
+- [x] Mutation testing of fee and receipt matching (#207)
 
 ## Toward 1.0: a stable API
 

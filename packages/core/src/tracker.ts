@@ -204,7 +204,7 @@ const REPLACEMENT_REASONS: ReadonlySet<string> = new Set([
 export interface TxTracker {
   /**
    * Starts a `send` span as a child of `parent` (default: the active context).
-   * Call `end(hash)` once the transaction hash is known, or `fail(error)`.
+   * Call `end({ hash })` once the transaction hash is known, or `fail(error)`.
    */
   startSend(input: SendInput, parent?: Context): SendHandle;
   /**
@@ -340,7 +340,6 @@ function amount(value: unknown): string | undefined {
   return typeof text === 'string' && AMOUNT.test(text) ? text : undefined;
 }
 
-/** The `error.type` for a failure: an adapter's override when it is a short identifier, else the class name. */
 /** A finite number, an `HrTime` pair or a `Date`: what the deprecated positional `endTime` argument takes. */
 function isTimeInput(value: unknown): value is TimeInput {
   if (typeof value === 'number') return Number.isFinite(value);
@@ -387,6 +386,7 @@ function handleOptions(second: unknown, third?: unknown): HandleOptions {
   }
 }
 
+/** The `error.type` for a failure: an adapter's override when it is a short identifier, else the class name. */
 function reportedErrorType(error: unknown, options: HandleOptions | undefined): string {
   const override = options?.errorType;
   if (override === undefined) return errorType(error);
