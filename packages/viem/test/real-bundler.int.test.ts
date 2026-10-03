@@ -1,6 +1,7 @@
 // User operations through a real ERC-4337 bundler: Alto, run as a separate process against Anvil, with the canonical
 // EntryPoint v0.7 deployed at its canonical address and SimpleAccount smart accounts. Both are installed outside the
-// pnpm workspace by scripts/install-bundler.sh (`make tools`); nothing leaves localhost.
+// pnpm workspace by scripts/install-bundler.sh (`make tools`). Alto listens on every network interface (its host is
+// fixed to 0.0.0.0), so the file runs only in CI or when HASHSPAN_REAL_BUNDLER=1 is set, not on every local test run.
 import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { SpanStatusCode } from '@opentelemetry/api';
@@ -35,6 +36,7 @@ import { reverterCode } from './entry-point/test-entry-point.js';
 import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
+const RUN = Boolean(process.env.CI || process.env.HASHSPAN_REAL_BUNDLER);
 const ANVIL_PORT = await freePort();
 const ALTO_PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${ANVIL_PORT}`;
@@ -151,6 +153,7 @@ async function startAlto(): Promise<void> {
 }
 
 beforeAll(async () => {
+  if (!RUN) return;
   if (!existsSync(ALTO)) throw new Error('Alto is not installed: run ./scripts/install-bundler.sh');
   await instance.start();
   const entryPoint = await deploy(creationCode('EntryPoint'), ENTRY_POINT_SALT);
@@ -171,6 +174,7 @@ beforeAll(async () => {
   await startAlto();
 });
 afterAll(async () => {
+  if (!RUN) return;
   alto?.kill();
   await instance.stop();
 });
@@ -252,7 +256,7 @@ const rawReceipt = (hash: Hex) =>
     params: [hash],
   }) as Promise<RawReceipt | null>;
 
-describe('user operations through Alto on Anvil', () => {
+describe.skipIf(!RUN)('user operations through Alto on Anvil', () => {
   it('traces an operation that deploys its account, from the bundler to its receipt', async () => {
     const client = await bundlerClient(1n);
     const before = await reader.getBalance({ address: RECIPIENT });

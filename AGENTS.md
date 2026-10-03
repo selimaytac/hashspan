@@ -44,7 +44,8 @@ Run lint, typecheck and tests before proposing a change.
     `test/*.int.test.ts` run against Anvil via prool; user operations go through `test/test-bundler.ts`, an
     in-process bundler, to a stand-in EntryPoint (`test/entry-point/`, compiled into `test-entry-point.ts`);
     `test/real-bundler.int.test.ts` sends them through Alto, a real bundler, to the canonical EntryPoint v0.7, both
-    installed outside the workspace by `scripts/install-bundler.sh` (GPL, pinned by `scripts/bundler/package-lock.json`)
+    installed outside the workspace by `scripts/install-bundler.sh` (GPL, pinned by `scripts/bundler/package-lock.json`);
+    it runs in CI or with `HASHSPAN_REAL_BUNDLER=1`, since Alto listens on every network interface
 - `packages/cdp` → capture adapter for the Coinbase CDP SDK (ADR 0012)
   - `src/index.ts` `withHashspan(cdp, { reader })` wraps `cdp.evm` and the accounts its factories return, in place;
     confirmations go through `@hashspan/viem`'s `watch()`; `src/networks.ts` maps CDP network names to chain ids;
