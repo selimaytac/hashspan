@@ -99,6 +99,13 @@ function settledWithin(work: Promise<unknown>[], ms: number): Promise<boolean> {
   });
 }
 
+/** The chain id a client's node reports, from `eth_chainId`; rejects for an answer that is not one. */
+async function chainIdOfClient(client: ViemClientLike): Promise<number> {
+  const id = Number(await client.request({ method: 'eth_chainId' }));
+  if (!Number.isSafeInteger(id) || id <= 0) throw new TypeError('invalid chain id');
+  return id;
+}
+
 /** Resolves with `value`, or with undefined after `ms`. Never rejects; its timer does not keep the process alive. */
 function within<T>(value: Promise<T>, ms: number, what: string): Promise<T | undefined> {
   return new Promise((resolve) => {
@@ -227,7 +234,8 @@ export interface WatchOptions {
   hash: string;
   /**
    * EIP-155 chain id; defaults to the client's chain. Without either, nothing is recorded; when it differs from the
-   * client's chain, nothing is recorded either and a `diag` warning is logged.
+   * client's chain, nothing is recorded either and a `diag` warning is logged. A client without a chain is asked
+   * for its chain id with `eth_chainId` first.
    */
   chainId?: number | undefined;
   /** How long to poll for the receipt before the confirm span ends as `timeout`. Default: 120 000 ms. */
@@ -983,19 +991,31 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         onReceipt(undefined);
         return;
       }
-      // Polling another chain would only end in a timeout, recorded for the wrong chain.
-      const clientChainId = client.chain?.id;
-      if (clientChainId !== undefined && clientChainId !== chainId) {
-        diag.warn(
-          `hashspan: watch() got chain ${chainId} and a client on chain ${clientChainId}; not recording it`,
-        );
-        onReceipt(undefined);
+      const timeoutMs = options.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS;
+      /** Polling another chain would only end in a timeout, or a receipt recorded for the wrong chain. */
+      const confirmOn = (clientChainId: number | undefined): void => {
+        if (clientChainId !== chainId) {
+          if (clientChainId !== undefined) {
+            diag.warn(
+              `hashspan: watch() got chain ${chainId} and a client on chain ${clientChainId}; not recording it`,
+            );
+          }
+          onReceipt(undefined);
+          return;
+        }
+        if (options.abi) abis.set(confirmKey(chainId, options.hash), options.abi);
+        if (!confirmThrough(client, chainId, options.hash, timeoutMs, onReceipt))
+          onReceipt(undefined);
+      };
+      if (client.chain?.id !== undefined) {
+        confirmOn(client.chain.id);
         return;
       }
-      if (options.abi) abis.set(confirmKey(chainId, options.hash), options.abi);
-      const timeoutMs = options.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS;
-      if (!confirmThrough(client, chainId, options.hash, timeoutMs, onReceipt))
-        onReceipt(undefined);
+      // A client without a chain can be on any chain, and the chain id asked for can come from elsewhere, such as
+      // the server of an x402 payment: ask the client, within the watch's timeout.
+      track(
+        within(chainIdOfClient(client), timeoutMs, 'ask a client for its chain id').then(confirmOn),
+      );
     } catch (error) {
       diag.error(`hashspan: failed to watch a transaction (${errorName(error)})`);
       onReceipt(undefined);
