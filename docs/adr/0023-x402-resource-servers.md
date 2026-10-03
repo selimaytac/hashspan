@@ -91,10 +91,10 @@ What the x402 SDK (`@x402/core` 2.13 to 2.28, the range `@hashspan/x402` support
     the payment was settled;
   - outcome never learned: no settle or cancel before the requirements' `maxTimeoutSeconds` plus a grace period,
     when too many payments are open, or when `flush()` gives up: error status, `error.type` `timeout`, as on the
-    payer's side. At most 1000 payments are open at once per `withHashspanServer()` result, counting the state
-    captured in `onBeforeVerify`, and the oldest ends as `timeout` when a new one would exceed it, as on the payer's
-    side: callers decide how many payments start, so this state must stay bounded. This includes a payment that a
-    hook registered after hashspan's aborts in `onBeforeSettle`, since the SDK calls no hook after the abort.
+    payer's side. This includes a payment that a hook registered after hashspan's aborts in `onBeforeSettle`, since
+    the SDK calls no hook after the abort. At most 1000 payments are open at once per `withHashspanServer()` result,
+    counting the state captured in `onBeforeVerify`, and the oldest ends as `timeout` when a new one would exceed
+    it, as on the payer's side: callers decide how many payments start, so this state must stay bounded.
 
   `error.type` from the facilitator follows ADR 0013's rule: a short identifier, else `_OTHER`. Verification and
   settlement are recorded as span events, `x402.verify` when the verification result arrives and `x402.settle` when
