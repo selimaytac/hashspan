@@ -6,6 +6,7 @@ import * as agents from '@openai/agents';
 import type { Hex } from 'viem';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { freePort } from '../../packages/viem/test/free-port.js';
 import { offline } from './offline.js';
 import {
   inAgentSpan,
@@ -17,7 +18,7 @@ import {
   tracedWallet,
 } from './openinference.js';
 
-const PORT = 18614;
+const PORT = await freePort();
 
 /** A model that calls the `pay_vendor` tool on its first turn and answers on its second; it never sends a request. */
 class ScriptedModel implements agents.Model {
