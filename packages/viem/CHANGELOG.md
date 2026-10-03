@@ -1,5 +1,39 @@
 # @hashspan/viem
 
+## 0.9.0
+
+### Minor Changes
+
+- [#198](https://github.com/selimaytac/hashspan/pull/198) [`4f86829`](https://github.com/selimaytac/hashspan/commit/4f86829bca5feb6d2c3cff6f5f0d38f29018f9cc) Thanks [@selimaytac](https://github.com/selimaytac)! - `withHashspan()` traces EIP-5792 call batches (ADR 0022): `sendCalls`, `waitForCallsStatus` and `sendCallsSync` of a
+  wallet client record `send` and `confirm` spans identified by the batch id. With `experimental_fallback`, the plain
+  transactions viem sends are linked to the batch's send span and always confirmed as transactions, with their fees.
+  With a tracker from an older `@hashspan/core`, batches are not traced.
+
+- [#247](https://github.com/selimaytac/hashspan/pull/247) [`8efcfa6`](https://github.com/selimaytac/hashspan/commit/8efcfa683f7cf737f84164c768cf1e2f897c3c8a) Thanks [@selimaytac](https://github.com/selimaytac)! - `sendTransaction` and `writeContract` record the `authorizationList` of an EIP-7702 transaction on its send span:
+  how many authorizations, each delegated address and its chain id, read from own data properties (only the first 64
+  entries are read; all are counted). Signatures and nonces never reach telemetry. With an older `@hashspan/core`, the
+  list is not recorded.
+
+### Patch Changes
+
+- [#252](https://github.com/selimaytac/hashspan/pull/252) [`4a3ccd5`](https://github.com/selimaytac/hashspan/commit/4a3ccd5d63b43ffd166b9cfae609a0fcca1882d6) Thanks [@selimaytac](https://github.com/selimaytac)! - A revert reason cut to its 1024-character bound no longer keeps part of a hex value that the cut splits: the part left
+  was too short to be recognised as an address, so in `off` and `hashed` address mode most of an address in a long
+  revert reason could be recorded. The hex value at the cut is now dropped whole.
+
+- [#219](https://github.com/selimaytac/hashspan/pull/219) [`6f0846d`](https://github.com/selimaytac/hashspan/commit/6f0846df0ce3c150ce66d5fcdf20204ffc702dac) Thanks [@selimaytac](https://github.com/selimaytac)! - The package's npm homepage is now https://hashspan.dev.
+
+- [#232](https://github.com/selimaytac/hashspan/pull/232) [`18f2f3c`](https://github.com/selimaytac/hashspan/commit/18f2f3c1a94ab75eb49bb027f34d61355d13e3b6) Thanks [@selimaytac](https://github.com/selimaytac)! - A wait that rejects with an error whose `name` cannot be read (a throwing getter or Proxy trap) now ends its confirm
+  span with error status and `error.type` `_OTHER`, for transactions, user operations and call batches, instead of
+  leaving the span open until `flush()` gives up. The rejection still reaches the caller unchanged.
+
+- [#254](https://github.com/selimaytac/hashspan/pull/254) [`0be88f5`](https://github.com/selimaytac/hashspan/commit/0be88f5edf0575745bd8a989199bb4fac3bf1110) Thanks [@selimaytac](https://github.com/selimaytac)! - `watch()` with a `chainId` and a client without a chain now asks the client for its chain id (`eth_chainId`) and
+  records nothing when the two differ, as it already did for a client with a chain. Before, the transaction was polled
+  on the client's chain and recorded under the given chain id. In `@hashspan/x402` that chain id comes from the paid
+  server, so a reader without a chain could record a confirm span, and its `blockchain.chain.id` metric label, for any
+  chain the server named.
+- Updated dependencies [[`4f86829`](https://github.com/selimaytac/hashspan/commit/4f86829bca5feb6d2c3cff6f5f0d38f29018f9cc), [`8efcfa6`](https://github.com/selimaytac/hashspan/commit/8efcfa683f7cf737f84164c768cf1e2f897c3c8a), [`4a3ccd5`](https://github.com/selimaytac/hashspan/commit/4a3ccd5d63b43ffd166b9cfae609a0fcca1882d6), [`6f0846d`](https://github.com/selimaytac/hashspan/commit/6f0846df0ce3c150ce66d5fcdf20204ffc702dac), [`c9795db`](https://github.com/selimaytac/hashspan/commit/c9795db3a1aa46ea7f93b9f7130c73c9a0a0e4e0), [`ad6b069`](https://github.com/selimaytac/hashspan/commit/ad6b069a70f703785576dde4e45051d1419b34e8)]:
+  - @hashspan/core@0.9.0
+
 ## 0.8.2
 
 ### Patch Changes

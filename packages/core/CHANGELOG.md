@@ -1,5 +1,45 @@
 # @hashspan/core
 
+## 0.9.0
+
+### Minor Changes
+
+- [#198](https://github.com/selimaytac/hashspan/pull/198) [`4f86829`](https://github.com/selimaytac/hashspan/commit/4f86829bca5feb6d2c3cff6f5f0d38f29018f9cc) Thanks [@selimaytac](https://github.com/selimaytac)! - Call batches of EIP-5792 `wallet_sendCalls` (ADR 0022): `tracker.startCallBatchSend()` records handing a batch to a
+  wallet as a `send {chainId}` span with `blockchain.call_batch.id`, `.sender` and `.call_count`, and
+  `tracker.startCallBatchConfirm()` joins its `confirm {chainId}` span, keyed by chain and batch id apart from
+  transactions and user operations, with `blockchain.call_batch.status` (`success`, `reverted`,
+  `partially_reverted` for codes 200, 500, 600), `.status_code`, `.atomic` and `.transaction_hashes`. Code 400 ends
+  with `error.type` `failed`, any other code with `_OTHER`, and a pending result without an outcome; no fee is
+  recorded. Batch ids must be `0x`-prefixed hex. Transactions an account sent itself for a batch are linked to its send
+  span. Metrics of batches carry `blockchain.operation.subject` `call_batch` and the batch status, never raw codes.
+
+- [#247](https://github.com/selimaytac/hashspan/pull/247) [`8efcfa6`](https://github.com/selimaytac/hashspan/commit/8efcfa683f7cf737f84164c768cf1e2f897c3c8a) Thanks [@selimaytac](https://github.com/selimaytac)! - `SendInput` takes an optional `authorizations` list, and the send span of an EIP-7702 (type 4) transaction records
+  `blockchain.tx.authorization.count`, and for each well-formed authorization (at most 64) its delegated address per
+  the address mode (`blockchain.tx.authorization.addresses`) and its chain id (`blockchain.tx.authorization.chain_ids`,
+  where `0` means every chain). Signatures and nonces are never recorded.
+
+- [#231](https://github.com/selimaytac/hashspan/pull/231) [`c9795db`](https://github.com/selimaytac/hashspan/commit/c9795db3a1aa46ea7f93b9f7130c73c9a0a0e4e0) Thanks [@selimaytac](https://github.com/selimaytac)! - Addresses are recorded in lower case in the default `raw` address mode, so one address has one value on every span:
+  before, a value was recorded as its source gave it, for example a user operation's EntryPoint checksummed on its send
+  span and lower-cased on its confirm span when the bundler returned it that way. This changes the recorded form of
+  `blockchain.tx.from` (viem passes the account's checksummed address), `blockchain.tx.to`,
+  `blockchain.user_operation.sender`, `.entry_point` and `.paymaster`, `blockchain.call_batch.sender`,
+  `blockchain.payment.payer`, `.recipient` and `.asset`, and of addresses inside `blockchain.contract.function.arguments`,
+  `blockchain.tx.revert.reason`, `x402.resource`, `error.type` and sanitized error messages. Queries, dashboards and
+  redaction hooks that match checksummed addresses must match the lower-cased form. `hashed` mode is unchanged: it
+  already hashed the lower-cased address.
+
+### Patch Changes
+
+- [#252](https://github.com/selimaytac/hashspan/pull/252) [`4a3ccd5`](https://github.com/selimaytac/hashspan/commit/4a3ccd5d63b43ffd166b9cfae609a0fcca1882d6) Thanks [@selimaytac](https://github.com/selimaytac)! - `x402.resource` cut to its 512-character bound no longer keeps part of a hex value that the cut splits: the part
+  left was too short to be recognised as an address, so in `off` and `hashed` address mode most of an address in a long
+  resource path could be recorded. The hex value at the cut is now dropped whole.
+
+- [#219](https://github.com/selimaytac/hashspan/pull/219) [`6f0846d`](https://github.com/selimaytac/hashspan/commit/6f0846df0ce3c150ce66d5fcdf20204ffc702dac) Thanks [@selimaytac](https://github.com/selimaytac)! - The package's npm homepage is now https://hashspan.dev.
+
+- [#253](https://github.com/selimaytac/hashspan/pull/253) [`ad6b069`](https://github.com/selimaytac/hashspan/commit/ad6b069a70f703785576dde4e45051d1419b34e8) Thanks [@selimaytac](https://github.com/selimaytac)! - `errorMessages: 'sanitized'` now cuts every URL in the recorded first line to its scheme, host and port, and records
+  `<url>` for one whose user info hides a `?` or `#`. viem keeps the request URL off the first line, but a custom
+  EIP-1193 transport or another library can put it there, with an API key in its path or query.
+
 ## 0.8.0
 
 ### Minor Changes

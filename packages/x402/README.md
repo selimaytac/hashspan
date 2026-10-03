@@ -6,7 +6,7 @@ With x402, an agent pays for an API call by signing an authorization; the API's 
 settling transaction from its own account. This adapter records each payment as a `payment {chainId}` span inside
 your agent's trace, with what was paid, to whom, for which resource and whether it settled, and, with a reader, a
 linked `confirm {chainId}` span with block, gas and fees. It records no `send` span, since the agent did not send the
-transaction ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.8.0/docs/adr/0013-x402-payments.md)).
+transaction ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.9.0/docs/adr/0013-x402-payments.md)).
 
 ## Install
 
@@ -51,7 +51,7 @@ Call `withHashspan` right after creating the client, before registering hooks of
 the order they were registered, and stops at the first that recovers a failed payment or a response, so a hook
 registered earlier can keep hashspan from seeing the outcome, which then ends as `timeout`.
 
-`withHashspan(client, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@0.8.0/packages/core#options)
+`withHashspan(client, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@0.9.0/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem` but off by default,
 `maxBackgroundConfirmations` as in `@hashspan/viem` (it limits the confirmations through the reader; a payment whose
 confirmation is not started gets no `verified`), `tracker`, `reader` (a viem public client, or a function returning
@@ -74,7 +74,7 @@ settlement on another network, an authorization that does not match the requirem
 `batch-settlement`). With a reader, the payment span is exported once the receipt is checked; its end time stays
 when the response came. The revert reason of a reverted settlement, which would be text from a contract the server
 chooses, is only recorded with `decodeRevertReason: true`. See
-[ADR 0017](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.8.0/docs/adr/0017-x402-payment-verification.md).
+[ADR 0017](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.9.0/docs/adr/0017-x402-payment-verification.md).
 
 `flush({ timeoutMs })` (default 10 000 ms) waits for payments still waiting for their response, then for
 confirmations through the reader, and ends what is left as `timeout` (a payment already settled and waiting for its
@@ -95,7 +95,7 @@ Every payment span records the payer, recipient (`payTo`), asset, the amount the
 origin of the resource URL, e.g. `https://api.example.com`: paths of paid APIs often carry user or account
 identifiers. The core option `paymentResource: 'path'` records the path too (never the query string, fragment or user
 info), and `'off'` nothing; see
-[docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.8.0/docs/semconv.md). When the
+[docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.9.0/docs/semconv.md). When the
 settlement reports the amount it settled, it is recorded as `blockchain.payment.settled_amount`, as reported: with the
 `upto` scheme, it can be less than the amount signed for.
 
