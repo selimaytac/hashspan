@@ -69,15 +69,19 @@
 Merged, and shipped with the next release.
 
 - [x] viem EIP-5792 `sendCalls` ([ADR 0022](adr/0022-call-batches.md))
+- [x] EIP-7702 authorizations on the send span of a type 4 transaction (#165)
+- [x] Addresses recorded in one form, lower case, on every span ([ADR 0004](adr/0004-privacy-defaults.md))
 
 ## Now: 0.9, maturation
 
 Tracked in the [0.9 milestone](https://github.com/selimaytac/hashspan/milestone/1).
 
-- [ ] Every documented integration runs in CI on Anvil
+- [x] Every documented integration runs in CI on Anvil ([integrations](integrations.md))
 - [x] Published packages checked on every supported Node.js version (#34)
 - [x] User operations tested through a real bundler (#206)
 - [x] Mutation testing of fee and receipt matching (#207)
+- [x] A Grafana dashboard for the send, confirmation and fee histograms in the local lab (#163,
+  [backends](backends.md#grafana-dashboard-for-the-metrics))
 
 ## Toward 1.0: a stable API
 
