@@ -1,6 +1,5 @@
 import {
   createTxTracker,
-  type ReceiptLike,
   type SendInput,
   type TxTracker,
   type UserOperationConfirmHandle,
@@ -13,11 +12,22 @@ import {
   type WithHashspanOptions as ViemOptions,
   withHashspan as withViemHashspan,
 } from '@hashspan/viem';
-import { type Context, context, diag } from '@opentelemetry/api';
+import { context, diag } from '@opentelemetry/api';
 import { parseTransaction } from 'viem';
+import {
+  addressOf,
+  cdpErrorType,
+  errorName,
+  isHexString,
+  sendContextOf,
+  stringOrUndefined,
+  timers,
+} from './helpers.js';
 import { CDP_API_SEND_CHAIN_IDS, chainIdOf } from './networks.js';
 import { own } from './own.js';
+import { receiptOf } from './receipt.js';
 import { SentUserOperations, userOperationReceiptFromBundle } from './user-operation.js';
+import { type AccountLike, type AnyFn, replace, WRAPPED, wrapFailed } from './wrap.js';
 
 export { CDP_NETWORK_CHAIN_IDS } from './networks.js';
 
@@ -50,23 +60,12 @@ export interface HashspanCdp {
 }
 
 // Structural views of the CDP SDK objects, so that the adapter does not depend on its internal types.
-type AnyFn = (...args: never[]) => Promise<unknown>;
 interface CdpClientLike {
   // `object`, not a record type: the SDK's `EvmClient` class has no index signature.
   evm: object;
 }
-interface AccountLike {
-  address?: unknown;
-  [key: string]: unknown;
-}
-const WRAPPED = Symbol.for('hashspan.cdp.wrapped');
 // The same default as @hashspan/viem's flush().
 const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
-// Timers without Node.js or DOM types, which src/ is type-checked without.
-const timers = globalThis as unknown as {
-  setTimeout(callback: () => void, ms: number): unknown;
-  clearTimeout(timer: unknown): void;
-};
 const TRANSFER_SELECTOR = '0xa9059cbb';
 // Unknown network values are named in warnings only when they look like a network name, never an RPC URL.
 const NETWORK_NAME = /^[a-z0-9-]{1,32}$/;
@@ -91,84 +90,6 @@ const MAX_SENT_USER_OPERATIONS = 4096;
 const DEFAULT_CONFIRM_TIMEOUT_MS = 120_000;
 // How often the reader is asked for a bundle receipt when it has no polling interval of its own.
 const DEFAULT_POLLING_INTERVAL_MS = 1000;
-
-function errorName(error: unknown): string {
-  return error instanceof Error && error.name ? error.name : 'unknown error';
-}
-
-/**
- * The context a send handle's call runs in: its send context, or the caller's for a handle without a usable one, such
- * as one from a tracker of a core before 0.4 (ADR 0014).
- */
-function sendContextOf(handle: { context?: unknown } | undefined): Context {
-  const caller = context.active();
-  try {
-    const sendContext = handle?.context;
-    return typeof sendContext === 'object' &&
-      sendContext !== null &&
-      typeof (sendContext as { getValue?: unknown }).getValue === 'function'
-      ? (sendContext as Context)
-      : caller;
-  } catch (error) {
-    diag.debug(`hashspan: could not read the send context (${errorName(error)})`);
-    return caller;
-  }
-}
-
-/** The CDP API's error type (`APIError.errorType`, e.g. `insufficient_balance`), recorded as `error.type`. */
-function cdpErrorType(error: unknown): string | undefined {
-  const type = error instanceof Error ? own(error, 'errorType') : undefined;
-  return typeof type === 'string' ? type : undefined;
-}
-
-/**
- * Whether `value` is a preconfirmation: a flashblocks node (such as Base's) returns a receipt before its block is
- * sealed, with a zero or null block hash, and its `l1Fee` can be that of another transaction
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.9.1/docs/adr/0024-sealed-receipt-fees.md).
- */
-function isPreconfirmed(value: object): boolean {
-  const blockHash = own(value, 'blockHash');
-  return blockHash === null || (typeof blockHash === 'string' && /^0x0*$/.test(blockHash));
-}
-
-/**
- * The fields of a viem receipt that the confirm span records, or undefined if `value` is not one. A preconfirmation's
- * fee fields are left out: the wait this records has no reader to read the sealed receipt with, and a fee that may be
- * another transaction's, or lacks its L1 part, would look valid (ADR 0024).
- */
-function receiptOf(value: unknown): ReceiptLike | undefined {
-  if (value === null || typeof value !== 'object') return undefined;
-  const status = own(value, 'status');
-  const blockNumber = own(value, 'blockNumber');
-  const gasUsed = own(value, 'gasUsed');
-  if (status !== 'success' && status !== 'reverted') return undefined;
-  if (typeof blockNumber !== 'bigint' || typeof gasUsed !== 'bigint') return undefined;
-  const optional = (v: unknown) => (typeof v === 'bigint' ? v : undefined);
-  const withFees = !isPreconfirmed(value);
-  if (!withFees) {
-    diag.debug('hashspan: the receipt is a preconfirmation; recording it without fees');
-  }
-  return {
-    status,
-    blockNumber,
-    gasUsed,
-    effectiveGasPrice: withFees ? optional(own(value, 'effectiveGasPrice')) : undefined,
-    l1Fee: withFees ? optional(own(value, 'l1Fee')) : undefined,
-    transactionHash: stringOrUndefined(own(value, 'transactionHash')),
-  };
-}
-
-function isHexString(value: unknown): value is `0x${string}` {
-  return typeof value === 'string' && /^0x[0-9a-fA-F]*$/.test(value);
-}
-
-function stringOrUndefined(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-function addressOf(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : stringOrUndefined(own(value, 'address'));
-}
 
 /** Transaction fields for the send span, from a request object or a serialized transaction. */
 function describeTransaction(transaction: unknown): Omit<SendInput, 'chainId'> {
@@ -621,45 +542,6 @@ export function withHashspan(
       if (stopped() || Date.now() + interval > deadline) return undefined;
       await new Promise<void>((resolve) => timers.setTimeout(resolve, interval));
     }
-  };
-
-  /**
-   * Replaces `target[name]` with `wrap(original)`, calling the original with `target` as `this`. Returns false when
-   * the method cannot be replaced, for example on a frozen object; a method replaced before is left as it is, so
-   * wrapping an object again never traces a call twice. The wrapper keeps the enumerability of the original's own
-   * property, and is not enumerable when the original was inherited (the SDK's methods live on its classes'
-   * prototypes), so `Object.keys`, object spread and `JSON.stringify` of the object do not change. It stays bound to
-   * `target`, so a method taken off the object keeps working as before.
-   */
-  const replace = (
-    target: Record<string, unknown>,
-    name: string,
-    wrap: (original: AnyFn) => AnyFn,
-  ): boolean => {
-    try {
-      const original = target[name];
-      if (typeof original !== 'function' || WRAPPED in original) return true;
-      const wrapper = wrap((original as AnyFn).bind(target));
-      Object.defineProperty(wrapper, WRAPPED, { value: true });
-      const descriptor = Object.getOwnPropertyDescriptor(target, name);
-      // An own property that is read-only or an accessor is left as its owner made it.
-      if (descriptor !== undefined && descriptor.writable !== true) return false;
-      Object.defineProperty(target, name, {
-        value: wrapper,
-        writable: true,
-        enumerable: descriptor?.enumerable ?? false,
-        configurable: descriptor?.configurable ?? true,
-      });
-      return target[name] === wrapper;
-    } catch (error) {
-      diag.error(`hashspan: failed to wrap ${name} (${errorName(error)})`);
-      return false;
-    }
-  };
-
-  /** Logs a failure to wrap a value the SDK returned; the value is then returned as it is. */
-  const wrapFailed = (error: unknown): void => {
-    diag.error(`hashspan: failed to wrap a CDP result (${errorName(error)})`);
   };
 
   /** Wraps a network-scoped account in place; never throws, so a call that returned it never fails. */
