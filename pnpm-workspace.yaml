@@ -1,3 +1,10 @@
 packages:
   - packages/*
   - examples/*
+
+# Supply chain: resolve only versions published at least a day ago (in minutes), since most compromised npm releases
+# are found and pulled within that time. Applies when versions are resolved (pnpm add, update, Dependabot, the weekly
+# newest-in-range jobs), not to installs from the lockfile. hashspan's own packages are exempt.
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - '@hashspan/*'

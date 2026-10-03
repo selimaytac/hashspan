@@ -26,7 +26,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-          cache: pnpm
+          # No pnpm cache: this job installs newer packages than the lockfile, and a store it saved would be restored
+          # under the same key by the release workflow.
       - run: pnpm install --frozen-lockfile
       # Within the range in package.json (^1), so a new major is a deliberate change rather than a failing job.
       # The updated lockfile is not committed.

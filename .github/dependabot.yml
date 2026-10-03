@@ -6,6 +6,8 @@ updates:
   - package-ecosystem: npm
     directory: /
     schedule: { interval: monthly }
+    # Matches minimumReleaseAge in pnpm-workspace.yaml, which rejects versions younger than a day.
+    cooldown: { default-days: 1 }
     groups:
       dev-dependencies:
         dependency-type: development

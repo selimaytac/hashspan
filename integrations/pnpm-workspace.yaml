@@ -1,1 +1,7 @@
 # A workspace of its own, with its own lockfile: see package.json.
+
+# As in the root pnpm-workspace.yaml, which this workspace does not inherit: resolve only versions published at least
+# a day ago; the weekly integrations job updates every dependency here within its range.
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - '@hashspan/*'
