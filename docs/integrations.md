@@ -116,10 +116,12 @@ framework's tool-call span is that span depends on its instrumentation:
 
 - **Mastra:** with its OpenTelemetry bridge (`OtelBridge` from `@mastra/otel-bridge`, set as `bridge` in an
   `Observability` config of `@mastra/observability`) and a registered tracer provider and context manager (the
-  OpenTelemetry Node SDK registers both), each tool runs inside its tool span. Checked with `@mastra/core` 1.74.0 and
-  `@mastra/otel-bridge` 1.5.13, running an agent against Anvil: the trace reads `invoke_agent`, then
-  `execute_tool pay_vendor`, then `send` and `confirm`. Without Mastra observability, the send and confirm spans
-  start traces of their own. Mastra marks the bridge as experimental.
+  OpenTelemetry Node SDK registers both), each tool runs inside its tool span: the trace reads
+  `invoke_agent <agent>`, then Mastra's spans of the model call and the agent's step, then `execute_tool <tool>`,
+  whose children are `send` and `confirm`. Without Mastra observability, the send and confirm spans start traces of
+  their own. CI runs both setups against Anvil with a scripted model, from `@mastra/core` 1.74.0 and
+  `@mastra/otel-bridge` 1.5.13 on, in [`integrations/test/mastra.int.test.ts`](../integrations/test/mastra.int.test.ts).
+  Mastra marks the bridge as experimental.
 - **LangChain JS and the OpenAI Agents SDK:** OpenInference's instrumentations
   (`@arizeai/openinference-instrumentation-langchain` 4.1.4, `@arizeai/openinference-instrumentation-openai-agents`
   0.3.2) record tool spans but do not make them active, so hashspan's spans attach to whatever span was active
