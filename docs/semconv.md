@@ -105,7 +105,7 @@ adapter records the CDP API's error type, e.g. `insufficient_balance`.
 
 Failures with an error object add an `exception` event following the OpenTelemetry exception conventions. By
 default it carries only `exception.type`; `exception.message` and `exception.stacktrace` depend on the tracker's
-`errorMessages` mode (`off` | `sanitized` | `raw`; `sanitized` keeps the first line, cut to 256 characters and `...`), and the
+`errorMessages` mode (`off` | `sanitized` | `raw`; `sanitized` keeps the first line with URLs cut to their origin, cut to 256 characters and `...`), and the
 span status description is the recorded
 `exception.message`, if any. See [ADR 0006](adr/0006-error-privacy.md).
 

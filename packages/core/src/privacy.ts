@@ -75,6 +75,8 @@ const ADDRESS_LENGTH = 42;
  */
 const MAX_HEX_LENGTH = 66;
 const MAX_MESSAGE_LENGTH = 256;
+/** A URL in free text: `scheme://` up to the next whitespace, quote or bracket; the bounded scheme keeps it linear. */
+const URL_IN_TEXT = /\b[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/[^\s"'<>()[\]{}]+/g;
 
 /**
  * Rewrites every address in `text` with the address mode (`<address>` when it records none). In `off` and `hashed`
@@ -88,11 +90,14 @@ export function formatAddressesIn(text: string, formatAddress: AddressFormatter)
 }
 
 /**
- * First line of an error message with addresses per address mode and longer hex data (such as calldata)
- * replaced by `<hex>`. Best effort: other free text is kept, so the redaction hook still runs on the result.
+ * First line of an error message with URLs cut to their origin (an RPC URL can carry an API key in its path or
+ * query), addresses per address mode and longer hex data (such as calldata) replaced by `<hex>`. Best effort: other
+ * free text is kept, so the redaction hook still runs on the result.
  */
 export function sanitizeErrorMessage(message: string, formatAddress: AddressFormatter): string {
-  const firstLine = message.split('\n', 1)[0]?.trim() ?? '';
+  const firstLine = (message.split('\n', 1)[0]?.trim() ?? '').replace(URL_IN_TEXT, (url) =>
+    hidesUserInfo(url) ? '<url>' : (originOf(url) ?? '<url>'),
+  );
   const sanitized = formatAddressesIn(firstLine, formatAddress).replace(HEX, (hex) =>
     hex.length > MAX_HEX_LENGTH ? '<hex>' : hex,
   );
