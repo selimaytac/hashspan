@@ -4,14 +4,11 @@ import {
   context,
   diag,
   type Link,
-  type Span,
   SpanKind,
-  SpanStatusCode,
   type TimeInput,
   type Tracer,
   trace,
 } from '@opentelemetry/api';
-import { agentAttributes } from './agent.js';
 import {
   ATTR_BLOCKCHAIN_BLOCK_NUMBER,
   ATTR_BLOCKCHAIN_CALL_BATCH_ATOMIC,
@@ -21,11 +18,9 @@ import {
   ATTR_BLOCKCHAIN_CALL_BATCH_STATUS,
   ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE,
   ATTR_BLOCKCHAIN_CALL_BATCH_TRANSACTION_HASHES,
-  ATTR_BLOCKCHAIN_CHAIN_ID,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR,
-  ATTR_BLOCKCHAIN_OPERATION_NAME,
   ATTR_BLOCKCHAIN_OPERATION_SUBJECT,
   ATTR_BLOCKCHAIN_PAYMENT_AMOUNT,
   ATTR_BLOCKCHAIN_PAYMENT_ASSET,
@@ -35,7 +30,6 @@ import {
   ATTR_BLOCKCHAIN_PAYMENT_SETTLED_AMOUNT,
   ATTR_BLOCKCHAIN_PAYMENT_STATUS,
   ATTR_BLOCKCHAIN_PAYMENT_VERIFIED,
-  ATTR_BLOCKCHAIN_SYSTEM,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_ADDRESSES,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_CHAIN_IDS,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_COUNT,
@@ -75,7 +69,6 @@ import {
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
-  BLOCKCHAIN_SYSTEM_VALUE_EVM,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPLACED,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPRICED,
@@ -95,9 +88,28 @@ import {
   resolveAddressFormatter,
   resolveErrorMessageMode,
   resolvePaymentResourceMode,
-  sanitizeErrorMessage,
   serializeFunctionArguments,
 } from './privacy.js';
+import { joinConfirm } from './tracker/confirm-claim.js';
+import {
+  errorType,
+  type HandleOptions,
+  handleOptions,
+  identifier,
+  OBSERVER_TIMEOUT,
+  reportedErrorType,
+  safely,
+} from './tracker/handles.js';
+import { createSpanRecording, metricAttributes, secondsSince } from './tracker/spans.js';
+import {
+  ADDRESS,
+  amount,
+  ownValue,
+  quantity,
+  smallQuantity,
+  TX_HASH,
+  toInt,
+} from './tracker/values.js';
 import type {
   CallBatchConfirmHandle,
   CallBatchConfirmInput,
@@ -129,50 +141,8 @@ const INSTRUMENTATION_NAME = '@hashspan/core';
 const DEFAULT_LINK_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_TRACKED = 10_000;
 
-/** OpenTelemetry exception event and attributes. */
-const EXCEPTION_EVENT = 'exception';
-const ATTR_EXCEPTION_TYPE = 'exception.type';
-const ATTR_EXCEPTION_MESSAGE = 'exception.message';
-const ATTR_EXCEPTION_STACKTRACE = 'exception.stacktrace';
-
-/** Attributes kept when the redaction hook fails (fail closed). */
-const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
-  ATTR_BLOCKCHAIN_SYSTEM,
-  ATTR_BLOCKCHAIN_CHAIN_ID,
-  ATTR_BLOCKCHAIN_OPERATION_NAME,
-  ATTR_BLOCKCHAIN_TX_HASH,
-  ATTR_BLOCKCHAIN_TX_STATUS,
-  ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH,
-  ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON,
-  ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL,
-  ATTR_BLOCKCHAIN_PAYMENT_STATUS,
-  ATTR_BLOCKCHAIN_PAYMENT_VERIFIED,
-  ATTR_BLOCKCHAIN_USER_OPERATION_HASH,
-  ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS,
-  ATTR_BLOCKCHAIN_CALL_BATCH_ID,
-  ATTR_BLOCKCHAIN_CALL_BATCH_STATUS,
-  ATTR_ERROR_TYPE,
-  ATTR_EXCEPTION_TYPE,
-]);
-
-const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
-const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const ZERO_ADDRESS = /^0x0{40}$/;
 
-/** The value of an own data property of `target`; undefined for an accessor, so no getter of the caller runs. */
-function ownValue(target: unknown, key: string): unknown {
-  if (typeof target !== 'object' || target === null) return undefined;
-  const descriptor = Object.getOwnPropertyDescriptor(target, key);
-  return descriptor !== undefined && 'value' in descriptor ? descriptor.value : undefined;
-}
-/** A non-negative integer that fits in 256 bits. */
-const AMOUNT = /^(0|[1-9][0-9]{0,77})$/;
-/** A `0x` hex quantity of at most 256 bits, as JSON-RPC encodes integers. */
-const HEX_QUANTITY = /^0x[0-9a-fA-F]{1,64}$/;
-const MAX_UINT256 = 2n ** 256n - 1n;
-const MAX_SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
-/** `error.type` of a wait that gave up: a confirmation or a payment whose outcome was never learned. */
-const OBSERVER_TIMEOUT = 'timeout';
 /** `error.type` of a call batch that failed without being included (EIP-5792 status 400). */
 const CALL_BATCH_FAILED = 'failed';
 /** A call batch id: `0x`-prefixed hex of at most 8194 characters, the bound EIP-5792 sets. */
@@ -181,20 +151,109 @@ const CALL_BATCH_ID = /^0x[0-9a-fA-F]{1,8192}$/;
 const MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH = 256;
 /** Most transaction hashes recorded for one call batch. */
 const MAX_CALL_BATCH_TRANSACTION_HASHES = 64;
+
 /** Most EIP-7702 authorizations listed on a send span; the count covers all of them. */
 const MAX_AUTHORIZATIONS = 64;
+
 /** EIP-5792 status code of a batch that is still pending. */
 const CALL_BATCH_PENDING = 100;
+
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED,
 ]);
+
 const REPLACEMENT_REASONS: ReadonlySet<string> = new Set([
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPRICED,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPLACED,
 ]);
+
+/** Records nothing; its context is the parent, so a call run in it still nests under the caller. */
+const noopSend = (parent: Context): SendHandle => ({
+  context: parent,
+  end: () => {},
+  fail: () => {},
+});
+
+const noopUserOperationSend = (parent: Context): UserOperationSendHandle => ({
+  context: parent,
+  end: () => {},
+  fail: () => {},
+});
+
+const NOOP_PAYMENT: PaymentHandle = {
+  end: () => {},
+  fail: () => {},
+  timeout: () => {},
+  link: () => {},
+};
+
+const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
+
+const NOOP_USER_OPERATION_CONFIRM: UserOperationConfirmHandle = {
+  end: () => {},
+  timeout: () => {},
+  fail: () => {},
+};
+
+const noopCallBatchSend = (parent: Context): CallBatchSendHandle => ({
+  context: parent,
+  end: () => {},
+  fail: () => {},
+});
+const NOOP_CALL_BATCH_CONFIRM: CallBatchConfirmHandle = {
+  end: () => {},
+  timeout: () => {},
+  fail: () => {},
+};
+
+/** The confirm span of one transaction and how to end it; shared by all its handles. */
+interface ConfirmSpan extends SharedConfirm {
+  /**
+   * What a confirm span of a replacing transaction inherits from this one
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0008-replaced-transactions.md).
+   */
+  origin: ConfirmOrigin;
+  receipt(receipt: ReceiptLike, endTime?: TimeInput): void;
+  timeout(endTime?: TimeInput): void;
+  fail(error: unknown, endTime?: TimeInput): void;
+  /** Ends as replaced by the transaction `hash`. */
+  replaced(hash: string, reason: ReplacementReason | undefined, endTime?: TimeInput): void;
+  /** Ends as a failure without any receipt data, for a receipt that cannot be attributed. */
+  unattributable(endTime?: TimeInput): void;
+}
+
+interface ConfirmOrigin {
+  parent: Context;
+  startTime: TimeInput;
+  links: Link[];
+}
+
+/** The confirm span of one user operation and how to end it; shared by all its handles. */
+interface UserOperationConfirmSpan extends SharedConfirm {
+  receipt(receipt: UserOperationReceiptLike, endTime?: TimeInput): void;
+  timeout(endTime?: TimeInput): void;
+  fail(error: unknown, options: HandleOptions): void;
+}
+
+/** The confirm span of one call batch and how to end it; shared by all its handles. */
+interface CallBatchConfirmSpan extends SharedConfirm {
+  status(status: CallBatchStatusLike, endTime?: TimeInput): void;
+  timeout(endTime?: TimeInput): void;
+  fail(error: unknown, options: HandleOptions): void;
+}
+
+/** A call batch id the tracker keys and records. */
+function isCallBatchId(id: unknown): id is string {
+  return typeof id === 'string' && CALL_BATCH_ID.test(id);
+}
+
+/** Whether `status` says the batch is still pending: its wait resolved before an outcome. */
+function isPendingCallBatch(status: CallBatchStatusLike | null | undefined): boolean {
+  return status?.statusCode === CALL_BATCH_PENDING;
+}
 
 /**
  * Records transactions, payments and user operations as spans. Obtain one from {@link createTxTracker}: it is not meant to be
@@ -253,245 +312,6 @@ export interface TxTracker {
   startCallBatchConfirm(input: CallBatchConfirmInput, parent?: Context): CallBatchConfirmHandle;
 }
 
-/** Records nothing; its context is the parent, so a call run in it still nests under the caller. */
-const noopSend = (parent: Context): SendHandle => ({
-  context: parent,
-  end: () => {},
-  fail: () => {},
-});
-const noopUserOperationSend = (parent: Context): UserOperationSendHandle => ({
-  context: parent,
-  end: () => {},
-  fail: () => {},
-});
-const NOOP_PAYMENT: PaymentHandle = {
-  end: () => {},
-  fail: () => {},
-  timeout: () => {},
-  link: () => {},
-};
-const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
-const NOOP_USER_OPERATION_CONFIRM: UserOperationConfirmHandle = {
-  end: () => {},
-  timeout: () => {},
-  fail: () => {},
-};
-const noopCallBatchSend = (parent: Context): CallBatchSendHandle => ({
-  context: parent,
-  end: () => {},
-  fail: () => {},
-});
-const NOOP_CALL_BATCH_CONFIRM: CallBatchConfirmHandle = {
-  end: () => {},
-  timeout: () => {},
-  fail: () => {},
-};
-
-/** Runs `fn`, logging instead of throwing: instrumentation must never break the caller. */
-function safely<T>(what: string, fn: () => T, fallback: T): T {
-  try {
-    return fn();
-  } catch (error) {
-    diag.error(`hashspan: failed to ${what}`, error);
-    return fallback;
-  }
-}
-
-function toInt(value: bigint | number): number {
-  if (typeof value === 'bigint') return Number(value);
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  throw new TypeError(`expected bigint or number, got ${typeof value}`);
-}
-
-function errorType(error: unknown): string {
-  return error instanceof Error && error.name ? error.name : ERROR_TYPE_VALUE_OTHER;
-}
-
-const ERROR_TYPE_OVERRIDE = /^[A-Za-z0-9_.-]{1,64}$/;
-
-/** `value` if it is a short identifier, the only kind of free text recorded from a remote party. */
-function identifier(value: unknown): string | undefined {
-  return typeof value === 'string' && ERROR_TYPE_OVERRIDE.test(value) ? value : undefined;
-}
-
-/**
- * A non-negative integer of at most 256 bits, from a bigint, a safe integer, or a decimal or `0x` hex string, as
- * bundlers return them; undefined for anything else.
- */
-function quantity(value: unknown): bigint | undefined {
-  let parsed: bigint | undefined;
-  if (typeof value === 'bigint') parsed = value;
-  else if (typeof value === 'number' && Number.isSafeInteger(value)) parsed = BigInt(value);
-  else if (typeof value === 'string' && (AMOUNT.test(value) || HEX_QUANTITY.test(value))) {
-    parsed = BigInt(value);
-  }
-  return parsed !== undefined && parsed >= 0n && parsed <= MAX_UINT256 ? parsed : undefined;
-}
-
-/** A quantity as a number, or undefined when it is none or too large to be one exactly. */
-function smallQuantity(value: unknown): number | undefined {
-  const parsed = quantity(value);
-  return parsed !== undefined && parsed <= MAX_SAFE_INTEGER ? Number(parsed) : undefined;
-}
-
-/** A decimal amount, or undefined when `value` is not a non-negative integer. */
-function amount(value: unknown): string | undefined {
-  const text = typeof value === 'bigint' ? value.toString() : value;
-  return typeof text === 'string' && AMOUNT.test(text) ? text : undefined;
-}
-
-/** A finite number, an `HrTime` pair or a `Date`: what the deprecated positional `endTime` argument takes. */
-function isTimeInput(value: unknown): value is TimeInput {
-  if (typeof value === 'number') return Number.isFinite(value);
-  if (Array.isArray(value)) {
-    return value.length === 2 && typeof value[0] === 'number' && typeof value[1] === 'number';
-  }
-  return Object.prototype.toString.call(value) === '[object Date]';
-}
-
-/** The options a handle method was called with, read once. */
-interface HandleOptions {
-  endTime?: TimeInput | undefined;
-  errorType?: unknown;
-}
-
-/**
- * Reads the options of a handle method called as `(what, options?)` or, deprecated, as `(what, endTime?, options?)`
- * (ADR 0014). A positional end time wins over `options.endTime`. Never throws: an argument of neither form, or an
- * end time that is not one, is ignored.
- */
-function handleOptions(second: unknown, third?: unknown): HandleOptions {
-  try {
-    const positional = isTimeInput(second) ? second : undefined;
-    const given = positional !== undefined || second === undefined ? third : (second as unknown);
-    if (
-      given !== undefined &&
-      (typeof given !== 'object' || given === null || isTimeInput(given))
-    ) {
-      diag.debug('hashspan: ignoring a handle argument that is neither options nor an end time');
-      return positional !== undefined ? { endTime: positional } : {};
-    }
-    const options = given as FailOptions | undefined;
-    const endTime: unknown = positional ?? options?.endTime;
-    if (endTime !== undefined && !isTimeInput(endTime)) {
-      diag.debug('hashspan: ignoring an end time that is not a TimeInput');
-    }
-    return {
-      endTime: isTimeInput(endTime) ? endTime : undefined,
-      errorType: options?.errorType,
-    };
-  } catch (error) {
-    diag.debug(`hashspan: could not read handle options (${errorType(error)})`);
-    return {};
-  }
-}
-
-/** The `error.type` for a failure: an adapter's override when it is a short identifier, else the class name. */
-function reportedErrorType(error: unknown, options: HandleOptions | undefined): string {
-  const override = options?.errorType;
-  if (override === undefined) return errorType(error);
-  if (typeof override === 'string' && ERROR_TYPE_OVERRIDE.test(override)) return override;
-  diag.debug('hashspan: ignoring an error type that is not a short identifier');
-  return errorType(error);
-}
-
-/** The confirm span of one transaction and how to end it; shared by all its handles. */
-interface ConfirmSpan extends SharedConfirm {
-  /**
-   * What a confirm span of a replacing transaction inherits from this one
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0008-replaced-transactions.md).
-   */
-  origin: ConfirmOrigin;
-  receipt(receipt: ReceiptLike, endTime?: TimeInput): void;
-  timeout(endTime?: TimeInput): void;
-  fail(error: unknown, endTime?: TimeInput): void;
-  /** Ends as replaced by the transaction `hash`. */
-  replaced(hash: string, reason: ReplacementReason | undefined, endTime?: TimeInput): void;
-  /** Ends as a failure without any receipt data, for a receipt that cannot be attributed. */
-  unattributable(endTime?: TimeInput): void;
-}
-
-interface ConfirmOrigin {
-  parent: Context;
-  startTime: TimeInput;
-  links: Link[];
-}
-
-/** The confirm span of one user operation and how to end it; shared by all its handles. */
-interface UserOperationConfirmSpan extends SharedConfirm {
-  receipt(receipt: UserOperationReceiptLike, endTime?: TimeInput): void;
-  timeout(endTime?: TimeInput): void;
-  fail(error: unknown, options: HandleOptions): void;
-}
-
-/** The confirm span of one call batch and how to end it; shared by all its handles. */
-interface CallBatchConfirmSpan extends SharedConfirm {
-  status(status: CallBatchStatusLike, endTime?: TimeInput): void;
-  timeout(endTime?: TimeInput): void;
-  fail(error: unknown, options: HandleOptions): void;
-}
-
-/** A call batch id the tracker keys and records. */
-function isCallBatchId(id: unknown): id is string {
-  return typeof id === 'string' && CALL_BATCH_ID.test(id);
-}
-
-/** Whether `status` says the batch is still pending: its wait resolved before an outcome. */
-function isPendingCallBatch(status: CallBatchStatusLike | null | undefined): boolean {
-  return status?.statusCode === CALL_BATCH_PENDING;
-}
-
-/** One handle's claim on a shared confirm span (ADR 0007). */
-interface ConfirmClaim<S extends SharedConfirm> {
-  shared: S;
-  /** Claims the span for a receipt: true, and the span counts as ended, unless this handle or the span ended. */
-  receive(): boolean;
-  /** Withdraws this handle, calling `end` if it was the last one still waiting. */
-  withdraw(end: () => void): void;
-}
-
-/**
- * Joins the confirm span for `hash` in `registry`, opening it with `open` for the first handle; undefined when the
- * key recently got a receipt. A receipt from any handle ends the span; a timeout or failure only ends it when it is the
- * last handle still waiting.
- */
-function joinConfirm<S extends SharedConfirm>(
-  registry: ConfirmRegistry<S>,
-  chainId: number,
-  hash: string,
-  open: () => S,
-): ConfirmClaim<S> | undefined {
-  const current = registry.get(chainId, hash);
-  if (current === 'settled') return undefined;
-  let confirm = current;
-  if (!confirm) {
-    confirm = open();
-    registry.start(chainId, hash, confirm);
-  }
-  const shared = confirm;
-  shared.active += 1;
-  let done = false;
-  return {
-    shared,
-    receive: () => {
-      if (done || shared.ended) return false;
-      done = true;
-      shared.active -= 1;
-      shared.ended = true;
-      return true;
-    },
-    withdraw: (end) => {
-      if (done || shared.ended) return;
-      done = true;
-      shared.active -= 1;
-      if (shared.active > 0) return;
-      shared.ended = true;
-      registry.release(chainId, hash, shared);
-      end();
-    },
-  };
-}
-
 /**
  * Creates a tracker that records transactions as `send` and `confirm` spans, and payments as `payment` spans, with
  * `@opentelemetry/api` (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/semconv.md). It makes
@@ -541,12 +361,6 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
   });
   const txMetrics = createTxMetrics(options.meterProvider, INSTRUMENTATION_NAME, VERSION);
-  /** Attributes of a metric: low-cardinality only, never an address, hash or agent identity. */
-  const metricAttributes = (chainId: number, extra: Attributes = {}): Attributes => ({
-    [ATTR_BLOCKCHAIN_SYSTEM]: BLOCKCHAIN_SYSTEM_VALUE_EVM,
-    [ATTR_BLOCKCHAIN_CHAIN_ID]: chainId,
-    ...extra,
-  });
   /** Metric attributes of a user operation sample: as for transactions, plus what the sample is about. */
   const userOperationMetricAttributes = (chainId: number, extra: Attributes = {}): Attributes =>
     metricAttributes(chainId, {
@@ -559,8 +373,6 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
       [ATTR_BLOCKCHAIN_OPERATION_SUBJECT]: BLOCKCHAIN_OPERATION_SUBJECT_VALUE_CALL_BATCH,
       ...extra,
     });
-  const secondsSince = (startMs: number, endTime: TimeInput | undefined): number =>
-    (toEpochMs(endTime) - startMs) / 1000;
   let tracer: Tracer | undefined;
   const getTracer = (): Tracer => {
     tracer ??= (options.tracerProvider ?? trace.getTracerProvider()).getTracer(
@@ -569,93 +381,8 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     );
     return tracer;
   };
-
-  const nonSensitive = (attributes: Attributes): Attributes =>
-    Object.fromEntries(Object.entries(attributes).filter(([key]) => NON_SENSITIVE_KEYS.has(key)));
-
-  const redact = (attributes: Attributes): Attributes => {
-    if (!options.redact) return attributes;
-    let redacted: unknown;
-    try {
-      redacted = options.redact({ ...attributes });
-    } catch (error) {
-      diag.error('hashspan: redaction hook failed; recording non-sensitive attributes only', error);
-      return nonSensitive(attributes);
-    }
-    if (typeof redacted !== 'object' || redacted === null || Array.isArray(redacted)) {
-      diag.error(
-        'hashspan: redaction hook must return an attributes object; recording non-sensitive attributes only',
-      );
-      return nonSensitive(attributes);
-    }
-    return redacted as Attributes;
-  };
-
-  /**
-   * Exception event attributes for `error`, per the error message mode. The error object itself is never handed to
-   * the SDK: its message and stack can carry addresses and calldata
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0006-error-privacy.md).
-   */
-  const exceptionAttributes = (type: string, error: unknown): Attributes => {
-    const attributes: Attributes = { [ATTR_EXCEPTION_TYPE]: type };
-    if (errorMessages === 'off') return attributes;
-    const message = error instanceof Error ? error.message : String(error);
-    if (errorMessages === 'sanitized') {
-      const sanitized = sanitizeErrorMessage(message, formatAddress);
-      if (sanitized) attributes[ATTR_EXCEPTION_MESSAGE] = sanitized;
-      return attributes;
-    }
-    attributes[ATTR_EXCEPTION_MESSAGE] = message;
-    if (error instanceof Error && error.stack) attributes[ATTR_EXCEPTION_STACKTRACE] = error.stack;
-    return attributes;
-  };
-
-  /**
-   * Error names are free text too: they follow the address mode and pass through the redaction hook.
-   * `exceptionName` is the class name for `exception.type` when `errorName` is an adapter's error type.
-   */
-  const markError = (
-    span: Span,
-    errorName: string,
-    error?: unknown,
-    exceptionName: string = errorName,
-  ): string => {
-    const type = formatAddressesIn(errorName, formatAddress);
-    let message: string | undefined;
-    if (error !== undefined) {
-      const exception = redact(
-        exceptionAttributes(formatAddressesIn(exceptionName, formatAddress), error),
-      );
-      span.addEvent(EXCEPTION_EVENT, exception);
-      const recorded = exception[ATTR_EXCEPTION_MESSAGE];
-      if (typeof recorded === 'string') message = recorded;
-    }
-    span.setAttributes(redact({ [ATTR_ERROR_TYPE]: type }));
-    span.setStatus({ code: SpanStatusCode.ERROR, ...(message !== undefined ? { message } : {}) });
-    return type;
-  };
-
-  /** Ends a span exactly once; the span is always ended even if recording attributes fails. */
-  const finisher = (span: Span) => {
-    let ended = false;
-    return (what: string, record: () => void, endTime?: TimeInput): void => {
-      if (ended) return;
-      ended = true;
-      try {
-        record();
-      } catch (error) {
-        diag.error(`hashspan: failed to ${what}`, error);
-      } finally {
-        safely('end span', () => span.end(endTime), undefined);
-      }
-    };
-  };
-
-  const setAddress = (attributes: Attributes, key: string, address: string | undefined): void => {
-    if (address === undefined) return;
-    const formatted = formatAddress(address);
-    if (formatted !== undefined) attributes[key] = formatted;
-  };
+  const recording = createSpanRecording({ options, formatAddress, errorMessages });
+  const { redact, markError, finisher, setAddress, setRemoteAddress, baseAttributes } = recording;
 
   /**
    * Records an EIP-7702 authorization list: its length, and for each well-formed entry (an address and a non-negative
@@ -679,18 +406,6 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     if (addresses.length > 0) attributes[ATTR_BLOCKCHAIN_TX_AUTHORIZATION_ADDRESSES] = addresses;
     if (chainIds.length > 0) attributes[ATTR_BLOCKCHAIN_TX_AUTHORIZATION_CHAIN_IDS] = chainIds;
   };
-
-  /** Records `address` only if it is one: payment and user operation addresses come from remote parties. */
-  const setRemoteAddress = (attributes: Attributes, key: string, address: unknown): void => {
-    if (typeof address === 'string' && ADDRESS.test(address)) setAddress(attributes, key, address);
-  };
-
-  const baseAttributes = (chainId: number, operation: string, ctx: Context): Attributes => ({
-    [ATTR_BLOCKCHAIN_SYSTEM]: BLOCKCHAIN_SYSTEM_VALUE_EVM,
-    [ATTR_BLOCKCHAIN_CHAIN_ID]: chainId,
-    [ATTR_BLOCKCHAIN_OPERATION_NAME]: operation,
-    ...agentAttributes(ctx, options.agent, options.agentFromBaggage !== false),
-  });
 
   const startSend = (input: SendInput, parentCtx?: Context): SendHandle => {
     const parent = parentCtx ?? context.active();
