@@ -8,6 +8,7 @@ coverage/
 # local / private
 CLAUDE.local.md
 .claude/settings.local.json
+.claude/worktrees/
 .beads/
 .env*
 !.env.example
