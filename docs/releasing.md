@@ -25,8 +25,9 @@ keeps its own, so versions can differ between packages.
    installs every published version into an empty project and imports it; if that fails, the job fails.
 5. Check the result: `npm view @hashspan/core` shows the version, and the npm page shows the provenance badge.
    After the run, the [SBOM workflow](../.github/workflows/sbom.yml) attaches `sbom.cdx.json`, a CycloneDX SBOM of
-   the lockfile, to each new GitHub release. To attach it to an earlier release, run that workflow by hand with one
-   of its tags.
+   the root workspace's lockfile, to each new GitHub release. The test-only trees of `integrations/` and
+   `scripts/bundler/`, which no package ships or builds with, are left out. To attach it to an earlier release, run
+   that workflow by hand with one of its tags.
 
 To try the publish script without npm, run it against a local registry such as Verdaccio, in a clone with the
 versions raised and `publishConfig.provenance` set to `false` (provenance needs CI): set `npm_config_registry` and a
