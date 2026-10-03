@@ -3,11 +3,14 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
+    # Waits a week before proposing a new release, so a compromised one is likely pulled first.
+    cooldown: { default-days: 7 }
   - package-ecosystem: npm
     directory: /
     schedule: { interval: monthly }
-    # Matches minimumReleaseAge in pnpm-workspace.yaml, which rejects versions younger than a day.
-    cooldown: { default-days: 1 }
+    # At least minimumReleaseAge in pnpm-workspace.yaml (a day), which rejects younger versions; a week, so a
+    # compromised release is likely pulled before it is proposed.
+    cooldown: { default-days: 7 }
     # Raise a range only when a new version falls outside it: a peer dependency range is a published contract, and
     # raising its floor narrows what users may install.
     versioning-strategy: increase-if-necessary
