@@ -224,8 +224,8 @@ Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-
 The address mode also applies to addresses inside `blockchain.tx.revert.reason`,
 `blockchain.contract.function.arguments`, `x402.resource`, `error.type` and sanitized error messages (`<address>` in `off` mode).
 In `hashed` and `off` mode, hex values longer than an address are recorded as `<hex>` in those attributes, because a
-padded `bytes32` or ABI-encoded `bytes` value can embed an address. When a value is cut to its length bound, a hex
-value that the cut would split is dropped whole, so no part of an address is left. The redaction hook also runs on `error.type` and on `exception` event
+padded `bytes32` or ABI-encoded `bytes` value can embed an address. What a value longer than its bound becomes is
+listed under [Bounds](#bounds). The redaction hook also runs on `error.type` and on `exception` event
 attributes; if it throws, only `exception.type` is kept on the event.
 
 Payment values usually come from a remote party (the paid server or the settling party): addresses that are not
@@ -240,6 +240,25 @@ The EIP-7702 attributes describe what the sent transaction asks for, not what to
 authorization whose signature, nonce or chain id does not hold, without failing the transaction. The account that
 signed each authorization (its authority) is not recorded; it is often the sender, but not in a sponsored
 transaction. The signatures and the authorities' nonces are never recorded.
+
+## Bounds
+
+Values come from parties hashspan does not control, and the OpenTelemetry SDK does not bound attribute values by
+default, so each value read from them has a bound ([ADR 0025](adr/0025-untrusted-input.md)); the hostile-input tests
+of each package check the bounds against the values that split at them.
+
+| Value | Bound | A longer value becomes |
+|---|---|---|
+| `blockchain.tx.revert.reason`, as the viem adapter decodes it | 1024 characters | its first 1024 characters, followed by `...`; a hex value the cut would split is dropped whole |
+| `exception.message` in `sanitized` mode | 256 characters of the first line | its first 256 characters, followed by `...` |
+| `blockchain.contract.function.arguments` | 4096 characters, nesting depth 32 | the JSON up to the value that crosses 4096 characters, cut there and followed by `...`; arguments nested deeper are not recorded |
+| `x402.resource` | 512 characters | its first 512 characters, followed by `...`; a hex value the cut would split is dropped whole |
+| `blockchain.call_batch.id` | 256 characters | its first 256 characters; an id that is not hex or longer than 8194 characters is not recorded |
+| `blockchain.tx.authorization.addresses` and `.chain_ids` | 64 entries | the first 64 well-formed entries; `blockchain.tx.authorization.count` keeps the full length, and no further entry is read |
+| `blockchain.call_batch.transaction_hashes` | 64 hashes | the first 64 distinct well-formed hashes |
+| x402 payments waiting for their response | 1000 per `withHashspan()` | the oldest payment span ends as `timeout` |
+| Background confirmations polling at once | 256 per `withHashspan()` (`maxBackgroundConfirmations`) | the transaction gets no background confirm span; a `diag` warning is logged |
+| Sent transactions, user operations and call batches kept for links | 10 000 each, for 10 minutes (`maxTrackedTransactions`, `linkTtlMs`) | the oldest is forgotten: its confirm span has no link |
 
 ## Change policy
 
