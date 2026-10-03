@@ -7,7 +7,7 @@ them.
 
 | ADR | Status | Decision |
 |---|---|---|
-| [0001. Hash-centric core with thin capture adapters](0001-hash-centric-core.md) | accepted | The core turns a transaction hash plus metadata into spans and makes no network calls; adapters observe the send path and pass it receipts |
+| [0001. Hash-centric core with thin capture adapters](0001-hash-centric-core.md) | accepted | The core turns a transaction hash plus metadata into spans and makes no network calls; adapters observe the send path and pass it receipts; the viem adapter is the EVM confirmation layer the other adapters build on (amended) |
 | [0002. Separate `send` and `confirm` spans connected by a span link](0002-send-confirm-spans.md) | accepted | `send` ends when the hash is returned, `confirm` covers receipt retrieval under whoever waits, and a span link joins them |
 | [0003. `blockchain.*` attribute namespace, development stability, versioned schema](0003-attribute-namespace.md) | accepted | Attributes live under `blockchain.*`, reuse `rpc.*`, `gen_ai.agent.*` and `error.type` where they apply, and are all `development` |
 | [0004. Privacy defaults](0004-privacy-defaults.md) | accepted | Addresses are `raw` by default and can be `hashed` or `off`; call arguments are opt-in; a redaction hook runs last |
