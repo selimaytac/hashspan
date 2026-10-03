@@ -9,8 +9,8 @@ OTEL_EXPORTER_OTLP_HEADERS="key1=value1,key2=value2"     # authentication, if th
 ```
 
 The example agent's setup ([`examples/ai-sdk-agent/src/telemetry.ts`](../examples/ai-sdk-agent/src/telemetry.ts))
-uses `@opentelemetry/exporter-trace-otlp-proto`, which reads both. Each setup below was run once with `make demo`
-against hashspan 0.5.0 on 2026-10-02; the versions tested are listed with each backend. Keep keys out of shell
+uses `@opentelemetry/exporter-trace-otlp-proto`, which reads both. Each setup below was run once with `make demo`;
+the hashspan and backend versions tested are listed with each backend. Keep keys out of shell
 history and out of the repository, for example with `read -rs KEY` before running the command.
 
 ## Jaeger
@@ -21,7 +21,7 @@ The [local lab](../README.md#local-lab) starts Jaeger on `http://localhost:4318`
 
 ## Grafana Tempo
 
-Tested with Tempo 3.0.0 and Grafana 13.2.3, both in Docker.
+Tested with Tempo 3.0.0 and Grafana 13.2.3, both in Docker, against hashspan 0.5.0 on 2026-10-02.
 
 ```sh
 OTEL_EXPORTER_OTLP_ENDPOINT=http://your-tempo:4318
@@ -55,7 +55,8 @@ OpenTelemetry settings; it was not part of this test.
 
 ## Langfuse
 
-Tested with Langfuse 4.49.0, self-hosted with its Docker Compose file. Langfuse Cloud uses the same API.
+Tested with Langfuse 4.49.0, self-hosted with its Docker Compose file, against hashspan 0.9.0 on 2026-10-03.
+Langfuse Cloud uses the same API.
 
 ```sh
 OTEL_EXPORTER_OTLP_ENDPOINT=https://cloud.langfuse.com/api/public/otel   # US: https://us.cloud.langfuse.com/api/public/otel
@@ -74,9 +75,29 @@ Langfuse stores an attribute string that looks like a number as a number when it
 A wei value such as `blockchain.tx.fee` can therefore come back as a number on one span (`40616290500000`) and as a
 string on another (`"1234567890123456789"`); take that into account when filtering or exporting.
 
+### With `LangfuseSpanProcessor`
+
+Langfuse's own JavaScript setup, `LangfuseSpanProcessor` from `@langfuse/otel` (as in Langfuse's AI SDK guide),
+exports only the spans its default filter `isDefaultExportSpan` keeps: Langfuse's own spans, spans with a `gen_ai.*`
+attribute and spans of known LLM instrumentations. It drops the others without an error (it logs them at debug level
+only). hashspan's `send`, `confirm`, `payment`, user operation and call batch spans carry `gen_ai.agent.*` attributes
+only when an agent identity is set, and its JSON-RPC spans never do. Keep every hashspan span by adding its
+instrumentation scopes (`@hashspan/core` and `@hashspan/viem`) to the filter:
+
+```ts
+const processor = new LangfuseSpanProcessor({
+  shouldExportSpan: ({ otelSpan }) =>
+    isDefaultExportSpan(otelSpan) || otelSpan.instrumentationScope.name.startsWith('@hashspan/'),
+});
+```
+
+Setting an agent identity (the `agent` option of `withHashspan()` or `createTxTracker()`, or the `gen_ai.agent.*`
+Baggage entries) also keeps the transaction and payment spans, but not the JSON-RPC spans. Tested with
+`@langfuse/otel` 5.11.1.
+
 ## Honeycomb
 
-Tested with Honeycomb's free plan, US region.
+Tested with Honeycomb's free plan, US region, against hashspan 0.5.0 on 2026-10-02.
 
 ```sh
 OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io   # EU: https://api.eu1.honeycomb.io
