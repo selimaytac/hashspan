@@ -3,7 +3,6 @@ import {
   type Context,
   context,
   diag,
-  type Link,
   SpanKind,
   type TimeInput,
   type Tracer,
@@ -18,9 +17,6 @@ import {
   ATTR_BLOCKCHAIN_CALL_BATCH_STATUS,
   ATTR_BLOCKCHAIN_CALL_BATCH_STATUS_CODE,
   ATTR_BLOCKCHAIN_CALL_BATCH_TRANSACTION_HASHES,
-  ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS,
-  ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME,
-  ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR,
   ATTR_BLOCKCHAIN_OPERATION_SUBJECT,
   ATTR_BLOCKCHAIN_PAYMENT_AMOUNT,
   ATTR_BLOCKCHAIN_PAYMENT_ASSET,
@@ -30,22 +26,8 @@ import {
   ATTR_BLOCKCHAIN_PAYMENT_SETTLED_AMOUNT,
   ATTR_BLOCKCHAIN_PAYMENT_STATUS,
   ATTR_BLOCKCHAIN_PAYMENT_VERIFIED,
-  ATTR_BLOCKCHAIN_TX_AUTHORIZATION_ADDRESSES,
-  ATTR_BLOCKCHAIN_TX_AUTHORIZATION_CHAIN_IDS,
-  ATTR_BLOCKCHAIN_TX_AUTHORIZATION_COUNT,
-  ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE,
-  ATTR_BLOCKCHAIN_TX_FEE,
-  ATTR_BLOCKCHAIN_TX_FROM,
-  ATTR_BLOCKCHAIN_TX_GAS_USED,
   ATTR_BLOCKCHAIN_TX_HASH,
-  ATTR_BLOCKCHAIN_TX_L1_FEE,
-  ATTR_BLOCKCHAIN_TX_NONCE,
-  ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH,
-  ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON,
   ATTR_BLOCKCHAIN_TX_REVERT_REASON,
-  ATTR_BLOCKCHAIN_TX_STATUS,
-  ATTR_BLOCKCHAIN_TX_TO,
-  ATTR_BLOCKCHAIN_TX_VALUE,
   ATTR_BLOCKCHAIN_USER_OPERATION_CALL_COUNT,
   ATTR_BLOCKCHAIN_USER_OPERATION_ENTRY_POINT,
   ATTR_BLOCKCHAIN_USER_OPERATION_GAS_COST,
@@ -69,12 +51,7 @@ import {
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
-  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
-  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPLACED,
-  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPRICED,
-  BLOCKCHAIN_TX_STATUS_VALUE_REPLACED,
   BLOCKCHAIN_TX_STATUS_VALUE_REVERTED,
-  BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS,
   ERROR_TYPE_VALUE_OTHER,
 } from './attributes.js';
 import { ConfirmRegistry, type SharedConfirm } from './confirm-registry.js';
@@ -88,7 +65,6 @@ import {
   resolveAddressFormatter,
   resolveErrorMessageMode,
   resolvePaymentResourceMode,
-  serializeFunctionArguments,
 } from './privacy.js';
 import { joinConfirm } from './tracker/confirm-claim.js';
 import {
@@ -102,14 +78,12 @@ import {
 } from './tracker/handles.js';
 import { createSpanRecording, metricAttributes, secondsSince } from './tracker/spans.js';
 import {
-  ADDRESS,
-  amount,
-  ownValue,
-  quantity,
-  smallQuantity,
-  TX_HASH,
-  toInt,
-} from './tracker/values.js';
+  type ConfirmSpan,
+  createTransactionSpans,
+  NOOP_CONFIRM,
+  noopSend,
+} from './tracker/transaction.js';
+import { ADDRESS, amount, quantity, smallQuantity, TX_HASH } from './tracker/values.js';
 import type {
   CallBatchConfirmHandle,
   CallBatchConfirmInput,
@@ -118,16 +92,11 @@ import type {
   CallBatchStatusLike,
   ConfirmHandle,
   ConfirmInput,
-  EndOptions,
-  FailOptions,
   PaymentHandle,
   PaymentInput,
   PaymentSettlement,
-  ReceiptLike,
-  ReplacementReason,
   SendHandle,
   SendInput,
-  SendResult,
   TxTrackerOptions,
   UserOperationConfirmHandle,
   UserOperationConfirmInput,
@@ -152,9 +121,6 @@ const MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH = 256;
 /** Most transaction hashes recorded for one call batch. */
 const MAX_CALL_BATCH_TRANSACTION_HASHES = 64;
 
-/** Most EIP-7702 authorizations listed on a send span; the count covers all of them. */
-const MAX_AUTHORIZATIONS = 64;
-
 /** EIP-5792 status code of a batch that is still pending. */
 const CALL_BATCH_PENDING = 100;
 
@@ -163,19 +129,6 @@ const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED,
 ]);
-
-const REPLACEMENT_REASONS: ReadonlySet<string> = new Set([
-  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPRICED,
-  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
-  BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPLACED,
-]);
-
-/** Records nothing; its context is the parent, so a call run in it still nests under the caller. */
-const noopSend = (parent: Context): SendHandle => ({
-  context: parent,
-  end: () => {},
-  fail: () => {},
-});
 
 const noopUserOperationSend = (parent: Context): UserOperationSendHandle => ({
   context: parent,
@@ -189,8 +142,6 @@ const NOOP_PAYMENT: PaymentHandle = {
   timeout: () => {},
   link: () => {},
 };
-
-const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
 
 const NOOP_USER_OPERATION_CONFIRM: UserOperationConfirmHandle = {
   end: () => {},
@@ -208,28 +159,6 @@ const NOOP_CALL_BATCH_CONFIRM: CallBatchConfirmHandle = {
   timeout: () => {},
   fail: () => {},
 };
-
-/** The confirm span of one transaction and how to end it; shared by all its handles. */
-interface ConfirmSpan extends SharedConfirm {
-  /**
-   * What a confirm span of a replacing transaction inherits from this one
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0008-replaced-transactions.md).
-   */
-  origin: ConfirmOrigin;
-  receipt(receipt: ReceiptLike, endTime?: TimeInput): void;
-  timeout(endTime?: TimeInput): void;
-  fail(error: unknown, endTime?: TimeInput): void;
-  /** Ends as replaced by the transaction `hash`. */
-  replaced(hash: string, reason: ReplacementReason | undefined, endTime?: TimeInput): void;
-  /** Ends as a failure without any receipt data, for a receipt that cannot be attributed. */
-  unattributable(endTime?: TimeInput): void;
-}
-
-interface ConfirmOrigin {
-  parent: Context;
-  startTime: TimeInput;
-  links: Link[];
-}
 
 /** The confirm span of one user operation and how to end it; shared by all its handles. */
 interface UserOperationConfirmSpan extends SharedConfirm {
@@ -382,338 +311,16 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     return tracer;
   };
   const recording = createSpanRecording({ options, formatAddress, errorMessages });
-  const { redact, markError, finisher, setAddress, setRemoteAddress, baseAttributes } = recording;
-
-  /**
-   * Records an EIP-7702 authorization list: its length, and for each well-formed entry (an address and a non-negative
-   * integer chain id, read from own data properties only) its address per the address mode and its chain id, at most
-   * {@link MAX_AUTHORIZATIONS}. The two lists stay aligned: an entry is listed in both or in neither.
-   */
-  const setAuthorizations = (attributes: Attributes, list: unknown): void => {
-    if (!Array.isArray(list) || list.length === 0) return;
-    attributes[ATTR_BLOCKCHAIN_TX_AUTHORIZATION_COUNT] = list.length;
-    const addresses: string[] = [];
-    const chainIds: number[] = [];
-    for (const entry of list.slice(0, MAX_AUTHORIZATIONS)) {
-      const address = ownValue(entry, 'address');
-      const chainId = ownValue(entry, 'chainId');
-      if (typeof address !== 'string' || !ADDRESS.test(address)) continue;
-      if (typeof chainId !== 'number' || !Number.isSafeInteger(chainId) || chainId < 0) continue;
-      const formatted = formatAddress(address);
-      if (formatted !== undefined) addresses.push(formatted);
-      chainIds.push(chainId);
-    }
-    if (addresses.length > 0) attributes[ATTR_BLOCKCHAIN_TX_AUTHORIZATION_ADDRESSES] = addresses;
-    if (chainIds.length > 0) attributes[ATTR_BLOCKCHAIN_TX_AUTHORIZATION_CHAIN_IDS] = chainIds;
-  };
-
-  const startSend = (input: SendInput, parentCtx?: Context): SendHandle => {
-    const parent = parentCtx ?? context.active();
-    const attributes = baseAttributes(input.chainId, BLOCKCHAIN_OPERATION_NAME_VALUE_SEND, parent);
-    setAddress(attributes, ATTR_BLOCKCHAIN_TX_FROM, input.from);
-    setAddress(attributes, ATTR_BLOCKCHAIN_TX_TO, input.to);
-    if (input.value !== undefined) attributes[ATTR_BLOCKCHAIN_TX_VALUE] = input.value.toString();
-    if (input.nonce !== undefined) attributes[ATTR_BLOCKCHAIN_TX_NONCE] = input.nonce;
-    try {
-      setAuthorizations(attributes, input.authorizations);
-    } catch (error) {
-      diag.debug(`hashspan: could not record authorizations (${errorType(error)})`);
-    }
-    if (input.functionName !== undefined) {
-      attributes[ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME] = input.functionName;
-    }
-    if (input.functionSelector !== undefined) {
-      attributes[ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR] = input.functionSelector;
-    }
-    if (options.recordFunctionArguments === true && input.functionArguments !== undefined) {
-      try {
-        attributes[ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS] = serializeFunctionArguments(
-          input.functionArguments,
-          formatAddress,
-        );
-      } catch (error) {
-        diag.debug(`hashspan: could not serialize function arguments (${errorType(error)})`);
-      }
-    }
-
-    const span = getTracer().startSpan(
-      `send ${input.chainId}`,
-      {
-        kind: SpanKind.CLIENT,
-        attributes: redact(attributes),
-        ...(input.startTime !== undefined ? { startTime: input.startTime } : {}),
-      },
-      parent,
-    );
-    const finish = finisher(span);
-    const startMs = toEpochMs(input.startTime);
-    const recordSend = (endTime: TimeInput | undefined, errorType?: string): void =>
-      txMetrics.sendDuration(
-        secondsSince(startMs, endTime),
-        metricAttributes(
-          input.chainId,
-          errorType === undefined ? {} : { [ATTR_ERROR_TYPE]: errorType },
-        ),
-      );
-
-    return {
-      context: trace.setSpan(parent, span),
-      end: (result: SendResult | string, second?: EndOptions | TimeInput): void =>
-        finish(
-          'record transaction hash',
-          () => {
-            const hash: unknown = typeof result === 'string' ? result : result?.hash;
-            if (typeof hash !== 'string') {
-              diag.debug('hashspan: ending a send span without a transaction hash');
-              return;
-            }
-            links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
-            span.setAttributes(redact({ [ATTR_BLOCKCHAIN_TX_HASH]: hash }));
-            recordSend(handleOptions(second).endTime);
-          },
-          handleOptions(second).endTime,
-        ),
-      fail: (error: unknown, second?: FailOptions | TimeInput, third?: FailOptions): void => {
-        const options = handleOptions(second, third);
-        finish(
-          'record send failure',
-          () =>
-            recordSend(
-              options.endTime,
-              markError(span, reportedErrorType(error, options), error, errorType(error)),
-            ),
-          options.endTime,
-        );
-      },
-    };
-  };
-
-  const receiptAttributes = (receipt: ReceiptLike): Attributes => {
-    const attributes: Attributes = {
-      [ATTR_BLOCKCHAIN_TX_STATUS]:
-        receipt.status === 'reverted'
-          ? BLOCKCHAIN_TX_STATUS_VALUE_REVERTED
-          : BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS,
-      [ATTR_BLOCKCHAIN_BLOCK_NUMBER]: toInt(receipt.blockNumber),
-      [ATTR_BLOCKCHAIN_TX_GAS_USED]: toInt(receipt.gasUsed),
-    };
-    const l1Fee = receipt.l1Fee ?? undefined;
-    if (l1Fee !== undefined) attributes[ATTR_BLOCKCHAIN_TX_L1_FEE] = l1Fee.toString();
-    if (receipt.effectiveGasPrice !== undefined) {
-      attributes[ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE] = receipt.effectiveGasPrice.toString();
-      const executionFee = BigInt(receipt.gasUsed) * receipt.effectiveGasPrice;
-      attributes[ATTR_BLOCKCHAIN_TX_FEE] = (executionFee + (l1Fee ?? 0n)).toString();
-    }
-    if (receipt.revertReason !== undefined) {
-      attributes[ATTR_BLOCKCHAIN_TX_REVERT_REASON] = formatAddressesIn(
-        receipt.revertReason,
-        formatAddress,
-      );
-    }
-    return attributes;
-  };
-
-  /** Opens the confirm span of a transaction; `replacing` is the confirm span of the transaction it replaced. */
-  const openConfirm = (
-    input: ConfirmInput,
-    parentCtx?: Context,
-    replacing?: ConfirmOrigin,
-  ): ConfirmSpan => {
-    const sent = links.get(input.chainId, input.hash);
-    const active = context.active();
-    const parent =
-      replacing?.parent ?? parentCtx ?? (trace.getSpan(active) ? active : (sent?.parent ?? active));
-    const attributes = baseAttributes(
-      input.chainId,
-      BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
-      parent,
-    );
-    attributes[ATTR_BLOCKCHAIN_TX_HASH] = input.hash;
-    const spanLinks: Link[] = [
-      ...(replacing?.links ?? []),
-      ...(sent ? [{ context: sent.spanContext }] : []),
-    ];
-    // Only spans recorded after the fact get an explicit start time (a replacing transaction's, or one an adapter
-    // records late): with one, the SDK measures the end time with the wall clock instead of the monotonic clock.
-    const explicitStart = input.startTime ?? replacing?.startTime;
-
-    const span = getTracer().startSpan(
-      `confirm ${input.chainId}`,
-      {
-        kind: SpanKind.CLIENT,
-        attributes: redact(attributes),
-        links: spanLinks,
-        ...(explicitStart !== undefined ? { startTime: explicitStart } : {}),
-      },
-      parent,
-    );
-    const finish = finisher(span);
-    const startMs = toEpochMs(explicitStart);
-    const recordConfirmation = (endTime: TimeInput | undefined, outcome: Attributes): void =>
-      txMetrics.confirmationDuration(
-        secondsSince(startMs, endTime),
-        metricAttributes(input.chainId, outcome),
-      );
-    const origin: ConfirmOrigin = {
-      parent,
-      startTime: explicitStart ?? new Date(),
-      links: [{ context: span.spanContext() }, ...(sent ? [{ context: sent.spanContext }] : [])],
-    };
-
-    return {
-      active: 0,
-      ended: false,
-      origin,
-      receipt: (receipt, endTime) =>
-        finish(
-          'record receipt',
-          () => {
-            const attributes = receiptAttributes(receipt);
-            span.setAttributes(redact(attributes));
-            if (receipt.status === 'reverted') markError(span, BLOCKCHAIN_TX_STATUS_VALUE_REVERTED);
-            const status = { [ATTR_BLOCKCHAIN_TX_STATUS]: attributes[ATTR_BLOCKCHAIN_TX_STATUS] };
-            recordConfirmation(endTime, status);
-            const fee = attributes[ATTR_BLOCKCHAIN_TX_FEE];
-            if (typeof fee === 'string')
-              txMetrics.fee(BigInt(fee), metricAttributes(input.chainId, status));
-          },
-          endTime,
-        ),
-      // Giving up describes the observer, not the transaction: no blockchain.tx.status (docs/adr/0016).
-      timeout: (endTime) =>
-        finish(
-          'record confirmation timeout',
-          () =>
-            recordConfirmation(endTime, { [ATTR_ERROR_TYPE]: markError(span, OBSERVER_TIMEOUT) }),
-          endTime,
-        ),
-      fail: (error, endTime) =>
-        finish(
-          'record confirmation failure',
-          () =>
-            recordConfirmation(endTime, {
-              [ATTR_ERROR_TYPE]: markError(span, errorType(error), error),
-            }),
-          endTime,
-        ),
-      replaced: (hash, reason, endTime) =>
-        finish(
-          'record replacement',
-          () => {
-            const attributes: Attributes = {
-              [ATTR_BLOCKCHAIN_TX_STATUS]: BLOCKCHAIN_TX_STATUS_VALUE_REPLACED,
-              [ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH]: hash,
-            };
-            if (reason !== undefined && REPLACEMENT_REASONS.has(reason)) {
-              attributes[ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON] = reason;
-            }
-            span.setAttributes(redact(attributes));
-            recordConfirmation(endTime, {
-              [ATTR_BLOCKCHAIN_TX_STATUS]: BLOCKCHAIN_TX_STATUS_VALUE_REPLACED,
-            });
-          },
-          endTime,
-        ),
-      unattributable: (endTime) =>
-        finish(
-          'record unattributable receipt',
-          () =>
-            recordConfirmation(endTime, {
-              [ATTR_ERROR_TYPE]: markError(span, ERROR_TYPE_VALUE_OTHER),
-            }),
-          endTime,
-        ),
-    };
-  };
-
-  /**
-   * Records `receipt` for the replacing transaction `hash`: ends its in-flight confirm span, does nothing if it
-   * already settled, and otherwise opens one that inherits parent, start time and links from `original`.
-   */
-  const recordReplacing = (
-    chainId: number,
-    hash: string,
-    receipt: ReceiptLike,
-    original: ConfirmOrigin,
-    endTime: TimeInput | undefined,
-  ): void => {
-    const current = confirmations.get(chainId, hash);
-    if (current === 'settled' || current?.ended) return;
-    const confirm = current ?? openConfirm({ chainId, hash }, undefined, original);
-    if (!current) confirmations.start(chainId, hash, confirm);
-    confirm.ended = true;
-    confirmations.settle(chainId, hash, confirm);
-    const { replacementReason: _reason, ...mined } = receipt;
-    confirm.receipt(mined, endTime);
-  };
-
-  /**
-   * Ends `shared` with `receipt`, attributing it to the transaction that was mined
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0008-replaced-transactions.md).
-   */
-  const endWithReceipt = (
-    chainId: number,
-    hash: string,
-    shared: ConfirmSpan,
-    receipt: ReceiptLike,
-    endTime: TimeInput | undefined,
-  ): void => {
-    const mined: unknown = receipt.transactionHash;
-    if (mined === undefined) {
-      confirmations.settle(chainId, hash, shared);
-      shared.receipt(receipt, endTime);
-      return;
-    }
-    // Validated before it is compared or used as a registry key.
-    if (typeof mined !== 'string' || !TX_HASH.test(mined)) {
-      diag.warn('hashspan: receipt has an invalid transaction hash; not recording it');
-      confirmations.release(chainId, hash, shared);
-      shared.unattributable(endTime);
-      return;
-    }
-    if (mined.toLowerCase() === hash.toLowerCase()) {
-      confirmations.settle(chainId, hash, shared);
-      shared.receipt(receipt, endTime);
-      return;
-    }
-    confirmations.settle(chainId, hash, shared);
-    shared.replaced(mined, receipt.replacementReason, endTime);
-    safely(
-      'record replacing transaction',
-      () => recordReplacing(chainId, mined, receipt, shared.origin, endTime),
-      undefined,
-    );
-  };
-
-  /**
-   * Joins the confirm span of the transaction, opening it for the first handle. A receipt from any handle ends the
-   * span; a timeout or failure only ends it when it is the last handle still waiting.
-   */
-  const startConfirm = (input: ConfirmInput, parentCtx?: Context): ConfirmHandle => {
-    const { chainId, hash } = input;
-    const claim = joinConfirm(confirmations, chainId, hash, () => openConfirm(input, parentCtx));
-    if (!claim) return NOOP_CONFIRM;
-    const { shared } = claim;
-    return {
-      end: (receipt: ReceiptLike, second?: EndOptions | TimeInput): void => {
-        const { endTime } = handleOptions(second);
-        if (!claim.receive()) return;
-        safely(
-          'record receipt',
-          () => endWithReceipt(chainId, hash, shared, receipt, endTime),
-          undefined,
-        );
-      },
-      timeout: (second?: EndOptions | TimeInput): void => {
-        const { endTime } = handleOptions(second);
-        claim.withdraw(() => shared.timeout(endTime));
-      },
-      fail: (error: unknown, second?: EndOptions | TimeInput): void => {
-        const { endTime } = handleOptions(second);
-        claim.withdraw(() => shared.fail(error, endTime));
-      },
-    };
-  };
+  const { redact, markError, finisher, setRemoteAddress, baseAttributes } = recording;
+  const { startSend, startConfirm } = createTransactionSpans({
+    options,
+    links,
+    confirmations,
+    txMetrics,
+    formatAddress,
+    getTracer,
+    recording,
+  });
 
   const startPayment = (input: PaymentInput, parentCtx?: Context): PaymentHandle => {
     const parent = parentCtx ?? context.active();
