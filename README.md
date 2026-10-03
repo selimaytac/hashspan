@@ -47,6 +47,13 @@ decoded custom error.</sub>
 | [`@hashspan/cdp`](packages/cdp) | Adapter for Coinbase CDP server and smart accounts | [![npm](https://img.shields.io/npm/v/@hashspan/cdp?label=)](https://www.npmjs.com/package/@hashspan/cdp) |
 | [`@hashspan/x402`](packages/x402) | Adapter for x402 payments | [![npm](https://img.shields.io/npm/v/@hashspan/x402?label=)](https://www.npmjs.com/package/@hashspan/x402) |
 
+Use one release line for every `@hashspan` package you install, such as 0.9.x of each: the adapters depend on the
+`@hashspan/core` of their own minor (and `@hashspan/cdp` and `@hashspan/x402` on the `@hashspan/viem` of it), as
+caret ranges do before 1.0. A tracker from another core release passed as the `tracker` option still works; what it
+does not know is not recorded ([ADR 0014](docs/adr/0014-core-api-boundary.md)). The libraries each package
+instruments are peer dependencies, with the supported ranges in its `package.json`; CI runs the CDP and x402 adapters
+against the newest SDK releases in their ranges every week, and the x402 adapter also against the oldest.
+
 ## Quick start
 
 Requires Node.js 22.3 or later.
