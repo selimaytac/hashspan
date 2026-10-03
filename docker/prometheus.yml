@@ -1,0 +1,10 @@
+# Prometheus for the local lab: it scrapes nothing and receives OTLP metrics from the example agent.
+global:
+  evaluation_interval: 15s
+otlp:
+  # blockchain.client.send.duration (unit s) becomes blockchain_client_send_duration_seconds, and
+  # blockchain.chain.id the label blockchain_chain_id.
+  translation_strategy: UnderscoreEscapingWithSuffixes
+storage:
+  tsdb:
+    out_of_order_time_window: 30m
