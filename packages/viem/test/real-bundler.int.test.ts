@@ -287,8 +287,8 @@ describe('user operations through Alto on Anvil', () => {
       'blockchain.system': 'evm',
       'blockchain.chain.id': 31337,
       'blockchain.operation.name': 'send',
-      'blockchain.user_operation.sender': account,
-      'blockchain.user_operation.entry_point': entryPoint07Address,
+      'blockchain.user_operation.sender': account.toLowerCase(),
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
       'blockchain.user_operation.call_count': 2,
       'blockchain.user_operation.hash': hash,
     });
@@ -302,14 +302,16 @@ describe('user operations through Alto on Anvil', () => {
       'blockchain.user_operation.success': true,
       'blockchain.user_operation.gas.used': Number(receipt.actualGasUsed),
       'blockchain.user_operation.gas.cost': receipt.actualGasCost.toString(),
-      'blockchain.user_operation.sender': account,
+      'blockchain.user_operation.sender': account.toLowerCase(),
       'blockchain.user_operation.nonce': BigInt(receipt.nonce).toString(),
-      // As the bundler returns it, lower-cased, while the send span has viem's checksummed address: a known
-      // inconsistency between the two spans in the `full` address mode, recorded here as it is.
       'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
       'blockchain.tx.hash': receipt.receipt.transactionHash,
       'blockchain.block.number': Number(receipt.receipt.blockNumber),
     });
+    // One form for each address on both spans, although viem gives the EntryPoint checksummed and Alto lower-cased.
+    for (const key of ['blockchain.user_operation.sender', 'blockchain.user_operation.entry_point']) {
+      expect(confirm.attributes[key]).toBe(send.attributes[key]);
+    }
     // The operation's own cost, from its UserOperationEvent, not the fee of the bundle transaction.
     const bundle = await reader.getTransactionReceipt({ hash: receipt.receipt.transactionHash });
     expect(receipt.actualGasCost).not.toBe(bundle.gasUsed * bundle.effectiveGasPrice);
