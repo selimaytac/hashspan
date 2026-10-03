@@ -4,6 +4,8 @@ name: SBOM
 # Release run (the releases are created with the workflow's token, which does not trigger `release` events), and by
 # hand for an existing release tag. Every release tagged on that commit gets the same file. See docs/releasing.md.
 on:
+  # zizmor: ignore[dangerous-triggers] runs only after a successful, manually dispatched Release run on main (see the
+  # job's condition) and checks out that run's commit without credentials.
   workflow_run:
     workflows: [Release]
     types: [completed]

@@ -27,6 +27,8 @@ jobs:
         end: [newest, oldest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -41,7 +43,7 @@ jobs:
         run: pnpm --filter @hashspan/x402 update @x402/core @x402/fetch @x402/evm
       - name: Install the oldest x402 SDK of the peer range
         if: matrix.end == 'oldest'
-        run: |
+        run: | # zizmor: ignore[adhoc-packages] installs the floor of the peer range on purpose; not committed
           floor=$(node -p "require('./packages/x402/package.json').peerDependencies['@x402/core'].replace(/^\^/, '')")
           pnpm --filter @hashspan/x402 add -D "@x402/core@$floor" "@x402/fetch@$floor" "@x402/evm@$floor"
       - run: pnpm --filter @hashspan/x402 list @x402/core @x402/fetch @x402/evm --depth 0
