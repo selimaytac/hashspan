@@ -39,24 +39,49 @@ jobs:
         uses: changesets/action/select-mode@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
 
   version:
-    name: Version packages pull request
+    name: Version packages branch
     needs: mode
     if: needs.mode.outputs.mode == 'version'
     runs-on: ubuntu-latest
+    # Pushes the version bump to the changeset-release branch; a maintainer opens the pull request from it, so CI runs
+    # on it. GitHub Actions may not open pull requests in this repository, which changesets/action requires.
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The write token is used by the push step only, not kept in the git config while dependencies install.
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: changesets/action/version@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
-        with:
-          script: pnpm version-packages
+      - name: Bump versions and write the changelogs
+        env:
+          # Read by @changesets/changelog-github to link pull requests and authors.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pnpm version-packages
+      - name: Commit and push the changeset-release branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: changeset-release/main
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898283+github-actions[bot]@users.noreply.github.com'
+          git switch --create "$BRANCH"
+          git add --all
+          git commit --message 'Version Packages'
+          # The branch only ever holds the latest version bump, so an earlier one is replaced.
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/$BRANCH"
+          {
+            echo '### Version packages branch pushed'
+            echo
+            echo "Open the pull request: https://github.com/${GITHUB_REPOSITORY}/compare/main...${BRANCH}?expand=1"
+            echo "or run \`gh pr create --base main --head ${BRANCH} --title \"Version Packages\"\`."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   publish:
     name: Publish to npm
