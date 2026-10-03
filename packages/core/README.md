@@ -46,16 +46,22 @@ try {
 
 // Later, wherever you wait for the receipt (or in a background watcher):
 const confirm = tracker.startConfirm({ chainId: 8453, hash });
-const receipt = await waitSomehow(hash);
-confirm.end({
-  status: receipt.status, // 'success' | 'reverted'
-  blockNumber: receipt.blockNumber,
-  gasUsed: receipt.gasUsed,
-  effectiveGasPrice: receipt.effectiveGasPrice,
-  l1Fee: receipt.l1Fee, // OP-stack chains
-  // Hash of the mined transaction: if a replacement was mined, the receipt is attributed to it (ADR 0008).
-  transactionHash: receipt.transactionHash,
-});
+try {
+  const receipt = await waitSomehow(hash);
+  confirm.end({
+    status: receipt.status, // 'success' | 'reverted'
+    blockNumber: receipt.blockNumber,
+    gasUsed: receipt.gasUsed,
+    effectiveGasPrice: receipt.effectiveGasPrice,
+    l1Fee: receipt.l1Fee, // OP-stack chains
+    // Hash of the mined transaction: if a replacement was mined, the receipt is attributed to it (ADR 0008).
+    transactionHash: receipt.transactionHash,
+  });
+} catch (error) {
+  // Withdraws this handle, so that it does not keep the confirm span open.
+  confirm.fail(error);
+  throw error;
+}
 ```
 
 `startConfirm` can be called by every part of your code that waits for the receipt: calls for the same transaction
