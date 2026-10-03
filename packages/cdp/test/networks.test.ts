@@ -25,3 +25,11 @@ it('maps CDP network names to the chain ids of viem chains', () => {
     zora: chains.zora.id,
   });
 });
+
+it('knows no network named after an Object.prototype member', async () => {
+  const { chainIdOf } = await import('../src/networks.js');
+  for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf']) {
+    expect(chainIdOf(name)).toBeUndefined();
+  }
+  expect(chainIdOf('base')).toBe(chains.base.id);
+});

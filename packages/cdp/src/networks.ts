@@ -28,6 +28,13 @@ export const CDP_NETWORK_CHAIN_IDS: Readonly<Record<string, number>> = {
  */
 export const CDP_API_SEND_CHAIN_IDS: ReadonlySet<number> = new Set([8453, 84532, 1, 11155111]);
 
+/**
+ * The chain id of a CDP network name; undefined for a name the map does not have, including names of `Object.prototype`
+ * members such as `constructor`, which a plain lookup would find.
+ */
 export function chainIdOf(network: unknown): number | undefined {
-  return typeof network === 'string' ? CDP_NETWORK_CHAIN_IDS[network] : undefined;
+  if (typeof network !== 'string' || !Object.hasOwn(CDP_NETWORK_CHAIN_IDS, network))
+    return undefined;
+  const chainId = CDP_NETWORK_CHAIN_IDS[network];
+  return typeof chainId === 'number' ? chainId : undefined;
 }

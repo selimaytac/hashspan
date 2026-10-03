@@ -626,7 +626,10 @@ export function withHashspan(
   /**
    * Replaces `target[name]` with `wrap(original)`, calling the original with `target` as `this`. Returns false when
    * the method cannot be replaced, for example on a frozen object; a method replaced before is left as it is, so
-   * wrapping an object again never traces a call twice.
+   * wrapping an object again never traces a call twice. The wrapper keeps the enumerability of the original's own
+   * property, and is not enumerable when the original was inherited (the SDK's methods live on its classes'
+   * prototypes), so `Object.keys`, object spread and `JSON.stringify` of the object do not change. It stays bound to
+   * `target`, so a method taken off the object keeps working as before.
    */
   const replace = (
     target: Record<string, unknown>,
@@ -638,7 +641,15 @@ export function withHashspan(
       if (typeof original !== 'function' || WRAPPED in original) return true;
       const wrapper = wrap((original as AnyFn).bind(target));
       Object.defineProperty(wrapper, WRAPPED, { value: true });
-      target[name] = wrapper;
+      const descriptor = Object.getOwnPropertyDescriptor(target, name);
+      // An own property that is read-only or an accessor is left as its owner made it.
+      if (descriptor !== undefined && descriptor.writable !== true) return false;
+      Object.defineProperty(target, name, {
+        value: wrapper,
+        writable: true,
+        enumerable: descriptor?.enumerable ?? false,
+        configurable: descriptor?.configurable ?? true,
+      });
       return target[name] === wrapper;
     } catch (error) {
       diag.error(`hashspan: failed to wrap ${name} (${errorName(error)})`);
