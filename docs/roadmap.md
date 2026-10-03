@@ -100,6 +100,9 @@ Exit criteria:
 - [ ] Span and attribute names reviewed once as a whole, for consistent naming across transaction, user operation,
   payment and call batch spans; renames done through deprecation
 - [ ] Each adapter validated in at least one real integration, with its findings closed
+- [ ] Starting from an empty project, a user who has not seen the project follows the README to a `send` and a
+  `confirm` span under the agent's trace in an OTLP backend, once for the viem path and once for a setup of
+  [integrations](integrations.md); the steps that needed help are fixed in the docs (#242)
 - [x] The published packages smoke-tested on every supported Node.js version (#34)
 - [ ] A stated policy for what 1.0 freezes (the public API) and what stays `development` (the semantic conventions,
   under their [change policy](semconv.md#change-policy))

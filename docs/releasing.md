@@ -10,11 +10,13 @@ keeps its own, so versions can differ between packages.
 ## Every release
 
 1. Merge pull requests with their changesets (`pnpm changeset`) into `main`.
-2. Run the **Release** workflow (Actions, Release, Run workflow). It runs the CI checks, then opens or updates a
-   **Version packages** pull request that bumps the versions and writes `CHANGELOG.md` from the changesets. This step needs no
+2. Run the **Release** workflow (Actions, Release, Run workflow). It runs the CI checks, then pushes the
+   `changeset-release/main` branch, which bumps the versions and writes `CHANGELOG.md` from the changesets. GitHub
+   Actions may not open pull requests in this repository, so its last step, opening the pull request, fails; open it
+   yourself: `gh pr create --base main --head changeset-release/main --title "Version Packages"`. This step needs no
    approval: only the job that publishes to npm runs in the `npm` environment.
-3. Review and merge that pull request. It is opened by GitHub Actions, so CI does not run on it; the next step runs
-   the checks again before publishing.
+3. Review that pull request (versions, `CHANGELOG.md`, the release-tag links) and merge it once its CI is green; opened
+   by a maintainer, it gets the usual checks.
 4. Run the **Release** workflow again. With no changesets left, it runs the checks, then waits for a maintainer to
    approve the `npm` environment deployment (Actions run page, Review deployments). Once approved, it publishes the new
    versions to npm, pushes the git tags and creates the GitHub releases.
