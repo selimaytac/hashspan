@@ -1090,3 +1090,29 @@ describe('results that cannot be wrapped', () => {
     expect(tracing.spans().filter((s) => s.name.startsWith('confirm '))).toHaveLength(0);
   });
 });
+
+describe('the objects withHashspan() wraps in place', () => {
+  it('keeps the own enumerable keys of cdp.evm and of an account', async () => {
+    const cdp = fakeCdp();
+    const evmKeys = Object.keys(cdp.evm);
+    withHashspan(cdp);
+    expect(Object.keys(cdp.evm)).toEqual(evmKeys);
+    expect(JSON.stringify(cdp.evm)).toBe('{}');
+
+    const plain = fakeAccount();
+    const accountKeys = Object.keys(plain);
+    const account = (await cdp.evm.getAccount()) as Record<string, unknown>;
+    expect(Object.keys(account)).toEqual(accountKeys);
+  });
+
+  it('does not trace a send on a network named after an Object.prototype member', async () => {
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    await cdp.evm.sendTransaction({
+      address: ACCOUNT,
+      network: 'constructor',
+      transaction: { to: TO, value: 1n },
+    } as never);
+    expect(sends()).toEqual([]);
+  });
+});
