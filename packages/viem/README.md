@@ -167,9 +167,12 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
   options always apply to your wait; while both run, receipt requests are made for each.
 - A pending confirmation keeps the Node.js process alive until the receipt arrives or `timeoutMs` (default
   120 000 ms) passes; the span then ends as an error with `error.type` `timeout`.
-- Some nodes return a mined transaction before its receipt. viem's `waitForTransactionReceipt` can then fail with
-  `TransactionReceiptNotFoundError`; background confirmation and `watch()` wait again until `timeoutMs`. Your own
-  waits are passed on unchanged, including that error.
+- viem's `waitForTransactionReceipt` fails on the first failed request of its poll (a rate limit, a JSON-RPC error,
+  a request timeout, a connection reset), and with `TransactionReceiptNotFoundError` when a node returns a mined
+  transaction before its receipt. Background confirmation and `watch()` then wait one polling interval and poll
+  again, until `timeoutMs`: the span ends as `timeout` only if no receipt came, and a provider that keeps failing
+  holds the confirmation (and its place under `maxBackgroundConfirmations`) until then. Your own waits are passed on
+  unchanged, including these errors.
 - At most `maxBackgroundConfirmations` (default 256) background confirmations, including those of `watch()`, poll at
   once. A transaction sent while that many are polling gets no background confirm span, and a `diag` warning is
   logged; `0` turns background confirmation off. Your own waits are not counted. See

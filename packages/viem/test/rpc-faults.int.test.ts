@@ -412,26 +412,20 @@ describe("the caller's waitForTransactionReceipt", () => {
 });
 
 describe.each(['background confirmation', 'watch()'] as const)('%s', (path) => {
-  // Background confirmation and watch() poll through viem's wait as well. They wait again after a missing receipt
-  // until their timeout, and end at once on any other error.
+  // Background confirmation and watch() poll through viem's wait as well. They wait again after a missing receipt or
+  // a failed request, one polling interval later, until their timeout: a fault that lasts ends as a timeout.
   const rows: Record<ConfirmFault, Row> = {
-    'a request that never answers': failed('TimeoutError'),
-    'HTTP 429': failed('HttpRequestError'),
-    'JSON-RPC -32005 (limit exceeded)': failed('LimitExceededRpcError'),
-    'JSON-RPC -32603 (internal error)': failed('InternalRpcError'),
-    'a connection reset mid-response': failed('HttpRequestError'),
+    'a request that never answers': TIMEOUT,
+    'HTTP 429': TIMEOUT,
+    'JSON-RPC -32005 (limit exceeded)': TIMEOUT,
+    'JSON-RPC -32603 (internal error)': TIMEOUT,
+    'a connection reset mid-response': TIMEOUT,
     'a receipt that stays null': TIMEOUT,
-    'a malformed receipt': failed('SyntaxError'),
+    'a malformed receipt': TIMEOUT,
     'a receipt that is not an object': NOT_A_RECEIPT,
-    'a malformed block, while the receipt stays null': failed('TypeError'),
+    'a malformed block, while the receipt stays null': TIMEOUT,
     'block numbers answered out of order': SUCCESS,
-    // finding: #310. One failed request ends the confirmation before its timeout, though the next
-    // poll finds the receipt; no caller can retry it.
-    'one failed receipt request between good ones': {
-      now: failed('InternalRpcError'),
-      finding: '#310',
-      should: SUCCESS,
-    },
+    'one failed receipt request between good ones': SUCCESS,
   };
 
   /** Confirms one transfer on `path` under `faults`. */
