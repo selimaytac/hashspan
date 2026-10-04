@@ -45,7 +45,9 @@ export function createServerAccountWrapping({
       'waitForTransactionReceipt',
       (original) =>
         async (...args: never[]) =>
-          confirmed(id, args[0], () => original(...args)),
+          confirmed(id, args[0], (options) =>
+            original(...([options, ...args.slice(1)] as never[])),
+          ),
     );
     // Through the CDP API, the scoped methods call the wrapped account's own methods, which trace the call.
     if (CDP_API_SEND_CHAIN_IDS.has(id)) return scoped;

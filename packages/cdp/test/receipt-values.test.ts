@@ -96,14 +96,13 @@ describe("a network-scoped account's receipt", () => {
     expect(error).not.toHaveBeenCalled();
   });
 
-  it('is attributed to the transaction that was mined', async () => {
+  it('is not recorded when it is of another hash that viem did not report as a replacement', async () => {
     const spans = await confirmOf({ ...viemReceipt, transactionHash: OTHER_HASH });
-    const byHash = (hash: string) => spans.find((s) => s.attributes['blockchain.tx.hash'] === hash);
-    expect(byHash(HASH)?.attributes).toMatchObject({
-      'blockchain.tx.status': 'replaced',
-      'blockchain.tx.replacement.hash': OTHER_HASH,
-    });
-    expect(byHash(OTHER_HASH)?.attributes['blockchain.tx.fee']).toBe('42000');
+    expect(spans).toHaveLength(1);
+    expect(spans[0]?.attributes['blockchain.tx.hash']).toBe(HASH);
+    expect(spans[0]?.attributes['error.type']).toBe('_OTHER');
+    expect(spans[0]?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(spans[0]?.attributes['blockchain.tx.fee']).toBeUndefined();
   });
 
   it('is sealed, with its fees, when its block hash only contains a zero hash or is not a string', async () => {
