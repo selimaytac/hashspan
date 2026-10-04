@@ -43,6 +43,8 @@ export interface MockOptions {
   callsStatus?: (call: number) => Record<string, unknown>;
   /** Called with each request's method as the request starts, in the context it was made in. */
   onRequest?: (method: string) => void;
+  /** How often viem retries a failed request (viem's default: 3, with a growing delay). */
+  retryCount?: number;
 }
 
 /** EIP-1193 transport answering the handful of methods the adapter's code paths use. */
@@ -77,128 +79,131 @@ export function mockTransport(options: MockOptions = {}) {
       ? options.transaction(hash)
       : options.transaction),
   });
-  const transport = custom({
-    async request({ method, params }: { method: string; params?: unknown }) {
-      calls.push(method);
-      requests.push({ method, params });
-      options.onRequest?.(method);
-      if (options.hangOn?.includes(method)) return new Promise(() => {});
-      if (options.failOn?.includes(method)) {
-        throw new RpcRequestError({
-          body: {},
-          error: { code: -32602, message: `mock: ${method} failed` },
-          url: 'mock',
-        });
-      }
-      switch (method) {
-        case 'eth_chainId':
-          return options.chainId ? options.chainId() : (options.chainIdHex ?? '0x2105');
-        case 'eth_sendTransaction':
-          if (options.sendDelayMs) {
-            await new Promise((resolve) => setTimeout(resolve, options.sendDelayMs));
-          }
-          sendCalls++;
-          if (
-            options.sendError &&
-            (options.sendErrorOnCall === undefined || options.sendErrorOnCall === sendCalls)
-          )
-            throw Object.assign(new Error(options.sendError.message), options.sendError);
-          return HASH;
-        case 'eth_blockNumber':
-          return `0x${(options.advanceBlocks ? block++ : block).toString(16)}`;
-        case 'eth_getTransactionByHash':
-          return transaction((params as unknown[] | undefined)?.[0]);
-        case 'eth_call':
-          if (options.callHangs) return new Promise(() => {});
-          if (options.callDelayMs)
-            await new Promise((resolve) => setTimeout(resolve, options.callDelayMs));
-          if (options.callRevertData === undefined) return '0x';
-          if (
-            options.callRevertsOn &&
-            !options.callRevertsOn((params as unknown[] | undefined)?.[1])
-          ) {
-            return '0x';
-          }
-          // Shaped like a node's JSON-RPC error, so viem does not retry it.
+  const transport = custom(
+    {
+      async request({ method, params }: { method: string; params?: unknown }) {
+        calls.push(method);
+        requests.push({ method, params });
+        options.onRequest?.(method);
+        if (options.hangOn?.includes(method)) return new Promise(() => {});
+        if (options.failOn?.includes(method)) {
           throw new RpcRequestError({
             body: {},
-            error: { code: 3, message: 'execution reverted', data: options.callRevertData },
+            error: { code: -32602, message: `mock: ${method} failed` },
             url: 'mock',
           });
-        case 'eth_getBlockByNumber':
-          // An empty block: viem scans it for replacements while the receipt is missing.
-          return {
-            hash: `0x${'cd'.repeat(32)}`,
-            parentHash: `0x${'00'.repeat(32)}`,
-            number: `0x${block.toString(16)}`,
-            timestamp: '0x0',
-            nonce: '0x0000000000000000',
-            difficulty: '0x0',
-            gasLimit: '0x1c9c380',
-            gasUsed: '0x0',
-            miner: FROM,
-            extraData: '0x',
-            baseFeePerGas: '0x1',
-            logsBloom: `0x${'00'.repeat(256)}`,
-            transactions: options.blockIncludesTransaction ? [transaction()] : [],
-            uncles: [],
-            size: '0x0',
-            stateRoot: `0x${'00'.repeat(32)}`,
-            receiptsRoot: `0x${'00'.repeat(32)}`,
-            transactionsRoot: `0x${'00'.repeat(32)}`,
-            sha3Uncles: `0x${'00'.repeat(32)}`,
-            mixHash: `0x${'00'.repeat(32)}`,
-          };
-        case 'eth_getTransactionReceipt':
-          if (options.receipt === null || options.mined?.() === false) return null;
-          return {
-            transactionHash: HASH,
-            transactionIndex: '0x0',
-            blockHash: `0x${'cd'.repeat(32)}`,
-            blockNumber: '0x7b',
-            from: FROM,
-            to: TO,
-            cumulativeGasUsed: '0x5208',
-            gasUsed: '0x5208',
-            effectiveGasPrice: '0x3b9aca00',
-            contractAddress: null,
-            logs: [],
-            logsBloom: `0x${'00'.repeat(256)}`,
-            status: '0x1',
-            type: '0x2',
-            ...options.receipt,
-            ...options.receiptAt?.(++receiptCalls),
-          };
-        case 'wallet_sendCalls': {
-          const answer = options.sendCalls ?? { id: '0xb47c4' };
-          if ('error' in answer) {
-            throw new RpcRequestError({ body: {}, error: answer.error, url: 'mock' });
-          }
-          return answer;
         }
-        case 'wallet_getCallsStatus':
-          return {
-            version: '2.0.0',
-            id: (params as unknown[] | undefined)?.[0],
-            chainId: options.chainIdHex ?? '0x2105',
-            status: 200,
-            atomic: true,
-            receipts: [
-              {
-                transactionHash: HASH,
-                blockHash: `0x${'cd'.repeat(32)}`,
-                blockNumber: '0x7b',
-                gasUsed: '0x5208',
-                logs: [],
-                status: '0x1',
-              },
-            ],
-            ...options.callsStatus?.(++statusCalls),
-          };
-        default:
-          throw new Error(`mock transport: unexpected method ${method}`);
-      }
+        switch (method) {
+          case 'eth_chainId':
+            return options.chainId ? options.chainId() : (options.chainIdHex ?? '0x2105');
+          case 'eth_sendTransaction':
+            if (options.sendDelayMs) {
+              await new Promise((resolve) => setTimeout(resolve, options.sendDelayMs));
+            }
+            sendCalls++;
+            if (
+              options.sendError &&
+              (options.sendErrorOnCall === undefined || options.sendErrorOnCall === sendCalls)
+            )
+              throw Object.assign(new Error(options.sendError.message), options.sendError);
+            return HASH;
+          case 'eth_blockNumber':
+            return `0x${(options.advanceBlocks ? block++ : block).toString(16)}`;
+          case 'eth_getTransactionByHash':
+            return transaction((params as unknown[] | undefined)?.[0]);
+          case 'eth_call':
+            if (options.callHangs) return new Promise(() => {});
+            if (options.callDelayMs)
+              await new Promise((resolve) => setTimeout(resolve, options.callDelayMs));
+            if (options.callRevertData === undefined) return '0x';
+            if (
+              options.callRevertsOn &&
+              !options.callRevertsOn((params as unknown[] | undefined)?.[1])
+            ) {
+              return '0x';
+            }
+            // Shaped like a node's JSON-RPC error, so viem does not retry it.
+            throw new RpcRequestError({
+              body: {},
+              error: { code: 3, message: 'execution reverted', data: options.callRevertData },
+              url: 'mock',
+            });
+          case 'eth_getBlockByNumber':
+            // An empty block: viem scans it for replacements while the receipt is missing.
+            return {
+              hash: `0x${'cd'.repeat(32)}`,
+              parentHash: `0x${'00'.repeat(32)}`,
+              number: `0x${block.toString(16)}`,
+              timestamp: '0x0',
+              nonce: '0x0000000000000000',
+              difficulty: '0x0',
+              gasLimit: '0x1c9c380',
+              gasUsed: '0x0',
+              miner: FROM,
+              extraData: '0x',
+              baseFeePerGas: '0x1',
+              logsBloom: `0x${'00'.repeat(256)}`,
+              transactions: options.blockIncludesTransaction ? [transaction()] : [],
+              uncles: [],
+              size: '0x0',
+              stateRoot: `0x${'00'.repeat(32)}`,
+              receiptsRoot: `0x${'00'.repeat(32)}`,
+              transactionsRoot: `0x${'00'.repeat(32)}`,
+              sha3Uncles: `0x${'00'.repeat(32)}`,
+              mixHash: `0x${'00'.repeat(32)}`,
+            };
+          case 'eth_getTransactionReceipt':
+            if (options.receipt === null || options.mined?.() === false) return null;
+            return {
+              transactionHash: HASH,
+              transactionIndex: '0x0',
+              blockHash: `0x${'cd'.repeat(32)}`,
+              blockNumber: '0x7b',
+              from: FROM,
+              to: TO,
+              cumulativeGasUsed: '0x5208',
+              gasUsed: '0x5208',
+              effectiveGasPrice: '0x3b9aca00',
+              contractAddress: null,
+              logs: [],
+              logsBloom: `0x${'00'.repeat(256)}`,
+              status: '0x1',
+              type: '0x2',
+              ...options.receipt,
+              ...options.receiptAt?.(++receiptCalls),
+            };
+          case 'wallet_sendCalls': {
+            const answer = options.sendCalls ?? { id: '0xb47c4' };
+            if ('error' in answer) {
+              throw new RpcRequestError({ body: {}, error: answer.error, url: 'mock' });
+            }
+            return answer;
+          }
+          case 'wallet_getCallsStatus':
+            return {
+              version: '2.0.0',
+              id: (params as unknown[] | undefined)?.[0],
+              chainId: options.chainIdHex ?? '0x2105',
+              status: 200,
+              atomic: true,
+              receipts: [
+                {
+                  transactionHash: HASH,
+                  blockHash: `0x${'cd'.repeat(32)}`,
+                  blockNumber: '0x7b',
+                  gasUsed: '0x5208',
+                  logs: [],
+                  status: '0x1',
+                },
+              ],
+              ...options.callsStatus?.(++statusCalls),
+            };
+          default:
+            throw new Error(`mock transport: unexpected method ${method}`);
+        }
+      },
     },
-  });
+    options.retryCount === undefined ? {} : { retryCount: options.retryCount },
+  );
   return { transport, calls, requests };
 }
