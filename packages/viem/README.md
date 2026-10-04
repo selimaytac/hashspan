@@ -298,7 +298,7 @@ instrumentation creates for the request nest under it; the code after the call s
 
 Failed sends, reverted receipts and receipt timeouts set error status; the original error is always rethrown
 unchanged. Spans record only the error type unless `errorMessages` allows more, because viem error messages
-include the request arguments. Not traced yet: `deployContract`, `sendRawTransaction`.
+include the request arguments. For the actions that are not traced, see [known limits](#known-limits).
 
 ## Apply it last
 
@@ -313,6 +313,39 @@ walletClient.extend(withHashspan()).extend(publicActions);
 ```
 
 When a framework extends the client you pass in, check whether confirm spans appear; send spans are unaffected.
+
+## Known limits
+
+- Not traced: `deployContract` ([#36](https://github.com/selimaytac/hashspan/issues/36)), `sendRawTransaction`
+  ([#33](https://github.com/selimaytac/hashspan/issues/33)), and `sendTransactionSync`, `writeContractSync` and
+  `sendRawTransactionSync`, which send and wait in one call.
+- Only actions called as methods of an extended client are traced: a library that calls viem's actions as functions
+  or creates its own client bypasses the extension
+  ([libraries that take a viem client](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/integrations.md#libraries-that-take-a-viem-client)),
+  and an extension applied after `withHashspan()` can hide the traced actions ([apply it last](#apply-it-last)).
+- A transaction sent by a wallet API or a wallet provider that creates its own client gets a confirm span through
+  `watch()`, but no send span ([transactions sent elsewhere](#transactions-sent-elsewhere)).
+- Only waits are traced: polling `getTransactionReceipt` or `getCallsStatus` yourself records nothing
+  ([call batches](#call-batches-eip-5792)).
+- Background confirmation and `watch()` cover transactions only: a user operation or a call batch gets a confirm span
+  only from your own wait ([smart accounts](#smart-accounts-erc-4337), [call batches](#call-batches-eip-5792)).
+- `sendCallsSync` is traced from viem 2.45.2, and call batches record no fee
+  ([call batches](#call-batches-eip-5792)).
+- A transaction sent while `maxBackgroundConfirmations` confirmations are polling gets no background confirm span, and
+  in serverless runtimes that freeze after the response, background confirmations may not complete
+  ([background confirmation](#background-confirmation)).
+- A wait with `confirmations` above 1 records the receipt it read first, also when a reorganisation during the wait
+  moved or removed the transaction ([#306](https://github.com/selimaytac/hashspan/issues/306)).
+- A wait that resolves with the receipt of another transaction records it as a replacement, also when it is not one,
+  as after a mixed-up RPC response ([#355](https://github.com/selimaytac/hashspan/issues/355)).
+- A preconfirmed receipt whose sealed receipt does not come in time is recorded without fees
+  ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)).
+- Revert reasons are best effort: a provider without historical state cannot replay the transaction, and earlier
+  transactions in the same block can change the result ([revert reasons](#revert-reasons)).
+- On a client without a chain, a call is not traced when its `eth_chainId` request fails or has not answered 30 s
+  after the call ended ([clients without a chain](#clients-without-a-chain)).
+- The limits of the core apply too
+  ([`@hashspan/core` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.10.0/packages/core#known-limits)).
 
 ## License
 

@@ -177,6 +177,24 @@ aggregation). Definitions:
   hook. Errors of the instrumented call never are. Do not put sensitive values, such as the address being hashed,
   into errors your callbacks throw, or route `diag` to a sink your policy allows.
 
+## Known limits
+
+These hold for every adapter; each adapter's README lists its own.
+
+- EVM chains only: chain ids are EIP-155 numbers and hashes 32-byte hex
+  ([roadmap candidates](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/roadmap.md#candidates)).
+- `blockchain.tx.fee` and the fee histogram leave out the OP Stack operator fee, so on a chain that charges one the
+  fee is too low ([attributes](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/semconv.md#attributes),
+  [#287](https://github.com/selimaytac/hashspan/issues/287)).
+- A confirm span is not revised after it ended: a reorganisation that removes its block leaves its status and block
+  number ([chain reorganisations](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/semconv.md#spans)).
+- A user operation receipt whose `success` is not a boolean ends without an outcome, on the span and on the
+  confirmation sample ([#366](https://github.com/selimaytac/hashspan/issues/366)).
+- Values from outside are bounded: longer ones are cut or dropped, and past `maxTrackedTransactions` or `linkTtlMs` a
+  confirm span has no link to its send
+  ([bounds](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/semconv.md#bounds)).
+- The `redact` hook does not run on [metrics](#metrics).
+
 ## License
 
 Apache-2.0

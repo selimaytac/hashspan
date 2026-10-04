@@ -13,8 +13,8 @@ This page collects the setups that were checked; each code block is compiled in 
 | viem bundler client (ERC-4337) | `@hashspan/viem` | a tracker from `@hashspan/core` 0.8 or later | no background confirmation or `watch()` for user operations ([smart accounts](../packages/viem/README.md#smart-accounts-erc-4337)) | `packages/viem` tests, a real bundler in CI only |
 | EIP-5792 wallet (`sendCalls`) | `@hashspan/viem` | none | no fees on the batch; `getCallsStatus` is not traced ([call batches](../packages/viem/README.md#call-batches-eip-5792)) | `packages/viem` tests |
 | Transactions sent elsewhere | `@hashspan/viem` [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) | a public client | no send span | `packages/viem` tests |
-| Coinbase CDP SDK | `@hashspan/cdp` | a `reader` for confirm spans | CommonJS needs Node.js 22.12 ([install](../packages/cdp/README.md#install)); see [traced calls](../packages/cdp/README.md#traced) | `packages/cdp` tests |
-| x402 client | `@hashspan/x402` | a `reader` for `verified` | x402 v1 and non-`eip155` networks are not traced ([recorded](../packages/x402/README.md#recorded)) | `packages/x402` tests |
+| Coinbase CDP SDK | `@hashspan/cdp` | a `reader` for confirm spans | CommonJS needs Node.js 22.12 ([install](../packages/cdp/README.md#install)); see [known limits](../packages/cdp/README.md#known-limits) | `packages/cdp` tests |
+| x402 client | `@hashspan/x402` | a `reader` for `verified` | x402 v1 and non-`eip155` networks are not traced ([known limits](../packages/x402/README.md#known-limits)) | `packages/x402` tests |
 | AgentKit `ViemWalletProvider` | `@hashspan/viem` | background confirmation | TypeScript needs a cast ([setup](#viemwalletprovider)) | `integrations/` |
 | AgentKit `CdpEvmWalletProvider`, `CdpSmartWalletProvider` | `@hashspan/cdp` on `getClient()` | the provider's public client as `reader` | `configureWithWallet()` itself is not run in CI ([setup](#cdpevmwalletprovider)) | `integrations/` |
 | Other AgentKit wallet providers | `@hashspan/viem` `watch()` | the returned hash | no send span ([setup](#other-wallet-providers)) | no |
