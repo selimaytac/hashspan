@@ -23,3 +23,10 @@ attribute names are the public API of a telemetry library: renaming them breaks 
 
 - A single documented schema doubles as the draft for an upstream proposal.
 - Monetary values (wei) exceed int64 and are emitted as decimal strings.
+
+## Amendment (2026-10-04): `blockchain.system.name`
+
+`blockchain.system` is renamed to `blockchain.system.name`, as OpenTelemetry renamed `db.system` and `rpc.system` to
+`db.system.name` and `rpc.system.name`. Following the change policy in [docs/semconv.md](../semconv.md#change-policy),
+both are recorded with the same value until 1.0, which removes `blockchain.system`; the schema version is
+`0.3.0-dev`.

@@ -57,6 +57,7 @@ describe('call batch send span', () => {
     expect(active).toBeDefined();
     expect(span.attributes).toEqual({
       'blockchain.system': 'evm',
+      'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'send',
       'blockchain.call_batch.sender': SENDER,
@@ -294,6 +295,7 @@ describe('call batch metrics', () => {
   }
   const base = {
     'blockchain.system': 'evm',
+    'blockchain.system.name': 'evm',
     'blockchain.chain.id': CHAIN_ID,
     'blockchain.operation.subject': 'call_batch',
   };

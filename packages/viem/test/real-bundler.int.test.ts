@@ -289,6 +289,7 @@ describe.skipIf(!RUN)('user operations through Alto on Anvil', () => {
     expect(send.status.code).toBe(SpanStatusCode.UNSET);
     expect(send.attributes).toEqual({
       'blockchain.system': 'evm',
+      'blockchain.system.name': 'evm',
       'blockchain.chain.id': 31337,
       'blockchain.operation.name': 'send',
       'blockchain.user_operation.sender': account.toLowerCase(),
@@ -300,6 +301,7 @@ describe.skipIf(!RUN)('user operations through Alto on Anvil', () => {
     expect(confirm.status.code).toBe(SpanStatusCode.UNSET);
     expect(confirm.attributes).toEqual({
       'blockchain.system': 'evm',
+      'blockchain.system.name': 'evm',
       'blockchain.chain.id': 31337,
       'blockchain.operation.name': 'confirm',
       'blockchain.user_operation.hash': hash,

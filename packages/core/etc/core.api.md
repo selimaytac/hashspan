@@ -94,8 +94,11 @@ export const ATTR_BLOCKCHAIN_PAYMENT_STATUS: "blockchain.payment.status";
 // @public
 export const ATTR_BLOCKCHAIN_PAYMENT_VERIFIED: "blockchain.payment.verified";
 
-// @public
+// @public @deprecated
 export const ATTR_BLOCKCHAIN_SYSTEM: "blockchain.system";
+
+// @public
+export const ATTR_BLOCKCHAIN_SYSTEM_NAME: "blockchain.system.name";
 
 // @public
 export const ATTR_BLOCKCHAIN_TX_AUTHORIZATION_ADDRESSES: "blockchain.tx.authorization.addresses";

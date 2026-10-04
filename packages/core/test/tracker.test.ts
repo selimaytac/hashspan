@@ -57,6 +57,7 @@ describe('send span', () => {
     expect(send.instrumentationScope.name).toBe('@hashspan/core');
     expect(send.attributes).toMatchObject({
       'blockchain.system': 'evm',
+      'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'send',
       'blockchain.tx.hash': HASH,

@@ -74,6 +74,7 @@ describe('user operation send span', () => {
     );
     expect(span.attributes).toEqual({
       'blockchain.system': 'evm',
+      'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'send',
       'blockchain.user_operation.sender': SENDER,
@@ -116,6 +117,7 @@ describe('user operation send span', () => {
         'blockchain.chain.id',
         'blockchain.operation.name',
         'blockchain.system',
+        'blockchain.system.name',
         'blockchain.user_operation.hash',
       ]);
     }
@@ -167,6 +169,7 @@ describe('user operation confirm span', () => {
     expect(span.parentSpanContext?.spanId).toBe(tool.spanContext().spanId);
     expect(span.attributes).toEqual({
       'blockchain.system': 'evm',
+      'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'confirm',
       'blockchain.user_operation.hash': USER_OP_HASH,
@@ -287,6 +290,7 @@ describe('user operation confirm span', () => {
         'blockchain.chain.id',
         'blockchain.operation.name',
         'blockchain.system',
+        'blockchain.system.name',
         'blockchain.user_operation.hash',
       ]);
     }
@@ -438,12 +442,14 @@ describe('user operation privacy', () => {
     tracker.startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH }).end(receipt);
     expect(tracing.spanNamed(send).attributes).toEqual({
       'blockchain.system': 'evm',
+      'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'send',
       'blockchain.user_operation.hash': USER_OP_HASH,
     });
     expect(tracing.spanNamed(confirm).attributes).toEqual({
       'blockchain.system': 'evm',
+      'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'confirm',
       'blockchain.user_operation.hash': USER_OP_HASH,
@@ -472,6 +478,7 @@ describe('user operation metrics', () => {
   }
   const base = {
     'blockchain.system': 'evm',
+    'blockchain.system.name': 'evm',
     'blockchain.chain.id': CHAIN_ID,
     'blockchain.operation.subject': 'user_operation',
   };
