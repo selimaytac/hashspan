@@ -96,7 +96,8 @@ Exit criteria:
 
 - [ ] Every public export and `withHashspan` option of the four packages is documented, and the export pins in each
   package's `test/exports.test.ts` match the docs
-- [ ] No open P0 or P1 issue; the known limits of each adapter are stated in its README
+- [x] No open P0 or P1 issue; the known limits of each adapter are stated in its README (a `Known limits` section in
+  each package README)
 - [ ] Span and attribute names reviewed once as a whole, for consistent naming across transaction, user operation,
   payment and call batch spans; renames done through deprecation
 - [ ] Each adapter validated in at least one real integration, with its findings closed
