@@ -196,7 +196,7 @@
             "type": "prometheus",
             "uid": "hashspan-prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (max_over_time(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\"}[$__range]) - min_over_time(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\"}[$__range]))) / 1e9",
+          "expr": "histogram_quantile(0.5, sum by (le) (max_over_time(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\",blockchain_fee_payer=\"\"}[$__range]) - min_over_time(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\",blockchain_fee_payer=\"\"}[$__range]))) / 1e9",
           "legendFormat": "",
           "refId": "A",
           "instant": true
@@ -351,7 +351,7 @@
             "type": "prometheus",
             "uid": "hashspan-prometheus"
           },
-          "expr": "(histogram_quantile(0.5, sum by (le, blockchain_chain_id) (rate(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\"}[$__rate_interval])))) / 1e9",
+          "expr": "(histogram_quantile(0.5, sum by (le, blockchain_chain_id) (rate(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\",blockchain_fee_payer=\"\"}[$__rate_interval])))) / 1e9",
           "legendFormat": "p50 chain {{blockchain_chain_id}}",
           "refId": "A"
         },
@@ -360,7 +360,7 @@
             "type": "prometheus",
             "uid": "hashspan-prometheus"
           },
-          "expr": "(histogram_quantile(0.95, sum by (le, blockchain_chain_id) (rate(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\"}[$__rate_interval])))) / 1e9",
+          "expr": "(histogram_quantile(0.95, sum by (le, blockchain_chain_id) (rate(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\",blockchain_fee_payer=\"\"}[$__rate_interval])))) / 1e9",
           "legendFormat": "p95 chain {{blockchain_chain_id}}",
           "refId": "B"
         }
@@ -406,7 +406,7 @@
             "type": "prometheus",
             "uid": "hashspan-prometheus"
           },
-          "expr": "sort(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(sum by (le) (max_over_time(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\"}[$__range]) - min_over_time(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\"}[$__range])), \"bound\", \"up to 1e8 wei\", \"le\", \"100000000\"), \"bound\", \"up to 1e9 wei\", \"le\", \"1000000000\"), \"bound\", \"up to 1e10 wei\", \"le\", \"10000000000\"), \"bound\", \"up to 1e11 wei\", \"le\", \"100000000000\"), \"bound\", \"up to 1e12 wei\", \"le\", \"1000000000000\"), \"bound\", \"up to 1e13 wei\", \"le\", \"10000000000000\"), \"bound\", \"up to 1e14 wei\", \"le\", \"100000000000000\"), \"bound\", \"up to 1e15 wei\", \"le\", \"1000000000000000\"), \"bound\", \"up to 1e16 wei\", \"le\", \"10000000000000000\"), \"bound\", \"up to 1e17 wei\", \"le\", \"100000000000000000\"), \"bound\", \"up to 1e18 wei\", \"le\", \"1000000000000000000\"), \"bound\", \"any fee\", \"le\", \"\\\\+Inf\") > 0)",
+          "expr": "sort(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(sum by (le) (max_over_time(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\",blockchain_fee_payer=\"\"}[$__range]) - min_over_time(blockchain_client_fee_bucket{blockchain_chain_id=~\"$chain\",blockchain_fee_payer=\"\"}[$__range])), \"bound\", \"up to 1e8 wei\", \"le\", \"100000000\"), \"bound\", \"up to 1e9 wei\", \"le\", \"1000000000\"), \"bound\", \"up to 1e10 wei\", \"le\", \"10000000000\"), \"bound\", \"up to 1e11 wei\", \"le\", \"100000000000\"), \"bound\", \"up to 1e12 wei\", \"le\", \"1000000000000\"), \"bound\", \"up to 1e13 wei\", \"le\", \"10000000000000\"), \"bound\", \"up to 1e14 wei\", \"le\", \"100000000000000\"), \"bound\", \"up to 1e15 wei\", \"le\", \"1000000000000000\"), \"bound\", \"up to 1e16 wei\", \"le\", \"10000000000000000\"), \"bound\", \"up to 1e17 wei\", \"le\", \"100000000000000000\"), \"bound\", \"up to 1e18 wei\", \"le\", \"1000000000000000000\"), \"bound\", \"any fee\", \"le\", \"\\\\+Inf\") > 0)",
           "instant": true,
           "legendFormat": "{{bound}}",
           "refId": "A"

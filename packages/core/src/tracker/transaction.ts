@@ -15,6 +15,7 @@ import {
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR,
+  ATTR_BLOCKCHAIN_FEE_PAYER,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_ADDRESSES,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_CHAIN_IDS,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_COUNT,
@@ -43,7 +44,7 @@ import {
   ERROR_TYPE_VALUE_OTHER,
 } from '../attributes.js';
 import type { ConfirmRegistry, SharedConfirm } from '../confirm-registry.js';
-import type { LinkStore } from '../link-store.js';
+import type { LinkStore, SentTransaction } from '../link-store.js';
 import { type TxMetrics, toEpochMs } from '../metrics.js';
 import {
   type AddressFormatter,
@@ -128,6 +129,8 @@ interface ConfirmOrigin {
   parent: Context;
   startTime: TimeInput;
   links: Link[];
+  /** Who pays the fee when it is not the sender; the replacing transaction's fee is paid by the same party. */
+  feePayer: SentTransaction['feePayer'];
 }
 
 /** What the transaction spans need from the `createTxTracker()` call. */
@@ -310,6 +313,7 @@ export function createTransactionSpans({
     replacing?: ConfirmOrigin,
   ): ConfirmSpan => {
     const sent = links.get(input.chainId, input.hash);
+    const feePayer = replacing ? replacing.feePayer : sent?.feePayer;
     const active = context.active();
     const parent =
       replacing?.parent ?? parentCtx ?? (trace.getSpan(active) ? active : (sent?.parent ?? active));
@@ -348,6 +352,7 @@ export function createTransactionSpans({
       parent,
       startTime: explicitStart ?? new Date(),
       links: [{ context: span.spanContext() }, ...(sent ? [{ context: sent.spanContext }] : [])],
+      feePayer,
     };
 
     return {
@@ -375,7 +380,13 @@ export function createTransactionSpans({
             recordConfirmation(endTime, status);
             const fee = attributes[ATTR_BLOCKCHAIN_TX_FEE];
             if (typeof fee === 'string')
-              txMetrics.fee(BigInt(fee), metricAttributes(input.chainId, status));
+              txMetrics.fee(
+                BigInt(fee),
+                metricAttributes(
+                  input.chainId,
+                  feePayer ? { ...status, [ATTR_BLOCKCHAIN_FEE_PAYER]: feePayer } : status,
+                ),
+              );
           },
           endTime,
         ),
