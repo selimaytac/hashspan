@@ -249,7 +249,7 @@ export function addCallBatchActions(
 
     actions.waitForCallsStatus = (args: unknown) => {
       let id: unknown;
-      let chainId: number | undefined;
+      let chainId: number | null | undefined;
       try {
         id = own(args, 'id');
         // sendCallsSync passes its `chain` on to the wait, as a caller may.
@@ -258,7 +258,7 @@ export function addCallBatchActions(
         untraced(error);
         return waitForCallsStatus(args);
       }
-      if (typeof id !== 'string') return waitForCallsStatus(args);
+      if (typeof id !== 'string' || chainId === null) return waitForCallsStatus(args);
       let handle: CallBatchConfirmHandle | undefined;
       if (chainId !== undefined) {
         try {

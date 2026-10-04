@@ -58,8 +58,8 @@ const { transactionHash } = await walletApi.send(tx); // not traced by hashspan
 hashspan.watch(reader, { hash: transactionHash });
 ```
 
-Options: `chainId` (defaults to the client's chain; without either, or when it contradicts the client's chain,
-nothing is recorded and a `diag` message says why; a client without a chain is asked for its chain id with
+Options: `chainId` (defaults to the client's chain; without either, when either is not a positive safe integer, or
+when it contradicts the client's chain, nothing is recorded and a `diag` message says why; a client without a chain is asked for its chain id with
 `eth_chainId` first), `timeoutMs` (default 120 000 ms), `abi`, to decode custom errors
 in the revert reason, and `onReceipt`, called once when the watch ends with the receipt of the mined transaction, or
 with `undefined` when none was retrieved; it never affects the confirm span. `watch()` never throws or waits;

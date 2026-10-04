@@ -208,11 +208,12 @@ describe('chain ids that are not one', () => {
     expect(tracing.spans().map((s) => s.attributes['blockchain.chain.id'])).not.toContain(0);
   });
 
-  it.each([0, -1, Number.NaN, 1.5])('ignores a call chain with id %s', async (id) => {
+  // A call that names such a chain is not traced: recorded under the client's chain, its span would name a chain the
+  // call was not sent on.
+  it.each([0, -1, Number.NaN, 1.5])('does not trace a send whose chain has id %s', async (id) => {
     const { transport } = mockTransport();
-    const wallet = createWalletClient({ account: FROM, chain: base, transport }).extend(
-      withHashspan(),
-    );
+    const hashspan = withHashspan();
+    const wallet = createWalletClient({ account: FROM, chain: base, transport }).extend(hashspan);
 
     await wallet
       .sendTransaction({
@@ -220,8 +221,61 @@ describe('chain ids that are not one', () => {
         chain: { ...base, id } as unknown as typeof base,
       })
       .catch(() => {});
-    for (const span of tracing.spans()) {
-      expect(span.attributes['blockchain.chain.id']).not.toBe(id);
-    }
+    await expect(hashspan.flush()).resolves.toBe(true);
+    expect(tracing.spans()).toEqual([]);
+  });
+
+  it.each([0, -1])('does not trace a wait whose chain has id %s', async (id) => {
+    const hashspan = withHashspan();
+    const reader = createPublicClient({
+      chain: base,
+      transport: mockTransport().transport,
+      pollingInterval: 10,
+    }).extend(hashspan);
+
+    await expect(
+      reader.waitForTransactionReceipt({
+        hash: HASH,
+        chain: { ...base, id },
+      } as never),
+    ).resolves.toMatchObject({ transactionHash: HASH });
+    await expect(hashspan.flush()).resolves.toBe(true);
+    expect(tracing.spans()).toEqual([]);
+  });
+});
+
+describe('watch() with chain ids that are not one', () => {
+  it.each([
+    ['a client on chain 0, asked for chain 0', 0, 0],
+    ['a client on chain 0, asked for no chain', 0, undefined],
+    ['a client on chain 0, asked for chain 8453', 0, 8453],
+    ['a client on chain 8453, asked for chain 0', 8453, 0],
+    ['a client on chain 8453, asked for chain -1', 8453, -1],
+  ])('records nothing for %s', async (_label, clientChain, chainId) => {
+    const hashspan = withHashspan();
+    const mock = mockTransport();
+    const reader = createPublicClient({
+      chain: { ...base, id: clientChain },
+      transport: mock.transport,
+      pollingInterval: 10,
+    });
+    const onReceipt = vi.fn();
+
+    hashspan.watch(reader, { hash: HASH, chainId, onReceipt });
+    await expect(hashspan.flush()).resolves.toBe(true);
+    expect(tracing.spans()).toEqual([]);
+    expect(mock.calls).toEqual([]);
+    expect(onReceipt).toHaveBeenCalledWith(undefined);
+  });
+
+  it('records nothing for a client without a chain asked for chain 0', async () => {
+    const hashspan = withHashspan();
+    const mock = mockTransport();
+    const reader = createPublicClient({ transport: mock.transport, pollingInterval: 10 });
+
+    hashspan.watch(reader, { hash: HASH, chainId: 0 });
+    await expect(hashspan.flush()).resolves.toBe(true);
+    expect(tracing.spans()).toEqual([]);
+    expect(mock.calls).toEqual([]);
   });
 });

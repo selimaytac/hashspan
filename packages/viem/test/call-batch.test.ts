@@ -80,6 +80,18 @@ describe.skipIf(withoutCallBatches)('sendCalls', () => {
 });
 
 describe.skipIf(withoutCallBatches)('waitForCallsStatus', () => {
+  it('does not trace a wait whose chain has an id that is not one', async () => {
+    const { client, hashspan } = wallet();
+    const status = await client.waitForCallsStatus({
+      id: BATCH_ID,
+      chain: { ...base, id: 0 },
+    } as never);
+    await expect(hashspan.flush()).resolves.toBe(true);
+
+    expect(status.status).toBe('success');
+    expect(tracing.spans()).toEqual([]);
+  });
+
   it('records a confirm span linked to the send span, with the status code and transaction hashes', async () => {
     const { client, hashspan } = wallet({
       callsStatus: (call) => (call === 1 ? { status: 100, receipts: [] } : {}),
