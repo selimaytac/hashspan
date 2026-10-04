@@ -22,7 +22,11 @@ export default defineConfig({
         test: {
           name: 'unit',
           include: ['packages/*/test/**/*.test.ts', 'examples/*/test/**/*.test.ts'],
-          exclude: ['packages/*/test/**/*.int.test.ts', 'examples/*/test/**/*.int.test.ts'],
+          exclude: [
+            'packages/*/test/**/*.int.test.ts',
+            'examples/*/test/**/*.int.test.ts',
+            'packages/*/test/**/*.load.test.ts',
+          ],
         },
       },
       {
@@ -33,6 +37,18 @@ export default defineConfig({
           testTimeout: 30_000,
           // Starting Anvil in beforeAll can take longer than the default 10 s while the whole suite runs in parallel.
           hookTimeout: 60_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          // Load and long-run checks: they run only with HASHSPAN_LOAD=1 (`pnpm test:load`, weekly in CI).
+          name: 'load',
+          include: ['packages/*/test/**/*.load.test.ts'],
+          testTimeout: 300_000,
+          hookTimeout: 60_000,
+          // For the heap check, which collects garbage before each measurement.
+          execArgv: ['--expose-gc'],
         },
       },
     ],

@@ -11,14 +11,20 @@ const read = (path: string) => readFileSync(join(root, path), 'utf8');
 /** Text as a literal in a regular expression. */
 const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** Markdown files of the repository; generated changelogs and local, git-ignored notes are left out. */
+/**
+ * Markdown files of the repository; generated changelogs and API reports (`pnpm api:update`) and local, git-ignored
+ * notes are left out.
+ */
 function markdownFiles(dir = ''): string[] {
   return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
       return ['node_modules', 'dist', '.git'].includes(entry.name) ? [] : markdownFiles(path);
     }
-    const skip = entry.name === 'CHANGELOG.md' || entry.name.endsWith('.local.md');
+    const skip =
+      entry.name === 'CHANGELOG.md' ||
+      entry.name.endsWith('.api.md') ||
+      entry.name.endsWith('.local.md');
     return entry.name.endsWith('.md') && !skip ? [path] : [];
   });
 }

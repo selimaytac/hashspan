@@ -2,6 +2,7 @@ import { diag, SpanStatusCode } from '@opentelemetry/api';
 import { createPublicClient, createWalletClient } from 'viem';
 import { mainnet } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Recent } from '../src/confirm/recent.js';
 import { withHashspan } from '../src/index.js';
 import { FROM, HASH, mockTransport, TO } from './mock-transport.js';
 import { setupTracing, type TestTracing } from './tracing.js';
@@ -140,10 +141,30 @@ describe('calls that fail before the chain id is known', () => {
 });
 
 describe('the recording safety net', () => {
-  it('still ends the confirm span when the receipt cannot be read', async () => {
-    const error = vi.spyOn(diag, 'error').mockImplementation(() => {});
+  it('records a receipt whose l1Fee cannot be read without it and without the total fee', async () => {
     // mainnet has no OP-stack formatter, so the unparsable l1Fee reaches the adapter as it is.
     const { transport } = mockTransport({ chainIdHex: '0x1', receipt: { l1Fee: 'nope' } });
+    const hashspan = withHashspan();
+    const reader = createPublicClient({ chain: mainnet, transport }).extend(hashspan);
+
+    await expect(reader.waitForTransactionReceipt({ hash: HASH })).resolves.toMatchObject({
+      transactionHash: HASH,
+    });
+    await expect(hashspan.flush()).resolves.toBe(true);
+
+    const confirm = tracing.spanNamed('confirm 1');
+    expect(confirm.status.code).not.toBe(SpanStatusCode.ERROR);
+    expect(confirm.attributes['blockchain.tx.status']).toBe('success');
+    expect(confirm.attributes['blockchain.tx.l1_fee']).toBeUndefined();
+    expect(confirm.attributes['blockchain.tx.fee']).toBeUndefined();
+  });
+
+  it('still ends the confirm span when the receipt cannot be recorded', async () => {
+    const error = vi.spyOn(diag, 'error').mockImplementation(() => {});
+    vi.spyOn(Recent.prototype, 'get').mockImplementation(() => {
+      throw new Error('unreadable');
+    });
+    const { transport } = mockTransport({ chainIdHex: '0x1', receipt: { status: '0x0' } });
     const hashspan = withHashspan();
     const reader = createPublicClient({ chain: mainnet, transport }).extend(hashspan);
 

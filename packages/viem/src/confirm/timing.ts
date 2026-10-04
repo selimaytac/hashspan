@@ -1,4 +1,4 @@
-import { diag } from '@opentelemetry/api';
+import { type Context, context, diag } from '@opentelemetry/api';
 import { errorName } from '../safe-tracker.js';
 import type { ViemClientLike } from '../types.js';
 
@@ -84,6 +84,37 @@ export function chainIdOrGiveUp(
     };
     settled.then(startGrace, startGrace);
   });
+}
+
+/**
+ * Records a wait whose chain id was unknown when it started, once it is known: `start` opens its confirm span in the
+ * caller's context `ctx`, and `record` records the wait with the time it settled. `chainId` is called after the wait
+ * is watched for that time. Never rejects.
+ */
+export async function recordLate<H>(
+  ctx: Context,
+  wait: Promise<unknown>,
+  chainId: () => Promise<number>,
+  start: (chainId: number) => H,
+  record: (handle: H, chainId: number, endTimeOf: () => Date) => Promise<void>,
+): Promise<void> {
+  let endTime: Date | undefined;
+  const settled = wait.then(
+    () => {
+      endTime = new Date();
+    },
+    () => {
+      endTime = new Date();
+    },
+  );
+  const id = await chainIdOrGiveUp(chainId(), settled);
+  if (id === undefined) return;
+  try {
+    const handle = context.with(ctx, () => start(id));
+    await record(handle, id, () => endTime ?? new Date());
+  } catch (error) {
+    diag.error(`hashspan: failed to record confirm span (${errorName(error)})`);
+  }
 }
 
 /** The longest delay a JavaScript timer keeps; a longer one fires at once. */

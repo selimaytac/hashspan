@@ -167,3 +167,8 @@ stays proposed until then.
   pending settlements, a settle that throws, an `upfront` payment on 2.28, both ends of the SDK range (the weekly x402
   workflow), an older core, a facilitator client extended with `withHashspan()`, and a payer and a server under HTTP
   instrumentation sharing a trace.
+
+## Amendment (2026-10-04): role values
+
+The values of `blockchain.payment.role` are `payer` and `recipient`, matching the released
+`blockchain.payment.recipient`. "Payee" stays the name of the server's side in this ADR's prose.

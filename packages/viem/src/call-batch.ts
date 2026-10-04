@@ -5,7 +5,7 @@ import type {
   CallBatchStatusLike,
   TxTracker,
 } from '@hashspan/core';
-import { type Context, context, diag, type TimeInput } from '@opentelemetry/api';
+import { context, diag, type TimeInput } from '@opentelemetry/api';
 // A namespace import: `sendCallsSync` is missing from older viem releases in the peer range, and a named import of it
 // would fail to load there.
 import * as viemActions from 'viem/actions';
@@ -13,7 +13,7 @@ import { addressOf, own } from './arguments.js';
 import { type Confirmation, DEFAULT_BACKGROUND_TIMEOUT_MS } from './confirm/confirmation.js';
 import type { Pending } from './confirm/pending.js';
 import { isCallsTimeout, isReadable, nameOf, unreadable } from './confirm/receipt.js';
-import { chainIdOrGiveUp } from './confirm/timing.js';
+import { recordLate } from './confirm/timing.js';
 import { errorName } from './safe-tracker.js';
 import type { SendArgs, SendTracing } from './send.js';
 import type {
@@ -211,41 +211,15 @@ export function addCallBatchActions(
       return Promise.race([record(), confirmation.ended]);
     };
 
-    /** Records a wait whose chain id was unknown when it started, once it is known. Never rejects. */
-    const recordLateCallBatchStatus = async (
-      ctx: Context,
-      startTime: Date,
-      id: string,
-      wait: Promise<unknown>,
-    ): Promise<void> => {
-      let endTime: Date | undefined;
-      const settled = wait.then(
-        () => {
-          endTime = new Date();
-        },
-        () => {
-          endTime = new Date();
-        },
-      );
-      // The status names its chain; without one, the client is asked once the wait has settled.
-      const chainId = wait.then(
+    /** The chain a call batch status names; without one, the client is asked once the wait has settled. */
+    const statusChainId = (wait: Promise<unknown>): Promise<number> =>
+      wait.then(
         (status) => {
           const reported = own(status, 'chainId');
           return typeof reported === 'number' ? reported : queryChainId();
         },
         () => queryChainId(),
       );
-      const known = await chainIdOrGiveUp(chainId, settled);
-      if (known === undefined) return;
-      try {
-        const handle = context.with(ctx, () =>
-          tracker.startCallBatchConfirm({ chainId: known, id, startTime }),
-        );
-        await recordCallBatchStatus(handle, wait, () => endTime ?? new Date());
-      } catch (error) {
-        diag.error(`hashspan: failed to record confirm span (${errorName(error)})`);
-      }
-    };
 
     actions.waitForCallsStatus = (args: unknown) => {
       let id: unknown;
@@ -272,7 +246,18 @@ export function addCallBatchActions(
       // Called synchronously, as without hashspan; a synchronous throw becomes a rejection the handle records.
       const wait = (async () => waitForCallsStatus(args))() as Promise<unknown>;
       if (handle) track(recordCallBatchStatus(handle, wait));
-      else if (late) track(recordLateCallBatchStatus(late.ctx, late.startTime, id, wait));
+      else if (late) {
+        track(
+          recordLate(
+            late.ctx,
+            wait,
+            () => statusChainId(wait),
+            (known) =>
+              tracker.startCallBatchConfirm({ chainId: known, id, startTime: late.startTime }),
+            (lateHandle, _known, endTimeOf) => recordCallBatchStatus(lateHandle, wait, endTimeOf),
+          ),
+        );
+      }
       return wait;
     };
   }

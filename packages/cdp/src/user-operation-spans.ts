@@ -9,6 +9,8 @@ import type { ViemClientLike } from '@hashspan/viem';
 import { context, diag } from '@opentelemetry/api';
 import type { ReaderFor } from './chain.js';
 import {
+  callChainId,
+  DEFAULT_CONFIRM_TIMEOUT_MS,
   ERROR_TYPE_OTHER,
   errorName,
   failSend,
@@ -24,7 +26,6 @@ import { SentUserOperations, userOperationReceiptFromBundle } from './user-opera
 // The user operations whose chain and sender are remembered for later waits.
 const MAX_SENT_USER_OPERATIONS = 4096;
 // The same default as the confirmations through the reader (`confirmTimeoutMs`).
-const DEFAULT_CONFIRM_TIMEOUT_MS = 120_000;
 // The longest delay a timer keeps; a longer one fires at once.
 const MAX_TIMER_MS = 2 ** 31 - 1;
 // How often the reader is asked for a bundle receipt when it has no polling interval of its own.
@@ -99,19 +100,8 @@ export function createUserOperationSpans({
     describe: () => Omit<UserOperationInput, 'chainId'>,
     send: () => Promise<unknown>,
   ): Promise<unknown> => {
-    let chainId: number | undefined;
-    try {
-      chainId = chainIdOf();
-    } catch (error) {
-      diag.error(
-        `hashspan: failed to read the call options; call not traced (${errorName(error)})`,
-      );
-      return send();
-    }
-    if (chainId === undefined) {
-      diag.debug('hashspan: no known CDP network in the call; not tracing it');
-      return send();
-    }
+    const chainId = callChainId(chainIdOf);
+    if (chainId === undefined) return send();
     if (!tracesUserOperations()) return send();
     let input: Omit<UserOperationInput, 'chainId'> = {};
     let handle: ReturnType<TxTracker['startUserOperationSend']> | undefined;

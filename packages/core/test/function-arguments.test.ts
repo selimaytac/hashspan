@@ -87,4 +87,25 @@ describe('function arguments', () => {
       tracing.spanNamed(`send ${CHAIN_ID}`).attributes['blockchain.contract.function.name'],
     ).toBe('transfer');
   });
+
+  it('records binary data as 0x hex', () => {
+    const bytes = Uint8Array.from(Buffer.from(RECIPIENT.slice(2), 'hex'));
+    const recorded = sendWith({ recordFunctionArguments: true }, [
+      bytes,
+      new Uint8Array([1, 255]).buffer,
+    ]);
+    expect(recorded).toBe(`["${RECIPIENT}","0x01ff"]`);
+  });
+
+  it('applies the address mode to binary data', () => {
+    const bytes = Uint8Array.from(Buffer.from(RECIPIENT.slice(2), 'hex'));
+    const recorded = sendWith({ recordFunctionArguments: true, address: 'off' }, [bytes]);
+    expect(recorded).not.toContain(RECIPIENT.slice(2));
+  });
+
+  it('reads no more of a large buffer than the bound needs', () => {
+    const recorded = sendWith({ recordFunctionArguments: true }, [new Uint8Array(4 * 1024 * 1024)]);
+    expect(typeof recorded).toBe('string');
+    expect((recorded as string).length).toBeLessThanOrEqual(4096 + 3);
+  });
 });

@@ -67,7 +67,9 @@ export function resolveAddressFormatter(
 }
 
 /** 0x-prefixed hex. Unprefixed hex and addresses written as numbers are not detected. */
-const HEX = /0[xX][0-9a-fA-F]+/g;
+// A `0x` followed by a hex digit starts a new hex value, also right after another: `0x…0x<address>` holds an address
+// the address mode must see. A `0` followed by an `x` that starts nothing stays part of the value: `0x…0xyz`.
+const HEX = /0[xX](?:(?!0[xX][0-9a-fA-F])[0-9a-fA-F])+/g;
 const ADDRESS_LENGTH = 42;
 /**
  * Longest hex kept in sanitized error messages in raw address mode: a 32-byte word such as a transaction hash. In
@@ -75,8 +77,11 @@ const ADDRESS_LENGTH = 42;
  */
 const MAX_HEX_LENGTH = 66;
 const MAX_MESSAGE_LENGTH = 256;
-/** A URL in free text: `scheme://` up to the next whitespace, quote or bracket; the bounded scheme keeps it linear. */
-const URL_IN_TEXT = /\b[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/[^\s"'<>()[\]{}]+/g;
+/**
+ * A URL in free text: `scheme://` up to the next whitespace, quote or bracket; the bounded scheme keeps it linear. Not
+ * anchored to a word boundary, so a URL right after other text (`rpc_https://...`) is found too.
+ */
+const URL_IN_TEXT = /[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/[^\s"'<>()[\]{}]+/g;
 
 /**
  * Rewrites every address in `text` with the address mode (`<address>` when it records none). In `off` and `hashed`
@@ -101,9 +106,7 @@ export function sanitizeErrorMessage(message: string, formatAddress: AddressForm
   const sanitized = formatAddressesIn(firstLine, formatAddress).replace(HEX, (hex) =>
     hex.length > MAX_HEX_LENGTH ? '<hex>' : hex,
   );
-  return sanitized.length > MAX_MESSAGE_LENGTH
-    ? `${sanitized.slice(0, MAX_MESSAGE_LENGTH)}...`
-    : sanitized;
+  return cutAt(sanitized, MAX_MESSAGE_LENGTH);
 }
 
 const MAX_ARGUMENTS_LENGTH = 4096;
@@ -116,9 +119,10 @@ class ArgumentsLimitReached extends Error {}
  * {@link formatAddressesIn}), at most `MAX_ARGUMENTS_LENGTH` characters followed by `...`.
  *
  * Side-effect free for ordinary values: it reads only own enumerable data properties and never calls `toJSON()` or
- * getters (so a `Date` records as `{}`). A Proxy's traps still run, as for any property read; use the redaction
- * hook, or leave arguments off, for values that are Proxies. It stops after the value that crosses the length limit instead of walking the rest. Functions, symbols and `undefined` are skipped in objects and written as `null` in arrays, as in
- * JSON. Throws for cycles and for nesting deeper than `MAX_ARGUMENTS_DEPTH`.
+ * getters (so a `Date` records as `{}`); binary data records as `0x` hex. A Proxy's traps still run, as for any
+ * property read; use the redaction hook, or leave arguments off, for values that are Proxies. It stops after the value
+ * that crosses the length limit instead of walking the rest. Functions, symbols and `undefined` are skipped in objects
+ * and written as `null` in arrays, as in JSON. Throws for cycles and for nesting deeper than `MAX_ARGUMENTS_DEPTH`.
  */
 export function serializeFunctionArguments(
   args: readonly unknown[],
@@ -154,6 +158,11 @@ export function serializeFunctionArguments(
     }
     if (value === null) {
       write('null');
+      return true;
+    }
+    const bytes = bytesOf(value);
+    if (bytes !== undefined) {
+      write(text(bytes));
       return true;
     }
     if (ancestors.has(value)) throw new TypeError('cyclic function arguments');
@@ -193,9 +202,25 @@ export function serializeFunctionArguments(
     walk(args, 0);
     return out;
   } catch (error) {
-    if (error instanceof ArgumentsLimitReached) return `${out.slice(0, MAX_ARGUMENTS_LENGTH)}...`;
+    if (error instanceof ArgumentsLimitReached) return cutAt(out, MAX_ARGUMENTS_LENGTH);
     throw error;
   }
+}
+
+/**
+ * Binary data (an `ArrayBuffer`, typed array or `DataView`) as `0x` hex of at most the bytes that fit the arguments
+ * bound, so the address mode applies to it and a large buffer is not walked index by index.
+ */
+function bytesOf(value: object): string | undefined {
+  let view: Uint8Array;
+  if (value instanceof ArrayBuffer) view = new Uint8Array(value);
+  else if (ArrayBuffer.isView(value)) {
+    view = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  } else return undefined;
+  const length = Math.min(view.length, MAX_ARGUMENTS_LENGTH / 2);
+  let hex = '0x';
+  for (let i = 0; i < length; i++) hex += (view[i] as number).toString(16).padStart(2, '0');
+  return hex;
 }
 
 export function resolveErrorMessageMode(mode: ErrorMessageMode | undefined): ErrorMessageMode {
@@ -236,10 +261,27 @@ export function paymentResourceOf(resource: string, mode: PaymentResourceMode): 
  * `text` cut to `max` characters, followed by `...`. A hex value that the cut splits is dropped whole: the part left
  * is shorter than an address, so the address mode, applied later, would no longer recognise it as one.
  */
-function cutAt(text: string, max: number): string {
+export function cutAt(text: string, max: number): string {
   if (text.length <= max) return text;
   const head = text.slice(0, max);
   return `${/^[0-9a-fA-F]/.test(text.slice(max)) ? head.replace(/0[xX][0-9a-fA-F]*$/, '') : head}...`;
+}
+
+/** Longest revert reason recorded, as the viem adapter's decoder cuts it too. */
+const MAX_REVERT_REASON_LENGTH = 1024;
+const ELLIPSIS = '...';
+
+/**
+ * A revert reason within its bound, with addresses per the address mode. A reason that an adapter already cut to the
+ * bound (it ends with `...` and is no longer than the bound and the ellipsis) is kept as it is, so it is not cut twice.
+ */
+export function boundRevertReason(reason: string, formatAddress: AddressFormatter): string {
+  const alreadyCut =
+    reason.length <= MAX_REVERT_REASON_LENGTH + ELLIPSIS.length && reason.endsWith(ELLIPSIS);
+  return formatAddressesIn(
+    alreadyCut ? reason : cutAt(reason, MAX_REVERT_REASON_LENGTH),
+    formatAddress,
+  );
 }
 
 /** Longest `x402.resource` recorded; the value comes from the server that asks for the payment. */

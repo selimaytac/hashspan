@@ -1,6 +1,6 @@
 // Transactions: `sendTransaction`, `writeContract` and `waitForTransactionReceipt`.
 import type { ConfirmHandle, SendInput, TxTracker } from '@hashspan/core';
-import { type Context, context, diag } from '@opentelemetry/api';
+import { context, diag } from '@opentelemetry/api';
 import { type Abi, getAbiItem, toFunctionSelector } from 'viem';
 import {
   abiForTelemetry,
@@ -22,7 +22,7 @@ import {
   type ViemReplacement,
 } from './confirm/receipt.js';
 import { confirmKey, type Recent } from './confirm/recent.js';
-import { chainIdOrGiveUp } from './confirm/timing.js';
+import { recordLate } from './confirm/timing.js';
 import { errorName } from './safe-tracker.js';
 import type { SendArgs, SendTrace, SendTracing } from './send.js';
 import type {
@@ -182,44 +182,6 @@ export function addTransactionActions(
   }
 
   if (typeof waitForTransactionReceipt === 'function') {
-    /** Records a wait whose chain id was unknown when it started, once it is known. Never rejects. */
-    const recordLateConfirmation = async (
-      ctx: Context,
-      startTime: Date,
-      chainId: Promise<number>,
-      hash: string,
-      wait: Promise<ViemReceipt>,
-      capture: ReplacementCapture,
-    ): Promise<void> => {
-      let endTime: Date | undefined;
-      const settled = wait.then(
-        () => {
-          endTime = new Date();
-        },
-        () => {
-          endTime = new Date();
-        },
-      );
-      const id = await chainIdOrGiveUp(chainId, settled);
-      if (id === undefined) return;
-      try {
-        const handle = context.with(ctx, () =>
-          tracker.startConfirm({ chainId: id, hash, startTime }),
-        );
-        await recordConfirmation(
-          id,
-          hash,
-          handle,
-          wait,
-          capture,
-          client,
-          () => endTime ?? new Date(),
-        );
-      } catch (error) {
-        diag.error(`hashspan: failed to record confirm span (${errorName(error)})`);
-      }
-    };
-
     /**
      * What tracing a wait needs, read without running a getter, or undefined when the wait is not traced: an
      * inherited hash, a hash or callback behind an accessor, a `chain` whose id is not a chain id, or arguments that
@@ -266,7 +228,16 @@ export function addTransactionActions(
       if (handle && chainId !== undefined) {
         track(recordConfirmation(chainId, hash, handle, wait, capture, client));
       } else if (late) {
-        track(recordLateConfirmation(late.ctx, late.startTime, late.chainId, hash, wait, capture));
+        track(
+          recordLate(
+            late.ctx,
+            wait,
+            () => late.chainId,
+            (id) => tracker.startConfirm({ chainId: id, hash, startTime: late.startTime }),
+            (lateHandle, id, endTimeOf) =>
+              recordConfirmation(id, hash, lateHandle, wait, capture, client, endTimeOf),
+          ),
+        );
       }
       return wait;
     };
