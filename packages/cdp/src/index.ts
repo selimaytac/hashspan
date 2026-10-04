@@ -106,15 +106,22 @@ export function withHashspan(
       return viemDone && ownDone;
     },
   };
-  const evm = cdp.evm as Record<string, unknown> & { [WRAPPED]?: HashspanCdp };
-  const existing = evm[WRAPPED];
-  if (existing) {
-    diag.warn(
-      'hashspan: this CDP client is already traced; ignoring the options of the second withHashspan()',
-    );
-    return existing;
+  let evm: Record<string, unknown> & { [WRAPPED]?: HashspanCdp };
+  try {
+    evm = cdp.evm as typeof evm;
+    const existing = evm[WRAPPED];
+    if (existing) {
+      diag.warn(
+        'hashspan: this CDP client is already traced; ignoring the options of the second withHashspan()',
+      );
+      return existing;
+    }
+    Object.defineProperty(evm, WRAPPED, { value: handle });
+  } catch {
+    // A client that cannot be read or marked is not traced; withHashspan() never throws into the caller (ADR 0025).
+    diag.warn('hashspan: not tracing this CDP client: it cannot be read or marked as traced');
+    return handle;
   }
-  Object.defineProperty(evm, WRAPPED, { value: handle });
   wrapEvm(evm, {
     chainIdFor,
     traced,

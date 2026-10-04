@@ -144,10 +144,6 @@ const RECEIPT_QUANTITY_FINDING = { records: 'core-receipt-quantities' } as const
 const REVERT_REASON_FINDING = { records: 'core-revert-reason' } as const;
 // finding: core-error-name. error.type and exception.type take an error's name unbounded.
 const ERROR_NAME_FINDING = { records: 'core-error-name' } as const;
-// finding: core-receipt-open-span. A receipt that cannot be read leaves the confirm span open, never exported.
-const OPEN_SPAN_FINDING = { throws: 'core-receipt-open-span' } as const;
-// finding: core-handle-throws. CallBatchConfirmHandle.end throws for a status that cannot be read.
-const HANDLE_THROWS_FINDING = { throws: 'core-handle-throws' } as const;
 // finding: core-options. Options are not checked: createTxTracker(null) throws, and a TTL or bound that is not a
 // number makes handle methods throw or leaves spans open.
 const OPTIONS_FINDING = { throws: 'core-options' } as const;
@@ -282,7 +278,6 @@ const ROWS: Row[] = [
   {
     name: 'ConfirmHandle.end receipt',
     run: (t, value) => t.startConfirm(CONFIRM).end(value as never),
-    findings: OPEN_SPAN_FINDING,
   },
   {
     name: 'ConfirmHandle.end receipt.revertReason',
@@ -476,7 +471,6 @@ const ROWS: Row[] = [
   {
     name: 'CallBatchConfirmHandle.end status',
     run: (t, value) => t.startCallBatchConfirm(CALL_BATCH_CONFIRM).end(value as never),
-    findings: HANDLE_THROWS_FINDING,
   },
   {
     name: 'CallBatchConfirmHandle.timeout options',
@@ -792,14 +786,14 @@ describe('bounds', () => {
 // --- Rule 3: a value that fails validation is not recorded as another ---------------------------------------------
 
 describe('values that fail validation', () => {
-  // finding: core-receipt-status. A receipt status other than success or reverted is recorded as success.
-  it.fails.each(['0x5', 'pending', undefined, 1])(
-    'records no transaction status for a receipt status of %s [finding: core-receipt-status]',
+  it.each(['0x5', 'pending', undefined, 1])(
+    'records no transaction status for a receipt status of %s',
     (status) => {
       createTxTracker()
         .startConfirm(CONFIRM)
         .end({ ...RECEIPT, status } as never);
       expect(spanAttribute('blockchain.tx.status')).toBeUndefined();
+      expect(spanAttribute('error.type')).toBe('_OTHER');
     },
   );
 

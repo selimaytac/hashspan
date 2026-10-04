@@ -76,6 +76,12 @@ import { ADDRESS, ownValue, TX_HASH, toInt } from './values.js';
 /** Most EIP-7702 authorizations listed on a send span; the count covers all of them. */
 const MAX_AUTHORIZATIONS = 64;
 
+/** The receipt statuses of the `ReceiptLike` type and what each records as `blockchain.tx.status`. */
+const RECEIPT_STATUSES: ReadonlyMap<unknown, string> = new Map([
+  ['success', BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS],
+  ['reverted', BLOCKCHAIN_TX_STATUS_VALUE_REVERTED],
+]);
+
 const REPLACEMENT_REASONS: ReadonlySet<string> = new Set([
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPRICED,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
@@ -246,13 +252,12 @@ export function createTransactionSpans({
 
   const receiptAttributes = (receipt: ReceiptLike): Attributes => {
     const attributes: Attributes = {
-      [ATTR_BLOCKCHAIN_TX_STATUS]:
-        receipt.status === 'reverted'
-          ? BLOCKCHAIN_TX_STATUS_VALUE_REVERTED
-          : BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS,
       [ATTR_BLOCKCHAIN_BLOCK_NUMBER]: toInt(receipt.blockNumber),
       [ATTR_BLOCKCHAIN_TX_GAS_USED]: toInt(receipt.gasUsed),
     };
+    // A status other than the two a receipt can have is not recorded as either (ADR 0025 rule 3).
+    const status = RECEIPT_STATUSES.get(receipt.status);
+    if (status !== undefined) attributes[ATTR_BLOCKCHAIN_TX_STATUS] = status;
     const l1Fee = receipt.l1Fee ?? undefined;
     if (l1Fee !== undefined) attributes[ATTR_BLOCKCHAIN_TX_L1_FEE] = l1Fee.toString();
     if (receipt.effectiveGasPrice !== undefined) {
@@ -326,8 +331,18 @@ export function createTransactionSpans({
           () => {
             const attributes = receiptAttributes(receipt);
             span.setAttributes(redact(attributes));
-            if (receipt.status === 'reverted') markError(span, BLOCKCHAIN_TX_STATUS_VALUE_REVERTED);
-            const status = { [ATTR_BLOCKCHAIN_TX_STATUS]: attributes[ATTR_BLOCKCHAIN_TX_STATUS] };
+            const recorded = attributes[ATTR_BLOCKCHAIN_TX_STATUS];
+            // A receipt without a known status says nothing about the transaction's outcome: `_OTHER`, no fee sample.
+            if (recorded === undefined) {
+              recordConfirmation(endTime, {
+                [ATTR_ERROR_TYPE]: markError(span, ERROR_TYPE_VALUE_OTHER),
+              });
+              return;
+            }
+            if (recorded === BLOCKCHAIN_TX_STATUS_VALUE_REVERTED) {
+              markError(span, BLOCKCHAIN_TX_STATUS_VALUE_REVERTED);
+            }
+            const status = { [ATTR_BLOCKCHAIN_TX_STATUS]: recorded };
             recordConfirmation(endTime, status);
             const fee = attributes[ATTR_BLOCKCHAIN_TX_FEE];
             if (typeof fee === 'string')
@@ -454,11 +469,19 @@ export function createTransactionSpans({
       end: (receipt: ReceiptLike, second?: EndOptions | TimeInput): void => {
         const { endTime } = handleOptions(second);
         if (!claim.receive()) return;
-        safely(
-          'record receipt',
-          () => endWithReceipt(chainId, hash, shared, receipt, endTime),
-          undefined,
-        );
+        try {
+          endWithReceipt(chainId, hash, shared, receipt, endTime);
+        } catch {
+          // A receipt that cannot be read still ends the span, as `_OTHER`, and releases the key for a later wait
+          // (ADR 0025 rule 1). Neither call does anything if the span already ended or the key was settled.
+          diag.debug('hashspan: could not read a receipt; ending the confirm span without it');
+          safely(
+            'release receipt key',
+            () => confirmations.release(chainId, hash, shared),
+            undefined,
+          );
+          shared.unattributable(endTime);
+        }
       },
       timeout: (second?: EndOptions | TimeInput): void => {
         const { endTime } = handleOptions(second);

@@ -8,7 +8,12 @@ import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type FaultProxy, RECEIPT_FAULTS, startFaultProxy } from '../../viem/test/fault-proxy.js';
+import {
+  type Fault,
+  type FaultProxy,
+  type FaultRule,
+  startFaultProxy,
+} from '../../viem/test/fault-proxy.js';
 import { freePort } from '../../viem/test/free-port.js';
 import { withHashspan } from '../src/index.js';
 import { startMockCdpApi, throwawayCredentials } from './mock-cdp-api.js';
@@ -67,6 +72,44 @@ beforeEach(() => {
 afterEach(async () => {
   await tracing.teardown();
 });
+
+/**
+ * Faults on the receipt requests of the confirmation through `watch()`, with the `error.type` its confirm span ends
+ * with today, as in `../../viem/test/rpc-faults.int.test.ts` (which covers more). `finding` names the issue of an
+ * ending that is a defect: the confirmation should then end with the receipt.
+ */
+const RECEIPT_FAULTS: Record<
+  string,
+  { faults: Record<string, Fault | FaultRule | FaultRule[]>; errorType: string; finding?: string }
+> = {
+  'a request that never answers': {
+    faults: { eth_getTransactionReceipt: { kind: 'hang' } },
+    errorType: 'TimeoutError',
+  },
+  'HTTP 429': {
+    faults: { eth_getTransactionReceipt: { kind: 'http', status: 429 } },
+    errorType: 'HttpRequestError',
+  },
+  'JSON-RPC -32603 (internal error)': {
+    faults: { eth_getTransactionReceipt: { kind: 'rpc-error', code: -32603 } },
+    errorType: 'InternalRpcError',
+  },
+  'a receipt that stays null': {
+    faults: { eth_getTransactionReceipt: { kind: 'result', result: () => null } },
+    errorType: 'timeout',
+  },
+  // The first receipt request finds none, the second fails, later ones find the receipt.
+  'one failed receipt request between good ones': {
+    faults: {
+      eth_getTransactionReceipt: [
+        { fault: { kind: 'result', result: () => null }, times: 1 },
+        { fault: { kind: 'rpc-error', code: -32603 }, after: 1, times: 1 },
+      ],
+    },
+    errorType: 'InternalRpcError',
+    finding: '#310',
+  },
+};
 
 /** Runs `run`, collecting the unhandled rejections raised until a little after it settled. */
 async function collectingRejections<T>(run: () => Promise<T>): Promise<[T, unknown[]]> {

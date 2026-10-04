@@ -29,6 +29,14 @@ span of the mined hash. If that span is created for this purpose, it has the sam
 replaced one and links to it and to both `send` spans when known. Dashboards counting confirmations should exclude
 `blockchain.tx.status = replaced`. See [ADR 0008](adr/0008-replaced-transactions.md).
 
+**Chain reorganisations.** A confirm span records the receipt its wait ended with and is not revised afterwards: when
+a reorganisation removes the receipt's block, the span keeps its status and block number, and a later wait for the
+transaction within the link TTL adds no span, as the transaction stays settled (see one confirm span per transaction,
+below). A wait with `confirmations` above 1 ends with the receipt it read first, also when a reorganisation during the
+wait moved the transaction to another block or removed it, since viem returns that receipt to the caller
+([#306](https://github.com/selimaytac/hashspan/issues/306)). A transaction removed before a wait, `watch()` or
+background confirmation read its receipt, and not included again, ends as a timeout.
+
 **Payments.** A `payment` span records a payment that the agent authorizes and another party settles on chain, such
 as an x402 facilitator: the agent signs, but does not send, the settling transaction, so there is no `send` span
 ([ADR 0013](adr/0013-x402-payments.md)). It carries what was paid, to whom, and the settlement. A settlement with a
@@ -77,6 +85,7 @@ no span; after a timeout or failure, a retry gets a new span. The same holds for
 | Gave up waiting for the receipt (its timeout, or `flush()` gave up) | confirm | error | `timeout` | none; see below |
 | Replaced by another transaction (same sender and nonce) | confirm of the replaced hash | unset | none | `replaced` |
 | Receipt with an invalid transaction hash | confirm | error | `_OTHER` | none |
+| Receipt with a status other than success or reverted, or one that cannot be read | confirm | error | `_OTHER` | none |
 | Retrieving the receipt failed | confirm | error | error class name, else `_OTHER` | none |
 | User operation receipt with success | confirm | unset | none | none; `blockchain.user_operation.success` is `true` |
 | User operation receipt without success (its calls reverted) | confirm | error | `reverted` | none; `blockchain.user_operation.success` is `false` |
@@ -85,13 +94,14 @@ no span; after a timeout or failure, a retry gets a new span. The same holds for
 | Call batch status 500 (reverted) | confirm | error | `reverted` | none; `blockchain.call_batch.status` is `reverted` |
 | Call batch status 600 (partially reverted) | confirm | error | `partially_reverted` | none; `blockchain.call_batch.status` is `partially_reverted` |
 | Call batch status 400 (failed without inclusion) | confirm | error | `failed` | none |
-| Call batch status with any other code, or none | confirm | error | `_OTHER` | none; `blockchain.call_batch.status_code` keeps an integer code |
+| Call batch status with any other code, or none, or one that cannot be read | confirm | error | `_OTHER` | none; `blockchain.call_batch.status_code` keeps an integer code |
 | Call batch status 100 (a wait that accepted a pending status) | confirm | unset | none | none; no metric sample is recorded |
 | Payment settled | payment | unset | none | none; `blockchain.payment.status` is `settled` |
 | Payment settlement pending: transaction known, receipt not seen | payment | unset | none | none; `blockchain.payment.status` is `pending` |
 | Payment settlement failed | payment | error | the settling party's reason if it is a short identifier (see below), else `_OTHER` | none; `blockchain.payment.status` is `failed` |
 | Creating the payment failed (e.g. signing it) | payment | error | as for a failed send | none |
 | Payment response without a settlement | payment | error | `no_settlement` (x402 adapter) | none |
+| Payment response that cannot be read | payment | error | `_OTHER` | none |
 | Payment outcome never learned (no response before its authorization expired, or flush gave up) | payment | error | `timeout` | none |
 
 **Timeouts.** `blockchain.tx.status` describes the transaction as the chain recorded it. A confirm span that gave up
