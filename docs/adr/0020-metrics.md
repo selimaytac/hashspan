@@ -56,3 +56,8 @@ samples without it.
 - The tracker knows a settlement from the payment that linked its hash, and a replacing transaction inherits the
   replaced one's payer (ADR 0008). A settlement confirmed through another tracker, with no link to the payment, is
   recorded as paid by its sender.
+
+## Amendment (2026-10-04): `blockchain.system.name`
+
+`blockchain.system` is renamed to `blockchain.system.name` (ADR 0003). Until 1.0, every sample records both, with the
+same value, so each series gains a label; 1.0 removes `blockchain.system`.

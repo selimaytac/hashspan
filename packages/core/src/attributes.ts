@@ -4,7 +4,15 @@
  * Stability: development. See https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/semconv.md for
  * definitions and value types. These names are a public contract: changes follow the deprecation policy in AGENTS.md.
  */
+/**
+ * The kind of chain: `evm`.
+ *
+ * @deprecated Renamed to `blockchain.system.name` ({@link ATTR_BLOCKCHAIN_SYSTEM_NAME}). Both are recorded with the
+ * same value until 1.0, which removes this attribute and the constant.
+ */
 export const ATTR_BLOCKCHAIN_SYSTEM = 'blockchain.system' as const;
+/** The kind of chain, `evm`; on every span except JSON-RPC spans, and on every metric sample. */
+export const ATTR_BLOCKCHAIN_SYSTEM_NAME = 'blockchain.system.name' as const;
 /** EIP-155 chain id, e.g. `8453`; on every span. */
 export const ATTR_BLOCKCHAIN_CHAIN_ID = 'blockchain.chain.id' as const;
 /** The operation a span records: `send`, `confirm` or `payment`. */
@@ -159,7 +167,7 @@ export const BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_REVERTED = 'reverted' as const;
 /** Some of the calls of the batch reverted. */
 export const BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_PARTIALLY_REVERTED = 'partially_reverted' as const;
 
-/** Values for {@link ATTR_BLOCKCHAIN_SYSTEM}. */
+/** Values for {@link ATTR_BLOCKCHAIN_SYSTEM_NAME} and the deprecated {@link ATTR_BLOCKCHAIN_SYSTEM}. */
 export const BLOCKCHAIN_SYSTEM_VALUE_EVM = 'evm' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_OPERATION_NAME}. */

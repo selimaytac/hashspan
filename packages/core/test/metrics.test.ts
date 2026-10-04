@@ -64,11 +64,19 @@ describe('metrics', () => {
       .fail(new TypeError('boom'), { endTime: new Date(1_250) });
 
     expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION)).toEqual([
-      { value: 2.5, attributes: { 'blockchain.system': 'evm', 'blockchain.chain.id': 8453 } },
+      {
+        value: 2.5,
+        attributes: {
+          'blockchain.system': 'evm',
+          'blockchain.system.name': 'evm',
+          'blockchain.chain.id': 8453,
+        },
+      },
       {
         value: 0.25,
         attributes: {
           'blockchain.system': 'evm',
+          'blockchain.system.name': 'evm',
           'blockchain.chain.id': 8453,
           'error.type': 'TypeError',
         },
@@ -89,7 +97,11 @@ describe('metrics', () => {
       .startConfirm({ chainId: 1, hash: OTHER_HASH, startTime: start })
       .timeout(new Date(130_000));
 
-    const base = { 'blockchain.system': 'evm', 'blockchain.chain.id': 1 };
+    const base = {
+      'blockchain.system': 'evm',
+      'blockchain.system.name': 'evm',
+      'blockchain.chain.id': 1,
+    };
     expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)).toEqual([
       { value: 12, attributes: { ...base, 'blockchain.tx.status': 'success' } },
       { value: 120, attributes: { ...base, 'error.type': 'timeout' } },

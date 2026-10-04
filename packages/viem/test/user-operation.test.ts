@@ -67,6 +67,7 @@ describe('sendUserOperation', () => {
     expect(send.parentSpanContext?.spanId).toBe(tool.spanContext().spanId);
     expect(send.attributes).toEqual({
       'blockchain.system': 'evm',
+      'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'send',
       'blockchain.user_operation.sender': SENDER,
@@ -138,6 +139,7 @@ describe('waitForUserOperationReceipt', () => {
     expect(confirm.links.map((link) => link.context.spanId)).toEqual([send.spanContext().spanId]);
     expect(confirm.attributes).toEqual({
       'blockchain.system': 'evm',
+      'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'confirm',
       'blockchain.user_operation.hash': USER_OP_HASH,

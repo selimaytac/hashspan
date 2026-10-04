@@ -92,11 +92,11 @@ export interface TxTrackerOptions {
   /**
    * Runs last on every attribute set, including exception event attributes, and returns the attributes to record.
    * If it throws or returns something other than an attributes object, the tracker fails closed and records only
-   * `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`,
-   * `blockchain.tx.status`, `blockchain.tx.replacement.hash`, `blockchain.tx.replacement.reason`,
+   * `blockchain.system.name`, `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`,
+   * `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`, `blockchain.tx.replacement.reason`,
    * `blockchain.payment.protocol`, `blockchain.payment.status`, `blockchain.payment.verified`,
-   * `blockchain.user_operation.hash`, `blockchain.user_operation.success`, `error.type` and `exception.type`, and logs
-   * the failure via `diag`.
+   * `blockchain.user_operation.hash`, `blockchain.user_operation.success`, `blockchain.call_batch.id`,
+   * `blockchain.call_batch.status`, `error.type` and `exception.type`, and logs the failure via `diag`.
    */
   redact?: ((attributes: Attributes) => Attributes) | undefined;
   /** How long a sent transaction or user operation can be linked from its confirmation. Default: 10 minutes. */
