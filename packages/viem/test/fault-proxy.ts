@@ -186,3 +186,41 @@ export async function startFaultProxy(upstream: string): Promise<FaultProxy> {
       }),
   };
 }
+
+/**
+ * Faults on the receipt requests of a confirmation through `watch()`, for the adapters that confirm through it (cdp,
+ * x402), with the `error.type` its confirm span ends with today; `rpc-faults.int.test.ts` covers more. `finding`
+ * names the issue of an ending that is a defect: the confirmation should then end with the receipt.
+ */
+export const RECEIPT_FAULTS: Record<
+  string,
+  { faults: Record<string, Fault | FaultRule | FaultRule[]>; errorType: string; finding?: string }
+> = {
+  'a request that never answers': {
+    faults: { eth_getTransactionReceipt: { kind: 'hang' } },
+    errorType: 'TimeoutError',
+  },
+  'HTTP 429': {
+    faults: { eth_getTransactionReceipt: { kind: 'http', status: 429 } },
+    errorType: 'HttpRequestError',
+  },
+  'JSON-RPC -32603 (internal error)': {
+    faults: { eth_getTransactionReceipt: { kind: 'rpc-error', code: -32603 } },
+    errorType: 'InternalRpcError',
+  },
+  'a receipt that stays null': {
+    faults: { eth_getTransactionReceipt: { kind: 'result', result: () => null } },
+    errorType: 'timeout',
+  },
+  // The first receipt request finds none, the second fails, later ones find the receipt.
+  'one failed receipt request between good ones': {
+    faults: {
+      eth_getTransactionReceipt: [
+        { fault: { kind: 'result', result: () => null }, times: 1 },
+        { fault: { kind: 'rpc-error', code: -32603 }, after: 1, times: 1 },
+      ],
+    },
+    errorType: 'InternalRpcError',
+    finding: '#310',
+  },
+};
