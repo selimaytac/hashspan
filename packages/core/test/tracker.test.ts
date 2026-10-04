@@ -863,7 +863,7 @@ describe('replaced transactions', () => {
   it('validates the receipt hash before comparing it with the awaited hash', () => {
     vi.spyOn(diag, 'warn').mockImplementation(() => {});
     createTxTracker()
-      .startConfirm({ chainId: CHAIN_ID, hash: 'not-a-hash' })
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
       .end({ ...receipt, transactionHash: 'NOT-A-HASH' });
     const [span] = tracing.spans();
     expect(span?.attributes['error.type']).toBe('_OTHER');

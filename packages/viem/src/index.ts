@@ -1,4 +1,5 @@
 import { createTxTracker, type TxTracker, type TxTrackerOptions } from '@hashspan/core';
+import { diag } from '@opentelemetry/api';
 import type { Abi } from 'viem';
 import { own } from './arguments.js';
 import { addCallBatchActions } from './call-batch.js';
@@ -29,6 +30,7 @@ export type {
   WatchOptions,
 } from './types.js';
 
+/** Options of {@link withHashspan}: the tracker options of `createTxTracker()`, and those of this adapter. */
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
    * Tracker from `createTxTracker()` to report to, to share one between adapters. Defaults to one tracker per
@@ -46,14 +48,14 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    * when the first replay does not revert).
    * `{ timeoutMs }` bounds the replay; if the provider has not answered by then, the receipt is recorded without a
    * reason. Default: true, with a 10 000 ms bound. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0005-revert-reason-replay.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0005-revert-reason-replay.md.
    */
   decodeRevertReason?: boolean | { timeoutMs?: number | undefined } | undefined;
   /**
    * Most background confirmations (`confirm: { mode: 'background' }` and `watch()`) polling at once. A transaction
    * sent while that many are polling gets no background confirm span, and a `diag` warning is logged; waits of the
    * caller are not counted and always traced. Default: 256. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0018-background-confirmation-limit.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0018-background-confirmation-limit.md.
    */
   maxBackgroundConfirmations?: number | undefined;
 }
@@ -63,6 +65,7 @@ const DEFAULT_REVERT_REASON_TIMEOUT_MS = 10_000;
 
 /** Client extension returned by {@link withHashspan}: the traced actions present on the client. */
 export interface HashspanExtension {
+  /** Extends `client` with traced versions of the actions it has. */
   <TClient extends ViemClientLike>(
     client: TClient,
   ): Pick<TClient, Extract<keyof TClient, TracedAction>>;
@@ -70,14 +73,14 @@ export interface HashspanExtension {
    * Waits for tracing work still running after traced calls returned (background confirmations, revert reason
    * replays, calls recorded once their chain id is known), so their spans are ended before the OpenTelemetry SDK
    * shuts down. Resolves true when all of it finished, false on timeout; never rejects. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0010-flush-before-shutdown.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
   /**
    * Confirms a transaction sent outside the extended clients (for example by a wallet API) through `client`, in the
    * background: a confirm span with the receipt, revert reason and fees, linked to the send span when the same
    * tracker recorded one. Never throws and never waits; `flush()` awaits it. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0012-cdp-adapter.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0012-cdp-adapter.md.
    */
   watch(client: ViemClientLike, options: WatchOptions): void;
 }
@@ -92,18 +95,46 @@ function revertReasonTimeoutOf(option: unknown): number {
 }
 
 /**
+ * A plain copy of the options object, with the own enumerable properties that can be read: an option whose read
+ * throws gets its default, and anything but an object gives all defaults, with a `diag` warning.
+ */
+function optionsOf(given: unknown): Record<string, unknown> {
+  const options: Record<string, unknown> = {};
+  if ((typeof given !== 'object' && typeof given !== 'function') || given === null) {
+    if (given !== undefined) diag.warn('hashspan: options must be an object; using defaults');
+    return options;
+  }
+  let keys: string[];
+  try {
+    keys = Object.keys(given);
+  } catch {
+    diag.warn('hashspan: could not read the options; using defaults');
+    return options;
+  }
+  for (const key of keys) {
+    try {
+      options[key] = (given as Record<string, unknown>)[key];
+    } catch {
+      diag.warn(`hashspan: could not read the ${key} option; using its default`);
+    }
+  }
+  return options;
+}
+
+/**
  * viem client extension that traces transactions with `@hashspan/core`:
  * `client.extend(withHashspan())`. Apply it after other extensions such as `publicActions`,
  * which would otherwise replace the traced actions.
  */
 export function withHashspan(options: WithHashspanOptions = {}): HashspanExtension {
+  // A null or hostile options object gives the defaults instead of a throw (ADR 0025 rule 1).
   const {
     tracker: providedTracker,
     confirm,
     decodeRevertReason: decodeRevertReasonOption = true,
     maxBackgroundConfirmations: maxBackgroundOption,
     ...trackerOptions
-  } = options;
+  } = optionsOf(options) as WithHashspanOptions;
   const maxBackgroundConfirmations =
     typeof maxBackgroundOption === 'number' && maxBackgroundOption >= 0
       ? maxBackgroundOption

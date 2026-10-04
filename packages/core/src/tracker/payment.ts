@@ -19,6 +19,7 @@ import {
   ATTR_BLOCKCHAIN_TX_HASH,
   ATTR_X402_RESOURCE,
   ATTR_X402_SCHEME,
+  BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR,
   BLOCKCHAIN_OPERATION_NAME_VALUE_PAYMENT,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
@@ -36,13 +37,12 @@ import type {
 import {
   errorType,
   handleOptions,
-  identifier,
   OBSERVER_TIMEOUT,
   reportedErrorType,
   safely,
 } from './handles.js';
 import type { SpanRecording } from './spans.js';
-import { ADDRESS, amount, TX_HASH } from './values.js';
+import { ADDRESS, amount, identifier, TX_HASH } from './values.js';
 
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
@@ -117,7 +117,12 @@ export function createPaymentSpans({
       if (typeof hash !== 'string' || !TX_HASH.test(hash)) return false;
       // A hash this tracker already links, such as one of its own sends, keeps that link.
       if (!links.get(input.chainId, hash)) {
-        links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
+        // The facilitator sends the settlement transaction and pays its fee.
+        links.set(input.chainId, hash, {
+          spanContext: span.spanContext(),
+          parent,
+          feePayer: BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR,
+        });
       }
       return true;
     };

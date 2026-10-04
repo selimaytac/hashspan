@@ -45,4 +45,30 @@ describe('agentAttributes', () => {
     });
     expect(agentAttributes(ctx, undefined, false)).toEqual({});
   });
+
+  it('records baggage values only when they look like an agent id or name', () => {
+    const ok = withBaggage({
+      'gen_ai.agent.id': 'run:42/a@b',
+      'gen_ai.agent.name': 'Trésor agent 2',
+    });
+    expect(agentAttributes(ok, undefined)).toEqual({
+      'gen_ai.agent.id': 'run:42/a@b',
+      'gen_ai.agent.name': 'Trésor agent 2',
+    });
+    for (const value of ['x'.repeat(129), '<script>', 'a\nb', 'a"b', '']) {
+      const ctx = withBaggage({ 'gen_ai.agent.id': value, 'gen_ai.agent.name': value });
+      expect(agentAttributes(ctx, undefined), JSON.stringify(value)).toEqual({});
+    }
+    expect(agentAttributes(withBaggage({ 'gen_ai.agent.id': 'x'.repeat(128) }), undefined)).toEqual(
+      {
+        'gen_ai.agent.id': 'x'.repeat(128),
+      },
+    );
+  });
+
+  it('keeps a static identity as given', () => {
+    expect(agentAttributes(ROOT_CONTEXT, { name: 'x'.repeat(200) })).toEqual({
+      'gen_ai.agent.name': 'x'.repeat(200),
+    });
+  });
 });

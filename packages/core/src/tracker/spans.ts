@@ -25,12 +25,13 @@ import {
   ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS,
   ATTR_ERROR_TYPE,
   BLOCKCHAIN_SYSTEM_VALUE_EVM,
+  ERROR_TYPE_VALUE_OTHER,
 } from '../attributes.js';
 import { toEpochMs } from '../metrics.js';
 import { type AddressFormatter, formatAddressesIn, sanitizeErrorMessage } from '../privacy.js';
 import type { ErrorMessageMode, TxTrackerOptions } from '../types.js';
-import { safely } from './handles.js';
-import { ADDRESS } from './values.js';
+import { errorType, safely } from './handles.js';
+import { ADDRESS, identifier, ownValue } from './values.js';
 
 /** OpenTelemetry exception event and attributes. */
 const EXCEPTION_EVENT = 'exception';
@@ -115,19 +116,21 @@ export function createSpanRecording({
   /**
    * Exception event attributes for `error`, per the error message mode. The error object itself is never handed to
    * the SDK: its message and stack can carry addresses and calldata
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0006-error-privacy.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0006-error-privacy.md).
    */
   const exceptionAttributes = (type: string, error: unknown): Attributes => {
     const attributes: Attributes = { [ATTR_EXCEPTION_TYPE]: type };
     if (errorMessages === 'off') return attributes;
-    const message = error instanceof Error ? error.message : String(error);
+    const message = messageOf(error);
+    if (message === undefined) return attributes;
     if (errorMessages === 'sanitized') {
       const sanitized = sanitizeErrorMessage(message, formatAddress);
       if (sanitized) attributes[ATTR_EXCEPTION_MESSAGE] = sanitized;
       return attributes;
     }
     attributes[ATTR_EXCEPTION_MESSAGE] = message;
-    if (error instanceof Error && error.stack) attributes[ATTR_EXCEPTION_STACKTRACE] = error.stack;
+    const stack = stackOf(error);
+    if (stack) attributes[ATTR_EXCEPTION_STACKTRACE] = stack;
     return attributes;
   };
 
@@ -141,18 +144,23 @@ export function createSpanRecording({
     error?: unknown,
     exceptionName: string = errorName,
   ): string => {
-    const type = formatAddressesIn(errorName, formatAddress);
-    let message: string | undefined;
+    // Checked here too, so no caller can record free text as a type (ADR 0025).
+    const type = formatAddressesIn(identifier(errorName) ?? ERROR_TYPE_VALUE_OTHER, formatAddress);
+    // The failure is recorded first, so an exception event that cannot be built never hides it.
+    span.setAttributes(redact({ [ATTR_ERROR_TYPE]: type }));
+    span.setStatus({ code: SpanStatusCode.ERROR });
     if (error !== undefined) {
-      const exception = redact(
-        exceptionAttributes(formatAddressesIn(exceptionName, formatAddress), error),
+      const exceptionType = formatAddressesIn(
+        identifier(exceptionName) ?? ERROR_TYPE_VALUE_OTHER,
+        formatAddress,
       );
+      const exception = redact(exceptionAttributes(exceptionType, error));
       span.addEvent(EXCEPTION_EVENT, exception);
       const recorded = exception[ATTR_EXCEPTION_MESSAGE];
-      if (typeof recorded === 'string') message = recorded;
+      if (typeof recorded === 'string') {
+        span.setStatus({ code: SpanStatusCode.ERROR, message: recorded });
+      }
     }
-    span.setAttributes(redact({ [ATTR_ERROR_TYPE]: type }));
-    span.setStatus({ code: SpanStatusCode.ERROR, ...(message !== undefined ? { message } : {}) });
     return type;
   };
 
@@ -165,7 +173,8 @@ export function createSpanRecording({
       try {
         record();
       } catch (error) {
-        diag.error(`hashspan: failed to ${what}`, error);
+        // The name only: what was thrown can be the caller's error, with addresses and URLs in its message.
+        diag.error(`hashspan: failed to ${what}: ${errorType(error)}`);
       } finally {
         safely('end span', () => span.end(endTime), undefined);
       }
@@ -191,4 +200,35 @@ export function createSpanRecording({
   });
 
   return { redact, markError, finisher, setAddress, setRemoteAddress, baseAttributes };
+}
+
+/**
+ * The message of `error`: an Error's `message`, or a primitive thrown as is. The own data property is read first;
+ * otherwise `message` is read normally (a `DOMException` has an accessor), and a read that throws gives no message.
+ */
+function messageOf(error: unknown): string | undefined {
+  if (typeof error === 'string') return error;
+  if (typeof error === 'number' || typeof error === 'bigint' || typeof error === 'boolean') {
+    return String(error);
+  }
+  try {
+    if (!(error instanceof Error)) return undefined;
+    const own = ownValue(error, 'message');
+    const message: unknown = own !== undefined ? own : error.message;
+    return typeof message === 'string' ? message : undefined;
+  } catch {
+    // A Proxy can throw from its traps.
+    return undefined;
+  }
+}
+
+/** The stack of `error`, if it is an Error with a readable string stack. */
+function stackOf(error: unknown): string | undefined {
+  try {
+    if (!(error instanceof Error)) return undefined;
+    const stack: unknown = error.stack;
+    return typeof stack === 'string' ? stack : undefined;
+  } catch {
+    return undefined;
+  }
 }

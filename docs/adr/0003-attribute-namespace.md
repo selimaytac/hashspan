@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-09-26
+- Amended: 2026-10-04: the change policy is the one in docs/semconv.md, not AGENTS.md.
 
 ## Context
 
@@ -15,7 +16,7 @@ attribute names are the public API of a telemetry library: renaming them breaks 
 - Reuse existing conventions where they apply: `rpc.*` / `jsonrpc.*` for RPC spans, `gen_ai.agent.*` for agent
   identity, `error.type` for errors.
 - Mark every attribute `development` and document it in [`docs/semconv.md`](../semconv.md), versioned alongside the
-  packages. Changes follow the deprecation policy in AGENTS.md.
+  packages. Changes follow its [change policy](../semconv.md#change-policy).
 - Once the schema has real users, propose it upstream to OpenTelemetry semantic conventions.
 
 ## Consequences

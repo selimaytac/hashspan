@@ -1,4 +1,4 @@
-import { SpanStatusCode } from '@opentelemetry/api';
+import { type Attributes, type MeterProvider, SpanStatusCode } from '@opentelemetry/api';
 import { x402Client } from '@x402/core/client';
 import { x402Facilitator } from '@x402/core/facilitator';
 import {
@@ -17,6 +17,8 @@ import { type Address, createPublicClient, createWalletClient, http, publicActio
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { collectingRejections, type Faults, faultsOn } from '../../viem/test/fault-checks.js';
+import { type FaultProxy, startFaultProxy } from '../../viem/test/fault-proxy.js';
 import { startAnvil } from '../../viem/test/start-anvil.js';
 import { withHashspan } from '../src/index.js';
 import { testUsdAbi, testUsdBytecode } from './token/test-usd.js';
@@ -207,6 +209,34 @@ describe('an EIP-3009 payment settled by the SDK facilitator', () => {
     });
   });
 
+  it("records the settlement fee as the facilitator's, not the agent's", async () => {
+    const fees: Attributes[] = [];
+    const meterProvider = {
+      getMeter: () => ({
+        createHistogram: (name: string) => ({
+          record: (_: number, attributes: Attributes = {}) => {
+            if (name === 'blockchain.client.fee') fees.push(attributes);
+          },
+        }),
+      }),
+    } as unknown as MeterProvider;
+    const client = new x402Client();
+    const hashspan = withHashspan(client, { reader, meterProvider });
+    registerClientScheme(client, { signer: agent, networks: [NETWORK] });
+    client.setSpendControls({ allowedAssets: [{ network: NETWORK, asset: token }] });
+    const response = await wrapFetchWithPayment(await paidApi(), client)('http://api.test/weather');
+    expect(response.status).toBe(200);
+    expect(await hashspan.flush()).toBe(true);
+
+    // The facilitator sent the settling transaction and paid its gas (#329).
+    expect(fees).toEqual([
+      expect.objectContaining({
+        'blockchain.tx.status': 'success',
+        'blockchain.fee.payer': 'facilitator',
+      }),
+    ]);
+  });
+
   it('is pending when the facilitator did not see the receipt, and the confirm span resolves it', async () => {
     const { client, hashspan } = agentClient();
     await wrapFetchWithPayment(
@@ -242,5 +272,86 @@ describe('an EIP-3009 payment settled by the SDK facilitator', () => {
     expect(payment.attributes['error.type']).toBe('no_settlement');
     expect(payment.attributes['blockchain.tx.hash']).toBeUndefined();
     expect(tracing.spans().map((span) => span.name)).toEqual([PAYMENT_SPAN]);
+  });
+});
+
+describe('a payment whose reader fails while the settlement is checked', () => {
+  // The reader reads the settling transaction's receipt to check the payment (ADR 0017). When it cannot, before
+  // `confirmTimeoutMs`, the payment span keeps its settlement without `blockchain.payment.verified`, and the confirm
+  // span ends as a timeout, as `watch()`'s does (issue #317).
+  let proxy: FaultProxy;
+  beforeAll(async () => {
+    proxy = await startFaultProxy(RPC_URL);
+    // Two payments per row.
+    await reader.waitForTransactionReceipt({
+      hash: await facilitatorWallet.writeContract({
+        address: token,
+        abi: testUsdAbi,
+        functionName: 'mint',
+        args: [agent.address, 20n * PRICE],
+      }),
+    });
+  });
+  afterAll(async () => {
+    await proxy.stop();
+  });
+  const rows: Record<string, { faults: Faults; verified: boolean | undefined }> = {
+    ...Object.fromEntries(
+      Object.entries(faultsOn('eth_getTransactionReceipt')).map(([fault, faults]) => [
+        fault,
+        { faults, verified: undefined },
+      ]),
+    ),
+    'a receipt that stays null': {
+      faults: { eth_getTransactionReceipt: { kind: 'result', result: () => null } },
+      verified: undefined,
+    },
+    'one failed receipt request before the receipt': {
+      faults: {
+        eth_getTransactionReceipt: [{ fault: { kind: 'rpc-error', code: -32603 }, times: 1 }],
+      },
+      verified: true,
+    },
+  };
+
+  /** Pays once, with a reader through the proxy under `faults`. */
+  async function pay(faults: Faults, traced: boolean) {
+    const client = new x402Client();
+    const faultyReader = createPublicClient({
+      chain: foundry,
+      transport: http(proxy.url, { retryCount: 0, timeout: 1_000 }),
+      pollingInterval: 50,
+    });
+    const hashspan = traced
+      ? withHashspan(client, { reader: faultyReader, confirmTimeoutMs: 2_500 })
+      : undefined;
+    registerClientScheme(client, { signer: agent, networks: [NETWORK] });
+    client.setSpendControls({ allowedAssets: [{ network: NETWORK, asset: token }] });
+    proxy.set(faults);
+    const response = await wrapFetchWithPayment(await paidApi(), client)('http://api.test/weather');
+    return { status: response.status, flushed: await hashspan?.flush({ timeoutMs: 10_000 }) };
+  }
+
+  it.each(Object.keys(rows))('%s', async (row) => {
+    const { faults, verified } = rows[row] as (typeof rows)[string];
+    const untraced = await pay(faults, false);
+    const [{ status, flushed }, rejections] = await collectingRejections(() => pay(faults, true));
+
+    expect(status).toBe(untraced.status);
+    expect(status).toBe(200);
+    expect(rejections).toEqual([]);
+    expect(flushed).toBe(true);
+    const payment = tracing.spanNamed(PAYMENT_SPAN);
+    expect(payment.status.code).toBe(SpanStatusCode.UNSET);
+    expect(payment.attributes['blockchain.payment.status']).toBe('settled');
+    expect(payment.attributes['blockchain.payment.verified']).toBe(verified);
+    const confirm = tracing.spanNamed(CONFIRM_SPAN);
+    if (verified) {
+      expect(confirm.status.code).toBe(SpanStatusCode.UNSET);
+      expect(confirm.attributes['blockchain.tx.status']).toBe('success');
+    } else {
+      expect(confirm.status.code).toBe(SpanStatusCode.ERROR);
+      expect(confirm.attributes['error.type']).toBe('timeout');
+    }
   });
 });

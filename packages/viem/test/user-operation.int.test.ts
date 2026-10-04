@@ -8,9 +8,11 @@ import {
   type Address,
   createPublicClient,
   createWalletClient,
+  custom,
   encodeFunctionData,
   type Hex,
   http,
+  RpcRequestError,
 } from 'viem';
 import {
   createBundlerClient,
@@ -27,6 +29,18 @@ import {
   testAccountCode,
   testEntryPointCode,
 } from './entry-point/test-entry-point.js';
+import {
+  collectingRejections,
+  type Ending,
+  expectEnding,
+  failed,
+  NO_OUTCOME,
+  type Outcome,
+  recordingMeterProvider,
+  settle,
+  succeeded,
+  TIMEOUT,
+} from './fault-checks.js';
 import { startAnvil } from './start-anvil.js';
 import { testBundler } from './test-bundler.js';
 import { setupTracing, type TestTracing } from './tracing.js';
@@ -245,4 +259,111 @@ describe('user operations on Anvil', () => {
       expect(confirm.attributes['blockchain.user_operation.success']).toBe(true);
     },
   );
+});
+
+// RPC faults on the bundler methods of a user operation (issue #317), with the checks of rpc-faults.int.test.ts
+// (fault-checks.ts). The in-process bundler cannot hang or drop a connection like an HTTP node: its methods fail with
+// a JSON-RPC internal error, once or always, or the receipt stays null.
+describe('bundler faults', () => {
+  type BundlerFault = 'fails' | 'fails once' | 'stays null';
+  /** The test bundler behind `faults`, per bundler method. */
+  const faulty = (faults: Record<string, BundlerFault>) => {
+    const counts = new Map<string, number>();
+    return custom({
+      async request({ method, params }: { method: string; params?: unknown }) {
+        const fault = faults[method];
+        const count = (counts.get(method) ?? 0) + 1;
+        counts.set(method, count);
+        if (fault === 'fails' || (fault === 'fails once' && count === 1)) {
+          throw new RpcRequestError({
+            body: { method },
+            error: { code: -32603, message: 'internal error' },
+            url: 'bundler',
+          });
+        }
+        if (fault === 'stays null') return null;
+        return bundler.transport({ chain: anvil }).request({ method, params } as never);
+      },
+    });
+  };
+
+  const USER_OPERATION_SUCCESS = 'blockchain.user_operation.success';
+  // viem wraps a failure before or at the send in a UserOperationExecutionError; a receipt request that fails ends
+  // the caller's wait, which keeps polling only while the receipt is missing.
+  const rows: Record<
+    string,
+    { faults: Record<string, BundlerFault>; send: Ending; confirm?: Ending }
+  > = {
+    'eth_estimateUserOperationGas fails': {
+      faults: { eth_estimateUserOperationGas: 'fails' },
+      send: failed('UserOperationExecutionError'),
+    },
+    'eth_sendUserOperation fails': {
+      faults: { eth_sendUserOperation: 'fails' },
+      send: failed('UserOperationExecutionError'),
+    },
+    'eth_getUserOperationReceipt fails': {
+      faults: { eth_getUserOperationReceipt: 'fails' },
+      send: NO_OUTCOME,
+      confirm: failed('InternalRpcError'),
+    },
+    'eth_getUserOperationReceipt fails once': {
+      faults: { eth_getUserOperationReceipt: 'fails once' },
+      send: NO_OUTCOME,
+      confirm: succeeded(true),
+    },
+    'the receipt stays null': {
+      faults: { eth_getUserOperationReceipt: 'stays null' },
+      send: NO_OUTCOME,
+      confirm: TIMEOUT,
+    },
+  };
+
+  it.each(Object.keys(rows))('%s', async (row) => {
+    const { faults, send, confirm } = rows[row] as (typeof rows)[string];
+    const run = async (traced: boolean) => {
+      const account = await smartAccount();
+      const meters = recordingMeterProvider();
+      const hashspan = withHashspan({ meterProvider: meters.provider });
+      const plain = createBundlerClient({
+        account,
+        client: reader,
+        transport: faulty(faults),
+        pollingInterval: 50,
+      });
+      const client = traced ? plain.extend(hashspan) : plain;
+      const sent = await settle(
+        client.sendUserOperation({ calls: [{ to: RECIPIENT, value: 1n }] }),
+      );
+      const hash = 'resolved' in sent ? (sent.resolved as Hex) : undefined;
+      const waited = hash
+        ? await settle(
+            client.waitForUserOperationReceipt({ hash, timeout: 2_500, retryCount: 0 } as never),
+          )
+        : undefined;
+      return { sent, waited, meters, flushed: await hashspan.flush({ timeoutMs: 5_000 }) };
+    };
+    /** What the caller got, without the hashes and receipts that differ between runs. */
+    const shape = (outcome: Outcome | undefined) =>
+      outcome && ('rejected' in outcome ? outcome.rejected.name : 'resolved');
+    const untraced = await run(false);
+    const [traced, rejections] = await collectingRejections(() => run(true));
+
+    expect([shape(traced.sent), shape(traced.waited)]).toEqual([
+      shape(untraced.sent),
+      shape(untraced.waited),
+    ]);
+    expect(rejections).toEqual([]);
+    expect(traced.flushed).toBe(true);
+    const sends = tracing.spans().filter((s) => s.name === 'send 31337');
+    const confirms = tracing.spans().filter((s) => s.name === 'confirm 31337');
+    expect(sends).toHaveLength(1);
+    expectEnding(sends[0], send, USER_OPERATION_SUCCESS);
+    expect(confirms).toHaveLength(confirm ? 1 : 0);
+    if (confirm) expectEnding(confirms[0], confirm, USER_OPERATION_SUCCESS);
+    expect(traced.meters.recorded('blockchain.client.send.duration')).toHaveLength(1);
+    expect(traced.meters.recorded('blockchain.client.confirmation.duration')).toHaveLength(
+      confirm ? 1 : 0,
+    );
+  });
 });

@@ -4,7 +4,14 @@ import type { HashspanExtension } from '@hashspan/viem';
 import { context, diag } from '@opentelemetry/api';
 import { parseTransaction } from 'viem';
 import type { ReaderFor } from './chain.js';
-import { errorName, failSend, isHexString, sendContextOf, stringOrUndefined } from './helpers.js';
+import {
+  callChainId,
+  errorName,
+  failSend,
+  isHexString,
+  sendContextOf,
+  stringOrUndefined,
+} from './helpers.js';
 import { own } from './own.js';
 import type { Pending } from './pending.js';
 import { receiptOf } from './receipt.js';
@@ -71,19 +78,8 @@ export function createTransactionSpans({
     describe: () => Omit<SendInput, 'chainId'>,
     send: () => Promise<unknown>,
   ): Promise<unknown> => {
-    let chainId: number | undefined;
-    try {
-      chainId = chainIdOf();
-    } catch (error) {
-      diag.error(
-        `hashspan: failed to read the call options; call not traced (${errorName(error)})`,
-      );
-      return send();
-    }
-    if (chainId === undefined) {
-      diag.debug('hashspan: no known CDP network in the call; not tracing it');
-      return send();
-    }
+    const chainId = callChainId(chainIdOf);
+    if (chainId === undefined) return send();
     let handle: ReturnType<TxTracker['startSend']> | undefined;
     try {
       handle = tracker.startSend({ ...describe(), chainId });
@@ -149,7 +145,7 @@ export function createTransactionSpans({
   /**
    * Ends `handle` from the outcome of the user's wait; never rejects. It is tracked, so `flush()` waits for it and
    * ends it as `timeout` if it cannot wait longer
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.9.1/docs/adr/0010-flush-before-shutdown.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.10.0/docs/adr/0010-flush-before-shutdown.md).
    */
   const recordWait = (
     handle: ReturnType<TxTracker['startConfirm']>,

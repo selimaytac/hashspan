@@ -145,7 +145,9 @@ instance rather than a module.
 ## Agent frameworks
 
 hashspan's spans are children of the OpenTelemetry span that is active when the transaction is sent. Whether a
-framework's tool-call span is that span depends on its instrumentation:
+framework's tool-call span is that span depends on its instrumentation. A framework's own spans follow its own
+privacy settings, not hashspan's: see the
+[privacy notes](../packages/core/README.md#privacy-notes).
 
 - **Mastra:** with its OpenTelemetry bridge (`OtelBridge` from `@mastra/otel-bridge`, set as `bridge` in an
   `Observability` config of `@mastra/observability`) and a registered tracer provider and context manager (the

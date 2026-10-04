@@ -8,6 +8,27 @@ export const timers = globalThis as unknown as {
   clearTimeout(timer: unknown): void;
 };
 
+// The defaults of @hashspan/viem's flush() and background confirmation; test/defaults.test.ts keeps them equal.
+export const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
+export const DEFAULT_CONFIRM_TIMEOUT_MS = 120_000;
+
+/**
+ * The chain id of a call to trace: undefined, after a `diag` message, when reading the call's options throws or they
+ * name no known CDP network. The call is then made untraced.
+ */
+export function callChainId(chainIdOf: () => number | undefined): number | undefined {
+  let chainId: number | undefined;
+  try {
+    chainId = chainIdOf();
+  } catch (error) {
+    diag.error(`hashspan: failed to read the call options; call not traced (${errorName(error)})`);
+    return undefined;
+  }
+  if (chainId === undefined)
+    diag.debug('hashspan: no known CDP network in the call; not tracing it');
+  return chainId;
+}
+
 /** The name of `error` for a `diag` message; never throws, also for an error whose name cannot be read. */
 export function errorName(error: unknown): string {
   try {

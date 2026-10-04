@@ -3,7 +3,7 @@
 # Removing .tools/ (or `make lab-nuke`) uninstalls it; nothing outside the repo is touched.
 set -euo pipefail
 
-VERSION="${FOUNDRY_VERSION:-v1.8.3}"
+VERSION="${FOUNDRY_VERSION:-v1.8.4}"
 DEST="$(cd "$(dirname "$0")/.." && pwd)/.tools/bin"
 
 case "$(uname -s)" in
@@ -27,10 +27,10 @@ fi
 # when added. Add a line per platform when bumping VERSION.
 pinned_sha256() {
   case "$1" in
-    v1.8.3_darwin_arm64) echo 562f9c2f9094e512f1efc1e005c79de7642c27ffc1e7e9dcf8e31baa54577d6e ;;
-    v1.8.3_darwin_amd64) echo 1b469229681b31e3c66a07132811b99460b2874a0a48de3b29500234454f47b8 ;;
-    v1.8.3_linux_amd64) echo 7ca48e6ca3cac1bce1403ca67e5bc1dc3bc1fd818199c9957c7165079c228568 ;;
-    v1.8.3_linux_arm64) echo 93fc23be26c8a902ca58fe54aa6ca28c880b58af95d052674933161df7928e6d ;;
+    v1.8.4_darwin_arm64) echo b6a1b35d85c6b7dbe4b34ccf6c389407d530f906b56c319a5c74c7eec854de3b ;;
+    v1.8.4_darwin_amd64) echo a4ba162f6e3677878b717643fcb247c7dbe31e8007c7645564626161cb7d2053 ;;
+    v1.8.4_linux_amd64) echo 699e2207a6a9b27ca17c48c81e56f1677ed9c58b623b59128b4e15ec9da0625e ;;
+    v1.8.4_linux_arm64) echo d998f88314c057dc37c1de9a2044f49b273505965ff94bea5c3c5aefa9d1debd ;;
     *) return 1 ;;
   esac
 }

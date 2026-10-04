@@ -11,6 +11,7 @@ import {
 import type { Transport } from 'viem';
 import { errorName } from './safe-tracker.js';
 
+/** Options of {@link traceTransport}. */
 export interface TraceTransportOptions {
   /** Tracer provider to record the spans with. Defaults to the global one. */
   tracerProvider?: TracerProvider | undefined;
@@ -77,7 +78,7 @@ function endWith(span: Span, error: unknown): void {
  * the OpenTelemetry RPC conventions describe. Used with `withHashspan()`, the requests a transaction makes nest under
  * its `send` span. Records no parameters or results, and of the transport's URL only the host and port. Tracing never
  * changes a request, its result or its error. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0019-json-rpc-spans.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0019-json-rpc-spans.md.
  */
 export function traceTransport<TTransport extends Transport>(
   transport: TTransport,

@@ -8,6 +8,8 @@ import {
 import { diag } from '@opentelemetry/api';
 import { createChainIdFor, createReaderFor } from './chain.js';
 import { wrapEvm } from './evm.js';
+import { DEFAULT_FLUSH_TIMEOUT_MS } from './helpers.js';
+import { own } from './own.js';
 import { createPending } from './pending.js';
 import { createServerAccountWrapping } from './server-account.js';
 import { createSmartAccountWrapping } from './smart-account.js';
@@ -17,6 +19,10 @@ import { WRAPPED } from './wrap.js';
 
 export { CDP_NETWORK_CHAIN_IDS } from './networks.js';
 
+/**
+ * Options of {@link withHashspan}: those of `@hashspan/viem`'s `withHashspan()` except `confirm`, and the reader to
+ * confirm with.
+ */
 export interface WithHashspanCdpOptions extends Omit<ViemOptions, 'confirm'> {
   /**
    * viem public client(s) to confirm transactions with, and to read the outcome of user operations from their bundle
@@ -40,23 +46,38 @@ export interface HashspanCdp {
    * waits of network-scoped accounts and `waitForUserOperation` waits), so their spans are ended before the OpenTelemetry SDK shuts down. Resolves
    * true when all of it finished, false on timeout (default 10 000 ms), ending confirm spans still open as `timeout`
    * (a user operation CDP reported complete ends with what is known); never rejects. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.9.1/docs/adr/0010-flush-before-shutdown.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.10.0/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
 }
 
 // Structural views of the CDP SDK objects, so that the adapter does not depend on its internal types.
+/** The part of a CDP client the adapter relies on: its EVM client. */
 interface CdpClientLike {
+  /** The client's EVM client (`cdp.evm`), wrapped in place. */
   // `object`, not a record type: the SDK's `EvmClient` class has no index signature.
   evm: object;
 }
-// The same default as @hashspan/viem's flush().
-const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
+
+/**
+ * The `timeoutMs` of flush options, read as an own data property, as @hashspan/viem's flush() reads it: the default for
+ * options without a usable one, or that cannot be read (such as a revoked Proxy), so `flush()` always resolves.
+ */
+function flushTimeoutOf(options: unknown): number {
+  try {
+    const value = own(options, 'timeoutMs');
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? Math.min(value, 2 ** 31 - 1)
+      : DEFAULT_FLUSH_TIMEOUT_MS;
+  } catch {
+    return DEFAULT_FLUSH_TIMEOUT_MS;
+  }
+}
 
 /**
  * Traces transactions sent by a Coinbase CDP client's EVM server accounts, and user operations of its smart accounts,
- * with `@hashspan/core` (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.9.1/docs/adr/0012-cdp-adapter.md,
- * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.9.1/docs/adr/0021-user-operations.md). It wraps the
+ * with `@hashspan/core` (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.10.0/docs/adr/0012-cdp-adapter.md,
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.10.0/docs/adr/0021-user-operations.md). It wraps the
  * client in place: `cdp.evm.sendTransaction`, its user operation methods and `waitForUserOperation`, the account and
  * smart account factories, and the send methods of every account they return. Call
  * it once, right after creating the client: a second call on the same client returns the first handle, ignores its
@@ -98,7 +119,7 @@ export function withHashspan(
 
   const handle: HashspanCdp = {
     flush: async (flushOptions) => {
-      const timeoutMs = flushOptions?.timeoutMs ?? DEFAULT_FLUSH_TIMEOUT_MS;
+      const timeoutMs = flushTimeoutOf(flushOptions);
       const [viemDone, ownDone] = await Promise.all([
         viem.flush({ timeoutMs }),
         flushOwn(timeoutMs),

@@ -15,6 +15,7 @@ import {
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR,
+  ATTR_BLOCKCHAIN_FEE_PAYER,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_ADDRESSES,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_CHAIN_IDS,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_COUNT,
@@ -43,11 +44,11 @@ import {
   ERROR_TYPE_VALUE_OTHER,
 } from '../attributes.js';
 import type { ConfirmRegistry, SharedConfirm } from '../confirm-registry.js';
-import type { LinkStore } from '../link-store.js';
+import type { LinkStore, SentTransaction } from '../link-store.js';
 import { type TxMetrics, toEpochMs } from '../metrics.js';
 import {
   type AddressFormatter,
-  formatAddressesIn,
+  boundRevertReason,
   serializeFunctionArguments,
 } from '../privacy.js';
 import type {
@@ -66,12 +67,24 @@ import { joinConfirm } from './confirm-claim.js';
 import {
   errorType,
   handleOptions,
+  NOOP_CONFIRM,
   OBSERVER_TIMEOUT,
   reportedErrorType,
   safely,
 } from './handles.js';
 import { metricAttributes, type SpanRecording, secondsSince } from './spans.js';
-import { ADDRESS, ownValue, TX_HASH, toInt } from './values.js';
+import {
+  amount,
+  count,
+  functionName,
+  functionSelector,
+  integer,
+  isAddress,
+  isTxHash,
+  ownValue,
+  smallInteger,
+  uint256,
+} from './values.js';
 
 /** Most EIP-7702 authorizations listed on a send span; the count covers all of them. */
 const MAX_AUTHORIZATIONS = 64;
@@ -88,20 +101,11 @@ const REPLACEMENT_REASONS: ReadonlySet<string> = new Set([
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPLACED,
 ]);
 
-/** Records nothing; its context is the parent, so a call run in it still nests under the caller. */
-export const noopSend = (parent: Context): SendHandle => ({
-  context: parent,
-  end: () => {},
-  fail: () => {},
-});
-
-export const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
-
 /** The confirm span of one transaction and how to end it; shared by all its handles. */
 export interface ConfirmSpan extends SharedConfirm {
   /**
    * What a confirm span of a replacing transaction inherits from this one
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0008-replaced-transactions.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0008-replaced-transactions.md).
    */
   origin: ConfirmOrigin;
   receipt(receipt: ReceiptLike, endTime?: TimeInput): void;
@@ -117,6 +121,8 @@ interface ConfirmOrigin {
   parent: Context;
   startTime: TimeInput;
   links: Link[];
+  /** Who pays the fee when it is not the sender; the replacing transaction's fee is paid by the same party. */
+  feePayer: SentTransaction['feePayer'];
 }
 
 /** What the transaction spans need from the `createTxTracker()` call. */
@@ -159,7 +165,7 @@ export function createTransactionSpans({
     for (const entry of list.slice(0, MAX_AUTHORIZATIONS)) {
       const address = ownValue(entry, 'address');
       const chainId = ownValue(entry, 'chainId');
-      if (typeof address !== 'string' || !ADDRESS.test(address)) continue;
+      if (!isAddress(address)) continue;
       if (typeof chainId !== 'number' || !Number.isSafeInteger(chainId) || chainId < 0) continue;
       const formatted = formatAddress(address);
       if (formatted !== undefined) addresses.push(formatted);
@@ -172,21 +178,22 @@ export function createTransactionSpans({
   const startSend = (input: SendInput, parentCtx?: Context): SendHandle => {
     const parent = parentCtx ?? context.active();
     const attributes = baseAttributes(input.chainId, BLOCKCHAIN_OPERATION_NAME_VALUE_SEND, parent);
-    setAddress(attributes, ATTR_BLOCKCHAIN_TX_FROM, input.from);
-    setAddress(attributes, ATTR_BLOCKCHAIN_TX_TO, input.to);
-    if (input.value !== undefined) attributes[ATTR_BLOCKCHAIN_TX_VALUE] = input.value.toString();
-    if (input.nonce !== undefined) attributes[ATTR_BLOCKCHAIN_TX_NONCE] = input.nonce;
+    // What the caller passes is validated like what a remote party returns (ADR 0025 rule 3).
+    if (isAddress(input.from)) setAddress(attributes, ATTR_BLOCKCHAIN_TX_FROM, input.from);
+    if (isAddress(input.to)) setAddress(attributes, ATTR_BLOCKCHAIN_TX_TO, input.to);
+    const value = amount(input.value);
+    if (value !== undefined) attributes[ATTR_BLOCKCHAIN_TX_VALUE] = value;
+    const nonce = count(input.nonce);
+    if (nonce !== undefined) attributes[ATTR_BLOCKCHAIN_TX_NONCE] = nonce;
     try {
       setAuthorizations(attributes, input.authorizations);
     } catch (error) {
       diag.debug(`hashspan: could not record authorizations (${errorType(error)})`);
     }
-    if (input.functionName !== undefined) {
-      attributes[ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME] = input.functionName;
-    }
-    if (input.functionSelector !== undefined) {
-      attributes[ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR] = input.functionSelector;
-    }
+    const name = functionName(input.functionName);
+    if (name !== undefined) attributes[ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME] = name;
+    const selector = functionSelector(input.functionSelector);
+    if (selector !== undefined) attributes[ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR] = selector;
     if (options.recordFunctionArguments === true && input.functionArguments !== undefined) {
       try {
         attributes[ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS] = serializeFunctionArguments(
@@ -220,21 +227,23 @@ export function createTransactionSpans({
 
     return {
       context: trace.setSpan(parent, span),
-      end: (result: SendResult | string, second?: EndOptions | TimeInput): void =>
+      end: (result: SendResult | string, second?: EndOptions | TimeInput): void => {
+        const { endTime } = handleOptions(second);
         finish(
           'record transaction hash',
           () => {
             const hash: unknown = typeof result === 'string' ? result : result?.hash;
-            if (typeof hash !== 'string') {
-              diag.debug('hashspan: ending a send span without a transaction hash');
+            if (!isTxHash(hash)) {
+              diag.debug('hashspan: ending a send span without a valid transaction hash');
               return;
             }
             links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
             span.setAttributes(redact({ [ATTR_BLOCKCHAIN_TX_HASH]: hash }));
-            recordSend(handleOptions(second).endTime);
+            recordSend(endTime);
           },
-          handleOptions(second).endTime,
-        ),
+          endTime,
+        );
+      },
       fail: (error: unknown, second?: FailOptions | TimeInput, third?: FailOptions): void => {
         const options = handleOptions(second, third);
         finish(
@@ -250,23 +259,40 @@ export function createTransactionSpans({
     };
   };
 
+  /**
+   * Attributes of a receipt. Its quantities come from a node: one that is not a non-negative integer is not recorded,
+   * and the fee only when every part of it is known (ADR 0025 rule 3).
+   */
   const receiptAttributes = (receipt: ReceiptLike): Attributes => {
+    const block = smallInteger(receipt.blockNumber);
+    const gasUsed = smallInteger(receipt.gasUsed);
+    // Both are required: a receipt without them cannot be read, and records nothing.
+    if (block === undefined || gasUsed === undefined) {
+      throw new TypeError('receipt block number or gas used is not a non-negative safe integer');
+    }
     const attributes: Attributes = {
-      [ATTR_BLOCKCHAIN_BLOCK_NUMBER]: toInt(receipt.blockNumber),
-      [ATTR_BLOCKCHAIN_TX_GAS_USED]: toInt(receipt.gasUsed),
+      [ATTR_BLOCKCHAIN_BLOCK_NUMBER]: block,
+      [ATTR_BLOCKCHAIN_TX_GAS_USED]: gasUsed,
     };
     // A status other than the two a receipt can have is not recorded as either (ADR 0025 rule 3).
     const status = RECEIPT_STATUSES.get(receipt.status);
     if (status !== undefined) attributes[ATTR_BLOCKCHAIN_TX_STATUS] = status;
-    const l1Fee = receipt.l1Fee ?? undefined;
+    const givenL1Fee: unknown = receipt.l1Fee ?? undefined;
+    const l1Fee = integer(givenL1Fee);
     if (l1Fee !== undefined) attributes[ATTR_BLOCKCHAIN_TX_L1_FEE] = l1Fee.toString();
-    if (receipt.effectiveGasPrice !== undefined) {
-      attributes[ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE] = receipt.effectiveGasPrice.toString();
-      const executionFee = BigInt(receipt.gasUsed) * receipt.effectiveGasPrice;
-      attributes[ATTR_BLOCKCHAIN_TX_FEE] = (executionFee + (l1Fee ?? 0n)).toString();
+    const givenGasPrice: unknown = receipt.effectiveGasPrice;
+    const gasPrice = integer(givenGasPrice);
+    if (gasPrice !== undefined) {
+      attributes[ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE] = gasPrice.toString();
+      // A fee without its L1 part, or without the gas used, would be a wrong value, not a bounded one.
+      const fee =
+        givenL1Fee === undefined || l1Fee !== undefined
+          ? uint256(BigInt(gasUsed) * gasPrice + (l1Fee ?? 0n))
+          : undefined;
+      if (fee !== undefined) attributes[ATTR_BLOCKCHAIN_TX_FEE] = fee.toString();
     }
-    if (receipt.revertReason !== undefined) {
-      attributes[ATTR_BLOCKCHAIN_TX_REVERT_REASON] = formatAddressesIn(
+    if (typeof receipt.revertReason === 'string') {
+      attributes[ATTR_BLOCKCHAIN_TX_REVERT_REASON] = boundRevertReason(
         receipt.revertReason,
         formatAddress,
       );
@@ -281,6 +307,7 @@ export function createTransactionSpans({
     replacing?: ConfirmOrigin,
   ): ConfirmSpan => {
     const sent = links.get(input.chainId, input.hash);
+    const feePayer = replacing ? replacing.feePayer : sent?.feePayer;
     const active = context.active();
     const parent =
       replacing?.parent ?? parentCtx ?? (trace.getSpan(active) ? active : (sent?.parent ?? active));
@@ -319,6 +346,7 @@ export function createTransactionSpans({
       parent,
       startTime: explicitStart ?? new Date(),
       links: [{ context: span.spanContext() }, ...(sent ? [{ context: sent.spanContext }] : [])],
+      feePayer,
     };
 
     return {
@@ -346,7 +374,13 @@ export function createTransactionSpans({
             recordConfirmation(endTime, status);
             const fee = attributes[ATTR_BLOCKCHAIN_TX_FEE];
             if (typeof fee === 'string')
-              txMetrics.fee(BigInt(fee), metricAttributes(input.chainId, status));
+              txMetrics.fee(
+                BigInt(fee),
+                metricAttributes(
+                  input.chainId,
+                  feePayer ? { ...status, [ATTR_BLOCKCHAIN_FEE_PAYER]: feePayer } : status,
+                ),
+              );
           },
           endTime,
         ),
@@ -420,7 +454,7 @@ export function createTransactionSpans({
 
   /**
    * Ends `shared` with `receipt`, attributing it to the transaction that was mined
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0008-replaced-transactions.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0008-replaced-transactions.md).
    */
   const endWithReceipt = (
     chainId: number,
@@ -429,6 +463,17 @@ export function createTransactionSpans({
     receipt: ReceiptLike,
     endTime: TimeInput | undefined,
   ): void => {
+    // A receipt without a readable block number and gas used cannot be recorded: it ends the span as a failure and
+    // releases the key for a later wait, as one with an invalid hash does (#311).
+    if (
+      smallInteger(receipt.blockNumber) === undefined ||
+      smallInteger(receipt.gasUsed) === undefined
+    ) {
+      diag.warn('hashspan: receipt without a readable block number or gas used; not recording it');
+      confirmations.release(chainId, hash, shared);
+      shared.unattributable(endTime);
+      return;
+    }
     const mined: unknown = receipt.transactionHash;
     if (mined === undefined) {
       confirmations.settle(chainId, hash, shared);
@@ -436,7 +481,7 @@ export function createTransactionSpans({
       return;
     }
     // Validated before it is compared or used as a registry key.
-    if (typeof mined !== 'string' || !TX_HASH.test(mined)) {
+    if (!isTxHash(mined)) {
       diag.warn('hashspan: receipt has an invalid transaction hash; not recording it');
       confirmations.release(chainId, hash, shared);
       shared.unattributable(endTime);
@@ -462,6 +507,11 @@ export function createTransactionSpans({
    */
   const startConfirm = (input: ConfirmInput, parentCtx?: Context): ConfirmHandle => {
     const { chainId, hash } = input;
+    // The hash keys the shared span: one that is not a hash records nothing.
+    if (!isTxHash(hash)) {
+      diag.debug('hashspan: not confirming a transaction without a valid hash');
+      return NOOP_CONFIRM;
+    }
     const claim = joinConfirm(confirmations, chainId, hash, () => openConfirm(input, parentCtx));
     if (!claim) return NOOP_CONFIRM;
     const { shared } = claim;

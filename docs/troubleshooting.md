@@ -38,8 +38,30 @@ hashspan's spans are children of the span that is active when the transaction is
   OpenTelemetry bridge ([agent frameworks](integrations.md#agent-frameworks)).
 - **A confirm span is not linked to its send span.** Clients extended with different `withHashspan()` results have
   different trackers: reuse one result for every client of an agent ([viem usage](../packages/viem/README.md#usage)),
-  and give `@hashspan/cdp` and `@hashspan/x402` the same `tracker`. Links are kept for the tracker's `linkTtlMs`
+  and give `@hashspan/cdp` and `@hashspan/x402` the same `tracker`. Without the link, the fee sample of an x402
+  settlement is also recorded as paid by its sender, not with `blockchain.fee.payer` `facilitator`. Links are kept for the tracker's `linkTtlMs`
   (10 minutes by default; [core options](../packages/core/README.md#options)).
+
+## A confirm span with no send span next to it
+
+A confirm span usually sits next to its send span, under the same parent: the span active at the wait, or the send
+span's parent for a confirmation in the background or through `watch()`
+([confirm span parent](semconv.md#spans)). When no span was active at the send, the send span has no
+parent, and the confirm span then starts a trace of its own: only its span link relates it to the send.
+
+- **The backend keeps no span links.** Langfuse does not store them, so a confirm span in a trace of its own shows no
+  relation to its send there ([which backends keep links](backends.md#span-links)). Run the send inside an active
+  span, so that both spans share a parent and a trace, or relate them by the key both carry:
+
+  | Span | Key on both spans |
+  |---|---|
+  | transaction (`send`, `confirm`; a `payment` span carries its settlement's) | `blockchain.tx.hash` |
+  | user operation | `blockchain.user_operation.hash`, with `blockchain.chain.id` |
+  | call batch | `blockchain.call_batch.id` |
+
+  In Grafana Tempo, for example, `{span.blockchain.tx.hash = "0x…"}` finds the trace of the send and the trace of the
+  confirm span.
+- **The confirm span has no link either.** See [a confirm span is not linked to its send span](#spans-in-a-separate-trace-from-the-agents).
 
 ## A send span but no confirm span
 
@@ -53,6 +75,13 @@ hashspan's spans are children of the span that is active when the transaction is
 - **The background confirmation limit was reached.** A transaction sent while `maxBackgroundConfirmations` (256 by
   default) confirmations are polling gets no background confirm span, and a `diag` warning is logged
   ([background confirmation](../packages/viem/README.md#background-confirmation)).
+- **A sampler kept the send and dropped the confirm span, or the other way round.** With a parent-based sampler, a
+  span follows its parent's decision. A confirm span's parent is the span active when it starts, else the parent of
+  its send (the tool span), so a send and its confirm span are sampled together, also when the confirmation ends after
+  the tool span (background confirmation, `watch()`, an x402 settlement). They are sampled apart when the confirm span
+  gets another parent: `watch()` run inside another trace (the confirm span joins that trace), a hash the tracker did
+  not send, or a send it no longer keeps (`maxTrackedTransactions`, `linkTtlMs`), whose confirm span starts a trace of
+  its own ([core options](../packages/core/README.md#options)).
 - **User operations and call batches** get a confirm span only from a wait you make (`waitForUserOperationReceipt`,
   CDP's `waitForUserOperation`, `waitForCallsStatus`); background confirmation and `watch()` cover transactions only
   ([smart accounts](../packages/viem/README.md#smart-accounts-erc-4337),

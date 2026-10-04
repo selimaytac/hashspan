@@ -40,3 +40,19 @@ The tracker already sees every send and confirmation, from every adapter, with i
   `_OTHER` (#177). Spans keep their own `error.type`.
 - Samples of user operations carry `blockchain.operation.subject` `user_operation`, and their outcome from chain data
   is `blockchain.user_operation.success` (ADR 0021).
+
+## Amendment (2026-10-04, proposed): who paid a fee
+
+The fee histogram is meant to show what an agent spends, but it also recorded fees the traced account did not pay:
+the settlement transaction of a payment, sent and paid for by the facilitator, and user operations a paymaster paid
+for (#329). Those samples now carry `blockchain.fee.payer`: `facilitator` or `paymaster`. The attribute is absent when
+the sender of the traced transaction or operation paid, as for every sample before, so "what the agent paid" is the
+samples without it.
+
+- The samples are kept rather than dropped: a team that pays for its own paymaster, or for a sponsorship plan, still
+  sees those costs.
+- Values form a closed set; never an address. Only the fee sample carries it: the confirmation duration measures
+  observation, not cost.
+- The tracker knows a settlement from the payment that linked its hash, and a replacing transaction inherits the
+  replaced one's payer (ADR 0008). A settlement confirmed through another tracker, with no link to the payment, is
+  recorded as paid by its sender.

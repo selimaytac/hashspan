@@ -64,8 +64,9 @@ OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic $LANGFUSE_AUTH,x-langfuse-ingest
 ```
 
 `LANGFUSE_AUTH` is `printf '%s:%s' "$PUBLIC_KEY" "$SECRET_KEY" | base64`, from a project's API keys. For a
-self-hosted instance the endpoint is `http://your-langfuse:3000/api/public/otel`. Langfuse accepts OTLP over HTTP
-only (JSON or protobuf), not gRPC. See [Langfuse's OpenTelemetry guide](https://langfuse.com/docs/opentelemetry/get-started).
+self-hosted instance the endpoint is `https://your-langfuse/api/public/otel`; plain `http://` (port 3000 by default)
+sends the keys unencrypted, so keep it to localhost or a private network. Langfuse accepts OTLP over HTTP only (JSON
+or protobuf), not gRPC. See [Langfuse's OpenTelemetry guide](https://langfuse.com/docs/opentelemetry/get-started).
 
 Langfuse maps GenAI spans to its own observation types: `invoke_agent` becomes an agent, `execute_tool` a tool named
 after the tool, `chat` a generation. `send`, `confirm` and `payment` spans are plain spans; the reverted confirm span
@@ -111,12 +112,29 @@ Use an ingest key from your environment's API keys. The spans land in a dataset 
 GenAI spans, so the agent span shows its model and token usage. See
 [Honeycomb's OpenTelemetry docs](https://docs.honeycomb.io/send-data/opentelemetry/).
 
+## Span links
+
+A confirm span links to its send or payment span. Where no span was active at the send, the confirm span is in a
+trace of its own and the link is the only relation between them
+([troubleshooting](troubleshooting.md#a-confirm-span-with-no-send-span-next-to-it)). Checked with hashspan 0.9.0 on
+2026-10-04, unless noted:
+
+| Backend | Keeps span links | How it was checked |
+|---|---|---|
+| Jaeger 2.21.0 | yes | both query APIs return the link: `/api/v3/traces` as an OTLP link, `/api/traces` as a `FOLLOWS_FROM` reference |
+| Grafana Tempo 3.0.0 | yes | `/api/v2/traces/{traceId}` returns the link; how Grafana shows it was not checked |
+| Langfuse 4.49.0 | no | no link in the observations API (`/api/public/v2/observations`) or in its storage; see [langfuse/langfuse#12337](https://github.com/langfuse/langfuse/issues/12337) |
+| Honeycomb | yes | the link shows on the span (hashspan 0.5.0, 2026-10-02, [above](#honeycomb)) |
+
 ## Grafana dashboard for the metrics
 
 hashspan's tracker records three histograms ([metrics](semconv.md#metrics)): send duration, confirmation duration and
 fee. [`docker/grafana/dashboards/hashspan.json`](../docker/grafana/dashboards/hashspan.json) is a ready Grafana
 dashboard for them, on a Prometheus data source: confirmation and send latency percentiles per chain, fees per chain
-and their distribution, send failures by `error.type`, and confirmation outcomes, with a chain id filter.
+and their distribution, send failures by `error.type`, and confirmation outcomes of transactions, user operations and
+call batches, each with its own outcome attribute ([metrics](semconv.md#metrics)), with a chain id filter. The fee
+panels show the fees the senders paid: samples with `blockchain.fee.payer` (a payment's facilitator, a paymaster) are
+left out.
 
 ![The hashspan dashboard in Grafana after a few runs of the example agent](images/grafana-dashboard.png)
 

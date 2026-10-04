@@ -1,6 +1,7 @@
 // RPC faults on the transaction send and confirm paths of the viem adapter (sendTransaction, writeContract, the
 // caller's waitForTransactionReceipt, background confirmation, watch()), injected by a proxy in front of Anvil
-// (`fault-proxy.ts`). User operations and call batches are not covered here. For each fault and path it checks that:
+// (`fault-proxy.ts`). Call batches are in `call-batch-faults.int.test.ts`, the bundler methods of user operations in
+// `user-operation.int.test.ts`. For each fault and path it checks that:
 // 1. the caller's call returns or throws as it does on a client without hashspan;
 // 2. the span ends with the status and `error.type` of docs/semconv.md (Span status);
 // 3. no unhandled rejection occurs;
@@ -300,13 +301,8 @@ const now = (row: Row): Ending => ('now' in row ? row.now : row);
 /** Confirmation duration samples a confirmation records: one, unless its span ended without an outcome. */
 const samples = (ending: Ending): number => (ending === NO_OUTCOME ? 0 : 1);
 
-// finding: #311. A result that is not a receipt ends the confirm span without an error or an outcome, and
-// records no confirmation metric.
-const NOT_A_RECEIPT: Row = {
-  now: NO_OUTCOME,
-  finding: '#311',
-  should: failed('_OTHER'),
-};
+// A result that is not a receipt ends the confirm span as a failure, with one confirmation sample (#311).
+const NOT_A_RECEIPT: Row = failed('_OTHER');
 
 describe("the caller's waitForTransactionReceipt", () => {
   // The span records the error the caller got, by class name (docs/semconv.md, Span status).
@@ -474,9 +470,12 @@ describe.each(['background confirmation', 'watch()'] as const)('%s', (path) => {
       // Faults on receipts leave the send untouched.
       expect(sent).toEqual({ resolved: expect.stringMatching(/^0x[0-9a-f]{64}$/) });
     } else {
-      // Called once: with what viem resolved, or with undefined when the watch failed.
+      // Called once: with what viem resolved, or with undefined when the watch failed. viem resolves a result that is
+      // not a receipt, which the span cannot record (#311): onReceipt still gets what viem resolved.
       expect(onReceipt).toHaveBeenCalledOnce();
-      const failedWatch = now(rows[fault]).status === SpanStatusCode.ERROR;
+      const failedWatch =
+        now(rows[fault]).status === SpanStatusCode.ERROR &&
+        fault !== 'a receipt that is not an object';
       expect(onReceipt.mock.calls[0]?.[0] === undefined).toBe(failedWatch);
     }
     expect(rejections).toEqual([]);

@@ -13,6 +13,10 @@ import {
 import { type Context, context, diag } from '@opentelemetry/api';
 import { decodeEventLog, decodeFunctionData, parseAbi } from 'viem';
 
+/**
+ * Options of {@link withHashspan}: those of `@hashspan/viem`'s `withHashspan()` except `confirm`, and the reader to
+ * confirm settlements with.
+ */
 export interface WithHashspanX402Options extends Omit<ViemOptions, 'confirm'> {
   /**
    * viem public client(s) to confirm settlements with: one client, used for every chain it is on, or a function
@@ -25,7 +29,7 @@ export interface WithHashspanX402Options extends Omit<ViemOptions, 'confirm'> {
   /**
    * Replay reverted settlements to record their revert reason, as in `@hashspan/viem`. Default: false: the server you
    * pay chooses the settling transaction, and with it the contract whose revert text would be recorded. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.9.0/docs/adr/0013-x402-payments.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.10.0/docs/adr/0013-x402-payments.md.
    */
   decodeRevertReason?: ViemOptions['decodeRevertReason'];
 }
@@ -37,7 +41,7 @@ export interface HashspanX402 {
    * confirmations through the reader), so their spans are ended before the OpenTelemetry SDK shuts down. Resolves
    * true when all of it finished, false on timeout (default 10 000 ms), ending payment spans still open as `timeout`;
    * never rejects. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.9.0/docs/adr/0010-flush-before-shutdown.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.10.0/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
 }
@@ -51,6 +55,21 @@ const HOOKS = [
 ] as const;
 // The same default as @hashspan/viem's flush().
 const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
+
+/**
+ * The `timeoutMs` of flush options, read as an own data property, as @hashspan/viem's flush() reads it: the default for
+ * options without a usable one, or that cannot be read (such as a revoked Proxy), so `flush()` always resolves.
+ */
+function flushTimeoutOf(options: unknown): number {
+  try {
+    const value = own(options, 'timeoutMs');
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? Math.min(value, 2 ** 31 - 1)
+      : DEFAULT_FLUSH_TIMEOUT_MS;
+  } catch {
+    return DEFAULT_FLUSH_TIMEOUT_MS;
+  }
+}
 /** How long a payment may wait for its response: its authorization's validity, plus a grace period, bounded. */
 const DEFAULT_VALIDITY_S = 300;
 const GRACE_MS = 30_000;
@@ -118,6 +137,33 @@ function own(target: unknown, key: string): unknown {
   }
   const descriptor = Object.getOwnPropertyDescriptor(target, key);
   return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+}
+
+/**
+ * A plain copy of the options object, with the own enumerable properties that can be read: an option whose read
+ * throws gets its default, and anything but an object gives all defaults, with a `diag` warning (ADR 0025 rule 1).
+ */
+function optionsOf(given: unknown): Record<string, unknown> {
+  const options: Record<string, unknown> = {};
+  if ((typeof given !== 'object' && typeof given !== 'function') || given === null) {
+    if (given !== undefined) diag.warn('hashspan: options must be an object; using defaults');
+    return options;
+  }
+  let keys: string[];
+  try {
+    keys = Object.keys(given);
+  } catch {
+    diag.warn('hashspan: could not read the options; using defaults');
+    return options;
+  }
+  for (const key of keys) {
+    try {
+      options[key] = (given as Record<string, unknown>)[key];
+    } catch {
+      diag.warn(`hashspan: could not read the ${key} option; using its default`);
+    }
+  }
+  return options;
 }
 
 /** Whether `tracker` can record payments; a tracker that cannot be read cannot (ADR 0025 rule 1). */
@@ -228,7 +274,7 @@ const lower = (value: unknown): unknown =>
 /**
  * The check of an `exact` payment authorized with EIP-3009 (`transferWithAuthorization`), or undefined for any
  * other scheme or authorization method
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.9.0/docs/adr/0017-x402-payment-verification.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.10.0/docs/adr/0017-x402-payment-verification.md).
  */
 function eip3009CheckOf(requirements: object, payload: object): Eip3009Check | undefined {
   if (own(requirements, 'scheme') !== 'exact') return undefined;
@@ -260,7 +306,7 @@ function eip3009CheckOf(requirements: object, payload: object): Eip3009Check | u
  * The check of an `exact` or `upto` payment authorized with Permit2 (`permit2Authorization`), or undefined for any
  * other scheme or authorization method, or when the authorization does not match the requirements: another token,
  * recipient or amount, or for `upto` no facilitator
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.9.0/docs/adr/0017-x402-payment-verification.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.10.0/docs/adr/0017-x402-payment-verification.md).
  */
 function permit2CheckOf(
   requirements: object,
@@ -439,7 +485,7 @@ interface OpenPayment {
 
 /**
  * Traces the payments an x402 client makes, as `payment` spans
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.9.0/docs/adr/0013-x402-payments.md). It registers hooks on the
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.10.0/docs/adr/0013-x402-payments.md). It registers hooks on the
  * `x402Client` (from `@x402/core/client`) that `@x402/fetch`, `@x402/axios` and `@x402/mcp` pay through, so pass
  * that client, not an `x402HTTPClient`. Call it once per client, right after creating it and before registering
  * hooks of your own, which could otherwise keep hashspan from seeing an outcome: a second call returns the first
@@ -447,7 +493,12 @@ interface OpenPayment {
  * networks are traced; others are made untraced, with a warning.
  */
 export function withHashspan(client: object, options: WithHashspanX402Options = {}): HashspanX402 {
-  const { reader, confirmTimeoutMs, tracker: providedTracker, ...rest } = options;
+  const {
+    reader,
+    confirmTimeoutMs,
+    tracker: providedTracker,
+    ...rest
+  } = optionsOf(options) as WithHashspanX402Options;
   const tracker: TxTracker = providedTracker ?? createTxTracker(rest);
   // Confirmations reuse the viem adapter's receipt handling, on the same tracker.
   // The server chooses the settling transaction, and with it the contract whose revert text would be recorded: revert
@@ -802,8 +853,8 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
 
   const handle: HashspanX402 = {
     flush: async (flushOptions) => {
+      const deadline = Date.now() + flushTimeoutOf(flushOptions);
       try {
-        const deadline = Date.now() + (flushOptions?.timeoutMs ?? DEFAULT_FLUSH_TIMEOUT_MS);
         // In order: a response that arrives while payments are awaited can start a confirmation for viem to await.
         const paymentsDone = await flushPayments(deadline);
         const viemDone = await viem.flush({ timeoutMs: Math.max(0, deadline - Date.now()) });
