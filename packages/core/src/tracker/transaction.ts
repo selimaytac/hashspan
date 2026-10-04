@@ -112,7 +112,7 @@ export const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, f
 export interface ConfirmSpan extends SharedConfirm {
   /**
    * What a confirm span of a replacing transaction inherits from this one
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0008-replaced-transactions.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0008-replaced-transactions.md).
    */
   origin: ConfirmOrigin;
   receipt(receipt: ReceiptLike, endTime?: TimeInput): void;
@@ -449,7 +449,7 @@ export function createTransactionSpans({
 
   /**
    * Ends `shared` with `receipt`, attributing it to the transaction that was mined
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0008-replaced-transactions.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0008-replaced-transactions.md).
    */
   const endWithReceipt = (
     chainId: number,

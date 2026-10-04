@@ -56,7 +56,7 @@ export interface ViemReceipt {
 /**
  * Whether `receipt` is a preconfirmation: a flashblocks node returns a receipt before its block is sealed, with a zero
  * (or null) block hash, and its `l1Fee` can be that of another transaction. Fees are recorded from the sealed receipt
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0024-sealed-receipt-fees.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0024-sealed-receipt-fees.md).
  */
 export function isPreconfirmed(receipt: ViemReceipt): boolean {
   const { blockHash } = receipt;

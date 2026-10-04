@@ -46,14 +46,14 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    * when the first replay does not revert).
    * `{ timeoutMs }` bounds the replay; if the provider has not answered by then, the receipt is recorded without a
    * reason. Default: true, with a 10 000 ms bound. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0005-revert-reason-replay.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0005-revert-reason-replay.md.
    */
   decodeRevertReason?: boolean | { timeoutMs?: number | undefined } | undefined;
   /**
    * Most background confirmations (`confirm: { mode: 'background' }` and `watch()`) polling at once. A transaction
    * sent while that many are polling gets no background confirm span, and a `diag` warning is logged; waits of the
    * caller are not counted and always traced. Default: 256. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0018-background-confirmation-limit.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0018-background-confirmation-limit.md.
    */
   maxBackgroundConfirmations?: number | undefined;
 }
@@ -70,14 +70,14 @@ export interface HashspanExtension {
    * Waits for tracing work still running after traced calls returned (background confirmations, revert reason
    * replays, calls recorded once their chain id is known), so their spans are ended before the OpenTelemetry SDK
    * shuts down. Resolves true when all of it finished, false on timeout; never rejects. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0010-flush-before-shutdown.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
   /**
    * Confirms a transaction sent outside the extended clients (for example by a wallet API) through `client`, in the
    * background: a confirm span with the receipt, revert reason and fees, linked to the send span when the same
    * tracker recorded one. Never throws and never waits; `flush()` awaits it. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0012-cdp-adapter.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0012-cdp-adapter.md.
    */
   watch(client: ViemClientLike, options: WatchOptions): void;
 }

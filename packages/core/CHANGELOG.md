@@ -1,5 +1,28 @@
 # @hashspan/core
 
+## 0.10.0
+
+### Minor Changes
+
+- [#308](https://github.com/selimaytac/hashspan/pull/308) [`6635459`](https://github.com/selimaytac/hashspan/commit/663545943b5087b35e2f08283f6f573fec882c3f) Thanks [@selimaytac](https://github.com/selimaytac)! - A confirm span ends even when its receipt cannot be read (a throwing Proxy, `null`), with `error.type` `_OTHER`;
+  before, it stayed open and was never exported. A receipt status other than `success` or `reverted` is no longer
+  recorded as `success`: the span ends with `error.type` `_OTHER` and no `blockchain.tx.status`.
+  `CallBatchConfirmHandle.end` no longer throws for a status that cannot be read; the span ends with `error.type`
+  `_OTHER`.
+
+### Patch Changes
+
+- [#338](https://github.com/selimaytac/hashspan/pull/338) [`03889c2`](https://github.com/selimaytac/hashspan/commit/03889c2bb75eac3a48c1ff7b16b6d335e1a543aa) Thanks [@selimaytac](https://github.com/selimaytac)! - The tracker validates and bounds every value it records, also those a caller or an adapter passes to it (ADR 0025).
+  A call without a positive safe integer chain id, or a confirmation without a 32-byte hex hash, records no span; a
+  send hash that is not one is not recorded. A send records only well-formed addresses, values, nonces, function names
+  and selectors; a receipt's block number and gas used must be non-negative safe integers, and its gas price and L1 fee
+  non-negative integers, with `blockchain.tx.fee` omitted unless every part of it is known. `error.type` and
+  `exception.type` take an error's name only if it is a short identifier (`[A-Za-z0-9_.-]`, at most 64 characters),
+  else `_OTHER`. Revert reasons are cut to 1024 characters, and sanitized messages and function arguments are cut
+  without splitting a hex value. At most 64 receipts of a call batch status and 64 transaction hashes of a call batch
+  send are read. `createTxTracker()` no longer throws for options it cannot read, and uses the default for a `linkTtlMs`
+  or `maxTrackedTransactions` that is not a positive number. Valid values are recorded as before.
+
 ## 0.9.0
 
 ### Minor Changes
