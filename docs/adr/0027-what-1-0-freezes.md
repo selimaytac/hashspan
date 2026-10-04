@@ -36,8 +36,9 @@ and CI fails when it is stale.
 - `TxTracker` and its handles stay produced by `createTxTracker()` only: adding members to them, and to their
   handles, is a minor change (ADR 0014).
 - Supported environments: raising the lowest supported Node.js version (`engines.node`) or the lowest version of a
-  peer dependency's range is a major change, except dropping a Node.js release line past its end of life, which is
-  a minor change with a changeset.
+  peer dependency's range is a major change, with two exceptions, each a minor or patch change with a changeset:
+  dropping a Node.js release line past its end of life, and raising a floor to leave out versions with a published
+  security advisory (the changeset links it). Users already on a newer version see no change either way.
 
 **Not part of the public API:** `diag` messages, file and module layout inside a package, chunk names in `dist/`,
 anything not exported from a package's entry point, and the test helpers.
@@ -71,8 +72,9 @@ change policy says.
 - The change policy in docs/semconv.md is rewritten to the four rules above, in one place, and the roadmap's freeze
   criterion links to this ADR.
 - #287 records the operator fee as `blockchain.tx.operator_fee` rather than changing `blockchain.tx.fee`.
-- Raising the viem floor (`^2.21.0`) or the CDP SDK floor after 1.0 waits for a major release; the weekly jobs that
-  test both ends of each peer range (#299, #321) keep the floors honest until then.
+- Raising the viem floor (`^2.21.0`) or the CDP SDK floor after 1.0 waits for a major release, unless a security
+  advisory covers the versions left out; the weekly jobs that test both ends of each peer range (#299, #321) keep the
+  floors honest until then.
 - API Extractor reads the declarations with its own TypeScript 5.9 while the packages build with TypeScript 7. The
   reports stay valid while the emitted declarations use syntax both accept; a declaration only TypeScript 7 can read
   shows up as a failing `pnpm api:check`, and is solved then.
