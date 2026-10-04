@@ -21,3 +21,5 @@ privacy modes and metrics. It makes no network calls; adapters pass it hashes, m
   and the untraced-versus-traced runner of the adapters), imported by every package's `test/hostile-input.test.ts`;
   `test/hostile-input.test.ts` applies it to every `TxTracker` method, handle method and option. A new entry point adds
   rows there; a rule that does not hold yet is an `it.fails` row tagged `// finding: <tag>`
+- `.github/workflows/otel-api-floor.yml` runs every package's tests weekly against the oldest `@opentelemetry/api` of
+  the peer range

@@ -1,0 +1,48 @@
+name: OpenTelemetry API floor
+
+# Every package peer-depends on @opentelemetry/api, and CI tests the release of the lockfile; this job tests the
+# oldest version the peer range allows, with typecheck and the unit and integration tests of every package, so that a
+# use of a newer API shows up before users report it. Tests run offline, as in CI. The updated lockfile is not
+# committed. The job also runs on a pull request that changes it.
+on:
+  schedule:
+    - cron: '53 5 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/otel-api-floor.yml
+
+permissions: {}
+
+concurrency:
+  group: otel-api-floor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  floor:
+    name: Packages against the oldest @opentelemetry/api in range
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          # No pnpm cache: this job installs another release than the lockfile, and a store it saved would be
+          # restored under the same key by the release workflow.
+      - run: pnpm install --frozen-lockfile
+      - run: ./scripts/install-anvil.sh
+      # Alto and the EntryPoint artifacts for the real-bundler test, pinned by scripts/bundler/package-lock.json.
+      - run: ./scripts/install-bundler.sh
+      - name: Install the oldest @opentelemetry/api of the peer range in every package
+        run: | # zizmor: ignore[adhoc-packages] installs the floor of the peer range on purpose; not committed
+          floor=$(node -p "require('./packages/core/package.json').peerDependencies['@opentelemetry/api'].replace(/^\^/, '')")
+          pnpm --recursive --filter './packages/*' add -D "@opentelemetry/api@$floor"
+          pnpm --recursive --filter './packages/*' list @opentelemetry/api --depth 0
+      - run: pnpm typecheck
+      - name: Unit and integration tests of every package
+        run: pnpm vitest run packages
