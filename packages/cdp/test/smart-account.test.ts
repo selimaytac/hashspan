@@ -781,6 +781,70 @@ describe('waitForUserOperation with a reader', () => {
     );
   });
 
+  /** A reader whose `eth_getTransactionReceipt` answers after `delayMs`, or never without one. */
+  const slowReader = (delayMs?: number) => {
+    const { reader, calls } = readerWith([userOperationLog({})]);
+    const request = reader.request;
+    const slow = Object.assign(Object.create(reader), {
+      pollingInterval: 10,
+      request: (args: { method: string }) => {
+        calls.push(args.method);
+        if (args.method !== 'eth_getTransactionReceipt') return request(args as never);
+        if (delayMs === undefined) return new Promise(() => {});
+        return new Promise((resolve) => setTimeout(resolve, delayMs)).then(() =>
+          request(args as never),
+        );
+      },
+    });
+    return { reader: slow, calls };
+  };
+  const runWith = async (reader: unknown, confirmTimeoutMs?: number) => {
+    const { cdp } = fakeCdp();
+    const hashspan = withHashspan(cdp, { reader: reader as never, confirmTimeoutMs });
+    const account = await smartAccountOf(cdp);
+    await account.sendUserOperation({ network: 'base', calls: [{ to: TO }] });
+    await expect(account.waitForUserOperation({ userOpHash: OP_HASH })).resolves.toEqual(complete);
+    return hashspan;
+  };
+
+  it('gives up after confirmTimeoutMs on a reader whose request never answers', async () => {
+    const { reader } = slowReader();
+    const hashspan = await runWith(reader, 5);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    // The span ended at the deadline, with what CDP reported, and the tracked work settled.
+    const span = tracing.spanNamed('confirm 8453');
+    expect(span.attributes['blockchain.tx.hash']).toBe(BUNDLE);
+    expect(span.attributes['error.type']).toBeUndefined();
+    expect(span.attributes['blockchain.user_operation.success']).toBeUndefined();
+    await expect(hashspan.flush({ timeoutMs: 10 })).resolves.toBe(true);
+    await expect(hashspan.flush({ timeoutMs: 10 })).resolves.toBe(true);
+    expect(tracing.spans().filter((s) => s.name === 'confirm 8453')).toHaveLength(1);
+  });
+
+  it('accepts no bundle receipt that arrives after confirmTimeoutMs', async () => {
+    const { reader } = slowReader(80);
+    const hashspan = await runWith(reader, 20);
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    await expect(hashspan.flush({ timeoutMs: 100 })).resolves.toBe(true);
+
+    const span = tracing.spanNamed('confirm 8453');
+    expect(span.attributes['blockchain.tx.hash']).toBe(BUNDLE);
+    expect(span.attributes['blockchain.user_operation.success']).toBeUndefined();
+  });
+
+  it('settles its work when flush() gives up on a request that never answers', async () => {
+    const { reader } = slowReader();
+    const hashspan = await runWith(reader);
+
+    await expect(hashspan.flush({ timeoutMs: 30 })).resolves.toBe(false);
+    const span = tracing.spanNamed('confirm 8453');
+    expect(span.attributes['blockchain.tx.hash']).toBe(BUNDLE);
+    expect(span.attributes['error.type']).toBeUndefined();
+    // The request cannot be cancelled, but the work flush() awaits no longer waits for it.
+    await expect(hashspan.flush({ timeoutMs: 30 })).resolves.toBe(true);
+  });
+
   it('ends a completed operation with what is known when flush() gives up', async () => {
     const { hashspan, calls } = await run([], { receipt: null });
     await expect(hashspan.flush({ timeoutMs: 30 })).resolves.toBe(false);

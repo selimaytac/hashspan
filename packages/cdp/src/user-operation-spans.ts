@@ -24,6 +24,8 @@ import { SentUserOperations, userOperationReceiptFromBundle } from './user-opera
 const MAX_SENT_USER_OPERATIONS = 4096;
 // The same default as the confirmations through the reader (`confirmTimeoutMs`).
 const DEFAULT_CONFIRM_TIMEOUT_MS = 120_000;
+// The longest delay a timer keeps; a longer one fires at once.
+const MAX_TIMER_MS = 2 ** 31 - 1;
 // `error.type` of a confirm span whose outcome could not be read.
 const ERROR_TYPE_OTHER = '_OTHER';
 // How often the reader is asked for a bundle receipt when it has no polling interval of its own.
@@ -61,6 +63,13 @@ export function createUserOperationSpans({
   waiting,
   confirmTimeoutMs,
 }: UserOperationSpansDependencies): UserOperationSpans {
+  // An option that is not a duration falls back to the default; a longer one than a timer can wait is cut to that.
+  const confirmWaitMs =
+    typeof confirmTimeoutMs === 'number' &&
+    Number.isFinite(confirmTimeoutMs) &&
+    confirmTimeoutMs >= 0
+      ? Math.min(confirmTimeoutMs, MAX_TIMER_MS)
+      : DEFAULT_CONFIRM_TIMEOUT_MS;
   const sentUserOperations = new SentUserOperations(MAX_SENT_USER_OPERATIONS);
   let warnedOldTracker = false;
   /** Whether the tracker records user operations; one from a core before 0.8 does not (ADR 0014). */
@@ -198,6 +207,11 @@ export function createUserOperationSpans({
   ): Promise<void> => {
     let ended = false;
     let completed: { receipt: UserOperationReceiptLike; endTime: Date } | undefined;
+    // Resolves once the span ended, so a bundle receipt request still pending stops being awaited.
+    let stop = (): void => {};
+    const stopped = new Promise<void>((resolve) => {
+      stop = resolve;
+    });
     /**
      * Ends the handle once with `record`, which reads the outcome and calls a handle method. If that throws (an
      * outcome that cannot be read), the handle still ends, as a failure with `error.type` `_OTHER`; the abandon
@@ -206,6 +220,7 @@ export function createUserOperationSpans({
     const end = (record: () => void, what: string): void => {
       if (ended) return;
       ended = true;
+      stop();
       try {
         record();
       } catch (error) {
@@ -246,7 +261,7 @@ export function createUserOperationSpans({
       completed = { receipt: { transactionHash }, endTime };
       const client = isHexString(transactionHash) ? readerFor(chainId) : undefined;
       if (client) {
-        const raw = await bundleReceipt(client, transactionHash, () => ended);
+        const raw = await bundleReceipt(client, transactionHash, stopped);
         if (raw) completed.receipt = userOperationReceiptFromBundle(raw, userOpHash, sender);
       }
       const { receipt } = completed;
@@ -271,33 +286,78 @@ export function createUserOperationSpans({
   };
 
   /**
-   * The node's raw receipt of a bundle transaction, polled through the reader until it is found, `stopped()`, or
-   * `confirmTimeoutMs` passed. It calls the client's `request` directly, so a reader extended by `@hashspan/viem`
-   * records no transaction confirm span for the bundle, whose fee covers every operation in it (ADR 0021).
+   * The node's raw receipt of a bundle transaction, polled through the reader until it is found, `stopped` resolves,
+   * or `confirmTimeoutMs` passed. Each request is raced against both, so one that never answers does not hold the
+   * confirmation past its bound, and a receipt that arrives later is not used. It calls the client's `request`
+   * directly, so a reader extended by `@hashspan/viem` records no transaction confirm span for the bundle, whose fee
+   * covers every operation in it (ADR 0021).
    */
   const bundleReceipt = async (
     client: ViemClientLike,
     hash: string,
-    stopped: () => boolean,
+    stopped: Promise<void>,
   ): Promise<unknown> => {
     const polling = own(client, 'pollingInterval');
     const interval =
       typeof polling === 'number' && polling > 0 ? polling : DEFAULT_POLLING_INTERVAL_MS;
-    const deadline = Date.now() + (confirmTimeoutMs ?? DEFAULT_CONFIRM_TIMEOUT_MS);
+    const deadline = Date.now() + confirmWaitMs;
+    let stop = false;
+    void stopped.then(() => {
+      stop = true;
+    });
     for (;;) {
+      const remaining = deadline - Date.now();
+      if (stop || remaining <= 0) return undefined;
       try {
-        const raw: unknown = await client.request({
-          method: 'eth_getTransactionReceipt',
-          params: [hash],
-        });
+        const answer = await before(
+          Promise.resolve().then(() =>
+            client.request({ method: 'eth_getTransactionReceipt', params: [hash] }),
+          ),
+          remaining,
+          stopped,
+        );
+        if (answer === undefined) return undefined;
+        const raw: unknown = answer.value;
         if (raw !== null && typeof raw === 'object') return raw;
       } catch (error) {
         diag.debug(`hashspan: could not read the bundle receipt (${errorName(error)})`);
       }
-      if (stopped() || Date.now() + interval > deadline) return undefined;
-      await new Promise<void>((resolve) => timers.setTimeout(resolve, interval));
+      if (stop || Date.now() + interval > deadline) return undefined;
+      // A pause until the next request, cut short once the span ended.
+      await before(new Promise<never>(() => {}), interval, stopped);
     }
   };
 
   return { tracedUserOperation, confirmedUserOperation };
+}
+
+/**
+ * Settles with `{ value }` once `work` resolves, or with undefined after `ms` or once `stopped` resolves, whichever
+ * comes first; rejects if `work` rejects first. `work` itself cannot be cancelled: it is only no longer awaited, and a
+ * later rejection of it is handled here. The timer does not keep the process alive.
+ */
+function before<T>(
+  work: Promise<T>,
+  ms: number,
+  stopped: Promise<void>,
+): Promise<{ value: T } | undefined> {
+  return new Promise((resolve, reject) => {
+    const timer = timers.setTimeout(() => resolve(undefined), ms);
+    (timer as { unref?: () => void } | undefined)?.unref?.();
+    const done = (): void => timers.clearTimeout(timer);
+    void stopped.then(() => {
+      done();
+      resolve(undefined);
+    });
+    work.then(
+      (value) => {
+        done();
+        resolve({ value });
+      },
+      (error: unknown) => {
+        done();
+        reject(error);
+      },
+    );
+  });
 }
