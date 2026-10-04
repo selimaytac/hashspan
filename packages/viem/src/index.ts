@@ -1,4 +1,5 @@
 import { createTxTracker, type TxTracker, type TxTrackerOptions } from '@hashspan/core';
+import { diag } from '@opentelemetry/api';
 import type { Abi } from 'viem';
 import { own } from './arguments.js';
 import { addCallBatchActions } from './call-batch.js';
@@ -92,18 +93,46 @@ function revertReasonTimeoutOf(option: unknown): number {
 }
 
 /**
+ * A plain copy of the options object, with the own enumerable properties that can be read: an option whose read
+ * throws gets its default, and anything but an object gives all defaults, with a `diag` warning.
+ */
+function optionsOf(given: unknown): Record<string, unknown> {
+  const options: Record<string, unknown> = {};
+  if ((typeof given !== 'object' && typeof given !== 'function') || given === null) {
+    if (given !== undefined) diag.warn('hashspan: options must be an object; using defaults');
+    return options;
+  }
+  let keys: string[];
+  try {
+    keys = Object.keys(given);
+  } catch {
+    diag.warn('hashspan: could not read the options; using defaults');
+    return options;
+  }
+  for (const key of keys) {
+    try {
+      options[key] = (given as Record<string, unknown>)[key];
+    } catch {
+      diag.warn(`hashspan: could not read the ${key} option; using its default`);
+    }
+  }
+  return options;
+}
+
+/**
  * viem client extension that traces transactions with `@hashspan/core`:
  * `client.extend(withHashspan())`. Apply it after other extensions such as `publicActions`,
  * which would otherwise replace the traced actions.
  */
 export function withHashspan(options: WithHashspanOptions = {}): HashspanExtension {
+  // A null or hostile options object gives the defaults instead of a throw (ADR 0025 rule 1).
   const {
     tracker: providedTracker,
     confirm,
     decodeRevertReason: decodeRevertReasonOption = true,
     maxBackgroundConfirmations: maxBackgroundOption,
     ...trackerOptions
-  } = options;
+  } = optionsOf(options) as WithHashspanOptions;
   const maxBackgroundConfirmations =
     typeof maxBackgroundOption === 'number' && maxBackgroundOption >= 0
       ? maxBackgroundOption

@@ -147,7 +147,7 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.tx.authorization.chain_ids` | int[] | send | on | chain id of each well-formed authorization, in the order of the addresses, at most 64; `0` means valid on every chain |
 | `blockchain.contract.function.name` | string | send | on | decoded function name when an ABI is known |
 | `blockchain.contract.function.selector` | string | send | on | 4-byte selector, e.g. `0xa9059cbb` |
-| `blockchain.contract.function.arguments` | string | send | off (opt-in) | decoded call arguments as a JSON array, e.g. `["0x2222...2222","1000000"]`: bigints as decimal strings, addresses per address mode, truncated after 4096 characters. Only own enumerable data properties are serialized; `toJSON()` and getters are never called |
+| `blockchain.contract.function.arguments` | string | send | off (opt-in) | decoded call arguments as a JSON array, e.g. `["0x2222...2222","1000000"]`: bigints as decimal strings, addresses per address mode, truncated after 4096 characters. Only own enumerable data properties are serialized; `toJSON()` and getters are never called; binary data (typed arrays, `ArrayBuffer`) as `0x` hex |
 | `blockchain.tx.status` | string | confirm | on | from chain data: `success` \| `reverted` \| `replaced` |
 | `blockchain.block.number` | int | confirm | on | inclusion block; for a user operation, the bundle transaction's; for a call batch, the highest among its receipts |
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
@@ -202,7 +202,8 @@ converted.
 
 Agent identity is recorded with the GenAI conventions `gen_ai.agent.id` and `gen_ai.agent.name`. A field set in the
 tracker's static `agent` option always wins; fields it leaves unset are taken from OpenTelemetry Baggage entries with
-the same keys, unless `agentFromBaggage` is false ([ADR 0011](adr/0011-agent-identity-precedence.md)). This lets
+the same keys, unless `agentFromBaggage` is false ([ADR 0011](adr/0011-agent-identity-precedence.md)). A Baggage
+value is recorded only if it has at most 128 letters, digits, spaces and `_ . : @ / -`. This lets
 backends search transactions by agent without joining spans. Baggage is propagated to downstream services; identifiers that
 must stay internal belong in the static `agent` option, which is never propagated.
 

@@ -35,6 +35,7 @@ import {
   signature,
   spanProblems,
   splitsHex,
+  throwingGetters,
   throwingProxy,
 } from '../../core/test/hostile.js';
 import { type HashspanExtension, traceTransport, withHashspan } from '../src/index.js';
@@ -603,6 +604,25 @@ describe('hostile input', () => {
     tracing: () => tracing,
     meters,
     sending: SENDING,
+  });
+});
+
+// --- The options object itself (rule 1) ---------------------------------------------------------------------------
+
+describe('withHashspan() options', () => {
+  const objects = (): [string, unknown][] => [
+    ['null', null],
+    ['an object whose option getters throw', throwingGetters(['tracker', 'confirm', 'address'])],
+    ...hostileValues(),
+  ];
+  it.each(objects())('gives a working extension for %s', async (_label, options) => {
+    let hashspan: HashspanExtension | undefined;
+    expect(() => {
+      hashspan = withHashspan(options as never);
+    }).not.toThrow();
+    const { client } = wallet(hashspan as HashspanExtension);
+    await expect(client.sendTransaction({ to: TO, value: 1n })).resolves.toBe(HASH);
+    await expect((hashspan as HashspanExtension).flush({ timeoutMs: 3_000 })).resolves.toBe(true);
   });
 });
 

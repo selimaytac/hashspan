@@ -135,6 +135,33 @@ function own(target: unknown, key: string): unknown {
   return descriptor && 'value' in descriptor ? descriptor.value : undefined;
 }
 
+/**
+ * A plain copy of the options object, with the own enumerable properties that can be read: an option whose read
+ * throws gets its default, and anything but an object gives all defaults, with a `diag` warning (ADR 0025 rule 1).
+ */
+function optionsOf(given: unknown): Record<string, unknown> {
+  const options: Record<string, unknown> = {};
+  if ((typeof given !== 'object' && typeof given !== 'function') || given === null) {
+    if (given !== undefined) diag.warn('hashspan: options must be an object; using defaults');
+    return options;
+  }
+  let keys: string[];
+  try {
+    keys = Object.keys(given);
+  } catch {
+    diag.warn('hashspan: could not read the options; using defaults');
+    return options;
+  }
+  for (const key of keys) {
+    try {
+      options[key] = (given as Record<string, unknown>)[key];
+    } catch {
+      diag.warn(`hashspan: could not read the ${key} option; using its default`);
+    }
+  }
+  return options;
+}
+
 /** Whether `tracker` can record payments; a tracker that cannot be read cannot (ADR 0025 rule 1). */
 function hasStartPayment(tracker: TxTracker): boolean {
   try {
@@ -462,7 +489,12 @@ interface OpenPayment {
  * networks are traced; others are made untraced, with a warning.
  */
 export function withHashspan(client: object, options: WithHashspanX402Options = {}): HashspanX402 {
-  const { reader, confirmTimeoutMs, tracker: providedTracker, ...rest } = options;
+  const {
+    reader,
+    confirmTimeoutMs,
+    tracker: providedTracker,
+    ...rest
+  } = optionsOf(options) as WithHashspanX402Options;
   const tracker: TxTracker = providedTracker ?? createTxTracker(rest);
   // Confirmations reuse the viem adapter's receipt handling, on the same tracker.
   // The server chooses the settling transaction, and with it the contract whose revert text would be recorded: revert
