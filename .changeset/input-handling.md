@@ -19,6 +19,8 @@ More defensive handling of unusual input:
   the address mode applies to it, instead of an object of its byte values.
 - `withHashspan()` of the viem, cdp and x402 adapters no longer throws for options it cannot read (`null`, a Proxy, a
   getter that throws): unreadable options take their defaults, with a `diag` warning.
+- The adapters' `diag` messages include an error's name only when it is short text; another name, such as a symbol,
+  is logged as unknown.
 - The viem adapter keeps one copy of a `writeContract` ABI per contract function instead of one per transaction.
 - A receipt whose `l1Fee` is not a hex quantity is recorded without `blockchain.tx.l1_fee` and `blockchain.tx.fee`;
   the rest of the receipt is recorded as usual instead of the confirmation ending as a failure.

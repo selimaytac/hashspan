@@ -1,7 +1,7 @@
 import { createTxTracker, type TxTracker } from '@hashspan/core';
 import { context, diag, ROOT_CONTEXT, trace } from '@opentelemetry/api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { guardTracker } from '../src/safe-tracker.js';
+import { errorName, guardTracker } from '../src/safe-tracker.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
 const HASH = `0x${'ab'.repeat(32)}`;
@@ -192,5 +192,40 @@ describe('guardTracker() user operations', () => {
         confirm.fail(new Error('x'));
       }).not.toThrow();
     }
+  });
+});
+
+const symbolNamed = (): Error => {
+  const error = new Error('boom');
+  Object.defineProperty(error, 'name', { value: Symbol('name') });
+  return error;
+};
+const getterNamed = (): Error => {
+  const error = new Error('boom');
+  Object.defineProperty(error, 'name', {
+    get() {
+      throw new Error('name');
+    },
+  });
+  return error;
+};
+const textNamed = (name: string): Error => {
+  const error = new Error('boom');
+  error.name = name;
+  return error;
+};
+
+describe('errorName', () => {
+  it('gives short text for any error, so a diag message can always include it', () => {
+    expect(errorName(textNamed('TransactionExecutionError'))).toBe('TransactionExecutionError');
+    for (const error of [
+      symbolNamed(),
+      getterNamed(),
+      textNamed('x'.repeat(65)),
+      textNamed('a b'),
+    ]) {
+      expect(errorName(error)).toBe('unknown');
+    }
+    expect(errorName('thrown')).toBe('string');
   });
 });
