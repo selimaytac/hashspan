@@ -1,5 +1,5 @@
 ---
-'@hashspan/core': patch
+'@hashspan/core': minor
 ---
 
 A confirm span ends even when its receipt cannot be read (a throwing Proxy, `null`), with `error.type` `_OTHER`;

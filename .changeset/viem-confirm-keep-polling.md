@@ -1,7 +1,7 @@
 ---
-'@hashspan/viem': patch
-'@hashspan/cdp': patch
-'@hashspan/x402': patch
+'@hashspan/viem': minor
+'@hashspan/cdp': minor
+'@hashspan/x402': minor
 ---
 
 Background confirmation and `watch()` now poll again, one polling interval later, after a failed receipt request (an
