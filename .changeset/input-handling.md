@@ -2,6 +2,7 @@
 '@hashspan/core': patch
 '@hashspan/viem': patch
 '@hashspan/x402': patch
+'@hashspan/cdp': patch
 ---
 
 More defensive handling of unusual input:
@@ -16,7 +17,7 @@ More defensive handling of unusual input:
   digits, spaces and `_ . : @ / -`. Values from the static `agent` option are recorded as given.
 - With `recordFunctionArguments`, binary data (typed arrays, `ArrayBuffer`, `DataView`) is recorded as `0x` hex, so
   the address mode applies to it, instead of an object of its byte values.
-- `withHashspan()` of the viem and x402 adapters no longer throws for options it cannot read (`null`, a Proxy, a
+- `withHashspan()` of the viem, cdp and x402 adapters no longer throws for options it cannot read (`null`, a Proxy, a
   getter that throws): unreadable options take their defaults, with a `diag` warning.
 - The viem adapter keeps one copy of a `writeContract` ABI per contract function instead of one per transaction.
 - A receipt whose `l1Fee` is not a hex quantity is recorded without `blockchain.tx.l1_fee` and `blockchain.tx.fee`;

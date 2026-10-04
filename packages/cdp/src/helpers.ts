@@ -98,3 +98,30 @@ export function stringOrUndefined(value: unknown): string | undefined {
 export function addressOf(value: unknown): string | undefined {
   return typeof value === 'string' ? value : stringOrUndefined(own(value, 'address'));
 }
+
+/**
+ * A plain copy of the options object, with the own enumerable properties that can be read: an option whose read
+ * throws gets its default, and anything but an object gives all defaults, with a `diag` warning (ADR 0025 rule 1).
+ */
+export function optionsOf(given: unknown): Record<string, unknown> {
+  const options: Record<string, unknown> = {};
+  if ((typeof given !== 'object' && typeof given !== 'function') || given === null) {
+    if (given !== undefined) diag.warn('hashspan: options must be an object; using defaults');
+    return options;
+  }
+  let keys: string[];
+  try {
+    keys = Object.keys(given);
+  } catch {
+    diag.warn('hashspan: could not read the options; using defaults');
+    return options;
+  }
+  for (const key of keys) {
+    try {
+      options[key] = (given as Record<string, unknown>)[key];
+    } catch {
+      diag.warn(`hashspan: could not read the ${key} option; using its default`);
+    }
+  }
+  return options;
+}
