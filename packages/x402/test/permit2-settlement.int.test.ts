@@ -22,6 +22,7 @@ import {
   createPublicClient,
   createTestClient,
   createWalletClient,
+  custom,
   type Hex,
   http,
   maxUint256,
@@ -210,10 +211,10 @@ async function paidApi(
 }
 
 /** The agent's x402 client, paying with Permit2 signatures, traced with a reader. */
-function agentClient(scheme: Scheme) {
+function agentClient(scheme: Scheme, confirmWith: typeof reader = reader) {
   const client = new x402Client();
   // Before any other hook, as the README asks.
-  const hashspan = withHashspan(client, { reader });
+  const hashspan = withHashspan(client, { reader: confirmWith });
   if (scheme === 'exact') registerClientScheme(client, { signer: agent, networks: [NETWORK] });
   else client.register(NETWORK, new UptoClientScheme(agent));
   client.setSpendControls({ allowedAssets: [{ network: NETWORK, asset: token }] });
@@ -306,5 +307,38 @@ describe('a Permit2 payment settled by the SDK facilitator', () => {
     expect(payment.attributes['blockchain.tx.hash']).toBe(firstHash);
     expect(payment.attributes['blockchain.payment.status']).toBe('settled');
     expect(payment.attributes['blockchain.payment.verified']).toBe(false);
+  });
+});
+
+// The JSON-RPC requests hashspan adds to a Permit2 payment (issue #334; docs/architecture.md): the settlement's
+// receipt, and its transaction once, whose input carries the Permit2 nonce the check compares.
+describe('the requests a Permit2 payment check makes through the reader', () => {
+  it.each(['exact', 'upto'] as const)('%s', async (scheme) => {
+    const counts: Record<string, number> = {};
+    const upstream = http(RPC_URL)({ chain: foundry });
+    const countingReader = createPublicClient({
+      chain: foundry,
+      pollingInterval: 50,
+      transport: custom({
+        async request({ method, params }: { method: string; params?: unknown }) {
+          counts[method] = (counts[method] ?? 0) + 1;
+          return upstream.request({ method, params } as never);
+        },
+      }),
+    });
+    const { client, hashspan } = agentClient(scheme, countingReader as never);
+    const response = await wrapFetchWithPayment(
+      await paidApi(scheme),
+      client,
+    )('http://api.test/weather');
+    expect(response.status).toBe(200);
+    expect(await hashspan.flush()).toBe(true);
+
+    expect(tracing.spanNamed(PAYMENT_SPAN).attributes['blockchain.payment.verified']).toBe(true);
+    expect(Object.keys(counts).sort()).toEqual([
+      'eth_getTransactionByHash',
+      'eth_getTransactionReceipt',
+    ]);
+    expect(counts.eth_getTransactionByHash).toBe(1);
   });
 });

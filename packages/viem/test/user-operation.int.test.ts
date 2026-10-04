@@ -372,3 +372,37 @@ describe('bundler faults', () => {
     );
   });
 });
+
+// The JSON-RPC requests hashspan adds to a user operation (issue #334; docs/architecture.md): none. How often viem
+// polls the bundler for the receipt depends on timing, so the methods are compared, not the number of polls.
+it('adds no JSON-RPC method to a user operation and its wait', async () => {
+  const run = async (traced: boolean) => {
+    const methods = new Set<string>();
+    const countingOn = (prefix: string, inner: { request: (args: never) => Promise<unknown> }) =>
+      custom({
+        async request({ method, params }: { method: string; params?: unknown }) {
+          methods.add(`${prefix}${method}`);
+          return inner.request({ method, params } as never);
+        },
+      });
+    const node = createPublicClient({
+      chain: anvil,
+      transport: countingOn('', http(RPC_URL)({ chain: anvil })),
+    });
+    const hashspan = withHashspan();
+    const plain = createBundlerClient({
+      account: await smartAccount(),
+      client: node,
+      transport: countingOn('bundler:', bundler.transport({ chain: anvil })),
+      pollingInterval: 50,
+    });
+    const client = traced ? plain.extend(hashspan) : plain;
+    const hash = await client.sendUserOperation({ calls: [{ to: RECIPIENT, value: 1n }] });
+    await client.waitForUserOperationReceipt({ hash });
+    await expect(hashspan.flush()).resolves.toBe(true);
+    return [...methods].sort();
+  };
+  const untraced = await run(false);
+  expect(await run(true)).toEqual(untraced);
+  expect(tracing.spans().map((s) => s.name)).toEqual(['send 31337', 'confirm 31337']);
+});
