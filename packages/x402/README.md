@@ -90,7 +90,7 @@ receipt check ends as settled, without `verified`). Call it before a short-lived
 | Settled | `blockchain.payment.status` `settled` and the transaction hash |
 | Settlement pending (`settlement_pending`) | `pending` and the hash; the confirm span resolves it |
 | Settlement failed | `failed`, error status, the facilitator's `errorReason` as `error.type` |
-| Response without a settlement: the facilitator refused the payment before settling it (e.g. the payer's balance is too low), or the API failed (e.g. answered 500) | error status, `error.type` `no_settlement` |
+| Response without a settlement: the facilitator refused the payment before settling it (e.g. the payer's balance is too low), or the API failed (e.g. answered 500) before settling; see [payment, request and task outcomes](#payment-request-and-task-outcomes) | error status, `error.type` `no_settlement` |
 | No response: the paid request failed on the network, `@x402/axios` got a status other than 2xx or 402, or no response came before the authorization expired | error status, `error.type` `timeout`, once the requirements' `maxTimeoutSeconds` plus 30 s passed (at least 30 s, at most 1 h; 300 s when the requirements give none), when more than 1000 payments are open (the oldest first), or on `flush()` |
 | Creating the payment failed (e.g. signing) | error status, the error's class name as `error.type` |
 
@@ -106,6 +106,28 @@ Not traced: x402 v1 payments (`registerExactEvmScheme` registers v1 networks too
 with a `diag` warning once per version or network; payments that client policies or spend controls refuse, which
 happens before any hook runs. If another `onPaymentCreationFailure` hook recovers a failed payment, its span still
 records the failure.
+
+## Payment, request and task outcomes
+
+The payment span records the payment, not the paid request or your tool: the x402 client hooks never see the
+response's status. Whether the tool succeeded is on your tool span (or your framework's), the parent of the payment
+and confirm spans. Together they tell these cases apart, checked with `@x402/core` 2.28 on Anvil:
+
+| What happened | Payment spans under the tool span | Tool span |
+|---|---|---|
+| The API failed before settling (by default a server settles after its handler, and not when the handler failed) | one, `no_settlement` | error, if the tool fails on the status |
+| The API settled, then failed: a server that settles before its handler (`paymentFlow` `upfront`) answered 500 | one, `settled` and `verified` | error, if the tool fails on the status; otherwise nothing records the failure |
+| The request succeeded, the tool failed on the response | one, `settled` | error |
+| The tool retried and paid again | two, `settled`, with two settlement transactions | as the retry ended |
+| The tool retried after a request that was not settled | two: one `no_settlement`, one `settled` | as the retry ended |
+| The settlement transaction does not carry the payment | `settled`, `verified` `false` | |
+| The settlement's outcome is unknown | `pending`, and the linked confirm span ends with `error.type` `timeout` | |
+
+Count only `settled` payments as paid; a `pending` one is paid once its confirm span records the receipt. What a
+tool call or task spent is the `amount` of each settled payment (the `settled_amount` for `upto`), per
+`blockchain.payment.asset`: amounts of different assets do not add up. The settlement's gas was paid by the
+facilitator, not by the agent. Spans are not an accounting record: a trace that a sampler dropped, or that was not
+exported, misses its payments.
 
 ## License
 
