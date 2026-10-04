@@ -11,6 +11,7 @@ import {
 } from '@opentelemetry/api';
 import {
   ATTR_BLOCKCHAIN_BLOCK_NUMBER,
+  ATTR_BLOCKCHAIN_FEE_PAYER,
   ATTR_BLOCKCHAIN_OPERATION_SUBJECT,
   ATTR_BLOCKCHAIN_TX_HASH,
   ATTR_BLOCKCHAIN_TX_REVERT_REASON,
@@ -24,6 +25,7 @@ import {
   ATTR_BLOCKCHAIN_USER_OPERATION_SENDER,
   ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS,
   ATTR_ERROR_TYPE,
+  BLOCKCHAIN_FEE_PAYER_VALUE_PAYMASTER,
   BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
   BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION,
@@ -257,7 +259,21 @@ export function createUserOperationSpans({
             recordConfirmation(endTime, outcome);
             const cost = attributes[ATTR_BLOCKCHAIN_USER_OPERATION_GAS_COST];
             if (typeof cost === 'string') {
-              txMetrics.fee(BigInt(cost), userOperationMetricAttributes(chainId, outcome));
+              // A paymaster, not the sender, paid the operation's cost (ADR 0020).
+              const paymaster: unknown = receipt?.paymaster;
+              const sponsored = typeof paymaster === 'string' && !ZERO_ADDRESS.test(paymaster);
+              txMetrics.fee(
+                BigInt(cost),
+                userOperationMetricAttributes(
+                  chainId,
+                  sponsored
+                    ? {
+                        ...outcome,
+                        [ATTR_BLOCKCHAIN_FEE_PAYER]: BLOCKCHAIN_FEE_PAYER_VALUE_PAYMASTER,
+                      }
+                    : outcome,
+                ),
+              );
             }
           },
           endTime,

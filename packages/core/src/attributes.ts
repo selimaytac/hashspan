@@ -105,6 +105,16 @@ export const ATTR_BLOCKCHAIN_OPERATION_SUBJECT = 'blockchain.operation.subject' 
 /** Values for {@link ATTR_BLOCKCHAIN_OPERATION_SUBJECT}. */
 export const BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION = 'user_operation' as const;
 export const BLOCKCHAIN_OPERATION_SUBJECT_VALUE_CALL_BATCH = 'call_batch' as const;
+/**
+ * Metrics only: who paid a fee sample's fee when it was not the sender of the traced transaction or operation:
+ * `facilitator` for the settlement transaction of a payment, `paymaster` for a user operation a paymaster paid for.
+ * Absent when the sender paid.
+ */
+export const ATTR_BLOCKCHAIN_FEE_PAYER = 'blockchain.fee.payer' as const;
+
+/** Values for {@link ATTR_BLOCKCHAIN_FEE_PAYER}. */
+export const BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR = 'facilitator' as const;
+export const BLOCKCHAIN_FEE_PAYER_VALUE_PAYMASTER = 'paymaster' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_CALL_BATCH_STATUS}. */
 export const BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_SUCCESS = 'success' as const;

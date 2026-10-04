@@ -130,7 +130,8 @@ trace of its own and the link is the only relation between them
 hashspan's tracker records three histograms ([metrics](semconv.md#metrics)): send duration, confirmation duration and
 fee. [`docker/grafana/dashboards/hashspan.json`](../docker/grafana/dashboards/hashspan.json) is a ready Grafana
 dashboard for them, on a Prometheus data source: confirmation and send latency percentiles per chain, fees per chain
-and their distribution, send failures by `error.type`, and confirmation outcomes, with a chain id filter.
+and their distribution, send failures by `error.type`, and confirmation outcomes, with a chain id filter. The fee panels
+show the fees the senders paid: samples with `blockchain.fee.payer` (a payment's facilitator, a paymaster) are left out.
 
 ![The hashspan dashboard in Grafana after a few runs of the example agent](images/grafana-dashboard.png)
 

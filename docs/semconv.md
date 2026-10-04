@@ -153,7 +153,7 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
 | `blockchain.tx.effective_gas_price` | string | confirm | on | wei, decimal string; see the `fee` row for when it is omitted |
 | `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, wei; see the `fee` row for when it is omitted |
-| `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, wei; omitted if the gas price is unknown. The OP Stack operator fee (Isthmus and later) is not included. Fee attributes come from the sealed receipt, never a flashblocks preconfirmation, and are omitted if only a preconfirmation was seen (see [ADR 0024](adr/0024-sealed-receipt-fees.md)) |
+| `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, wei; omitted if the gas price is unknown. The OP Stack operator fee (Isthmus and later) is not included. Fee attributes come from the sealed receipt, never a flashblocks preconfirmation, and are omitted if only a preconfirmation was seen (see [ADR 0024](adr/0024-sealed-receipt-fees.md)). On the confirm span of a payment's settlement, the fee is the facilitator's, which sent the transaction |
 | `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available, also of a reverted user operation: the `Error(string)` message, `Panic(0x..)`, `ErrorName(arg, ...)` for custom errors with a known ABI, else the 4-byte error selector. See [ADR 0005](adr/0005-revert-reason-replay.md) |
 | `blockchain.tx.replacement.hash` | string | confirm | on | on a `replaced` confirm span: hash of the mined transaction that replaced it |
 | `blockchain.tx.replacement.reason` | string | confirm | on | on a `replaced` confirm span: `repriced` \| `cancelled` \| `replaced`, as reported by the instrumented library; omitted when it reported none |
@@ -164,7 +164,7 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.user_operation.nonce` | string | confirm | on | the operation's nonce, decimal string (a 192-bit key and a 64-bit sequence number) |
 | `blockchain.user_operation.success` | boolean | confirm | on | whether the operation's calls succeeded; the bundle transaction can succeed while they revert |
 | `blockchain.user_operation.gas.used` | int | confirm | on | gas the operation used (`actualGasUsed`) |
-| `blockchain.user_operation.gas.cost` | string | confirm | on | what the operation paid (`actualGasCost`), wei, decimal string; its share of the bundle, not the bundle transaction's fee |
+| `blockchain.user_operation.gas.cost` | string | confirm | on | what the operation paid (`actualGasCost`), wei, decimal string; its share of the bundle, not the bundle transaction's fee; paid by the paymaster when `blockchain.user_operation.paymaster` is recorded |
 | `blockchain.user_operation.paymaster` | string | confirm | raw | address of the paymaster that paid for the operation, subject to address mode; absent when none paid |
 | `blockchain.call_batch.id` | string | send, confirm | on | the batch id the wallet returned for EIP-5792 `wallet_sendCalls` (`0x`-prefixed hex, at most 8194 characters), truncated after 256 characters; with the chain id, it identifies the batch |
 | `blockchain.call_batch.sender` | string | send | raw | address of the account the calls are sent from, subject to address mode |
@@ -174,6 +174,7 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.call_batch.atomic` | boolean | confirm | on | whether the wallet ran the calls atomically |
 | `blockchain.call_batch.transaction_hashes` | string[] | confirm | on | hashes of the transactions whose receipts the wallet reported for the batch, de-duplicated, at most 64 |
 | `blockchain.operation.subject` | string | none (metrics only) | on | on [metrics](#metrics) of user operations: `user_operation`; of call batches: `call_batch`; absent on those of transactions |
+| `blockchain.fee.payer` | string | none (metrics only) | on | on `blockchain.client.fee` samples whose fee the sender of the traced transaction or operation did not pay: `facilitator` for a payment's settlement transaction, `paymaster` for a user operation a paymaster paid for; absent when the sender paid ([ADR 0020](adr/0020-metrics.md)) |
 | `blockchain.payment.protocol` | string | payment | on | `x402` |
 | `blockchain.payment.payer` | string | payment | raw | address that pays, subject to address mode; the settlement's payer only when the payer knew none |
 | `blockchain.payment.recipient` | string | payment | raw | address that is paid, subject to address mode |
@@ -220,7 +221,7 @@ recorded on metrics, and batches record no fee ([ADR 0022](adr/0022-call-batches
 |---|---|---|---|---|
 | `blockchain.client.send.duration` | histogram | `s` | chain; `error.type` if the send failed | a send span ends with a hash or id, or fails: from the start of the sending call until then |
 | `blockchain.client.confirmation.duration` | histogram | `s` | chain; `blockchain.tx.status` from chain data (for a call batch, `blockchain.call_batch.status`), else `error.type` (`timeout`, an adapter's error type, an error class name, or `_OTHER`) | a confirm span ends: from the start of the wait until the receipt or batch status, a replacement, a timeout or a failure; not for a call batch that ended while still pending |
-| `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.tx.status` | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number; for a user operation, a receipt with its cost: `blockchain.user_operation.gas.cost` |
+| `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.tx.status`; `blockchain.fee.payer` when someone other than the sender paid | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number; for a user operation, a receipt with its cost: `blockchain.user_operation.gas.cost` |
 
 Bucket boundaries are given as advice: 0.05 s to 300 s for durations, and one bucket per power of ten from 10^8 to
 10^18 wei for fees. Fees above 2^53 wei lose precision as numbers; the span attribute keeps the exact value.

@@ -38,7 +38,8 @@ hashspan's spans are children of the span that is active when the transaction is
   OpenTelemetry bridge ([agent frameworks](integrations.md#agent-frameworks)).
 - **A confirm span is not linked to its send span.** Clients extended with different `withHashspan()` results have
   different trackers: reuse one result for every client of an agent ([viem usage](../packages/viem/README.md#usage)),
-  and give `@hashspan/cdp` and `@hashspan/x402` the same `tracker`. Links are kept for the tracker's `linkTtlMs`
+  and give `@hashspan/cdp` and `@hashspan/x402` the same `tracker`. Without the link, the fee sample of an x402
+  settlement is also recorded as paid by its sender, not with `blockchain.fee.payer` `facilitator`. Links are kept for the tracker's `linkTtlMs`
   (10 minutes by default; [core options](../packages/core/README.md#options)).
 
 ## A confirm span with no send span next to it

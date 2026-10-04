@@ -1,4 +1,4 @@
-import { SpanStatusCode } from '@opentelemetry/api';
+import { type Attributes, type MeterProvider, SpanStatusCode } from '@opentelemetry/api';
 import { x402Client } from '@x402/core/client';
 import { x402Facilitator } from '@x402/core/facilitator';
 import {
@@ -212,6 +212,34 @@ describe('an EIP-3009 payment settled by the SDK facilitator', () => {
       'blockchain.tx.status': 'success',
       'blockchain.block.number': Number(receipt.blockNumber),
     });
+  });
+
+  it("records the settlement fee as the facilitator's, not the agent's", async () => {
+    const fees: Attributes[] = [];
+    const meterProvider = {
+      getMeter: () => ({
+        createHistogram: (name: string) => ({
+          record: (_: number, attributes: Attributes = {}) => {
+            if (name === 'blockchain.client.fee') fees.push(attributes);
+          },
+        }),
+      }),
+    } as unknown as MeterProvider;
+    const client = new x402Client();
+    const hashspan = withHashspan(client, { reader, meterProvider });
+    registerClientScheme(client, { signer: agent, networks: [NETWORK] });
+    client.setSpendControls({ allowedAssets: [{ network: NETWORK, asset: token }] });
+    const response = await wrapFetchWithPayment(await paidApi(), client)('http://api.test/weather');
+    expect(response.status).toBe(200);
+    expect(await hashspan.flush()).toBe(true);
+
+    // The facilitator sent the settling transaction and paid its gas (#329).
+    expect(fees).toEqual([
+      expect.objectContaining({
+        'blockchain.tx.status': 'success',
+        'blockchain.fee.payer': 'facilitator',
+      }),
+    ]);
   });
 
   it('is pending when the facilitator did not see the receipt, and the confirm span resolves it', async () => {
