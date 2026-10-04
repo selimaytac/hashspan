@@ -5,8 +5,10 @@
 // - no timer is left once `flush()` resolved;
 // - the heap does not keep growing across repeated batches (a coarse check);
 // - metrics count each send and each confirmation exactly once.
-// Replacements are not mixed in: with mining off, Anvil 1.8.3 accepts a replacement into its pool but then mines
-// neither it nor the transaction it replaced. replacement.test.ts and anvil.int.test.ts cover replacements.
+// Replacements are not mixed in. Anvil 1.8.3 dropped a replacement of a pending nonce above the account's lowest when
+// it mined with mining off; on 1.8.4 the replacements are mined, but with hundreds of waits polling at once, the
+// originals of some accounts were not reported as replaced and ended as timeouts (not investigated further).
+// replacement.test.ts and anvil.int.test.ts cover replacements.
 import { diag, type Histogram, type MeterProvider } from '@opentelemetry/api';
 import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, http } from 'viem';
