@@ -7,10 +7,9 @@
 More defensive handling of unusual input:
 
 - A failed call is recorded as a failure (`error.type` and error status) also when its error cannot be read, for
-  example an error whose `message` is a getter that throws or a Proxy. The message is read from the error's own
-  `message` data property; a primitive thrown as is (a string, number, bigint or boolean) is recorded as text, other
-  thrown objects with no message. Failures of the tracker itself are logged through `diag` with the error's type
-  only.
+  example an error whose `message` is a getter that throws, or a Proxy; the event then has no message. A primitive
+  thrown as is (a string, number, bigint or boolean) is recorded as text; a thrown object that is not an Error, with
+  no message. Failures of the tracker itself are logged through `diag` with the error's type only.
 - `sanitized` error messages also cut a URL that directly follows other text, such as `rpc_https://...`, to its
   origin.
 - `gen_ai.agent.id` and `gen_ai.agent.name` taken from Baggage are recorded only if they have at most 128 letters,

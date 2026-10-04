@@ -203,8 +203,8 @@ export function createSpanRecording({
 }
 
 /**
- * The message of `error`: an Error's own `message` data property, or a primitive thrown as is. No getter or
- * `toString` of the caller's runs, so reading it cannot throw (ADR 0025).
+ * The message of `error`: an Error's `message`, or a primitive thrown as is. The own data property is read first;
+ * otherwise `message` is read normally (a `DOMException` has an accessor), and a read that throws gives no message.
  */
 function messageOf(error: unknown): string | undefined {
   if (typeof error === 'string') return error;
@@ -213,7 +213,8 @@ function messageOf(error: unknown): string | undefined {
   }
   try {
     if (!(error instanceof Error)) return undefined;
-    const message = ownValue(error, 'message');
+    const own = ownValue(error, 'message');
+    const message: unknown = own !== undefined ? own : error.message;
     return typeof message === 'string' ? message : undefined;
   } catch {
     // A Proxy can throw from its traps.

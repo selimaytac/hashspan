@@ -765,6 +765,15 @@ describe('getters of the caller', () => {
   });
 });
 
+describe('the message of a failure', () => {
+  it('is recorded for an error whose message is an accessor, such as a DOMException', () => {
+    createTxTracker({ errorMessages: 'raw' })
+      .startSend(SEND)
+      .fail(new DOMException('signal timed out', 'TimeoutError'));
+    expect(eventAttribute('exception.message')).toBe('signal timed out');
+  });
+});
+
 describe('a failure with a hostile error', () => {
   afterEach(() => {
     vi.restoreAllMocks();
