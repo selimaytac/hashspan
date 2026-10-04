@@ -318,7 +318,7 @@ When a framework extends the client you pass in, check whether confirm spans app
 
 - Not traced: `deployContract` ([#36](https://github.com/selimaytac/hashspan/issues/36)), `sendRawTransaction`
   ([#33](https://github.com/selimaytac/hashspan/issues/33)), and `sendTransactionSync`, `writeContractSync` and
-  `sendRawTransactionSync`, which send and wait in one call.
+  `sendRawTransactionSync`, which send and wait in one call ([#370](https://github.com/selimaytac/hashspan/issues/370)).
 - Only actions called as methods of an extended client are traced: a library that calls viem's actions as functions
   or creates its own client bypasses the extension
   ([libraries that take a viem client](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/integrations.md#libraries-that-take-a-viem-client)),
