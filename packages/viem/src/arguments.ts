@@ -44,24 +44,51 @@ export function authorizationsOf(list: unknown): SendInput['authorizations'] {
 const MAX_AUTHORIZATIONS = 64;
 
 export const MAX_ARGUMENTS_COPY_DEPTH = 8;
+/** Most values copied from the arguments of an overloaded function, to tell its overloads apart. */
+export const MAX_ARGUMENTS_COPY_VALUES = 100_000;
 // Deep enough for nested tuples, which add two levels each.
 const MAX_ABI_COPY_DEPTH = 32;
+/** Most items of an ABI read, and values copied from them; a longer ABI is not used for telemetry. */
+const MAX_ABI_ITEMS = 10_000;
+const MAX_ABI_COPY_VALUES = 100_000;
+
+/** How many more values a copy may make; one that would make more throws {@link CopyLimitReached}. */
+export interface CopyBudget {
+  left: number;
+}
+
+export class CopyLimitReached extends Error {}
+
+function spend(budget: CopyBudget, values: number): void {
+  budget.left -= values;
+  if (budget.left < 0) throw new CopyLimitReached('copy limit reached');
+}
 
 /**
  * A copy of `value` made of own data properties only, for code that reads it deeply (viem's ABI matching);
- * accessors become undefined and nothing deeper than `maxDepth` is copied.
+ * accessors become undefined and nothing deeper than `maxDepth` is copied. It throws {@link CopyLimitReached}
+ * before copying more values than `budget` allows, so the copy of a wide or sparse value stays bounded.
  */
-export function dataOnly(value: unknown, maxDepth: number, depth = 0): unknown {
+export function dataOnly(
+  value: unknown,
+  maxDepth: number,
+  budget: CopyBudget = { left: Number.POSITIVE_INFINITY },
+  depth = 0,
+): unknown {
   if (value === null || typeof value !== 'object') return value;
   if (depth >= maxDepth) return undefined;
   if (Array.isArray(value)) {
     const length = own(value, 'length');
-    return Array.from({ length: typeof length === 'number' ? length : 0 }, (_, i) =>
-      dataOnly(own(value, String(i)), maxDepth, depth + 1),
+    const count = typeof length === 'number' ? length : 0;
+    spend(budget, count + 1);
+    return Array.from({ length: count }, (_, i) =>
+      dataOnly(own(value, String(i)), maxDepth, budget, depth + 1),
     );
   }
+  const keys = Object.keys(value);
+  spend(budget, keys.length + 1);
   const copy: Record<string, unknown> = {};
-  for (const key of Object.keys(value)) copy[key] = dataOnly(own(value, key), maxDepth, depth + 1);
+  for (const key of keys) copy[key] = dataOnly(own(value, key), maxDepth, budget, depth + 1);
   return copy;
 }
 
@@ -72,13 +99,21 @@ export function dataOnly(value: unknown, maxDepth: number, depth = 0): unknown {
 export function abiForTelemetry(abi: unknown, functionName: unknown): Abi | undefined {
   if (!Array.isArray(abi)) return undefined;
   const length = own(abi, 'length');
+  const count = typeof length === 'number' ? length : 0;
+  if (count > MAX_ABI_ITEMS) return undefined;
+  const budget: CopyBudget = { left: MAX_ABI_COPY_VALUES };
   const items: unknown[] = [];
-  for (let i = 0; i < (typeof length === 'number' ? length : 0); i++) {
-    const item = own(abi, String(i));
-    const type = own(item, 'type');
-    if (type === 'error' || (type === 'function' && own(item, 'name') === functionName)) {
-      items.push(dataOnly(item, MAX_ABI_COPY_DEPTH));
+  try {
+    for (let i = 0; i < count; i++) {
+      const item = own(abi, String(i));
+      const type = own(item, 'type');
+      if (type === 'error' || (type === 'function' && own(item, 'name') === functionName)) {
+        items.push(dataOnly(item, MAX_ABI_COPY_DEPTH, budget));
+      }
     }
+  } catch (error) {
+    if (error instanceof CopyLimitReached) return undefined;
+    throw error;
   }
   return items as Abi;
 }

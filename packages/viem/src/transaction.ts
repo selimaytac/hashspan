@@ -9,6 +9,7 @@ import {
   dataOnly,
   descriptorOf,
   MAX_ARGUMENTS_COPY_DEPTH,
+  MAX_ARGUMENTS_COPY_VALUES,
   own,
   selectorOf,
   shadowing,
@@ -148,15 +149,23 @@ export function addTransactionActions(
           (chainId) => {
             let functionSelector: string | undefined;
             try {
-              const item = getAbiItem({
-                abi,
-                name: functionName,
-                // Overload matching reads the arguments deeply: it gets a copy without accessors.
-                args: dataOnly(functionArguments, MAX_ARGUMENTS_COPY_DEPTH),
-              } as never);
+              // `abi` holds only the functions named `functionName` (and the errors).
+              const functions = abi?.filter((item) => item.type === 'function') ?? [];
+              const item =
+                functions.length > 1
+                  ? getAbiItem({
+                      abi,
+                      name: functionName,
+                      // Only overload matching reads the arguments, deeply: it gets a bounded copy without
+                      // accessors.
+                      args: dataOnly(functionArguments, MAX_ARGUMENTS_COPY_DEPTH, {
+                        left: MAX_ARGUMENTS_COPY_VALUES,
+                      }),
+                    } as never)
+                  : functions[0];
               functionSelector = item ? toFunctionSelector(item as never) : undefined;
             } catch {
-              // Unknown or ambiguous ABI item: record the function name only.
+              // Unknown or ambiguous ABI item, or arguments past the copy bound: record the function name only.
             }
             return {
               ...sendInput(args, own(args, 'address') as string | undefined, chainId),
