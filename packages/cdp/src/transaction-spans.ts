@@ -4,13 +4,7 @@ import type { HashspanExtension } from '@hashspan/viem';
 import { context, diag } from '@opentelemetry/api';
 import { parseTransaction } from 'viem';
 import type { ReaderFor } from './chain.js';
-import {
-  cdpErrorType,
-  errorName,
-  isHexString,
-  sendContextOf,
-  stringOrUndefined,
-} from './helpers.js';
+import { errorName, failSend, isHexString, sendContextOf, stringOrUndefined } from './helpers.js';
 import { own } from './own.js';
 import type { Pending } from './pending.js';
 import { receiptOf } from './receipt.js';
@@ -102,11 +96,8 @@ export function createTransactionSpans({
       // follows runs in the caller's (ADR 0015).
       result = await context.with(sendContextOf(handle), send);
     } catch (error) {
-      try {
-        handle?.fail(error, undefined, { errorType: cdpErrorType(error) });
-      } catch (thrown) {
-        diag.error(`hashspan: failed to record send failure (${errorName(thrown)})`);
-      }
+      const failed = handle;
+      if (failed) failSend((what, errorType) => failed.fail(what, undefined, { errorType }), error);
       throw error;
     }
     try {

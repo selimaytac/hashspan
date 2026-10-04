@@ -281,9 +281,20 @@ const ROWS: Row[] = [
       },
     }),
     (evm) => evm.sendTransaction(SEND),
-    // finding: core-error-name reached through cdp: an error's name is recorded unbounded. finding:
-    // cdp-unreadable-error. A rejection that cannot be read (a Proxy) leaves the send span open.
-    { records: 'core-error-name', same: 'cdp-unreadable-error' },
+    // finding: core-error-name reached through cdp: an error's name is recorded unbounded.
+    { records: 'core-error-name' },
+  ),
+  answerRow(
+    'SDK rejection of sendUserOperation',
+    (value) => ({
+      userOperation: () => {
+        throw value;
+      },
+    }),
+    (evm) =>
+      evm.sendUserOperation({ smartAccount: { address: SMART }, network: 'base', calls: [] }),
+    // finding: core-error-name reached through cdp: an error's name is recorded unbounded.
+    { records: 'core-error-name' },
   ),
 
   // A reader and a tracker passed in: the user's, so only rule 1 applies.
@@ -321,9 +332,9 @@ const ROWS: Row[] = [
   },
 ];
 
-/** The rejection values of the SDK row are errors; every other row takes the general table. */
+/** The rejection values of the SDK rows are errors; every other row takes the general table. */
 const valuesOf = (row: Row): Row =>
-  row.name === 'SDK rejection of sendTransaction' ? { ...row, values: hostileErrors } : row;
+  row.name.startsWith('SDK rejection of ') ? { ...row, values: hostileErrors } : row;
 
 describe('hostile input', () => {
   describeAdapterRows(ROWS.map(valuesOf), {

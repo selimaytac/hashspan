@@ -9,8 +9,9 @@ import type { ViemClientLike } from '@hashspan/viem';
 import { context, diag } from '@opentelemetry/api';
 import type { ReaderFor } from './chain.js';
 import {
-  cdpErrorType,
+  ERROR_TYPE_OTHER,
   errorName,
+  failSend,
   isHexString,
   sendContextOf,
   stringOrUndefined,
@@ -26,8 +27,6 @@ const MAX_SENT_USER_OPERATIONS = 4096;
 const DEFAULT_CONFIRM_TIMEOUT_MS = 120_000;
 // The longest delay a timer keeps; a longer one fires at once.
 const MAX_TIMER_MS = 2 ** 31 - 1;
-// `error.type` of a confirm span whose outcome could not be read.
-const ERROR_TYPE_OTHER = '_OTHER';
 // How often the reader is asked for a bundle receipt when it has no polling interval of its own.
 const DEFAULT_POLLING_INTERVAL_MS = 1000;
 
@@ -127,11 +126,8 @@ export function createUserOperationSpans({
       // As for transactions, only the call runs in the send span's context (ADR 0015).
       result = await context.with(sendContextOf(handle), send);
     } catch (error) {
-      try {
-        handle?.fail(error, { errorType: cdpErrorType(error) });
-      } catch (thrown) {
-        diag.error(`hashspan: failed to record send failure (${errorName(thrown)})`);
-      }
+      const failed = handle;
+      if (failed) failSend((what, errorType) => failed.fail(what, { errorType }), error);
       throw error;
     }
     try {
