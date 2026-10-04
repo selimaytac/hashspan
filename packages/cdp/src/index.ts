@@ -8,7 +8,7 @@ import {
 import { diag } from '@opentelemetry/api';
 import { createChainIdFor, createReaderFor } from './chain.js';
 import { wrapEvm } from './evm.js';
-import { DEFAULT_FLUSH_TIMEOUT_MS } from './helpers.js';
+import { DEFAULT_FLUSH_TIMEOUT_MS, optionsOf } from './helpers.js';
 import { own } from './own.js';
 import { createPending } from './pending.js';
 import { createServerAccountWrapping } from './server-account.js';
@@ -88,7 +88,12 @@ export function withHashspan(
   cdp: CdpClientLike,
   options: WithHashspanCdpOptions = {},
 ): HashspanCdp {
-  const { reader, confirmTimeoutMs, tracker: providedTracker, ...rest } = options;
+  const {
+    reader,
+    confirmTimeoutMs,
+    tracker: providedTracker,
+    ...rest
+  } = optionsOf(options) as WithHashspanCdpOptions;
   const tracker: TxTracker = providedTracker ?? createTxTracker(rest);
   // Confirmations reuse the viem adapter's receipt handling, on the same tracker.
   const viem = withViemHashspan({ ...rest, tracker });

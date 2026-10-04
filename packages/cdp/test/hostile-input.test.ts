@@ -16,6 +16,7 @@ import {
   recordingMeterProvider,
   revokedProxy,
   setupHostileTracing,
+  throwingGetters,
   throwingProxy,
 } from '../../core/test/hostile.js';
 import { type WithHashspanCdpOptions, withHashspan } from '../src/index.js';
@@ -342,6 +343,27 @@ describe('the client withHashspan() wraps', () => {
         problems.push(
           `${label}: ${error instanceof HostileError ? 'HostileError' : String(error)}`,
         );
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+});
+
+describe('the options withHashspan() gets', () => {
+  it('never throws, and wraps the client, for options it cannot read', () => {
+    const problems: string[] = [];
+    for (const [label, options] of [
+      ['null', null],
+      ['an object whose option getters throw', throwingGetters(['reader', 'tracker', 'address'])],
+      ...hostileValues(),
+    ] as [string, unknown][]) {
+      const cdp = fakeCdp();
+      const send = cdp.evm.sendTransaction;
+      try {
+        withHashspan(cdp as never, options as never);
+        if (cdp.evm.sendTransaction === send) problems.push(`${label}: client not wrapped`);
+      } catch (error) {
+        problems.push(`${label}: ${String(error)}`);
       }
     }
     expect(problems).toEqual([]);
