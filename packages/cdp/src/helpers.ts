@@ -36,6 +36,30 @@ export function sendContextOf(handle: { context?: unknown } | undefined): Contex
   }
 }
 
+/** `error.type` of a span whose outcome could not be read. */
+export const ERROR_TYPE_OTHER = '_OTHER';
+
+/**
+ * Ends a send handle as a failure of the rejection `error`, with its CDP API error type: `fail(error, errorType)`
+ * calls the handle. If the error cannot be read (a Proxy whose traps throw), the handle still ends, as a failure with
+ * `error.type` `_OTHER` and without the error (ADR 0025 rule 1). Never throws.
+ */
+export function failSend(
+  fail: (error: unknown, errorType: string | undefined) => void,
+  error: unknown,
+): void {
+  try {
+    fail(error, cdpErrorType(error));
+  } catch (thrown) {
+    diag.error(`hashspan: failed to record send failure (${errorName(thrown)})`);
+    try {
+      fail(undefined, ERROR_TYPE_OTHER);
+    } catch (failure) {
+      diag.error(`hashspan: failed to end the send span (${errorName(failure)})`);
+    }
+  }
+}
+
 /** The CDP API's error type (`APIError.errorType`, e.g. `insufficient_balance`), recorded as `error.type`. */
 export function cdpErrorType(error: unknown): string | undefined {
   const type = error instanceof Error ? own(error, 'errorType') : undefined;
