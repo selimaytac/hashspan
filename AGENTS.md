@@ -86,6 +86,8 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
   `docs/adr/README.md`. New ADRs start as `proposed` and move to `accepted` only after the implementation was
   compared with them.
 - Prefer OSI-licensed dependencies; flag non-OSS licenses.
+- A bug found in a dependency and fixed or confirmed upstream gets a row in docs/upstream-findings.md, with what
+  hashspan does about it.
 
 ## Security
 - Never commit secrets or private keys (use Anvil's well-known test accounts in tests); gitleaks runs in CI.
