@@ -149,7 +149,7 @@ export function createTransactionSpans({
   /**
    * Ends `handle` from the outcome of the user's wait; never rejects. It is tracked, so `flush()` waits for it and
    * ends it as `timeout` if it cannot wait longer
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.9.1/docs/adr/0010-flush-before-shutdown.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.10.0/docs/adr/0010-flush-before-shutdown.md).
    */
   const recordWait = (
     handle: ReturnType<TxTracker['startConfirm']>,

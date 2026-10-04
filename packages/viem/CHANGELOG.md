@@ -1,5 +1,39 @@
 # @hashspan/viem
 
+## 0.10.0
+
+### Minor Changes
+
+- [#322](https://github.com/selimaytac/hashspan/pull/322) [`d69ba29`](https://github.com/selimaytac/hashspan/commit/d69ba296cb22e090f72b27ac9c2f8c626abf552e) Thanks [@selimaytac](https://github.com/selimaytac)! - Background confirmation and `watch()` now poll again, one polling interval later, after a failed receipt request (an
+  HTTP 429, a JSON-RPC error, a request timeout, a connection reset), until their `timeoutMs`, as they already did when
+  the receipt was not there yet. Before, one failed request ended the confirm span at once with that error, though the
+  next request would have found the receipt. A provider that keeps failing now ends the span as `timeout`. The
+  confirmations of `@hashspan/cdp` and `@hashspan/x402` through a `reader` go through `watch()` and behave the same; your
+  own `waitForTransactionReceipt` calls are unaffected.
+
+### Patch Changes
+
+- [#340](https://github.com/selimaytac/hashspan/pull/340) [`a81e328`](https://github.com/selimaytac/hashspan/commit/a81e328723bd8197d88393926e829c633601bce3) Thanks [@selimaytac](https://github.com/selimaytac)! - `flush()` reads `timeoutMs` as an own data property and always resolves to a boolean. Options it cannot read (`null`,
+  a revoked Proxy, a getter or a Proxy trap that throws) made the viem and cdp `flush()` reject, and the x402 one
+  resolve `false` without waiting; they now use the default of 10 000 ms, as does a `timeoutMs` that is not a
+  non-negative number.
+
+- [#319](https://github.com/selimaytac/hashspan/pull/319) [`3182feb`](https://github.com/selimaytac/hashspan/commit/3182febabd7633aa0951ea4bc3e32d6ed178d0a5) Thanks [@selimaytac](https://github.com/selimaytac)! - `writeContract` reads the call's arguments only to tell the overloads of a function apart, and its copies of the
+  arguments and of the ABI are bounded (100 000 values; an ABI of at most 10 000 items). Before, it copied every
+  argument before the call even for a function without overloads, so a wide or sparse argument added work on the
+  caller's path. Past a bound, no function selector is recorded; the call is unchanged.
+
+- [#282](https://github.com/selimaytac/hashspan/pull/282) [`0c7bb6e`](https://github.com/selimaytac/hashspan/commit/0c7bb6e0d0abeedc25dd4ff4784bf2a760d9a7b6) Thanks [@selimaytac](https://github.com/selimaytac)! - A chain id is taken only if it is a positive safe integer: a node that answers `eth_chainId` with `0x0`, or a call
+  whose `chain` has an id of 0, a negative or a non-integer number, no longer gives a span with that id. A call that
+  names such a chain is not traced (no send or confirm span), rather than recorded under the client's chain, and
+  `watch()` records nothing for a chain id, its own or its client's, that is not one.
+
+- [#308](https://github.com/selimaytac/hashspan/pull/308) [`6635459`](https://github.com/selimaytac/hashspan/commit/663545943b5087b35e2f08283f6f573fec882c3f) Thanks [@selimaytac](https://github.com/selimaytac)! - A `timeoutMs` that is not a finite non-negative number (a bigint, a symbol, `NaN`) no longer leaves the confirm span
+  open: the default timeout applies, and a duration longer than a timer can wait is cut to that. A `decodeRevertReason`
+  option that cannot be read no longer makes `withHashspan()` throw.
+- Updated dependencies [[`03889c2`](https://github.com/selimaytac/hashspan/commit/03889c2bb75eac3a48c1ff7b16b6d335e1a543aa), [`6635459`](https://github.com/selimaytac/hashspan/commit/663545943b5087b35e2f08283f6f573fec882c3f)]:
+  - @hashspan/core@0.10.0
+
 ## 0.9.0
 
 ### Minor Changes

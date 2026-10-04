@@ -7,7 +7,7 @@ export const ATTR_GEN_AI_AGENT_NAME = 'gen_ai.agent.name' as const;
 /**
  * Agent identity as GenAI attributes. A field set in the static identity always wins; Baggage, which a remote caller
  * can set, only fills fields it leaves unset, and is not read at all with `fromBaggage` false
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0011-agent-identity-precedence.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0011-agent-identity-precedence.md).
  */
 export function agentAttributes(
   ctx: Context,
