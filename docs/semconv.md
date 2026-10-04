@@ -29,6 +29,14 @@ span of the mined hash. If that span is created for this purpose, it has the sam
 replaced one and links to it and to both `send` spans when known. Dashboards counting confirmations should exclude
 `blockchain.tx.status = replaced`. See [ADR 0008](adr/0008-replaced-transactions.md).
 
+**Chain reorganisations.** A confirm span records the receipt its wait ended with and is not revised afterwards: when
+a reorganisation removes the receipt's block, the span keeps its status and block number, and a later wait for the
+transaction within the link TTL adds no span, as the transaction stays settled (see one confirm span per transaction,
+below). A wait with `confirmations` above 1 ends with the receipt it read first, also when a reorganisation during the
+wait moved the transaction to another block or removed it, since viem returns that receipt to the caller
+([#306](https://github.com/selimaytac/hashspan/issues/306)). A transaction removed before a wait, `watch()` or
+background confirmation read its receipt, and not included again, ends as a timeout.
+
 **Payments.** A `payment` span records a payment that the agent authorizes and another party settles on chain, such
 as an x402 facilitator: the agent signs, but does not send, the settling transaction, so there is no `send` span
 ([ADR 0013](adr/0013-x402-payments.md)). It carries what was paid, to whom, and the settlement. A settlement with a
