@@ -2,10 +2,12 @@
 // reads. A row names an entry point and one input; each rule is its own test, so a finding fails one test only.
 // A row whose rule does not hold yet is marked `it.fails` with `// finding: <tag>`; fixing it turns that test red
 // until the mark is removed.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { diag, SpanStatusCode } from '@opentelemetry/api';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTxTracker, type TxTracker, type TxTrackerOptions } from '../src/index.js';
 import {
   ADDRESS,
+  ADDRESS_HEX,
   addressAcrossCut,
   aroundBound,
   BOUNDS,
@@ -763,6 +765,54 @@ describe('getters of the caller', () => {
   });
 });
 
+describe('the message of a failure', () => {
+  it('is recorded for an error whose message is an accessor, such as a DOMException', () => {
+    createTxTracker({ errorMessages: 'raw' })
+      .startSend(SEND)
+      .fail(new DOMException('signal timed out', 'TimeoutError'));
+    expect(eventAttribute('exception.message')).toBe('signal timed out');
+  });
+});
+
+describe('a failure with a hostile error', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const modes = ['off', 'sanitized', 'raw'] as const;
+  for (const errorMessages of modes) {
+    it.each(errors())(
+      `is recorded as a failure with %s (errorMessages ${errorMessages})`,
+      (_n, error) => {
+        createTxTracker({ errorMessages }).startSend(SEND).fail(error);
+        const span = tracing.spans()[0];
+        expect(span?.status.code).toBe(SpanStatusCode.ERROR);
+        expect(typeof span?.attributes['error.type']).toBe('string');
+      },
+    );
+
+    it(`logs nothing of an error whose message getter throws (errorMessages ${errorMessages})`, () => {
+      const logged: unknown[] = [];
+      for (const level of ['error', 'warn', 'info', 'debug', 'verbose'] as const) {
+        vi.spyOn(diag, level).mockImplementation((...args: unknown[]) => {
+          logged.push(...args);
+        });
+      }
+      const error = new Error();
+      Object.defineProperty(error, 'message', {
+        get() {
+          throw new Error(`${SECRET_URL} ${ADDRESS}`);
+        },
+      });
+      createTxTracker({ errorMessages }).startSend(SEND).fail(error);
+      const text = logged.map((entry) => (entry instanceof Error ? entry.message : String(entry)));
+      expect(text.join('\n')).not.toContain(SECRET);
+      expect(text.join('\n')).not.toContain(ADDRESS_HEX);
+      expect(tracing.spans()[0]?.status.code).toBe(SpanStatusCode.ERROR);
+    });
+  }
+});
+
 // --- Rule 6: sensitive data stays opt-in --------------------------------------------------------------------------
 
 describe('sensitive data with default options', () => {
@@ -788,5 +838,23 @@ describe('sensitive data with default options', () => {
   it('keeps a URL credential out of a sanitized error message', () => {
     createTxTracker({ errorMessages: 'sanitized' }).startSend(SEND).fail(new Error(SECRET_URL));
     expect(eventAttribute('exception.message')).toBe('https://rpc.example.com');
+  });
+
+  it.each(['rpc_', '1', 'x'.repeat(40)])(
+    'keeps a URL credential out of a sanitized error message when %s precedes the URL',
+    (before) => {
+      createTxTracker({ errorMessages: 'sanitized' })
+        .startSend(SEND)
+        .fail(new Error(`failed: ${before}${SECRET_URL}`));
+      expect(eventAttribute('exception.message')).not.toContain(SECRET);
+    },
+  );
+
+  it('keeps an address ending in 0 out of a sanitized error message when an x follows it', () => {
+    const address = `0x${'2'.repeat(39)}0`;
+    createTxTracker({ address: 'off', errorMessages: 'sanitized' })
+      .startSend(SEND)
+      .fail(new Error(`from ${address}xyz`));
+    expect(eventAttribute('exception.message')).not.toContain('2'.repeat(39));
   });
 });

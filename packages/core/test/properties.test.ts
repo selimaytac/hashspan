@@ -120,8 +120,9 @@ describe('sanitizeErrorMessage', () => {
         textWithAddresses,
         secret,
         fc.constantFrom('https', 'http', 'wss'),
-        (text, token, scheme) => {
-          const message = `${text} ${scheme}://user:pw@rpc.example.com/v2/${token}?apikey=${token} ${text}`;
+        fc.constantFrom(' ', '', '_', 'rpc_', '1', 'x'.repeat(40)),
+        (text, token, scheme, before) => {
+          const message = `${text}${before}${scheme}://user:pw@rpc.example.com/v2/${token}?apikey=${token} ${text}`;
           const sanitized = sanitizeErrorMessage(message, OFF);
           expect(sanitized).toBe(sanitizeErrorMessage(message, OFF));
           expect(sanitized.length).toBeLessThanOrEqual(256 + 3);
