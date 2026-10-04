@@ -1,5 +1,5 @@
 // Send and confirm spans of transactions sent through the CDP API (ADR 0012).
-import type { SendInput, TxTracker } from '@hashspan/core';
+import type { ReceiptLike, ReplacementReason, SendInput, TxTracker } from '@hashspan/core';
 import type { HashspanExtension } from '@hashspan/viem';
 import { context, diag } from '@opentelemetry/api';
 import { parseTransaction } from 'viem';
@@ -15,6 +15,14 @@ import {
 import { own } from './own.js';
 import type { Pending } from './pending.js';
 import { receiptOf } from './receipt.js';
+import {
+  capturing,
+  descriptorOf,
+  type ReplacementCapture,
+  reportedReplacement,
+  sameHex,
+  shadowing,
+} from './replacement.js';
 
 /** Transaction fields for the send span, from a request object or a serialized transaction. */
 export function describeTransaction(transaction: unknown): Omit<SendInput, 'chainId'> {
@@ -57,8 +65,15 @@ export interface TransactionSpans {
     describe: () => Omit<SendInput, 'chainId'>,
     send: () => Promise<unknown>,
   ): Promise<unknown>;
-  /** Runs a network-scoped account's `waitForTransactionReceipt` inside a confirm span, without a reader. */
-  confirmed(chainId: number, options: unknown, wait: () => Promise<unknown>): Promise<unknown>;
+  /**
+   * Runs a network-scoped account's `waitForTransactionReceipt` inside a confirm span, without a reader. `wait` makes
+   * the call with the options it is given.
+   */
+  confirmed(
+    chainId: number,
+    options: unknown,
+    wait: (options: unknown) => Promise<unknown>,
+  ): Promise<unknown>;
 }
 
 export function createTransactionSpans({
@@ -119,27 +134,57 @@ export function createTransactionSpans({
   const confirmed = (
     chainId: number,
     options: unknown,
-    wait: () => Promise<unknown>,
+    wait: (options: unknown) => Promise<unknown>,
   ): Promise<unknown> => {
-    let hash: unknown;
+    let traced: { hash: string; waitOptions: unknown; capture: ReplacementCapture } | undefined;
     try {
-      hash = stringOrUndefined(own(options, 'hash')) ?? own(options, 'transactionHash');
+      traced = withReplacementCapture(chainId, options);
     } catch (error) {
       diag.error(
         `hashspan: failed to read the call options; call not traced (${errorName(error)})`,
       );
-      return wait();
     }
-    if (typeof hash !== 'string' || readerFor(chainId)) return wait();
+    if (!traced) return wait(options);
+    const { hash, waitOptions, capture } = traced;
     let handle: ReturnType<TxTracker['startConfirm']> | undefined;
     try {
       handle = tracker.startConfirm({ chainId, hash });
     } catch (error) {
       diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
     }
-    const call = wait();
-    if (handle) track(recordWait(handle, call));
+    const call = wait(waitOptions);
+    if (handle) track(recordWait(handle, call, hash, capture));
     return call;
+  };
+
+  /**
+   * The hash and the options a traced wait is made with, or undefined when it is passed on untraced: with a reader,
+   * without a hash, or with an `onReplaced` accessor. viem reports a replacement, matched on sender and nonce, through
+   * `onReplaced` (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.11.0/docs/adr/0008-replaced-transactions.md).
+   * The SDK passes viem's wait parameters on unchanged, so a capturing `onReplaced` is added to them; for
+   * `{ transactionHash }` it would call viem with the hash alone, so that form is passed on as `{ hash, onReplaced }`,
+   * the same viem call.
+   */
+  const withReplacementCapture = (
+    chainId: number,
+    options: unknown,
+  ): { hash: string; waitOptions: unknown; capture: ReplacementCapture } | undefined => {
+    const given = stringOrUndefined(own(options, 'hash'));
+    const hash = given ?? own(options, 'transactionHash');
+    if (typeof hash !== 'string' || readerFor(chainId)) return undefined;
+    const capture: ReplacementCapture = {};
+    if (given === undefined) {
+      return { hash, waitOptions: { hash, onReplaced: capturing(capture, undefined) }, capture };
+    }
+    // viem reads the callback through the prototype chain as well.
+    const onReplaced = descriptorOf(options as object, 'onReplaced');
+    if (onReplaced !== undefined && !('value' in onReplaced)) return undefined;
+    const waitOptions = shadowing(
+      options as object,
+      'onReplaced',
+      capturing(capture, onReplaced?.value),
+    );
+    return { hash, waitOptions, capture };
   };
 
   /**
@@ -150,6 +195,8 @@ export function createTransactionSpans({
   const recordWait = (
     handle: ReturnType<TxTracker['startConfirm']>,
     call: Promise<unknown>,
+    hash: string,
+    capture: ReplacementCapture,
   ): Promise<void> => {
     let ended = false;
     /**
@@ -178,21 +225,60 @@ export function createTransactionSpans({
       (result) => {
         end(() => {
           const receipt = receiptOf(result);
-          if (receipt) handle.end(receipt);
+          if (receipt) recordReceipt(handle, hash, receipt, capture);
           else handle.fail(new TypeError('not a transaction receipt'));
         }, 'receipt');
       },
       (error: unknown) => {
-        end(
-          () =>
-            error instanceof Error && own(error, 'name') === 'WaitForTransactionReceiptTimeoutError'
-              ? handle.timeout()
-              : handle.fail(error),
-          'confirmation failure',
-        );
+        end(() => {
+          // viem rejects after reporting a replacement only if the caller's onReplaced threw: the transaction was
+          // mined, so the reported receipt is recorded.
+          const reported = receiptOf(reportedReplacement(capture)?.receipt);
+          if (reported) recordReceipt(handle, hash, reported, capture);
+          else if (
+            error instanceof Error &&
+            own(error, 'name') === 'WaitForTransactionReceiptTimeoutError'
+          ) {
+            handle.timeout();
+          } else handle.fail(error);
+        }, 'confirmation failure');
       },
     );
   };
 
   return { traced, confirmed };
+}
+
+/**
+ * Ends `handle` with `receipt`. A receipt of another hash is the awaited transaction's only as a replacement viem
+ * reported, recorded with its reason; any other, such as an endpoint's answer for an unrelated transaction, is not
+ * recorded, and the span ends as a failure with `error.type` `_OTHER`.
+ */
+function recordReceipt(
+  handle: ReturnType<TxTracker['startConfirm']>,
+  hash: string,
+  receipt: ReceiptLike,
+  capture: ReplacementCapture,
+): void {
+  const report = reportedReplacement(capture);
+  const reported =
+    report !== undefined &&
+    sameHex(own(report.receipt, 'transactionHash'), receipt.transactionHash);
+  if (
+    !reported &&
+    receipt.transactionHash !== undefined &&
+    !sameHex(receipt.transactionHash, hash)
+  ) {
+    diag.debug(
+      'hashspan: the wait resolved with the receipt of another transaction; not recording it',
+    );
+    handle.fail(undefined);
+    return;
+  }
+  const reason = reported ? report.reason : undefined;
+  handle.end(
+    typeof reason === 'string'
+      ? { ...receipt, replacementReason: reason as ReplacementReason }
+      : receipt,
+  );
 }
