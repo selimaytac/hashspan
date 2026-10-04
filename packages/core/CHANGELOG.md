@@ -1,5 +1,64 @@
 # @hashspan/core
 
+## 0.11.0
+
+### Minor Changes
+
+- [#351](https://github.com/selimaytac/hashspan/pull/351) [`044acaa`](https://github.com/selimaytac/hashspan/commit/044acaae5d1b096995a2b28d4a8d74fa9d149545) Thanks [@selimaytac](https://github.com/selimaytac)! - `blockchain.client.fee` samples whose fee the traced sender did not pay now carry `blockchain.fee.payer`:
+  `facilitator` for the settlement transaction of a payment, `paymaster` for a user operation a paymaster paid for.
+  Samples without it are fees the senders paid, as all samples were counted before; filter on it to chart what an
+  agent spent. New exports: `ATTR_BLOCKCHAIN_FEE_PAYER`, `BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR` and
+  `BLOCKCHAIN_FEE_PAYER_VALUE_PAYMASTER`.
+
+- [#365](https://github.com/selimaytac/hashspan/pull/365) [`2e0efb5`](https://github.com/selimaytac/hashspan/commit/2e0efb5fbd5039e94d07ac36b9c9bea9d2db09cd) Thanks [@selimaytac](https://github.com/selimaytac)! - `blockchain.system` is renamed to `blockchain.system.name`, as OpenTelemetry names the system attribute of its
+  `db.*` and `rpc.*` conventions. Following the change policy of the semantic conventions, every span and metric sample
+  that records `blockchain.system` now records `blockchain.system.name` too, with the same value (`evm`); the redaction
+  hook's fail-closed set keeps both. Metric series therefore gain a label, `blockchain_system_name` in Prometheus: each series ends at the upgrade and
+  a new one starts, so `rate()` and `increase()` over a window that spans the upgrade undercount once.
+  Queries and dashboards should move to the new name: `blockchain.system` and the constant `ATTR_BLOCKCHAIN_SYSTEM`
+  are deprecated and removed in 1.0. New export: `ATTR_BLOCKCHAIN_SYSTEM_NAME`. The semantic conventions schema
+  version is `0.3.0-dev`. The doc comment of the `redact` option lists every key the fail-closed set keeps, call
+  batch keys included.
+
+### Patch Changes
+
+- [#364](https://github.com/selimaytac/hashspan/pull/364) [`4d7af1b`](https://github.com/selimaytac/hashspan/commit/4d7af1b70dd65ab0633e1a1a7df940bb52e437e5) Thanks [@selimaytac](https://github.com/selimaytac)! - The doc comment of the attribute keys links to the change policy of the semantic conventions, which says how
+  attribute names are renamed and removed.
+
+- [#352](https://github.com/selimaytac/hashspan/pull/352) [`96a967f`](https://github.com/selimaytac/hashspan/commit/96a967f92de7df92327fd04b3ba6d56fda57976d) Thanks [@selimaytac](https://github.com/selimaytac)! - A receipt without a readable block number or gas used, such as what viem returns when a node answers with something
+  that is not a receipt, now ends the confirm span with error status and `error.type` `_OTHER`, records one confirmation
+  sample, and lets a later wait record the receipt, as docs/semconv.md describes. Before, the span ended with no outcome
+  and no error, and no confirmation sample was recorded.
+
+- [#362](https://github.com/selimaytac/hashspan/pull/362) [`0b820da`](https://github.com/selimaytac/hashspan/commit/0b820da151b5025285aedf9576fc415d16480cde) Thanks [@selimaytac](https://github.com/selimaytac)! - The type declarations document every export, and every member of the exported interfaces, with a doc comment.
+
+- [#349](https://github.com/selimaytac/hashspan/pull/349) [`85c741a`](https://github.com/selimaytac/hashspan/commit/85c741ab262c254fc37816c8323cd409fab11955) Thanks [@selimaytac](https://github.com/selimaytac)! - In `off` and `hashed` address mode, an address that follows another hex value directly (`0x…0x<address>`) is now
+  recognised: a `0x` starts a new hex value. Before, the first value took the second address's leading `0`, and the
+  remaining 40 digits were recorded as they were. Found by the new property-based tests. A `0` followed by an `x` that starts no hex value stays part of the value before it, so an address ending in `0` and
+  followed by text such as `xyz` is recognised too.
+
+- [#359](https://github.com/selimaytac/hashspan/pull/359) [`2498693`](https://github.com/selimaytac/hashspan/commit/24986931fb8a7596c823af20a1732b001f57906e) Thanks [@selimaytac](https://github.com/selimaytac)! - More defensive handling of unusual input:
+  
+  - A failed call is recorded as a failure (`error.type` and error status) also when its error cannot be read, for
+    example an error whose `message` is a getter that throws, or a Proxy; the event then has no message. A primitive
+    thrown as is (a string, number, bigint or boolean) is recorded as text; a thrown object that is not an Error, with
+    no message. Failures of the tracker itself are logged through `diag` with the error's type only.
+  - `sanitized` error messages also cut a URL that directly follows other text, such as `rpc_https://...`, to its
+    origin.
+  - `gen_ai.agent.id` and `gen_ai.agent.name` taken from Baggage are recorded only if they have at most 128 letters,
+    digits, spaces and `_ . : @ / -`. Values from the static `agent` option are recorded as given.
+  - With `recordFunctionArguments`, binary data (typed arrays, `ArrayBuffer`, `DataView`) is recorded as `0x` hex, so
+    the address mode applies to it, instead of an object of its byte values.
+  - `withHashspan()` of the viem, cdp and x402 adapters no longer throws for options it cannot read (`null`, a Proxy, a
+    getter that throws): unreadable options take their defaults, with a `diag` warning.
+  - The adapters' `diag` messages include an error's name only when it is short text; another name, such as a symbol,
+    is logged as unknown.
+  - The viem adapter keeps one copy of a `writeContract` ABI per contract function instead of one per transaction.
+  - A receipt whose `l1Fee` is not a hex quantity is recorded without `blockchain.tx.l1_fee` and `blockchain.tx.fee`;
+    the rest of the receipt is recorded as usual instead of the confirmation ending as a failure.
+
+- [#369](https://github.com/selimaytac/hashspan/pull/369) [`1ada0ac`](https://github.com/selimaytac/hashspan/commit/1ada0aca407b91c9fa8ecde983a074a60833a27f) Thanks [@selimaytac](https://github.com/selimaytac)! - README states the package's known limits.
+
 ## 0.10.0
 
 ### Minor Changes

@@ -125,7 +125,7 @@ export function createSpanRecording({
   /**
    * Exception event attributes for `error`, per the error message mode. The error object itself is never handed to
    * the SDK: its message and stack can carry addresses and calldata
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0006-error-privacy.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0006-error-privacy.md).
    */
   const exceptionAttributes = (type: string, error: unknown): Attributes => {
     const attributes: Attributes = { [ATTR_EXCEPTION_TYPE]: type };

@@ -1,5 +1,35 @@
 # @hashspan/viem
 
+## 0.11.0
+
+### Patch Changes
+
+- [#362](https://github.com/selimaytac/hashspan/pull/362) [`0b820da`](https://github.com/selimaytac/hashspan/commit/0b820da151b5025285aedf9576fc415d16480cde) Thanks [@selimaytac](https://github.com/selimaytac)! - The type declarations document every export, and every member of the exported interfaces, with a doc comment.
+
+- [#359](https://github.com/selimaytac/hashspan/pull/359) [`2498693`](https://github.com/selimaytac/hashspan/commit/24986931fb8a7596c823af20a1732b001f57906e) Thanks [@selimaytac](https://github.com/selimaytac)! - More defensive handling of unusual input:
+  
+  - A failed call is recorded as a failure (`error.type` and error status) also when its error cannot be read, for
+    example an error whose `message` is a getter that throws, or a Proxy; the event then has no message. A primitive
+    thrown as is (a string, number, bigint or boolean) is recorded as text; a thrown object that is not an Error, with
+    no message. Failures of the tracker itself are logged through `diag` with the error's type only.
+  - `sanitized` error messages also cut a URL that directly follows other text, such as `rpc_https://...`, to its
+    origin.
+  - `gen_ai.agent.id` and `gen_ai.agent.name` taken from Baggage are recorded only if they have at most 128 letters,
+    digits, spaces and `_ . : @ / -`. Values from the static `agent` option are recorded as given.
+  - With `recordFunctionArguments`, binary data (typed arrays, `ArrayBuffer`, `DataView`) is recorded as `0x` hex, so
+    the address mode applies to it, instead of an object of its byte values.
+  - `withHashspan()` of the viem, cdp and x402 adapters no longer throws for options it cannot read (`null`, a Proxy, a
+    getter that throws): unreadable options take their defaults, with a `diag` warning.
+  - The adapters' `diag` messages include an error's name only when it is short text; another name, such as a symbol,
+    is logged as unknown.
+  - The viem adapter keeps one copy of a `writeContract` ABI per contract function instead of one per transaction.
+  - A receipt whose `l1Fee` is not a hex quantity is recorded without `blockchain.tx.l1_fee` and `blockchain.tx.fee`;
+    the rest of the receipt is recorded as usual instead of the confirmation ending as a failure.
+
+- [#369](https://github.com/selimaytac/hashspan/pull/369) [`1ada0ac`](https://github.com/selimaytac/hashspan/commit/1ada0aca407b91c9fa8ecde983a074a60833a27f) Thanks [@selimaytac](https://github.com/selimaytac)! - README states the package's known limits.
+- Updated dependencies [[`4d7af1b`](https://github.com/selimaytac/hashspan/commit/4d7af1b70dd65ab0633e1a1a7df940bb52e437e5), [`044acaa`](https://github.com/selimaytac/hashspan/commit/044acaae5d1b096995a2b28d4a8d74fa9d149545), [`96a967f`](https://github.com/selimaytac/hashspan/commit/96a967f92de7df92327fd04b3ba6d56fda57976d), [`2e0efb5`](https://github.com/selimaytac/hashspan/commit/2e0efb5fbd5039e94d07ac36b9c9bea9d2db09cd), [`0b820da`](https://github.com/selimaytac/hashspan/commit/0b820da151b5025285aedf9576fc415d16480cde), [`85c741a`](https://github.com/selimaytac/hashspan/commit/85c741ab262c254fc37816c8323cd409fab11955), [`2498693`](https://github.com/selimaytac/hashspan/commit/24986931fb8a7596c823af20a1732b001f57906e), [`1ada0ac`](https://github.com/selimaytac/hashspan/commit/1ada0aca407b91c9fa8ecde983a074a60833a27f)]:
+  - @hashspan/core@0.11.0
+
 ## 0.10.0
 
 ### Minor Changes
