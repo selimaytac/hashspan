@@ -35,6 +35,7 @@ import {
   signature,
   spanProblems,
   splitsHex,
+  throwingGetters,
   throwingProxy,
 } from '../../core/test/hostile.js';
 import { type HashspanExtension, traceTransport, withHashspan } from '../src/index.js';
@@ -226,18 +227,6 @@ function answerRows(
   );
 }
 
-// finding: core-tx-hash (#297) reached through viem: the hash a node returns, or a wait is given, is recorded
-// unchecked.
-const TX_HASH_FINDING = { records: 'core-tx-hash' } as const;
-// finding: viem-selector (#297). The selector is the first 10 characters of `data`, hex or not.
-const SELECTOR_FINDING = { records: 'viem-selector' } as const;
-// finding: core-send-input (#297) reached through viem: value, nonce and function name are recorded unchecked.
-const SEND_INPUT_FINDING = { records: 'core-send-input' } as const;
-// finding: core-receipt-quantities (#297): receipt block number, gas used, gas price and L1 fee are recorded unchecked.
-const RECEIPT_FINDING = { records: 'core-receipt-quantities' } as const;
-// finding: core-send-address (#297) reached through viem: `to` and `account` are recorded without an address check.
-const SEND_ADDRESS_FINDING = { records: 'core-send-address' } as const;
-
 const SEND_TRANSACTION = { to: TO, value: 1n, data: '0xa9059cbb', nonce: 1, chain: base };
 const WRITE_CONTRACT = { address: TO, abi: erc20, functionName: 'transfer', args: [TO, 1n] };
 const WAIT = { hash: HASH, chain: base, onReplaced: () => {}, timeout: WAIT_MS };
@@ -245,12 +234,7 @@ const CALLS = { calls: [{ to: TO, value: 1n }], chain: base };
 
 const ROWS: Row[] = [
   // The caller's arguments.
-  ...argumentRows('sendTransaction', SEND_TRANSACTION, onWallet('sendTransaction'), {
-    to: SEND_ADDRESS_FINDING,
-    value: SEND_INPUT_FINDING,
-    nonce: SEND_INPUT_FINDING,
-    data: SELECTOR_FINDING,
-  }),
+  ...argumentRows('sendTransaction', SEND_TRANSACTION, onWallet('sendTransaction')),
   ...argumentRows('sendTransaction', { authorizationList: [] }, onWallet('sendTransaction')),
   {
     name: 'sendTransaction chain.id',
@@ -267,13 +251,8 @@ const ROWS: Row[] = [
     scenario: (value, hashspan) =>
       onWallet('sendCalls')({ ...CALLS, chain: { ...base, id: value } }, hashspan),
   },
-  ...argumentRows('writeContract', WRITE_CONTRACT, onWallet('writeContract'), {
-    address: SEND_ADDRESS_FINDING,
-    functionName: SEND_INPUT_FINDING,
-  }),
-  ...argumentRows('waitForTransactionReceipt', WAIT, onReader('waitForTransactionReceipt'), {
-    hash: TX_HASH_FINDING,
-  }),
+  ...argumentRows('writeContract', WRITE_CONTRACT, onWallet('writeContract')),
+  ...argumentRows('waitForTransactionReceipt', WAIT, onReader('waitForTransactionReceipt')),
   // Gas fields are left valid: they are not telemetry's, and without them viem asks the bundler for an estimate.
   ...argumentRows(
     'sendUserOperation',
@@ -333,7 +312,6 @@ const ROWS: Row[] = [
         requests: () => mock.requests,
       };
     },
-    findings: TX_HASH_FINDING,
   },
   ...answerRows(
     'node receipt',
@@ -356,12 +334,6 @@ const ROWS: Row[] = [
           ? { receiptAt: (call) => (call === 1 ? { blockHash: value } : {}) }
           : { receipt: { [field]: value } },
       )(WAIT, hashspan),
-    {
-      blockNumber: RECEIPT_FINDING,
-      gasUsed: RECEIPT_FINDING,
-      effectiveGasPrice: RECEIPT_FINDING,
-      l1Fee: RECEIPT_FINDING,
-    },
   ),
   {
     name: 'node answer to eth_chainId',
@@ -466,7 +438,6 @@ const ROWS: Row[] = [
           requests: () => mock.requests,
         };
       },
-      ...(key === 'hash' ? { findings: TX_HASH_FINDING } : {}),
     }),
   ),
   {
@@ -496,8 +467,6 @@ const ROWS: Row[] = [
       },
       requests: () => [],
     }),
-    // finding: viem-flush-options (#328). flush() rejects for options it cannot read (a Proxy, null).
-    findings: { same: 'viem-flush-options' },
   },
 
   // A tracker passed in: the user's, so only rule 1 applies.
@@ -635,6 +604,25 @@ describe('hostile input', () => {
     tracing: () => tracing,
     meters,
     sending: SENDING,
+  });
+});
+
+// --- The options object itself (rule 1) ---------------------------------------------------------------------------
+
+describe('withHashspan() options', () => {
+  const objects = (): [string, unknown][] => [
+    ['null', null],
+    ['an object whose option getters throw', throwingGetters(['tracker', 'confirm', 'address'])],
+    ...hostileValues(),
+  ];
+  it.each(objects())('gives a working extension for %s', async (_label, options) => {
+    let hashspan: HashspanExtension | undefined;
+    expect(() => {
+      hashspan = withHashspan(options as never);
+    }).not.toThrow();
+    const { client } = wallet(hashspan as HashspanExtension);
+    await expect(client.sendTransaction({ to: TO, value: 1n })).resolves.toBe(HASH);
+    await expect((hashspan as HashspanExtension).flush({ timeoutMs: 3_000 })).resolves.toBe(true);
   });
 });
 

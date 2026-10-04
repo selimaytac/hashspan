@@ -281,7 +281,8 @@ describe('payment confirmation', () => {
       .startConfirm({ chainId: CHAIN_ID, hash: HASH.slice(0, 40) })
       .end({ status: 'success', blockNumber: 1n, gasUsed: 1n });
     expect(tracing.spanNamed(PAYMENT_SPAN).attributes['blockchain.tx.hash']).toBeUndefined();
-    expect(tracing.spanNamed(`confirm ${CHAIN_ID}`).links).toEqual([]);
+    // Nor is a confirmation of it recorded: the hash keys the confirm span.
+    expect(tracing.spans().map((span) => span.name)).toEqual([PAYMENT_SPAN]);
   });
 });
 

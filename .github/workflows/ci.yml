@@ -35,6 +35,8 @@ jobs:
       - run: pnpm build
       - name: Check package contents and type resolution
         run: pnpm check:packages
+      - name: Check the API reports
+        run: pnpm api:check
 
   integration:
     name: Integration tests (Anvil)

@@ -1,6 +1,6 @@
 {
   "name": "@hashspan/cdp",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "Coinbase CDP adapter for @hashspan/core: traces transactions of CDP server accounts and user operations of smart accounts.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",
@@ -64,6 +64,7 @@
     "@opentelemetry/sdk-trace-base": "^2.11.0",
     "@opentelemetry/sdk-trace-node": "^2.11.0",
     "prool": "^0.2.16",
+    "typescript": "^7.0.2",
     "viem": "^2.57.2"
   },
   "engines": {

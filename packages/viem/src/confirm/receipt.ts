@@ -56,7 +56,7 @@ export interface ViemReceipt {
 /**
  * Whether `receipt` is a preconfirmation: a flashblocks node returns a receipt before its block is sealed, with a zero
  * (or null) block hash, and its `l1Fee` can be that of another transaction. Fees are recorded from the sealed receipt
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0024-sealed-receipt-fees.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0024-sealed-receipt-fees.md).
  */
 export function isPreconfirmed(receipt: ViemReceipt): boolean {
   const { blockHash } = receipt;
@@ -198,7 +198,14 @@ export async function sealedReceipt(
   }
 }
 
-/** Normalises a viem receipt; `l1Fee` is a bigint with the OP-stack formatter, else a raw hex string. */
+/** A `0x` hex quantity of at most 256 bits, as a node encodes `l1Fee`. */
+const HEX_QUANTITY = /^0x[0-9a-fA-F]{1,64}$/;
+
+/**
+ * Normalises a viem receipt; `l1Fee` is a bigint with the OP-stack formatter, else a raw hex string. An `l1Fee` that
+ * is not a hex quantity is passed on as given: the core then records neither it nor the total fee, and the rest of
+ * the receipt as usual (ADR 0025 rule 3).
+ */
 export function toReceiptLike(receipt: ViemReceipt): ReceiptLike {
   const { l1Fee } = receipt;
   return {
@@ -206,7 +213,7 @@ export function toReceiptLike(receipt: ViemReceipt): ReceiptLike {
     blockNumber: receipt.blockNumber,
     gasUsed: receipt.gasUsed,
     effectiveGasPrice: receipt.effectiveGasPrice,
-    l1Fee: typeof l1Fee === 'string' ? BigInt(l1Fee) : l1Fee,
+    l1Fee: typeof l1Fee === 'string' && HEX_QUANTITY.test(l1Fee) ? BigInt(l1Fee) : (l1Fee as never),
     transactionHash: receipt.transactionHash,
   };
 }

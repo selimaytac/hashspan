@@ -1,11 +1,12 @@
 # Local lab: Jaeger (trace UI + OTLP receiver). Anvil runs as a project-local binary (make anvil).
 # The `metrics` profile adds Prometheus (OTLP metrics receiver) and Grafana with the hashspan dashboard.
-# All ports bind to 127.0.0.1 only. Managed via the Makefile (make lab-up / lab-metrics / lab-pause / lab-nuke).
+# Images are pinned by digest; Dependabot updates tag and digest together. All ports bind to 127.0.0.1 only.
+# Managed via the Makefile (make lab-up / lab-metrics / lab-pause / lab-nuke).
 name: hashspan-lab
 
 services:
   jaeger:
-    image: jaegertracing/jaeger:2.21.0
+    image: jaegertracing/jaeger:2.21.0@sha256:3d0ac795ff98aa04d1be04311d2dac6c25b4bfc8322dc02e53bc5b170c5018c3
     ports:
       - "127.0.0.1:16686:16686" # UI
       - "127.0.0.1:4317:4317" # OTLP gRPC
@@ -15,7 +16,7 @@ services:
         limits: { memory: 512m }
 
   prometheus:
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
     profiles: [metrics]
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -33,7 +34,7 @@ services:
         limits: { memory: 256m }
 
   grafana:
-    image: grafana/grafana:13.2.3
+    image: grafana/grafana:13.2.3@sha256:b28bae15e219c998fb0e0424ed724930cc61b1f61fb404d47c862f9a23f9e572
     profiles: [metrics]
     environment:
       # Local only: anonymous viewers see the provisioned dashboard; nothing is reported to Grafana Labs.

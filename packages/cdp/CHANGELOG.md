@@ -1,5 +1,46 @@
 # @hashspan/cdp
 
+## 0.10.0
+
+### Minor Changes
+
+- [#322](https://github.com/selimaytac/hashspan/pull/322) [`d69ba29`](https://github.com/selimaytac/hashspan/commit/d69ba296cb22e090f72b27ac9c2f8c626abf552e) Thanks [@selimaytac](https://github.com/selimaytac)! - Background confirmation and `watch()` now poll again, one polling interval later, after a failed receipt request (an
+  HTTP 429, a JSON-RPC error, a request timeout, a connection reset), until their `timeoutMs`, as they already did when
+  the receipt was not there yet. Before, one failed request ended the confirm span at once with that error, though the
+  next request would have found the receipt. A provider that keeps failing now ends the span as `timeout`. The
+  confirmations of `@hashspan/cdp` and `@hashspan/x402` through a `reader` go through `watch()` and behave the same; your
+  own `waitForTransactionReceipt` calls are unaffected.
+
+### Patch Changes
+
+- [#313](https://github.com/selimaytac/hashspan/pull/313) [`320b9ee`](https://github.com/selimaytac/hashspan/commit/320b9ee6421dc30f1cf5eced51f4630091055cbc) Thanks [@selimaytac](https://github.com/selimaytac)! - `confirmTimeoutMs` now bounds each bundle receipt request of a completed user operation, not only the time between
+  requests: a reader whose request never answers no longer keeps the confirm span open past it, a receipt that arrives
+  later is not used, and once `flush()` gives up the work it awaits settles, so the next `flush()` reports success. A
+  `confirmTimeoutMs` that is not a finite non-negative number falls back to the default for this wait.
+
+- [#312](https://github.com/selimaytac/hashspan/pull/312) [`d5c59a2`](https://github.com/selimaytac/hashspan/commit/d5c59a2547690620f6a1a39ad416897f57c928d5) Thanks [@selimaytac](https://github.com/selimaytac)! - A confirm span of a network-scoped `waitForTransactionReceipt` or of `waitForUserOperation` now ends when the wait's
+  result or error cannot be read (a Proxy whose traps throw, an error whose `name` getter throws), as a failure with
+  `error.type` `_OTHER`; before, it could stay open while `flush()` reported success. The error's name is read from an
+  own data property.
+
+- [#320](https://github.com/selimaytac/hashspan/pull/320) [`c6f476c`](https://github.com/selimaytac/hashspan/commit/c6f476c3fc421402aa9df5dc884d1714b84c80f4) Thanks [@selimaytac](https://github.com/selimaytac)! - A send span of `sendTransaction`, `transfer` or `sendUserOperation` now ends when the SDK call rejects with a value
+  that cannot be read (a Proxy whose traps throw), as a failure with `error.type` `_OTHER`; before, it stayed open and
+  was never exported. The rejection still reaches the caller unchanged.
+
+- [#281](https://github.com/selimaytac/hashspan/pull/281) [`16658b9`](https://github.com/selimaytac/hashspan/commit/16658b9c19b7147a80ef7a216be61ee9d9966d2a) Thanks [@selimaytac](https://github.com/selimaytac)! - Tracing work that `flush()` awaits can no longer surface as an unhandled rejection in the application's process if it
+  rejects, and `flush()` still resolves once it has settled.
+
+- [#308](https://github.com/selimaytac/hashspan/pull/308) [`6635459`](https://github.com/selimaytac/hashspan/commit/663545943b5087b35e2f08283f6f573fec882c3f) Thanks [@selimaytac](https://github.com/selimaytac)! - `withHashspan()` no longer throws for a client whose `evm` cannot be read or marked as traced (a Proxy, a frozen
+  object, a missing `evm`): the client is then not traced, with a `diag` warning.
+
+- [#340](https://github.com/selimaytac/hashspan/pull/340) [`a81e328`](https://github.com/selimaytac/hashspan/commit/a81e328723bd8197d88393926e829c633601bce3) Thanks [@selimaytac](https://github.com/selimaytac)! - `flush()` reads `timeoutMs` as an own data property and always resolves to a boolean. Options it cannot read (`null`,
+  a revoked Proxy, a getter or a Proxy trap that throws) made the viem and cdp `flush()` reject, and the x402 one
+  resolve `false` without waiting; they now use the default of 10 000 ms, as does a `timeoutMs` that is not a
+  non-negative number.
+- Updated dependencies [[`03889c2`](https://github.com/selimaytac/hashspan/commit/03889c2bb75eac3a48c1ff7b16b6d335e1a543aa), [`6635459`](https://github.com/selimaytac/hashspan/commit/663545943b5087b35e2f08283f6f573fec882c3f), [`a81e328`](https://github.com/selimaytac/hashspan/commit/a81e328723bd8197d88393926e829c633601bce3), [`3182feb`](https://github.com/selimaytac/hashspan/commit/3182febabd7633aa0951ea4bc3e32d6ed178d0a5), [`0c7bb6e`](https://github.com/selimaytac/hashspan/commit/0c7bb6e0d0abeedc25dd4ff4784bf2a760d9a7b6), [`d69ba29`](https://github.com/selimaytac/hashspan/commit/d69ba296cb22e090f72b27ac9c2f8c626abf552e), [`6635459`](https://github.com/selimaytac/hashspan/commit/663545943b5087b35e2f08283f6f573fec882c3f)]:
+  - @hashspan/core@0.10.0
+  - @hashspan/viem@0.10.0
+
 ## 0.9.1
 
 ### Patch Changes

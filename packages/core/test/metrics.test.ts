@@ -120,6 +120,64 @@ describe('metrics', () => {
     expect(outcomes).toEqual(['reverted', 'RangeError', 'replaced', 'success']);
   });
 
+  it("records who paid a fee that the sender did not: a payment's facilitator, or a paymaster", () => {
+    const meters = recordingMeterProvider();
+    const tracker = createTxTracker({ meterProvider: meters.provider });
+    const fees = () =>
+      meters
+        .recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)
+        .map(({ attributes }) => attributes['blockchain.fee.payer']);
+
+    // A transaction of the agent's own.
+    tracker.startSend({ chainId: 1 }).end({ hash: HASH });
+    tracker.startConfirm({ chainId: 1, hash: HASH }).end(receipt);
+    // The settlement transaction of a payment, sent by the facilitator.
+    const payment = tracker.startPayment({ chainId: 1, protocol: 'x402', amount: 1n });
+    payment.link(OTHER_HASH);
+    tracker.startConfirm({ chainId: 1, hash: OTHER_HASH }).end(receipt);
+    payment.end({ status: 'settled', hash: OTHER_HASH });
+    // A settlement replaced by the facilitator: the replacing transaction's fee is the facilitator's too.
+    const replaced = `0x${'ef'.repeat(32)}`;
+    const second = tracker.startPayment({ chainId: 1, protocol: 'x402', amount: 1n });
+    second.link(replaced);
+    tracker
+      .startConfirm({ chainId: 1, hash: replaced })
+      .end({ ...receipt, transactionHash: `0x${'12'.repeat(32)}` });
+    second.end({ status: 'settled', hash: replaced });
+    // User operations with and without a paymaster.
+    const operation = {
+      success: true,
+      actualGasCost: 1_000n,
+      actualGasUsed: 10n,
+      transactionHash: `0x${'34'.repeat(32)}`,
+      blockNumber: 1n,
+    };
+    tracker
+      .startUserOperationConfirm({ chainId: 1, userOpHash: `0x${'56'.repeat(32)}` })
+      .end(operation);
+    tracker
+      .startUserOperationConfirm({ chainId: 1, userOpHash: `0x${'78'.repeat(32)}` })
+      .end({ ...operation, paymaster: '0x3333333333333333333333333333333333333333' });
+    tracker
+      .startUserOperationConfirm({ chainId: 1, userOpHash: `0x${'9a'.repeat(32)}` })
+      .end({ ...operation, paymaster: `0x${'00'.repeat(20)}` });
+
+    expect(fees()).toEqual([
+      undefined,
+      'facilitator',
+      'facilitator',
+      undefined,
+      'paymaster',
+      undefined,
+    ]);
+    // Only the fee sample says who paid: the confirmation durations stay as they were.
+    expect(
+      meters
+        .recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)
+        .some(({ attributes }) => 'blockchain.fee.payer' in attributes),
+    ).toBe(false);
+  });
+
   it('never records addresses, hashes or agent identity', () => {
     const meters = recordingMeterProvider();
     const tracker = createTxTracker({

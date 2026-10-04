@@ -513,6 +513,7 @@ const ATTRIBUTE_CHECKS: Record<string, Check> = {
   'blockchain.call_batch.sender': address,
   'blockchain.call_batch.call_count': count,
   'blockchain.call_batch.status': oneOf('success', 'reverted', 'partially_reverted'),
+  'blockchain.fee.payer': oneOf('facilitator', 'paymaster'),
   'blockchain.call_batch.status_code': count,
   'blockchain.call_batch.atomic': boolean,
   'blockchain.call_batch.transaction_hashes': list(
@@ -607,6 +608,7 @@ const METRIC_KEYS = new Set([
   'blockchain.system',
   'blockchain.chain.id',
   'blockchain.operation.subject',
+  'blockchain.fee.payer',
   'blockchain.tx.status',
   'blockchain.user_operation.success',
   'blockchain.call_batch.status',

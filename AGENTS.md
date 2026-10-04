@@ -11,6 +11,7 @@ OpenTelemetry tracing for on-chain transactions sent by AI agents: every transac
 - Install deps: `pnpm install`
 - Build: `pnpm build`
 - Test (unit / integration): `pnpm test` / `pnpm test:integration` (needs Anvil and Alto: `make tools`)
+- Load and long-run tests: `pnpm test:load` (`*.load.test.ts`, needs Anvil; weekly in CI, `.github/workflows/load.yml`)
   - Tests import workspace packages from source (`vitest.config.ts` alias), so no build is needed first
 - Third-party integration tests: `pnpm --dir integrations install`, then `pnpm test:integrations` (typecheck and
   tests, needs Anvil)
@@ -18,6 +19,8 @@ OpenTelemetry tracing for on-chain transactions sent by AI agents: every transac
 - Typecheck: `pnpm typecheck` (builds the packages first, since adapters type-check against `@hashspan/core` output)
 - Coverage: `pnpm test:coverage` (unit and integration, with thresholds in `vitest.config.ts`; runs in CI)
 - Package checks: `pnpm check:packages` (publint and arethetypeswrong on the built packages; runs in CI)
+- API reports: `pnpm api:check` (API Extractor on the built declarations; fails when they differ from the committed
+  `packages/*/etc/*.api.md` or an export lacks a doc comment; runs in CI); `pnpm api:update` rewrites the reports
 - Smoke test: `pnpm smoke:packages` (packs the four packages, installs the tarballs with their peer dependencies into an
   empty project and checks `require()`, `import` and `hashed` address mode on the current Node.js; CI runs it on the
   lowest `engines.node`, the latest 22.x and the latest 24.x, and with `--runtime bun|deno` on Bun and Deno; needs

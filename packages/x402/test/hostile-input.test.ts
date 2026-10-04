@@ -21,6 +21,7 @@ import {
   SECRET,
   setupHostileTracing,
   splitsHex,
+  throwingGetters,
   throwingProxy,
 } from '../../core/test/hostile.js';
 import { mockTransport, HASH as RECEIPT_HASH } from '../../viem/test/mock-transport.js';
@@ -238,8 +239,6 @@ const ROWS: Row[] = [
     scenario: paying((pay, value) => {
       pay.error = value;
     }),
-    // finding: core-error-name reached through x402: an error's name is recorded unbounded.
-    findings: { records: 'core-error-name' },
   },
   // The receipt of the settlement, which the reader returns for the check of ADR 0017.
   ...['status', 'logs', 'to', 'from', 'transactionHash'].map(
@@ -365,6 +364,26 @@ describe('the client withHashspan() gets', () => {
     ] as [string, unknown][]) {
       try {
         withHashspan(client as never);
+      } catch (error) {
+        problems.push(`${label}: ${String(error)}`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+});
+
+describe('the options withHashspan() gets', () => {
+  it('never throws, and registers its hooks, for options it cannot read', () => {
+    const problems: string[] = [];
+    for (const [label, options] of [
+      ['null', null],
+      ['an object whose option getters throw', throwingGetters(['reader', 'tracker', 'address'])],
+      ...hostileValues(),
+    ] as [string, unknown][]) {
+      const { client, hooks } = capturingClient();
+      try {
+        withHashspan(client, options as never);
+        if (!hooks.before) problems.push(`${label}: no hooks registered`);
       } catch (error) {
         problems.push(`${label}: ${String(error)}`);
       }
