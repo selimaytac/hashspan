@@ -1,6 +1,7 @@
 // RPC faults on the transaction send and confirm paths of the viem adapter (sendTransaction, writeContract, the
 // caller's waitForTransactionReceipt, background confirmation, watch()), injected by a proxy in front of Anvil
-// (`fault-proxy.ts`). User operations and call batches are not covered here. For each fault and path it checks that:
+// (`fault-proxy.ts`). Call batches are in `call-batch-faults.int.test.ts`, the bundler methods of user operations in
+// `user-operation.int.test.ts`. For each fault and path it checks that:
 // 1. the caller's call returns or throws as it does on a client without hashspan;
 // 2. the span ends with the status and `error.type` of docs/semconv.md (Span status);
 // 3. no unhandled rejection occurs;
