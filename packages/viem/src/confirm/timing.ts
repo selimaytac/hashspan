@@ -86,6 +86,19 @@ export function chainIdOrGiveUp(
   });
 }
 
+/** The longest delay a JavaScript timer keeps; a longer one fires at once. */
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/**
+ * `value` if it is a duration in milliseconds, a finite non-negative number, else `fallback`: a timeout comes from the
+ * caller's options, which may hold any value (ADR 0025). A duration longer than a timer can wait is cut to that.
+ */
+export function durationOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.min(value, MAX_TIMER_MS)
+    : fallback;
+}
+
 /** Resolves after `ms`; its timer does not keep the process alive. */
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
