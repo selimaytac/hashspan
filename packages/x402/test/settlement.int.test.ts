@@ -13,7 +13,14 @@ import { registerExactEvmScheme as registerClientScheme } from '@x402/evm/exact/
 import { registerExactEvmScheme as registerFacilitatorScheme } from '@x402/evm/exact/facilitator';
 import { registerExactEvmScheme as registerServerScheme } from '@x402/evm/exact/server';
 import { wrapFetchWithPayment } from '@x402/fetch';
-import { type Address, createPublicClient, createWalletClient, http, publicActions } from 'viem';
+import {
+  type Address,
+  createPublicClient,
+  createWalletClient,
+  custom,
+  http,
+  publicActions,
+} from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -354,4 +361,31 @@ describe('a payment whose reader fails while the settlement is checked', () => {
       expect(confirm.attributes['error.type']).toBe('timeout');
     }
   });
+});
+
+// The JSON-RPC requests hashspan adds to a payment (issue #334; docs/architecture.md): the reader reads the settling
+// transaction's receipt, to confirm and check it. The paid request itself makes none through the reader.
+it("reads only the settlement's receipt through the reader to check an EIP-3009 payment", async () => {
+  const counts: Record<string, number> = {};
+  const upstream = http(RPC_URL)({ chain: foundry });
+  const countingReader = createPublicClient({
+    chain: foundry,
+    pollingInterval: 50,
+    transport: custom({
+      async request({ method, params }: { method: string; params?: unknown }) {
+        counts[method] = (counts[method] ?? 0) + 1;
+        return upstream.request({ method, params } as never);
+      },
+    }),
+  });
+  const client = new x402Client();
+  const hashspan = withHashspan(client, { reader: countingReader });
+  registerClientScheme(client, { signer: agent, networks: [NETWORK] });
+  client.setSpendControls({ allowedAssets: [{ network: NETWORK, asset: token }] });
+  const response = await wrapFetchWithPayment(await paidApi(), client)('http://api.test/weather');
+  expect(response.status).toBe(200);
+  expect(await hashspan.flush()).toBe(true);
+
+  expect(tracing.spanNamed(PAYMENT_SPAN).attributes['blockchain.payment.verified']).toBe(true);
+  expect(Object.keys(counts)).toEqual(['eth_getTransactionReceipt']);
 });

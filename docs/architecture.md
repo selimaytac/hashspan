@@ -44,3 +44,25 @@ Design decisions: [docs/adr](adr/). Attribute schema: [docs/semconv.md](semconv.
   ([ADR 0009](adr/0009-telemetry-off-the-call-path.md)).
 - **Read-only.** The library never signs or broadcasts transactions. The core makes no network calls; adapters read
   receipts and replay reverted transactions with read-only requests.
+
+## JSON-RPC requests hashspan adds
+
+Agents often run against rate-limited endpoints. These are the requests the adapters make in addition to the
+traced calls, per case; the integration tests named here count them against the same calls without hashspan, so a
+change that adds requests fails them. How often a wait polls depends on when blocks arrive, so polling is counted by
+method, not by number.
+
+| Case | Requests added | Option that changes them |
+|---|---|---|
+| A send and its wait, on a client with a chain (viem) | none | |
+| A send on a client without a chain (viem) | one `eth_chainId` per send | give the client a chain |
+| Background confirmation and `watch()` (viem; cdp and x402 confirm through `watch()`) | the receipt polling of one `waitForTransactionReceipt` per transaction | `confirm`, `maxBackgroundConfirmations`, `timeoutMs` |
+| A reverted transaction (viem, cdp) | one `eth_getTransactionByHash` and one `eth_call` to replay it; one more `eth_call` when the contract was created in the same block ([ADR 0005](adr/0005-revert-reason-replay.md)) | `decodeRevertReason: false` |
+| A preconfirmed receipt (flashblocks) | `eth_getTransactionReceipt` once per polling interval until the sealed receipt, at most 30 s ([Preconfirmed receipts](../packages/viem/README.md#preconfirmed-receipts-flashblocks)) | |
+| A user operation (viem bundler client) | none | |
+| A user operation of a CDP smart account, with a reader | `eth_getTransactionReceipt` of the bundle transaction, polled until found or `confirmTimeoutMs` ([ADR 0021](adr/0021-user-operations.md)) | no `reader` |
+| An x402 payment with a reader | the settling transaction's receipt; for Permit2 also its transaction, once | no `reader` |
+
+Tests: `packages/viem/test/request-count.int.test.ts`, the request-count tests of
+`packages/viem/test/user-operation.int.test.ts`, `packages/x402/test/settlement.int.test.ts` and
+`packages/x402/test/permit2-settlement.int.test.ts`.
