@@ -1,26 +1,21 @@
-import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, custom, http } from 'viem';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
-import { freePort } from './free-port.js';
+import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 const ZERO_HASH = `0x${'00'.repeat(32)}`;
 
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
 });
 
 let tracing: TestTracing;
 let account: Address;
 
 beforeAll(async () => {
-  await instance.start();
   [account] = (await createWalletClient({
     chain: anvil,
     transport: http(RPC_URL),

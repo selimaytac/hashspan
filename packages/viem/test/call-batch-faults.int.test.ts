@@ -4,7 +4,6 @@
 // makes the checks of `rpc-faults.int.test.ts` (fault-checks.ts): the caller's outcome is the one of a client without
 // hashspan, no unhandled rejection, `flush()` resolves true, the spans end as pinned and metrics count each call once.
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
-import { Instance } from 'prool';
 import { type Address, createWalletClient, custom, type Hex, http, RpcRequestError } from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
@@ -25,12 +24,10 @@ import {
   TIMEOUT,
 } from './fault-checks.js';
 import { type FaultProxy, startFaultProxy } from './fault-proxy.js';
-import { freePort } from './free-port.js';
+import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast, viemHasAction } from './viem-version.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 const OTHER = '0x00000000000000000000000000000000000000cd' as const;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -38,9 +35,8 @@ const LOCAL_ACCOUNT = mnemonicToAccount(ANVIL_MNEMONIC, { addressIndex: 1 });
 const REQUEST_TIMEOUT_MS = 1_000;
 const WAIT_TIMEOUT_MS = 2_500;
 
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
 });
 
 let proxy: FaultProxy;
@@ -48,7 +44,6 @@ let tracing: TestTracing;
 let unlocked: Address;
 
 beforeAll(async () => {
-  await instance.start();
   proxy = await startFaultProxy(RPC_URL);
   [unlocked] = (await createWalletClient({
     chain: anvil,

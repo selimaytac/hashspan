@@ -6,7 +6,6 @@ import * as CallbackManagerModule from '@langchain/core/callbacks/manager';
 import { AIMessage, createAgent, fakeModel, tool } from 'langchain';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { freePort } from '../../packages/viem/test/free-port.js';
 import { offline } from './offline.js';
 import {
   inAgentSpan,
@@ -18,13 +17,11 @@ import {
   tracedWallet,
 } from './openinference.js';
 
-const PORT = await freePort();
-
 let anvil: Awaited<ReturnType<typeof startAnvil>>;
 let instrumentation: LangChainInstrumentation;
 
 beforeAll(async () => {
-  anvil = await startAnvil(PORT);
+  anvil = await startAnvil();
   // OpenInference's documented setup for ESM: the callback manager is instrumented by hand.
   instrumentation = new LangChainInstrumentation();
   instrumentation.manuallyInstrument(CallbackManagerModule);

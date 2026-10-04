@@ -16,7 +16,6 @@ import { UptoEvmScheme as UptoClientScheme } from '@x402/evm/upto/client';
 import { UptoEvmScheme as UptoFacilitatorScheme } from '@x402/evm/upto/facilitator';
 import { UptoEvmScheme as UptoServerScheme } from '@x402/evm/upto/server';
 import { wrapFetchWithPayment } from '@x402/fetch';
-import { Instance } from 'prool';
 import {
   type Address,
   createPublicClient,
@@ -31,7 +30,7 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { freePort } from '../../viem/test/free-port.js';
+import { startAnvil } from '../../viem/test/start-anvil.js';
 import { withHashspan } from '../src/index.js';
 import {
   EXACT_PROXY_ADDRESS,
@@ -47,8 +46,6 @@ import { setupTracing, type TestTracing } from './tracing.js';
 // Settles real Permit2 payments, `exact` and `upto`, on Anvil through the SDK's own resource server, facilitator
 // and client, all in this process. Permit2 and the x402 proxies run from code copied from Base Sepolia
 // (permit2/contracts.ts), installed at their canonical addresses; nothing leaves localhost.
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const NETWORK = `eip155:${foundry.id}` as const;
 const PRICE = 10_000n;
 const PAY_TO = '0x00000000000000000000000000000000000000cc';
@@ -58,9 +55,8 @@ const FACILITATOR = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 const agent = privateKeyToAccount(generatePrivateKey());
 const PAYMENT_SPAN = `payment ${foundry.id}`;
 
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
   chainId: foundry.id,
 });
 const reader = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
@@ -72,7 +68,6 @@ const facilitatorWallet = createWalletClient({
 let token: Address;
 
 beforeAll(async () => {
-  await instance.start();
   const node = createTestClient({ chain: foundry, mode: 'anvil', transport: http(RPC_URL) });
   for (const [address, bytecode] of [
     [PERMIT2_ADDRESS, PERMIT2_CODE],

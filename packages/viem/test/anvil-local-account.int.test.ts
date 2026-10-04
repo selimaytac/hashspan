@@ -1,5 +1,4 @@
 import { SpanStatusCode } from '@opentelemetry/api';
-import { Instance } from 'prool';
 import {
   type Address,
   createPublicClient,
@@ -15,12 +14,10 @@ import { mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { type WithHashspanOptions, withHashspan } from '../src/index.js';
-import { freePort } from './free-port.js';
+import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemHasAction } from './viem-version.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 /** Anvil's public default mnemonic; its first account is funded on every Anvil chain. */
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
 // A local account signs in-process, unlike the unlocked JSON-RPC accounts of the other Anvil tests.
@@ -54,15 +51,13 @@ function revertingWith(payload: Hex): Hex {
   return `0x${code}${push2(size)}6000fd`; // PUSH2 size, PUSH1 0, REVERT
 }
 
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
 });
 
 let tracing: TestTracing;
 
 beforeAll(async () => {
-  await instance.start();
   const client = createPublicClient({ chain: anvil, transport: http(RPC_URL) });
   const setCode = (address: Address, payload: Hex) =>
     client.request({

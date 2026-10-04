@@ -4,7 +4,6 @@
 import { getTools } from '@goat-sdk/core';
 import { viem } from '@goat-sdk/wallet-viem';
 import { withHashspan } from '@hashspan/viem';
-import { Instance } from 'prool';
 import {
   type Address,
   createPublicClient,
@@ -16,13 +15,11 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { freePort } from '../../packages/viem/test/free-port.js';
+import { startAnvil } from '../../packages/viem/test/start-anvil.js';
 import { setupTracing, type TestTracing } from '../../packages/viem/test/tracing.js';
 import { testUsdAbi, testUsdBytecode } from '../../packages/x402/test/token/test-usd.js';
 import { offline } from './offline.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const chain = foundry;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc';
 const SPENDER = '0x00000000000000000000000000000000000000dd';
@@ -31,9 +28,8 @@ const DEPLOYER = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 const agent = privateKeyToAccount(generatePrivateKey());
 type GoatClient = Parameters<typeof viem>[0];
 
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
   chainId: chain.id,
 });
 const reader = createPublicClient({ chain, transport: http(RPC_URL) });
@@ -41,7 +37,6 @@ let tracing: TestTracing;
 let token: Address;
 
 beforeAll(async () => {
-  await instance.start();
   tracing = setupTracing();
 
   const deployer = createWalletClient({ account: DEPLOYER, chain, transport: http(RPC_URL) });

@@ -1,15 +1,12 @@
-import { Instance } from 'prool';
 import { type Address, createWalletClient, custom, type Hex, http } from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
-import { freePort } from './free-port.js';
+import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast, viemHasAction } from './viem-version.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 const OTHER = '0x00000000000000000000000000000000000000cd' as const;
 /** Anvil's public default mnemonic; its first accounts are funded on every Anvil chain. */
@@ -17,23 +14,24 @@ const ANVIL_MNEMONIC = 'test test test test test test test test test test test j
 // A local account that signs in-process, the second one, so that the first stays free for the stand-in wallet.
 const LOCAL_ACCOUNT = mnemonicToAccount(ANVIL_MNEMONIC, { addressIndex: 1 });
 
-const instance = Instance.anvil({
-  binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
-});
+// Every test needs `waitForCallsStatus`: on an older viem the file is skipped, and starts no Anvil.
+const RUNS = viemHasAction('waitForCallsStatus');
+const node = RUNS
+  ? await startAnvil({ binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname })
+  : undefined;
+const RPC_URL = node?.rpcUrl ?? 'http://127.0.0.1:0';
 
 let tracing: TestTracing;
 let unlocked: Address;
 
 beforeAll(async () => {
-  await instance.start();
   [unlocked] = (await createWalletClient({
     chain: anvil,
     transport: http(RPC_URL),
   }).getAddresses()) as [Address];
 });
 afterAll(async () => {
-  await instance.stop();
+  await node?.instance.stop();
 });
 beforeEach(() => {
   tracing = setupTracing();
@@ -86,7 +84,7 @@ function standInWallet() {
 
 // A wallet client's sendCalls and waitForCallsStatus came with viem 2.28.0, sendCallsSync with 2.38.0; its spans need
 // 2.45.2, whose sendCallsSync calls the client's own actions (the viem README, call batches).
-describe.skipIf(!viemHasAction('waitForCallsStatus'))('call batches on Anvil', () => {
+describe.skipIf(!RUNS)('call batches on Anvil', () => {
   it.skipIf(!viemAtLeast('2.45.2'))(
     "traces viem's fallback as a batch whose transactions are confirmed as transactions",
     async () => {
