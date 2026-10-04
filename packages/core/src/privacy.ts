@@ -67,7 +67,8 @@ export function resolveAddressFormatter(
 }
 
 /** 0x-prefixed hex. Unprefixed hex and addresses written as numbers are not detected. */
-const HEX = /0[xX][0-9a-fA-F]+/g;
+// A `0x` starts a new hex value, also right after another: `0x…0x<address>` holds an address the address mode must see.
+const HEX = /0[xX](?:(?!0[xX])[0-9a-fA-F])+/g;
 const ADDRESS_LENGTH = 42;
 /**
  * Longest hex kept in sanitized error messages in raw address mode: a 32-byte word such as a transaction hash. In
