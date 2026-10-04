@@ -8,6 +8,7 @@ import {
 import { diag } from '@opentelemetry/api';
 import { createChainIdFor, createReaderFor } from './chain.js';
 import { wrapEvm } from './evm.js';
+import { own } from './own.js';
 import { createPending } from './pending.js';
 import { createServerAccountWrapping } from './server-account.js';
 import { createSmartAccountWrapping } from './smart-account.js';
@@ -54,6 +55,21 @@ interface CdpClientLike {
 const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
 
 /**
+ * The `timeoutMs` of flush options, read as an own data property, as @hashspan/viem's flush() reads it: the default for
+ * options without a usable one, or that cannot be read (such as a revoked Proxy), so `flush()` always resolves.
+ */
+function flushTimeoutOf(options: unknown): number {
+  try {
+    const value = own(options, 'timeoutMs');
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? Math.min(value, 2 ** 31 - 1)
+      : DEFAULT_FLUSH_TIMEOUT_MS;
+  } catch {
+    return DEFAULT_FLUSH_TIMEOUT_MS;
+  }
+}
+
+/**
  * Traces transactions sent by a Coinbase CDP client's EVM server accounts, and user operations of its smart accounts,
  * with `@hashspan/core` (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.9.1/docs/adr/0012-cdp-adapter.md,
  * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.9.1/docs/adr/0021-user-operations.md). It wraps the
@@ -98,7 +114,7 @@ export function withHashspan(
 
   const handle: HashspanCdp = {
     flush: async (flushOptions) => {
-      const timeoutMs = flushOptions?.timeoutMs ?? DEFAULT_FLUSH_TIMEOUT_MS;
+      const timeoutMs = flushTimeoutOf(flushOptions);
       const [viemDone, ownDone] = await Promise.all([
         viem.flush({ timeoutMs }),
         flushOwn(timeoutMs),

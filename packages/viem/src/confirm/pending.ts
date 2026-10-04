@@ -5,9 +5,10 @@ import type {
   UserOperationConfirmHandle,
 } from '@hashspan/core';
 import { diag } from '@opentelemetry/api';
+import { own } from '../arguments.js';
 import { errorName } from '../safe-tracker.js';
 import type { FlushOptions } from '../types.js';
-import { settledWithin } from './timing.js';
+import { durationOr, settledWithin } from './timing.js';
 
 const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
 
@@ -32,6 +33,18 @@ export interface Pending {
   settleOnce<H extends AnyConfirmHandle>(handle: H): PendingConfirmation<H>;
 }
 
+/**
+ * The `timeoutMs` of flush options, read as an own data property: the default for options without one, or that
+ * cannot be read (such as a revoked Proxy), so `flush()` always resolves.
+ */
+function flushTimeoutOf(options: unknown): number {
+  try {
+    return durationOr(own(options, 'timeoutMs'), DEFAULT_FLUSH_TIMEOUT_MS);
+  } catch {
+    return DEFAULT_FLUSH_TIMEOUT_MS;
+  }
+}
+
 export function createPending(): Pending {
   /** Tracing work that outlives the traced call, awaited by `flush()`. */
   const pending = new Set<Promise<void>>();
@@ -42,9 +55,8 @@ export function createPending(): Pending {
   };
   /** Ends a confirm handle that is still waiting as `timeout`, for `flush()` to call when it cannot wait longer. */
   const waiting = new Set<() => void>();
-  const flush = async ({
-    timeoutMs = DEFAULT_FLUSH_TIMEOUT_MS,
-  }: FlushOptions = {}): Promise<boolean> => {
+  const flush = async (options?: FlushOptions): Promise<boolean> => {
+    const timeoutMs = flushTimeoutOf(options);
     const deadline = Date.now() + timeoutMs;
     // Loop, because finishing work can start more (e.g. a late send starting a background confirmation).
     while (pending.size > 0) {

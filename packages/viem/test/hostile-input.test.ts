@@ -466,8 +466,6 @@ const ROWS: Row[] = [
       },
       requests: () => [],
     }),
-    // finding: viem-flush-options (#328). flush() rejects for options it cannot read (a Proxy, null).
-    findings: { same: 'viem-flush-options' },
   },
 
   // A tracker passed in: the user's, so only rule 1 applies.
