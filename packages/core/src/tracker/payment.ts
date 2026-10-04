@@ -36,13 +36,12 @@ import type {
 import {
   errorType,
   handleOptions,
-  identifier,
   OBSERVER_TIMEOUT,
   reportedErrorType,
   safely,
 } from './handles.js';
 import type { SpanRecording } from './spans.js';
-import { ADDRESS, amount, TX_HASH } from './values.js';
+import { ADDRESS, amount, identifier, TX_HASH } from './values.js';
 
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,

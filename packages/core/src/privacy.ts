@@ -101,9 +101,7 @@ export function sanitizeErrorMessage(message: string, formatAddress: AddressForm
   const sanitized = formatAddressesIn(firstLine, formatAddress).replace(HEX, (hex) =>
     hex.length > MAX_HEX_LENGTH ? '<hex>' : hex,
   );
-  return sanitized.length > MAX_MESSAGE_LENGTH
-    ? `${sanitized.slice(0, MAX_MESSAGE_LENGTH)}...`
-    : sanitized;
+  return cutAt(sanitized, MAX_MESSAGE_LENGTH);
 }
 
 const MAX_ARGUMENTS_LENGTH = 4096;
@@ -193,7 +191,7 @@ export function serializeFunctionArguments(
     walk(args, 0);
     return out;
   } catch (error) {
-    if (error instanceof ArgumentsLimitReached) return `${out.slice(0, MAX_ARGUMENTS_LENGTH)}...`;
+    if (error instanceof ArgumentsLimitReached) return cutAt(out, MAX_ARGUMENTS_LENGTH);
     throw error;
   }
 }
@@ -236,10 +234,27 @@ export function paymentResourceOf(resource: string, mode: PaymentResourceMode): 
  * `text` cut to `max` characters, followed by `...`. A hex value that the cut splits is dropped whole: the part left
  * is shorter than an address, so the address mode, applied later, would no longer recognise it as one.
  */
-function cutAt(text: string, max: number): string {
+export function cutAt(text: string, max: number): string {
   if (text.length <= max) return text;
   const head = text.slice(0, max);
   return `${/^[0-9a-fA-F]/.test(text.slice(max)) ? head.replace(/0[xX][0-9a-fA-F]*$/, '') : head}...`;
+}
+
+/** Longest revert reason recorded, as the viem adapter's decoder cuts it too. */
+const MAX_REVERT_REASON_LENGTH = 1024;
+const ELLIPSIS = '...';
+
+/**
+ * A revert reason within its bound, with addresses per the address mode. A reason that an adapter already cut to the
+ * bound (it ends with `...` and is no longer than the bound and the ellipsis) is kept as it is, so it is not cut twice.
+ */
+export function boundRevertReason(reason: string, formatAddress: AddressFormatter): string {
+  const alreadyCut =
+    reason.length <= MAX_REVERT_REASON_LENGTH + ELLIPSIS.length && reason.endsWith(ELLIPSIS);
+  return formatAddressesIn(
+    alreadyCut ? reason : cutAt(reason, MAX_REVERT_REASON_LENGTH),
+    formatAddress,
+  );
 }
 
 /** Longest `x402.resource` recorded; the value comes from the server that asks for the payment. */

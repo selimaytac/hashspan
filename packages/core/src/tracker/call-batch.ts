@@ -47,7 +47,7 @@ import {
   reportedErrorType,
 } from './handles.js';
 import { metricAttributes, type SpanRecording, secondsSince } from './spans.js';
-import { smallQuantity, TX_HASH } from './values.js';
+import { isTxHash, smallQuantity } from './values.js';
 
 /** `error.type` of a call batch that failed without being included (EIP-5792 status 400). */
 const CALL_BATCH_FAILED = 'failed';
@@ -57,6 +57,18 @@ const CALL_BATCH_ID = /^0x[0-9a-fA-F]{1,8192}$/;
 const MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH = 256;
 /** Most transaction hashes recorded for one call batch. */
 const MAX_CALL_BATCH_TRANSACTION_HASHES = 64;
+
+/**
+ * The first {@link MAX_CALL_BATCH_TRANSACTION_HASHES} items of `list`, read by index, so a list from a wallet is never
+ * read in full (ADR 0025 rule 4); empty for anything but an array.
+ */
+function firstItems(list: unknown): unknown[] {
+  if (!Array.isArray(list)) return [];
+  const items: unknown[] = [];
+  const length = Math.min(list.length, MAX_CALL_BATCH_TRANSACTION_HASHES);
+  for (let i = 0; i < length; i++) items.push(list[i]);
+  return items;
+}
 
 /** EIP-5792 status code of a batch that is still pending. */
 const CALL_BATCH_PENDING = 100;
@@ -168,12 +180,8 @@ export function createCallBatchSpans({
             callBatchLinks.set(chainId, id, sent);
             // Transactions the account sent itself for the batch are linked like those of a send span.
             const hashes: unknown = result.transactionHashes;
-            if (Array.isArray(hashes)) {
-              for (const hash of hashes) {
-                if (typeof hash === 'string' && TX_HASH.test(hash) && !/^0x0+$/.test(hash)) {
-                  links.set(chainId, hash, sent);
-                }
-              }
+            for (const hash of firstItems(hashes)) {
+              if (isTxHash(hash) && !/^0x0+$/.test(hash)) links.set(chainId, hash, sent);
             }
             span.setAttributes(
               redact({
@@ -212,12 +220,14 @@ export function createCallBatchSpans({
       const hashes: string[] = [];
       const seen = new Set<string>();
       let block: number | undefined;
-      for (const receipt of receipts) {
+      for (const receipt of firstItems(receipts) as {
+        transactionHash?: unknown;
+        blockNumber?: unknown;
+      }[]) {
         const hash: unknown = receipt?.transactionHash;
         // Some wallets repeat one receipt per call: each transaction is recorded once, up to a bound.
         if (
-          typeof hash === 'string' &&
-          TX_HASH.test(hash) &&
+          isTxHash(hash) &&
           !seen.has(hash.toLowerCase()) &&
           hashes.length < MAX_CALL_BATCH_TRANSACTION_HASHES
         ) {
