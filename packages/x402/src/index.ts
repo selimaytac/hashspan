@@ -13,6 +13,10 @@ import {
 import { type Context, context, diag } from '@opentelemetry/api';
 import { decodeEventLog, decodeFunctionData, parseAbi } from 'viem';
 
+/**
+ * Options of {@link withHashspan}: those of `@hashspan/viem`'s `withHashspan()` except `confirm`, and the reader to
+ * confirm settlements with.
+ */
 export interface WithHashspanX402Options extends Omit<ViemOptions, 'confirm'> {
   /**
    * viem public client(s) to confirm settlements with: one client, used for every chain it is on, or a function

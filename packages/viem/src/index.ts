@@ -30,6 +30,7 @@ export type {
   WatchOptions,
 } from './types.js';
 
+/** Options of {@link withHashspan}: the tracker options of `createTxTracker()`, and those of this adapter. */
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
    * Tracker from `createTxTracker()` to report to, to share one between adapters. Defaults to one tracker per
@@ -64,6 +65,7 @@ const DEFAULT_REVERT_REASON_TIMEOUT_MS = 10_000;
 
 /** Client extension returned by {@link withHashspan}: the traced actions present on the client. */
 export interface HashspanExtension {
+  /** Extends `client` with traced versions of the actions it has. */
   <TClient extends ViemClientLike>(
     client: TClient,
   ): Pick<TClient, Extract<keyof TClient, TracedAction>>;
