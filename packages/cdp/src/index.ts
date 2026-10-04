@@ -8,6 +8,7 @@ import {
 import { diag } from '@opentelemetry/api';
 import { createChainIdFor, createReaderFor } from './chain.js';
 import { wrapEvm } from './evm.js';
+import { DEFAULT_FLUSH_TIMEOUT_MS } from './helpers.js';
 import { own } from './own.js';
 import { createPending } from './pending.js';
 import { createServerAccountWrapping } from './server-account.js';
@@ -51,8 +52,6 @@ interface CdpClientLike {
   // `object`, not a record type: the SDK's `EvmClient` class has no index signature.
   evm: object;
 }
-// The same default as @hashspan/viem's flush().
-const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
 
 /**
  * The `timeoutMs` of flush options, read as an own data property, as @hashspan/viem's flush() reads it: the default for

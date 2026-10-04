@@ -10,7 +10,7 @@ import { errorName } from '../safe-tracker.js';
 import type { FlushOptions } from '../types.js';
 import { durationOr, settledWithin } from './timing.js';
 
-const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
+export const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
 
 /** A confirm handle of a transaction or of a user operation. */
 export type AnyConfirmHandle = ConfirmHandle | UserOperationConfirmHandle | CallBatchConfirmHandle;
