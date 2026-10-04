@@ -29,10 +29,15 @@ export function callChainId(chainIdOf: () => number | undefined): number | undef
   return chainId;
 }
 
+/** An error name `diag` messages include: short text, as a class name is. */
+const ERROR_NAME = /^[A-Za-z0-9_.$-]{1,64}$/;
+
 /** The name of `error` for a `diag` message; never throws, also for an error whose name cannot be read. */
 export function errorName(error: unknown): string {
   try {
-    return error instanceof Error && error.name ? error.name : 'unknown error';
+    const name: unknown = error instanceof Error ? error.name : undefined;
+    // Text only, and short: a symbol would throw where the name is put into a message.
+    return typeof name === 'string' && ERROR_NAME.test(name) ? name : 'unknown error';
   } catch {
     return 'unknown error';
   }

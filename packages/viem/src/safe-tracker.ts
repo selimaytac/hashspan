@@ -38,13 +38,19 @@ const NOOP_PAYMENT: PaymentHandle = {
   link: () => {},
 };
 
+/** An error name `diag` messages include: short text, as a class name is. */
+const ERROR_NAME = /^[A-Za-z0-9_.$-]{1,64}$/;
+
 /**
  * What `diag` logs for an error: its name only. viem errors carry request arguments and RPC URLs, which may
  * include addresses, calldata or API keys.
  */
 export function errorName(error: unknown): string {
   try {
-    return error instanceof Error ? error.name : typeof error;
+    if (!(error instanceof Error)) return typeof error;
+    const name: unknown = error.name;
+    // Text only, and short: a symbol would throw where the name is put into a message.
+    return typeof name === 'string' && ERROR_NAME.test(name) ? name : 'unknown';
   } catch {
     // A name that cannot be read: a throwing getter or Proxy trap.
     return 'unknown';

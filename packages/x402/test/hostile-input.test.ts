@@ -391,3 +391,43 @@ describe('the options withHashspan() gets', () => {
     expect(problems).toEqual([]);
   });
 });
+
+describe('the hooks withHashspan() registers', () => {
+  it('never throw, also for a context that throws an error whose name is not text', () => {
+    const symbolNamed = (): Error => {
+      const error = new Error('boom');
+      Object.defineProperty(error, 'name', { value: Symbol('name') });
+      return error;
+    };
+    const context = () =>
+      new Proxy(
+        {},
+        {
+          get: () => {
+            throw symbolNamed();
+          },
+          getOwnPropertyDescriptor: () => {
+            throw symbolNamed();
+          },
+          ownKeys: () => {
+            throw symbolNamed();
+          },
+          has: () => {
+            throw symbolNamed();
+          },
+        },
+      );
+    const { client, hooks } = capturingClient();
+    withHashspan(client);
+    const problems: string[] = [];
+    for (const [name, hook] of Object.entries(hooks)) {
+      try {
+        if (hook(context()) !== undefined) problems.push(`${name}: returned a value`);
+      } catch (error) {
+        problems.push(`${name}: ${error instanceof Error ? error.message : 'threw'}`);
+      }
+    }
+    expect(Object.keys(hooks)).toHaveLength(4);
+    expect(problems).toEqual([]);
+  });
+});
