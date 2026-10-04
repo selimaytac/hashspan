@@ -313,5 +313,15 @@ of each package check the bounds against the values that split at them.
 
 ## Change policy
 
-Additions are minor changes. Renames and removals keep the old attribute emitted for at least one minor release,
-are announced in the CHANGELOG, and bump the schema version.
+These conventions stay `development` after 1.0; the public API is what 1.0 freezes
+([ADR 0027](adr/0027-what-1-0-freezes.md)). A change to them follows these rules:
+
+- **Additions are minor changes:** a new attribute, metric or enum value. Consumers handle values they do not know,
+  as `_OTHER` already asks.
+- **Renames and removals** of an attribute, a metric or an enum value record the old and the new name side by side
+  for at least one minor release, are announced in the CHANGELOG, and bump the schema version. A span name, which
+  cannot be recorded twice, changes only in a minor release, announced the same way.
+- **Meaning is not changed in place:** a new meaning gets a new name, and the old one is deprecated as above.
+- **Value forms are part of each attribute:** the type and form in the tables above change only through the same
+  steps.
+- An exported constant for a deprecated name stays exported, marked `@deprecated`, until the next major release.

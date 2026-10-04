@@ -94,18 +94,21 @@ The current focus: the work below decides when 1.0 is ready; it has no date.
 
 Exit criteria:
 
-- [ ] Every public export and `withHashspan` option of the four packages is documented, and the export pins in each
-  package's `test/exports.test.ts` match the docs
+- [x] Every public export and `withHashspan` option of the four packages is documented, and the export pins in each
+  package's `test/exports.test.ts` match the docs: the API report of each package (`packages/*/etc/*.api.md`) lists
+  every export, and `pnpm api:check` fails in CI on a stale report or an undocumented export (#362)
 - [ ] No open P0 or P1 issue; the known limits of each adapter are stated in its README
-- [ ] Span and attribute names reviewed once as a whole, for consistent naming across transaction, user operation,
-  payment and call batch spans; renames done through deprecation
-- [ ] Each adapter validated in at least one real integration, with its findings closed
+- [x] Span and attribute names reviewed once as a whole, for consistent naming across transaction, user operation,
+  payment and call batch spans; renames done through deprecation: `blockchain.system.name` is recorded next to
+  `blockchain.system` until 1.0 (#365), the other names are kept and the reasons documented (#364)
+- [x] Each adapter validated in at least one real integration, with its findings closed: every setup in
+  [integrations](integrations.md) runs in CI, and each adapter sent real transactions and payments on Base Sepolia
 - [ ] A user new to the project goes from an empty project to a send and a confirm span under the agent's trace by
   following the [quick start](../README.md#quick-start), once with a viem client and once with a setup from
   [integrations](integrations.md); every step that needed help is fixed in the docs (#242)
 - [x] The published packages smoke-tested on every supported Node.js version (#34)
-- [ ] A stated policy for what 1.0 freezes (the public API) and what stays `development` (the semantic conventions,
-  under their [change policy](semconv.md#change-policy))
+- [x] A stated policy for what 1.0 freezes (the public API) and what stays `development` (the semantic conventions,
+  under their [change policy](semconv.md#change-policy)): [ADR 0027](adr/0027-what-1-0-freezes.md)
 
 ## Candidates
 
