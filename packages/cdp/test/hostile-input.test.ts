@@ -342,8 +342,7 @@ describe('hostile input', () => {
 });
 
 describe('the client withHashspan() wraps', () => {
-  // finding: adapter-setup. withHashspan() reads `cdp.evm` without a guard: a client it cannot read throws into the caller.
-  it.fails('never throws for a client it cannot wrap [finding: adapter-setup]', () => {
+  it('never throws for a client it cannot wrap', () => {
     const problems: string[] = [];
     for (const [label, cdp] of [
       ...hostileValues(),

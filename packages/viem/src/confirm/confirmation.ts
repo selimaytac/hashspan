@@ -24,7 +24,7 @@ import {
   withoutFees,
 } from './receipt.js';
 import { confirmKey, type Recent } from './recent.js';
-import { delay, within } from './timing.js';
+import { delay, durationOr, within } from './timing.js';
 
 export const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
 /** How long telemetry waits for the sealed receipt of a preconfirmed transaction before it records it without fees. */
@@ -265,10 +265,11 @@ export function createConfirmation({
     }
     const handle = tracker.startConfirm({ chainId, hash });
     const capture: ReplacementCapture = {};
+    const waitMs = durationOr(timeoutMs, DEFAULT_BACKGROUND_TIMEOUT_MS);
     const background = backgroundClientOf(client);
     const polling = (client as { pollingInterval?: unknown }).pollingInterval;
     const retryMs = typeof polling === 'number' && polling > 0 ? polling : RECEIPT_LAG_RETRY_MS;
-    const deadline = Date.now() + timeoutMs;
+    const deadline = Date.now() + waitMs;
     const wait = async (): Promise<ViemReceipt> => {
       for (;;) {
         try {
