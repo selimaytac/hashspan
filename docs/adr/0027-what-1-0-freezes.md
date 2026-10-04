@@ -1,6 +1,6 @@
 # 0027. What 1.0 freezes
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-04
 
 ## Context
