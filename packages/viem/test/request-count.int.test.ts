@@ -59,10 +59,17 @@ function counting(): { transport: ReturnType<typeof custom>; counts: Counts } {
   return { transport, counts };
 }
 
-/** What `minuend` has more of than `subtrahend`, per method. */
-function difference(minuend: Counts, subtrahend: Counts): Counts {
+/**
+ * The methods a receipt wait polls: how often depends on when blocks arrive, so two runs of the same wait can differ
+ * by a poll. Exact comparisons leave them out; the background confirmation test checks them by method.
+ */
+const POLLING = new Set(['eth_getTransactionReceipt', 'eth_blockNumber', 'eth_getBlockByNumber']);
+
+/** What `minuend` has more of than `subtrahend`, per method; without polling methods if `polling` is false. */
+function difference(minuend: Counts, subtrahend: Counts, polling = true): Counts {
   const extra: Counts = {};
   for (const method of new Set([...Object.keys(minuend), ...Object.keys(subtrahend)])) {
+    if (!polling && POLLING.has(method)) continue;
     const more = (minuend[method] ?? 0) - (subtrahend[method] ?? 0);
     if (more !== 0) extra[method] = more;
   }
@@ -80,7 +87,11 @@ interface Clients {
  */
 async function extraRequests(
   scenario: (clients: Clients) => Promise<unknown>,
-  options: { hashspan?: Parameters<typeof withHashspan>[0]; chain?: boolean } = {},
+  options: {
+    hashspan?: Parameters<typeof withHashspan>[0];
+    chain?: boolean;
+    polling?: boolean;
+  } = {},
 ): Promise<Counts> {
   const run = async (traced: boolean) => {
     const { transport, counts } = counting();
@@ -104,7 +115,7 @@ async function extraRequests(
     return counts;
   };
   const untraced = await run(false);
-  return difference(await run(true), untraced);
+  return difference(await run(true), untraced, options.polling ?? false);
 }
 
 const send = ({ wallet }: Clients, to: Address = RECIPIENT): Promise<Hex> =>
@@ -119,6 +130,7 @@ const sendAndWait = async (clients: Clients, to?: Address) =>
   clients.reader.waitForTransactionReceipt({ hash: await send(clients, to) });
 
 describe('JSON-RPC requests the viem adapter adds', () => {
+  // Polling methods are left out of these exact counts (see POLLING); every other method is counted exactly.
   it('none to a send and its wait on a client with a chain', async () => {
     expect(await extraRequests(sendAndWait)).toEqual({});
   });
@@ -128,7 +140,10 @@ describe('JSON-RPC requests the viem adapter adds', () => {
   });
 
   it('for background confirmation, only the requests of a receipt wait', async () => {
-    const extra = await extraRequests(send, { hashspan: { confirm: { mode: 'background' } } });
+    const extra = await extraRequests(send, {
+      hashspan: { confirm: { mode: 'background' } },
+      polling: true,
+    });
     // The methods a caller's own wait uses, measured without hashspan. How often viem polls them depends on when
     // blocks arrive, so the methods are pinned, not the number of polls.
     const wait = difference(await measure(sendAndWait), await measure(send));
