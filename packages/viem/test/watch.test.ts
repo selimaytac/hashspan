@@ -159,4 +159,42 @@ describe('watch', () => {
     await hashspan.flush();
     expect(confirms()).toHaveLength(1);
   });
+
+  it.each([
+    ['a bigint', 1n],
+    ['a symbol', Symbol('ms')],
+    ['an array', [50]],
+    ['a string', '50'],
+    ['NaN', Number.NaN],
+    ['a negative number', -1],
+  ])('confirms with the default timeout when timeoutMs is %s', async (_label, timeoutMs) => {
+    const hashspan = withHashspan();
+    const reader = createPublicClient({
+      chain: base,
+      transport: mockTransport().transport,
+      pollingInterval: 10,
+    });
+
+    expect(() =>
+      hashspan.watch(reader, { hash: HASH, timeoutMs: timeoutMs as never }),
+    ).not.toThrow();
+    await expect(hashspan.flush({ timeoutMs: 1_000 })).resolves.toBe(true);
+    expect(confirms()).toHaveLength(1);
+    expect(confirms()[0]?.attributes['blockchain.tx.status']).toBe('success');
+  });
+
+  it('never throws for a decodeRevertReason option it cannot read', () => {
+    const unreadable = new Proxy(
+      {},
+      {
+        get: () => {
+          throw new Error('trap');
+        },
+        getOwnPropertyDescriptor: () => {
+          throw new Error('trap');
+        },
+      },
+    );
+    expect(() => withHashspan({ decodeRevertReason: unreadable as never })).not.toThrow();
+  });
 });

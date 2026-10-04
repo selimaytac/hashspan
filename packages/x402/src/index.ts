@@ -120,6 +120,16 @@ function own(target: unknown, key: string): unknown {
   return descriptor && 'value' in descriptor ? descriptor.value : undefined;
 }
 
+/** Whether `tracker` can record payments; a tracker that cannot be read cannot (ADR 0025 rule 1). */
+function hasStartPayment(tracker: TxTracker): boolean {
+  try {
+    return typeof tracker.startPayment === 'function';
+  } catch {
+    diag.debug('hashspan: could not read the tracker');
+    return false;
+  }
+}
+
 function isObject(value: unknown): value is object {
   return value !== null && typeof value === 'object';
 }
@@ -705,7 +715,17 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
       );
       return;
     }
-    const settlement = settlementOf(response);
+    let settlement: PaymentSettlement;
+    let network: unknown;
+    try {
+      settlement = settlementOf(response);
+      network = own(response, 'network');
+    } catch {
+      // A response that cannot be read still ends the payment span, as `_OTHER` (ADR 0025 rule 1).
+      diag.debug('hashspan: could not read the settlement response');
+      finish(payment, 'unreadable settlement', (handle) => handle.fail(undefined, { endTime }));
+      return;
+    }
     const end = (verified?: boolean): void =>
       finish(payment, 'payment settlement', (handle) =>
         handle.end(verified === undefined ? settlement : { ...settlement, verified }, { endTime }),
@@ -715,7 +735,6 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
       end();
       return;
     }
-    const network = own(response, 'network');
     if (network !== undefined && chainIdOf(network) !== payment.chainId) {
       diag.warn(
         'hashspan: the settlement is on another network than the payment; not confirming it',
@@ -798,20 +817,29 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
   const noop: HashspanX402 = { flush: (flushOptions) => viem.flush(flushOptions) };
 
   const target = client as Record<PropertyKey, unknown>;
-  const existing = own(target, WRAPPED as unknown as string) ?? target[WRAPPED];
+  let existing: unknown;
+  let hooksFound: boolean;
+  try {
+    existing = own(target, WRAPPED as unknown as string) ?? target[WRAPPED];
+    hooksFound = HOOKS.every((name) => typeof target[name] === 'function');
+  } catch {
+    // A client that cannot be read is not traced; withHashspan() never throws into the caller (ADR 0025 rule 1).
+    diag.warn('hashspan: not tracing x402 payments: the client cannot be read');
+    return noop;
+  }
   if (isObject(existing)) {
     diag.warn(
       'hashspan: this x402 client is already traced; ignoring the options of the second withHashspan()',
     );
     return existing as HashspanX402;
   }
-  if (HOOKS.some((name) => typeof target[name] !== 'function')) {
+  if (!hooksFound) {
     diag.warn(
       'hashspan: not tracing x402 payments: pass the x402Client (with onPaymentResponse, @x402/core 2.13 or later), not an x402HTTPClient',
     );
     return noop;
   }
-  if (typeof tracker.startPayment !== 'function') {
+  if (!hasStartPayment(tracker)) {
     diag.warn(
       'hashspan: not tracing x402 payments: the tracker has no startPayment; use createTxTracker() from @hashspan/core 0.4 or later',
     );

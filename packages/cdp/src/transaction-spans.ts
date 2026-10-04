@@ -165,31 +165,40 @@ export function createTransactionSpans({
     call: Promise<unknown>,
   ): Promise<void> => {
     let ended = false;
+    /**
+     * Ends the handle once with `record`, which reads the outcome and calls a handle method. If that throws (an
+     * outcome that cannot be read), the handle still ends, as a failure with `error.type` `_OTHER`; the abandon
+     * callback is removed only once a handle method was called (ADR 0025 rule 1).
+     */
     const end = (record: () => void, what: string): void => {
       if (ended) return;
       ended = true;
-      waiting.delete(abandon);
       try {
         record();
       } catch (error) {
         diag.error(`hashspan: failed to record ${what} (${errorName(error)})`);
+        try {
+          handle.fail(undefined);
+        } catch (failure) {
+          diag.error(`hashspan: failed to end the confirm span (${errorName(failure)})`);
+        }
       }
+      waiting.delete(abandon);
     };
     const abandon = (): void => end(() => handle.timeout(), 'confirmation timeout');
     waiting.add(abandon);
     return call.then(
       (result) => {
-        const receipt = receiptOf(result);
-        end(
-          () =>
-            receipt ? handle.end(receipt) : handle.fail(new TypeError('not a transaction receipt')),
-          'receipt',
-        );
+        end(() => {
+          const receipt = receiptOf(result);
+          if (receipt) handle.end(receipt);
+          else handle.fail(new TypeError('not a transaction receipt'));
+        }, 'receipt');
       },
       (error: unknown) => {
         end(
           () =>
-            error instanceof Error && error.name === 'WaitForTransactionReceiptTimeoutError'
+            error instanceof Error && own(error, 'name') === 'WaitForTransactionReceiptTimeoutError'
               ? handle.timeout()
               : handle.fail(error),
           'confirmation failure',

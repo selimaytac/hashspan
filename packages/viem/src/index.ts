@@ -1,9 +1,11 @@
 import { createTxTracker, type TxTracker, type TxTrackerOptions } from '@hashspan/core';
 import type { Abi } from 'viem';
+import { own } from './arguments.js';
 import { addCallBatchActions } from './call-batch.js';
 import { createConfirmation } from './confirm/confirmation.js';
 import { createPending } from './confirm/pending.js';
 import { Recent } from './confirm/recent.js';
+import { durationOr } from './confirm/timing.js';
 import { createWatch } from './confirm/watch.js';
 import { guardTracker } from './safe-tracker.js';
 import { createSendTracing } from './send.js';
@@ -80,6 +82,15 @@ export interface HashspanExtension {
   watch(client: ViemClientLike, options: WatchOptions): void;
 }
 
+/** The `timeoutMs` of the `decodeRevertReason` option, read from an own data property and never throwing. */
+function revertReasonTimeoutOf(option: unknown): number {
+  try {
+    return durationOr(own(option, 'timeoutMs'), DEFAULT_REVERT_REASON_TIMEOUT_MS);
+  } catch {
+    return DEFAULT_REVERT_REASON_TIMEOUT_MS;
+  }
+}
+
 /**
  * viem client extension that traces transactions with `@hashspan/core`:
  * `client.extend(withHashspan())`. Apply it after other extensions such as `publicActions`,
@@ -99,10 +110,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
       : DEFAULT_MAX_BACKGROUND_CONFIRMATIONS;
   // Guarded so that no tracker, including a user-provided one, can throw into the instrumented call.
   const decodeRevertReason = decodeRevertReasonOption !== false;
-  const revertReasonTimeoutMs =
-    (typeof decodeRevertReasonOption === 'object'
-      ? decodeRevertReasonOption.timeoutMs
-      : undefined) ?? DEFAULT_REVERT_REASON_TIMEOUT_MS;
+  const revertReasonTimeoutMs = revertReasonTimeoutOf(decodeRevertReasonOption);
   const tracker = guardTracker(providedTracker ?? createTxTracker(trackerOptions));
   /** ABIs of recent `writeContract` calls, to decode custom errors. */
   const abis = new Recent<Abi>();

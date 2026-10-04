@@ -5,7 +5,7 @@ import { errorName } from '../safe-tracker.js';
 import type { ViemClientLike, WatchOptions } from '../types.js';
 import { type Confirmation, DEFAULT_BACKGROUND_TIMEOUT_MS } from './confirmation.js';
 import { confirmKey, type Recent } from './recent.js';
-import { chainIdOfClient, isChainId, within } from './timing.js';
+import { chainIdOfClient, durationOr, isChainId, within } from './timing.js';
 
 export interface WatchDependencies {
   abis: Recent<Abi>;
@@ -42,7 +42,7 @@ export function createWatch({
         onReceipt(undefined);
         return;
       }
-      const timeoutMs = options.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS;
+      const timeoutMs = durationOr(options.timeoutMs, DEFAULT_BACKGROUND_TIMEOUT_MS);
       /** Polling another chain would only end in a timeout, or a receipt recorded for the wrong chain. */
       const confirmOn = (clientChainId: number | undefined): void => {
         if (clientChainId !== chainId) {
