@@ -501,8 +501,8 @@
             "type": "prometheus",
             "uid": "hashspan-prometheus"
           },
-          "expr": "sum by (blockchain_tx_status, error_type) (max_over_time(blockchain_client_confirmation_duration_seconds_count{blockchain_chain_id=~\"$chain\"}[$__range]) - min_over_time(blockchain_client_confirmation_duration_seconds_count{blockchain_chain_id=~\"$chain\"}[$__range]))",
-          "legendFormat": "{{blockchain_tx_status}}{{error_type}}",
+          "expr": "label_replace(label_replace(label_replace(sum by (blockchain_operation_subject, blockchain_tx_status, blockchain_user_operation_success, blockchain_call_batch_status, error_type) (max_over_time(blockchain_client_confirmation_duration_seconds_count{blockchain_chain_id=~\"$chain\"}[$__range]) - min_over_time(blockchain_client_confirmation_duration_seconds_count{blockchain_chain_id=~\"$chain\"}[$__range])), \"blockchain_operation_subject\", \"transaction\", \"blockchain_operation_subject\", \"\"), \"user_operation_outcome\", \"success\", \"blockchain_user_operation_success\", \"true\"), \"user_operation_outcome\", \"reverted\", \"blockchain_user_operation_success\", \"false\")",
+          "legendFormat": "{{blockchain_operation_subject}} {{blockchain_tx_status}}{{user_operation_outcome}}{{blockchain_call_batch_status}}{{error_type}}",
           "refId": "A",
           "instant": true
         }

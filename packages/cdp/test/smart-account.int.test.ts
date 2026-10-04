@@ -4,7 +4,6 @@
 // transactions and their `UserOperationEvent` logs, which the reader reads. What is not: CDP's bundler and
 // paymaster, signature validation and gas accounting (docs/adr/0021, Implementation notes).
 import { SpanStatusCode } from '@opentelemetry/api';
-import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, type Hex, http } from 'viem';
 import { entryPoint07Address } from 'viem/account-abstraction';
 import { baseSepolia } from 'viem/chains';
@@ -16,13 +15,11 @@ import {
 } from '../../viem/test/entry-point/test-entry-point.js';
 import { collectingRejections, type Faults, faultsOn } from '../../viem/test/fault-checks.js';
 import { type FaultProxy, startFaultProxy } from '../../viem/test/fault-proxy.js';
-import { freePort } from '../../viem/test/free-port.js';
+import { startAnvil } from '../../viem/test/start-anvil.js';
 import { withHashspan } from '../src/index.js';
 import { startMockCdpApi, throwawayCredentials } from './mock-cdp-api.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const SMART_ACCOUNT = '0x00000000000000000000000000000000000A11cE' as const;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 const REVERTER = '0x00000000000000000000000000000000000000a1' as const;
@@ -33,9 +30,8 @@ process.env.DISABLE_CDP_ERROR_REPORTING = 'true';
 
 // Anvil with Base Sepolia's chain id, so the real CDP network name applies; on `base`, the SDK would default the
 // paymaster to CDP's node.
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
   chainId: 84532,
 });
 const reader = createPublicClient({
@@ -57,7 +53,6 @@ beforeAll(async () => {
       return Promise.resolve(new Response(null, { status: 204 }));
     return realFetch(input, init);
   });
-  await instance.start();
   const setCode = (address: Address, code: Hex) =>
     reader.request({ method: 'anvil_setCode' as never, params: [address, code] as never });
   await setCode(entryPoint07Address, testEntryPointCode);

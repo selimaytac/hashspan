@@ -27,7 +27,8 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
 - `test/mock-transport.ts` EIP-1193 mock for unit tests (`test/mock-bundler.ts` for bundler clients);
   `test/*.int.test.ts` run against Anvil via prool; user operations go through `test/test-bundler.ts`, an
   in-process bundler, to a stand-in EntryPoint (`test/entry-point/`, compiled into `test-entry-point.ts`); every
-  Anvil test starts on a free port (`test/free-port.ts`)
+  Anvil test starts its own Anvil at module level with `startAnvil()` (`test/start-anvil.ts`), on a port the OS
+  assigns as Anvil binds it, not with `test/free-port.ts`, whose port another process can take before Anvil binds it
 - `test/fault-proxy.ts` an HTTP proxy in front of Anvil that injects RPC faults per JSON-RPC method (timeouts, HTTP
   errors, JSON-RPC errors, resets, rewritten or mixed-up results); `test/rpc-faults.int.test.ts` runs the
   transaction send and confirm paths through it, `test/call-batch-faults.int.test.ts` the call batch paths, and the

@@ -2,7 +2,6 @@
 // docs/integrations.md ("Agent frameworks") and the span lookups the tests assert on.
 import { withHashspan } from '@hashspan/viem';
 import { type Span, trace } from '@opentelemetry/api';
-import { Instance } from 'prool';
 import {
   createPublicClient,
   createWalletClient,
@@ -13,6 +12,7 @@ import {
 } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { foundry as chain } from 'viem/chains';
+import { startAnvil as startNode } from '../../packages/viem/test/start-anvil.js';
 import { setupTracing, type TestTracing } from '../../packages/viem/test/tracing.js';
 
 export { chain };
@@ -24,21 +24,19 @@ export const TOOL_SPAN = 'pay_vendor';
 export const OPENINFERENCE_KIND = 'openinference.span.kind';
 const VENDOR = '0x00000000000000000000000000000000000000cc';
 
-/** Starts Anvil on `port` and registers the in-memory tracer provider; call the result's `stop` in `afterAll`. */
-export async function startAnvil(port: number): Promise<{
+/** Starts Anvil and registers the in-memory tracer provider; call the result's `stop` in `afterAll`. */
+export async function startAnvil(): Promise<{
   rpcUrl: string;
   tracing: TestTracing;
   stop: () => Promise<void>;
 }> {
-  const instance = Instance.anvil({
+  const { instance, rpcUrl } = await startNode({
     binary: new URL('../../.tools/bin/anvil', import.meta.url).pathname,
-    port,
     chainId: chain.id,
   });
-  await instance.start();
   const tracing = setupTracing();
   return {
-    rpcUrl: `http://127.0.0.1:${port}`,
+    rpcUrl,
     tracing,
     stop: async () => {
       await tracing.teardown();

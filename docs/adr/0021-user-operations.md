@@ -41,7 +41,7 @@ What the SDKs give (viem 2.57, `@coinbase/cdp-sdk` 1.57):
   when one is known. `blockchain.tx.status` is not set on these spans: it describes the bundle transaction, which
   can succeed while the operation reverts. A CDP `failed` ends as an error; a wait that gives up ends as `timeout`
   (ADR 0016).
-- **Fees.** `blockchain.tx.fee`, `.gas_used` and `.effective_gas_price` are not derived from the bundle receipt:
+- **Fees.** `blockchain.tx.fee`, `.gas.used` and `.effective_gas_price` are not derived from the bundle receipt:
   they cover every operation in the bundle. The operation's cost is `blockchain.user_operation.gas.cost`. The fee
   histogram of ADR 0020 records it, with an attribute telling operations from transactions.
 - **Adapters.** viem: `withHashspan()` also wraps `sendUserOperation` and `waitForUserOperationReceipt` of a

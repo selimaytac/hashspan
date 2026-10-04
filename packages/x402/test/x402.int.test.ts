@@ -1,20 +1,15 @@
 import { context, trace } from '@opentelemetry/api';
 import { wrapFetchWithPayment } from '@x402/fetch';
-import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { freePort } from '../../viem/test/free-port.js';
+import { startAnvil } from '../../viem/test/start-anvil.js';
 import { withHashspan } from '../src/index.js';
 import { PAY_TO, paidApi, settledWith, testClient } from './fake-x402.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
-
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
   chainId: baseSepolia.id,
 });
 const wallet = createWalletClient({ chain: baseSepolia, transport: http(RPC_URL) });
@@ -38,7 +33,6 @@ const settlingApi = (delayMs = 0) =>
 
 let tracing: TestTracing;
 beforeAll(async () => {
-  await instance.start();
   [facilitator] = (await wallet.getAddresses()) as [Address];
 });
 afterAll(async () => {

@@ -3,18 +3,14 @@ import { context, propagation, trace } from '@opentelemetry/api';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { registerTelemetry } from 'ai';
-import { Instance } from 'prool';
 import { createPublicClient, http, numberToHex, parseEther } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { freePort } from '../../../packages/viem/test/free-port.js';
+import { startAnvil } from '../../../packages/viem/test/start-anvil.js';
 
 // A local chain that reports Base Sepolia's chain id stands in for the testnet: tests never leave localhost.
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
   chainId: 84532,
 });
 const exporter = new InMemorySpanExporter();
@@ -33,7 +29,6 @@ async function fundedKey(eth: string) {
 }
 
 beforeAll(async () => {
-  await instance.start();
   provider.register();
   registerTelemetry(new OpenTelemetry());
 });

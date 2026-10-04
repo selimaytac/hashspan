@@ -6,7 +6,6 @@
 // `watch()`'s does, nothing is left pending and no rejection is unhandled.
 import { SpanStatusCode } from '@opentelemetry/api';
 import { wrapFetchWithPayment } from '@x402/fetch';
-import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, type Hex, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -16,22 +15,19 @@ import {
   type FaultRule,
   startFaultProxy,
 } from '../../viem/test/fault-proxy.js';
-import { freePort } from '../../viem/test/free-port.js';
+import { startAnvil } from '../../viem/test/start-anvil.js';
 import { withHashspan } from '../src/index.js';
 import { paidApi, settledWith, testClient } from './fake-x402.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 const CONFIRM_TIMEOUT_MS = 2_500;
 const PAYMENT_SPAN = `payment ${baseSepolia.id}`;
 const CONFIRM_SPAN = `confirm ${baseSepolia.id}`;
 
 // Anvil with Base Sepolia's chain id, the network of the fake paid API.
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
   chainId: baseSepolia.id,
 });
 
@@ -40,7 +36,6 @@ let tracing: TestTracing;
 let account: Address;
 
 beforeAll(async () => {
-  await instance.start();
   proxy = await startFaultProxy(RPC_URL);
   [account] = (await createWalletClient({ transport: http(RPC_URL) }).getAddresses()) as [Address];
 });

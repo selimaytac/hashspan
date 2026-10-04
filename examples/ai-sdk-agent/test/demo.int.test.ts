@@ -3,21 +3,17 @@ import { context, propagation, trace } from '@opentelemetry/api';
 import { InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { registerTelemetry } from 'ai';
-import { Instance } from 'prool';
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { freePort } from '../../../packages/viem/test/free-port.js';
+import { startAnvil } from '../../../packages/viem/test/start-anvil.js';
 
-const PORT = await freePort();
-const instance = Instance.anvil({
+const { instance, rpcUrl } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
 });
 const exporter = new InMemorySpanExporter();
 const provider = new NodeTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] });
 
 beforeAll(async () => {
-  await instance.start();
-  process.env.RPC_URL = `http://127.0.0.1:${PORT}`;
+  process.env.RPC_URL = rpcUrl;
   provider.register();
   registerTelemetry(new OpenTelemetry());
 });

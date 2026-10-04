@@ -10,24 +10,20 @@ import { OtelBridge } from '@mastra/otel-bridge';
 import { context, propagation, trace } from '@opentelemetry/api';
 import { NodeSDK, tracing } from '@opentelemetry/sdk-node';
 import { MockLanguageModelV4 } from 'ai/test';
-import { Instance } from 'prool';
 import { createWalletClient, type Hex, http, parseEther, publicActions } from 'viem';
 import { foundry } from 'viem/chains';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { freePort } from '../../packages/viem/test/free-port.js';
+import { startAnvil } from '../../packages/viem/test/start-anvil.js';
 import { offline } from './offline.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc';
 // Anvil's first account, unlocked on the node.
 const ACCOUNT = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 const TOOL = 'pay_vendor';
 
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
   chainId: foundry.id,
 });
 const exporter = new tracing.InMemorySpanExporter();
@@ -41,7 +37,6 @@ const sdk = new NodeSDK({
 });
 
 beforeAll(async () => {
-  await instance.start();
   sdk.start();
 });
 

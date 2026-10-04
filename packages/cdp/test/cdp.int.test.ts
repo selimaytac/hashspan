@@ -1,15 +1,12 @@
 import { SpanStatusCode } from '@opentelemetry/api';
-import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { freePort } from '../../viem/test/free-port.js';
+import { startAnvil } from '../../viem/test/start-anvil.js';
 import { withHashspan } from '../src/index.js';
 import { startMockCdpApi, throwawayCredentials } from './mock-cdp-api.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 
 // Keep the SDK's own usage tracking and error reporting off: tests make no request outside localhost.
@@ -17,9 +14,8 @@ process.env.DISABLE_CDP_USAGE_TRACKING = 'true';
 process.env.DISABLE_CDP_ERROR_REPORTING = 'true';
 
 // Anvil with Base Sepolia's chain id, so the real CDP network name applies.
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
   chainId: 84532,
 });
 
@@ -38,7 +34,6 @@ beforeAll(async () => {
       return Promise.resolve(new Response(null, { status: 204 }));
     return realFetch(input, init);
   });
-  await instance.start();
   const [account] = (await createWalletClient({ transport: http(RPC_URL) }).getAddresses()) as [
     Address,
   ];

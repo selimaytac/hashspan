@@ -7,7 +7,8 @@ Root rules: [AGENTS.md](../AGENTS.md).
   audit and license check; it imports hashspan from source (`vitest.config.ts` alias), so the main install comes
   first: `pnpm install`, `pnpm --dir integrations install`, then `pnpm test:integrations` from the root.
 - `test/offline.ts` a setup file that lets only loopback requests through `fetch` and answers AgentKit's analytics
-  requests; each test starts its own Anvil on a free port (`packages/viem/test/free-port.ts`)
+  requests; each test starts its own Anvil with `startAnvil()`
+  (`packages/viem/test/start-anvil.ts`), on a port the OS assigns as Anvil binds it
 - `test/agentkit-viem.int.test.ts` the AgentKit `ViemWalletProvider` setup; `test/agentkit-cdp.int.test.ts` the
   AgentKit CDP wallet providers, against `packages/cdp/test/mock-cdp-api.ts`; `test/goat-viem.int.test.ts` the GOAT
   `viem()` wallet setup; `test/mastra.int.test.ts` the Mastra OpenTelemetry bridge setup, with a scripted model;

@@ -5,7 +5,6 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { SpanStatusCode } from '@opentelemetry/api';
-import { Instance } from 'prool';
 import {
   type Address,
   concat,
@@ -34,13 +33,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { withHashspan } from '../src/index.js';
 import { reverterCode } from './entry-point/test-entry-point.js';
 import { freePort } from './free-port.js';
+import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast } from './viem-version.js';
 
 const RUN = Boolean(process.env.CI || process.env.HASHSPAN_REAL_BUNDLER);
-const ANVIL_PORT = await freePort();
 const ALTO_PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${ANVIL_PORT}`;
 const BUNDLER_URL = `http://127.0.0.1:${ALTO_PORT}`;
 const TOOLS = new URL('../../../.tools/bundler/node_modules/', import.meta.url).pathname;
 const ALTO = `${TOOLS}@pimlico/alto/esm/cli/alto.js`;
@@ -71,10 +69,11 @@ const simpleAccountAbi = parseAbi([
 const creationCode = (name: string): Hex =>
   (JSON.parse(readFileSync(`${ARTIFACTS}${name}.json`, 'utf8')) as { bytecode: Hex }).bytecode;
 
-const instance = Instance.anvil({
-  binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: ANVIL_PORT,
-});
+// Started only when the file runs.
+const node = RUN
+  ? await startAnvil({ binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname })
+  : undefined;
+const RPC_URL = node?.rpcUrl ?? 'http://127.0.0.1:0';
 const reader = createPublicClient({ chain: anvil, transport: http(RPC_URL) });
 const testClient = createTestClient({ chain: anvil, mode: 'anvil', transport: http(RPC_URL) });
 const nodeWallet = createWalletClient({ chain: anvil, transport: http(RPC_URL) });
@@ -156,7 +155,6 @@ async function startAlto(): Promise<void> {
 beforeAll(async () => {
   if (!RUN) return;
   if (!existsSync(ALTO)) throw new Error('Alto is not installed: run ./scripts/install-bundler.sh');
-  await instance.start();
   const entryPoint = await deploy(creationCode('EntryPoint'), ENTRY_POINT_SALT);
   expect(entryPoint).toBe(entryPoint07Address);
   factory = await deploy(
@@ -177,7 +175,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!RUN) return;
   alto?.kill();
-  await instance.stop();
+  await node?.instance.stop();
 });
 beforeEach(() => {
   tracing = setupTracing();

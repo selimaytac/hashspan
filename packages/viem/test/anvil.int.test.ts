@@ -1,6 +1,5 @@
 import { createTxTracker } from '@hashspan/core';
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
-import { Instance } from 'prool';
 import {
   type Address,
   createPublicClient,
@@ -17,12 +16,10 @@ import {
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
-import { freePort } from './free-port.js';
+import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast } from './viem-version.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const REVERTER = '0x00000000000000000000000000000000000000aa' as const;
 const TOKEN = '0x00000000000000000000000000000000000000bb' as const;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
@@ -46,16 +43,14 @@ function revertingWith(payload: Hex): Hex {
   return `0x${code}60${size.toString(16).padStart(2, '0')}6000fd`; // PUSH1 size, PUSH1 0, REVERT
 }
 
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
 });
 
 let tracing: TestTracing;
 let account: Address;
 
 beforeAll(async () => {
-  await instance.start();
   const client = createPublicClient({ chain: anvil, transport: http(RPC_URL) });
   const setCode = (address: Address, code: Hex) =>
     client.request({ method: 'anvil_setCode' as never, params: [address, code] as never });
