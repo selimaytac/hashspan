@@ -2,7 +2,7 @@
 
 Trace the transactions your AI agents send with [viem](https://viem.sh), using OpenTelemetry.
 
-A viem client extension that reports to [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.10.0/packages/core): each transaction becomes a
+A viem client extension that reports to [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.11.0/packages/core): each transaction becomes a
 `send {chainId}` span inside your agent's trace, and each receipt wait a linked `confirm {chainId}` span with status,
 gas and fees.
 
@@ -34,7 +34,7 @@ await reader.waitForTransactionReceipt({ hash }); // confirm span, linked to the
 Reuse the same `withHashspan()` result for every client of one agent: the clients then share one tracker, so
 confirmations are linked to their sends even when they happen on a different client.
 
-`withHashspan(options)` accepts all [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.10.0/packages/core#options) (address mode, error messages,
+`withHashspan(options)` accepts all [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.11.0/packages/core#options) (address mode, error messages,
 agent identity, redaction hook) plus:
 
 | Option | Default | Description |
@@ -143,7 +143,7 @@ transaction's. hashspan therefore records fees from the sealed receipt:
   `effective_gas_price`, `l1_fee` and `fee`, since a fee without its L1 part would look valid and be too low.
 - Your `waitForTransactionReceipt` still returns what the node returned, and `watch()`'s `onReceipt` gets the receipt
   viem resolved with.
-- See [ADR 0024](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0024-sealed-receipt-fees.md).
+- See [ADR 0024](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0024-sealed-receipt-fees.md).
 
 ## Background confirmation
 
@@ -176,7 +176,7 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
 - At most `maxBackgroundConfirmations` (default 256) background confirmations, including those of `watch()`, poll at
   once. A transaction sent while that many are polling gets no background confirm span, and a `diag` warning is
   logged; `0` turns background confirmation off. Your own waits are not counted. See
-  [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0018-background-confirmation-limit.md).
+  [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0018-background-confirmation-limit.md).
 - In serverless runtimes that freeze after the response, background confirmations may not complete.
 
 ## Smart accounts (ERC-4337)
@@ -209,7 +209,7 @@ await bundler.waitForUserOperationReceipt({ hash }); // confirm span, linked to 
   `error.type` `reverted` and its decoded revert reason, even though the bundle transaction succeeded. The bundle
   transaction's status and fee are not recorded: they cover every operation in the bundle. The fee histogram records
   the operation's cost
-  ([ADR 0021](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0021-user-operations.md)).
+  ([ADR 0021](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0021-user-operations.md)).
 - The chain id is the bundler client's, which `createBundlerClient` takes from its `client`; without one, the spans
   are recorded once the bundler answered `eth_chainId`, as for [clients without a chain](#clients-without-a-chain).
 - Only these two bundler actions are traced; viem calls the others from inside them. Background confirmation and
@@ -250,7 +250,7 @@ await wallet.waitForCallsStatus({ id }); // confirm span, linked to the send spa
   `sendCallsSync` calls the two actions directly, so the batch is sent and waited for untraced, with its result
   unchanged. `getCallsStatus` is not traced: polling it yourself records
   nothing, as with `getTransactionReceipt`. Background confirmation and `watch()` do not cover batches.
-- See [ADR 0022](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0022-call-batches.md).
+- See [ADR 0022](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0022-call-batches.md).
 
 ## JSON-RPC requests
 
@@ -278,7 +278,7 @@ const wallet = createWalletClient({
   or the error's class name, never the message.
 - `methods` chooses which methods get a span (default: all); the example leaves out receipt polling.
   `tracerProvider` replaces the global tracer provider.
-- See [ADR 0019](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/adr/0019-json-rpc-spans.md).
+- See [ADR 0019](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0019-json-rpc-spans.md).
 
 ## Traced actions
 
@@ -321,7 +321,7 @@ When a framework extends the client you pass in, check whether confirm spans app
   `sendRawTransactionSync`, which send and wait in one call ([#370](https://github.com/selimaytac/hashspan/issues/370)).
 - Only actions called as methods of an extended client are traced: a library that calls viem's actions as functions
   or creates its own client bypasses the extension
-  ([libraries that take a viem client](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.10.0/docs/integrations.md#libraries-that-take-a-viem-client)),
+  ([libraries that take a viem client](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/integrations.md#libraries-that-take-a-viem-client)),
   and an extension applied after `withHashspan()` can hide the traced actions ([apply it last](#apply-it-last)).
 - A transaction sent by a wallet API or a wallet provider that creates its own client gets a confirm span through
   `watch()`, but no send span ([transactions sent elsewhere](#transactions-sent-elsewhere)).
@@ -345,7 +345,7 @@ When a framework extends the client you pass in, check whether confirm spans app
 - On a client without a chain, a call is not traced when its `eth_chainId` request fails or has not answered 30 s
   after the call ended ([clients without a chain](#clients-without-a-chain)).
 - The limits of the core apply too
-  ([`@hashspan/core` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.10.0/packages/core#known-limits)).
+  ([`@hashspan/core` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.11.0/packages/core#known-limits)).
 
 ## License
 
