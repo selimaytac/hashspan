@@ -31,6 +31,7 @@ export type ErrorMessageMode = 'off' | 'sanitized' | 'raw';
  */
 export type PaymentResourceMode = 'origin' | 'path' | 'off';
 
+/** Address recording mode with options; see {@link TxTrackerOptions.address}. */
 export interface AddressOptions {
   /** How addresses are recorded; `hash` applies to `hashed` mode only. */
   mode: AddressMode;
@@ -52,6 +53,7 @@ export interface AgentIdentity {
   name?: string | undefined;
 }
 
+/** Options of `createTxTracker()`; the adapters' `withHashspan()` options extend them. */
 export interface TxTrackerOptions {
   /** Defaults to the globally registered tracer provider. */
   tracerProvider?: TracerProvider | undefined;
@@ -106,6 +108,7 @@ export interface TxTrackerOptions {
   maxTrackedTransactions?: number | undefined;
 }
 
+/** A transaction about to be sent, for {@link TxTracker.startSend}. */
 export interface SendInput {
   /** EIP-155 chain id. */
   chainId: number;
@@ -142,6 +145,7 @@ export interface SendInput {
 export interface AuthorizationInput {
   /** The delegated contract address; `0x000...0` clears a delegation. */
   address: string;
+  /** Chain id the authorization is valid on; 0 means every chain. */
   chainId: number;
 }
 
@@ -161,11 +165,19 @@ export interface SendHandle {
   readonly context: Context;
   /** Ends the send span successfully once the transaction hash is known. */
   end(result: SendResult, options?: EndOptions): void;
-  /** @deprecated Use `end({ hash }, { endTime })`; removed in 1.0. */
+  /**
+   * Ends the send span successfully with the transaction hash.
+   *
+   * @deprecated Use `end({ hash }, { endTime })`; removed in 1.0.
+   */
   end(hash: string, endTime?: TimeInput): void;
   /** Ends the send span with an error (signing, simulation or broadcast failure). */
   fail(error: unknown, options?: FailOptions): void;
-  /** @deprecated Use `fail(error, { endTime, errorType })`; removed in 1.0. */
+  /**
+   * Ends the send span with an error.
+   *
+   * @deprecated Use `fail(error, { endTime, errorType })`; removed in 1.0.
+   */
   fail(error: unknown, endTime: TimeInput | undefined, options?: FailOptions): void;
 }
 
@@ -184,6 +196,7 @@ export interface EndOptions {
   endTime?: TimeInput | undefined;
 }
 
+/** Options of the `fail` methods of handles. */
 export interface FailOptions extends EndOptions {
   /**
    * `error.type` to record instead of the error's class name, for adapters whose library reports a stable,
@@ -194,6 +207,7 @@ export interface FailOptions extends EndOptions {
   errorType?: string | undefined;
 }
 
+/** A transaction whose receipt is awaited, for {@link TxTracker.startConfirm}. */
 export interface ConfirmInput {
   /** EIP-155 chain id; with `hash`, it identifies the transaction and its confirm span. */
   chainId: number;
@@ -210,7 +224,9 @@ export type ReplacementReason = 'repriced' | 'cancelled' | 'replaced';
 export interface ReceiptLike {
   /** `reverted` ends the confirm span with an error status and `error.type` `reverted`. */
   status: 'success' | 'reverted';
+  /** Block the transaction was included in. */
   blockNumber: bigint | number;
+  /** Gas the transaction used. */
   gasUsed: bigint | number;
   /** Wei per gas actually paid. */
   effectiveGasPrice?: bigint | undefined;
@@ -227,7 +243,7 @@ export interface ReceiptLike {
    * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0008-replaced-transactions.md).
    */
   transactionHash?: string | undefined;
-  /** Replacement reason reported by the library, when {@link transactionHash} differs from the awaited hash. */
+  /** Replacement reason reported by the library, when `transactionHash` differs from the awaited hash. */
   replacementReason?: ReplacementReason | undefined;
 }
 
@@ -240,21 +256,33 @@ export interface ReceiptLike {
 export interface ConfirmHandle {
   /** Ends the shared confirm span with the receipt, for every handle of the transaction. */
   end(receipt: ReceiptLike, options?: EndOptions): void;
-  /** @deprecated Use `end(receipt, { endTime })`; removed in 1.0. */
+  /**
+   * Ends the shared confirm span with the receipt.
+   *
+   * @deprecated Use `end(receipt, { endTime })`; removed in 1.0.
+   */
   end(receipt: ReceiptLike, endTime?: TimeInput): void;
   /**
    * Withdraws this handle because waiting for the receipt timed out. The confirm span ends as `timeout` only if
    * no other handle of the transaction is still waiting.
    */
   timeout(options?: EndOptions): void;
-  /** @deprecated Use `timeout({ endTime })`; removed in 1.0. */
+  /**
+   * Withdraws this handle because waiting for the receipt timed out.
+   *
+   * @deprecated Use `timeout({ endTime })`; removed in 1.0.
+   */
   timeout(endTime?: TimeInput): void;
   /**
    * Withdraws this handle because retrieving the receipt failed. The confirm span ends as a failure only if no
    * other handle of the transaction is still waiting.
    */
   fail(error: unknown, options?: EndOptions): void;
-  /** @deprecated Use `fail(error, { endTime })`; removed in 1.0. */
+  /**
+   * Withdraws this handle because retrieving the receipt failed.
+   *
+   * @deprecated Use `fail(error, { endTime })`; removed in 1.0.
+   */
   fail(error: unknown, endTime?: TimeInput): void;
 }
 
@@ -282,6 +310,7 @@ export interface PaymentInput {
   startTime?: TimeInput | undefined;
 }
 
+/** Fields of x402 payments, in {@link PaymentInput.x402}. */
 export interface X402PaymentDetails {
   /** Payment scheme, e.g. `exact`; recorded only if it is a short identifier. */
   scheme?: string | undefined;
@@ -294,6 +323,7 @@ export type PaymentStatus = 'settled' | 'pending' | 'failed';
 
 /** The settlement of a payment, as reported by the party that settled it. */
 export interface PaymentSettlement {
+  /** How the settlement ended, recorded as `blockchain.payment.status`. */
   status: PaymentStatus;
   /** Hash of the settling transaction; with it, a confirm span for this hash links to the payment span. */
   hash?: string | undefined;
@@ -381,6 +411,7 @@ export interface UserOperationSendHandle {
   fail(error: unknown, options?: FailOptions): void;
 }
 
+/** A user operation whose receipt is awaited, for {@link TxTracker.startUserOperationConfirm}. */
 export interface UserOperationConfirmInput {
   /** EIP-155 chain id; with `userOpHash`, it identifies the user operation and its confirm span. */
   chainId: number;
@@ -494,6 +525,7 @@ export interface CallBatchSendHandle {
   fail(error: unknown, options?: FailOptions): void;
 }
 
+/** A call batch whose status is awaited, for {@link TxTracker.startCallBatchConfirm}. */
 export interface CallBatchConfirmInput {
   /** EIP-155 chain id; with `id`, it identifies the batch and its confirm span. */
   chainId: number;

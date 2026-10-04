@@ -19,6 +19,10 @@ import { WRAPPED } from './wrap.js';
 
 export { CDP_NETWORK_CHAIN_IDS } from './networks.js';
 
+/**
+ * Options of {@link withHashspan}: those of `@hashspan/viem`'s `withHashspan()` except `confirm`, and the reader to
+ * confirm with.
+ */
 export interface WithHashspanCdpOptions extends Omit<ViemOptions, 'confirm'> {
   /**
    * viem public client(s) to confirm transactions with, and to read the outcome of user operations from their bundle
@@ -48,7 +52,9 @@ export interface HashspanCdp {
 }
 
 // Structural views of the CDP SDK objects, so that the adapter does not depend on its internal types.
+/** The part of a CDP client the adapter relies on: its EVM client. */
 interface CdpClientLike {
+  /** The client's EVM client (`cdp.evm`), wrapped in place. */
   // `object`, not a record type: the SDK's `EvmClient` class has no index signature.
   evm: object;
 }

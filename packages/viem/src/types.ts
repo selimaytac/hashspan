@@ -1,6 +1,7 @@
 // Public types that the extension's modules share; `index.ts` exports them, so no module imports the entry point.
 import type { Abi, TransactionReceipt } from 'viem';
 
+/** The `confirm` option of {@link withHashspan}: confirm transactions in the background. */
 export interface BackgroundConfirmOptions {
   /** Confirm every transaction sent through the extended clients, whether or not the caller waits for it. */
   mode: 'background';
@@ -30,18 +31,24 @@ export type BaseActions<K extends TracedAction> = { [P in K]?: AnyAction | undef
 
 /** The subset of a viem client the adapter relies on. */
 export interface ViemClientLike {
+  /** The client's chain; its id is the chain id of what is sent through the client. */
   chain?: { id: number } | undefined;
+  /** The client's account; its address is the sender when a call names no account. */
   account?: { address: string } | undefined;
+  /** viem's unique id of the client. */
   uid?: string | undefined;
+  /** The client's EIP-1193 request function. */
   // biome-ignore lint/suspicious/noExplicitAny: matches viem's overloaded EIP-1193 request function.
   request: (...args: any[]) => Promise<any>;
 }
 
+/** Options of `flush()`. */
 export interface FlushOptions {
   /** Longest time to wait. Default: 10 000 ms. */
   timeoutMs?: number | undefined;
 }
 
+/** Options of `watch()` of the extension: the transaction to confirm. */
 export interface WatchOptions {
   /** Transaction hash. */
   hash: string;

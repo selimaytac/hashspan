@@ -11,6 +11,7 @@ import {
 import type { Transport } from 'viem';
 import { errorName } from './safe-tracker.js';
 
+/** Options of {@link traceTransport}. */
 export interface TraceTransportOptions {
   /** Tracer provider to record the spans with. Defaults to the global one. */
   tracerProvider?: TracerProvider | undefined;

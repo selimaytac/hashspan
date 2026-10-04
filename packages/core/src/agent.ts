@@ -1,7 +1,9 @@
 import { type Attributes, type Context, propagation } from '@opentelemetry/api';
 import type { AgentIdentity } from './types.js';
 
+/** Agent id of the GenAI conventions, from the tracker's `agent` option or Baggage; on every span. */
 export const ATTR_GEN_AI_AGENT_ID = 'gen_ai.agent.id' as const;
+/** Agent name of the GenAI conventions, from the tracker's `agent` option or Baggage; on every span. */
 export const ATTR_GEN_AI_AGENT_NAME = 'gen_ai.agent.name' as const;
 
 /**
