@@ -469,6 +469,17 @@ export function createTransactionSpans({
     receipt: ReceiptLike,
     endTime: TimeInput | undefined,
   ): void => {
+    // A receipt without a readable block number and gas used cannot be recorded: it ends the span as a failure and
+    // releases the key for a later wait, as one with an invalid hash does (#311).
+    if (
+      smallInteger(receipt.blockNumber) === undefined ||
+      smallInteger(receipt.gasUsed) === undefined
+    ) {
+      diag.warn('hashspan: receipt without a readable block number or gas used; not recording it');
+      confirmations.release(chainId, hash, shared);
+      shared.unattributable(endTime);
+      return;
+    }
     const mined: unknown = receipt.transactionHash;
     if (mined === undefined) {
       confirmations.settle(chainId, hash, shared);
