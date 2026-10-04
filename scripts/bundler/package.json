@@ -3,7 +3,7 @@
   "private": true,
   "description": "Tools for the real-bundler integration test, installed into .tools/bundler by scripts/install-bundler.sh. Not part of the pnpm workspace: Alto is GPL-3.0-or-later and the EntryPoint sources are GPL-3.0.",
   "dependencies": {
-    "@account-abstraction/contracts": "0.7.0",
+    "@account-abstraction/contracts": "0.8.0",
     "@pimlico/alto": "0.0.21"
   }
 }
