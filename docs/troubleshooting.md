@@ -74,6 +74,13 @@ parent, and the confirm span then starts a trace of its own: only its span link 
 - **The background confirmation limit was reached.** A transaction sent while `maxBackgroundConfirmations` (256 by
   default) confirmations are polling gets no background confirm span, and a `diag` warning is logged
   ([background confirmation](../packages/viem/README.md#background-confirmation)).
+- **A sampler kept the send and dropped the confirm span, or the other way round.** With a parent-based sampler, a
+  span follows its parent's decision. A confirm span's parent is the span active when it starts, else the parent of
+  its send (the tool span), so a send and its confirm span are sampled together, also when the confirmation ends after
+  the tool span (background confirmation, `watch()`, an x402 settlement). They are sampled apart when the confirm span
+  gets another parent: `watch()` run inside another trace (the confirm span joins that trace), a hash the tracker did
+  not send, or a send it no longer keeps (`maxTrackedTransactions`, `linkTtlMs`), whose confirm span starts a trace of
+  its own ([core options](../packages/core/README.md#options)).
 - **User operations and call batches** get a confirm span only from a wait you make (`waitForUserOperationReceipt`,
   CDP's `waitForUserOperation`, `waitForCallsStatus`); background confirmation and `watch()` cover transactions only
   ([smart accounts](../packages/viem/README.md#smart-accounts-erc-4337),
