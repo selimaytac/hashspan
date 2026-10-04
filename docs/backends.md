@@ -64,8 +64,9 @@ OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic $LANGFUSE_AUTH,x-langfuse-ingest
 ```
 
 `LANGFUSE_AUTH` is `printf '%s:%s' "$PUBLIC_KEY" "$SECRET_KEY" | base64`, from a project's API keys. For a
-self-hosted instance the endpoint is `http://your-langfuse:3000/api/public/otel`. Langfuse accepts OTLP over HTTP
-only (JSON or protobuf), not gRPC. See [Langfuse's OpenTelemetry guide](https://langfuse.com/docs/opentelemetry/get-started).
+self-hosted instance the endpoint is `https://your-langfuse/api/public/otel`; plain `http://` (port 3000 by default)
+sends the keys unencrypted, so keep it to localhost or a private network. Langfuse accepts OTLP over HTTP only (JSON
+or protobuf), not gRPC. See [Langfuse's OpenTelemetry guide](https://langfuse.com/docs/opentelemetry/get-started).
 
 Langfuse maps GenAI spans to its own observation types: `invoke_agent` becomes an agent, `execute_tool` a tool named
 after the tool, `chat` a generation. `send`, `confirm` and `payment` spans are plain spans; the reverted confirm span
