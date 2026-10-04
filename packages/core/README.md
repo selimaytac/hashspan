@@ -152,9 +152,9 @@ aggregation). Definitions:
   query it, not to make transactions untraceable.
 - **A `hashed` address can be recovered from known addresses.** The default hash is unkeyed, and addresses are
   public, so anyone who can read the backend can hash the addresses they know and compare. To keep hashed addresses
-  joinable within your system but not reversible by backend readers, pass a keyed `hash`, such as an HMAC with a
-  secret kept outside the backend: `hash: (address) => createHmac('sha256', secret).update(address).digest('hex')`
-  (`node:crypto`).
+  joinable within your system but not reversible by backend readers, use a keyed hash, such as an HMAC with a
+  secret kept outside the backend: `address: { mode: 'hashed', hash: (address) =>
+  createHmac('sha256', secret).update(address).digest('hex') }` (`node:crypto`).
 - **Agent identity in Baggage travels.** Baggage is propagated to every downstream service your instrumented clients
   call when a Baggage propagator is configured (it is part of the default OpenTelemetry SDK setup), including third
   party APIs. Put only identifiers there that may leave your system, such as an opaque agent id. For identifiers
