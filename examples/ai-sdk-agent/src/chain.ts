@@ -26,6 +26,7 @@ export const WITHDRAW_GAS = 100_000n;
 // One withHashspan() result for every client, so confirm spans link to their send spans.
 export const hashspan = withHashspan({
   agent: { name: 'treasury-agent' },
+  // Off by default: call arguments can hold addresses and amounts. On here so the demo trace shows them.
   recordFunctionArguments: true,
 });
 

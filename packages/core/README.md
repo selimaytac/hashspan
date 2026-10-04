@@ -150,6 +150,11 @@ aggregation). Definitions:
   backend. They do not hide who transacted: every span carries the transaction hash, and anyone can look up its
   sender, recipient, value and calldata in a block explorer. Use them to limit what your backend stores and who can
   query it, not to make transactions untraceable.
+- **A `hashed` address can be recovered from known addresses.** The default hash is unkeyed, and addresses are
+  public, so anyone who can read the backend can hash the addresses they know and compare. To keep hashed addresses
+  joinable within your system but not reversible by backend readers, pass a keyed `hash`, such as an HMAC with a
+  secret kept outside the backend: `hash: (address) => createHmac('sha256', secret).update(address).digest('hex')`
+  (`node:crypto`).
 - **Agent identity in Baggage travels.** Baggage is propagated to every downstream service your instrumented clients
   call when a Baggage propagator is configured (it is part of the default OpenTelemetry SDK setup), including third
   party APIs. Put only identifiers there that may leave your system, such as an opaque agent id. For identifiers
@@ -158,6 +163,13 @@ aggregation). Definitions:
 - **Inbound Baggage can claim an identity.** A caller can send Baggage entries with any agent id. A field set in the
   `agent` option cannot be overridden that way; to ignore identity from Baggage entirely, set `agentFromBaggage: false`
   ([ADR 0011](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0011-agent-identity-precedence.md)).
+  Services that accept requests from outside their trust boundary should set it.
+- **Other instrumentation in the same trace has its own settings.** The address mode, the error message mode and the
+  `redact` hook apply to hashspan's spans only. The AI SDK records tool call inputs and outputs, such as recipient
+  addresses and amounts, unless `recordInputs` and `recordOutputs` are false in its `experimental_telemetry`
+  settings. HTTP instrumentation records `url.full`, which includes an RPC provider's API key when it is part of the
+  URL, and with `traceTransport` those HTTP spans are children of hashspan's JSON-RPC spans. Configure those
+  instrumentations to the same policy, or remove the values in your collector.
 - The redaction hook (`redact`) runs last on every span attribute set and on exception attributes; use it for
   anything else your policy forbids. It does not run on [metrics](#metrics), which carry no address or hash.
 - **Your callbacks' errors go to the diagnostic logger.** If a custom `hash` function or the `redact` hook throws,
