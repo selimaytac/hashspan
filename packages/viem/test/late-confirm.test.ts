@@ -1,7 +1,8 @@
-import { context, trace } from '@opentelemetry/api';
+import { context, ROOT_CONTEXT, trace } from '@opentelemetry/api';
 import { createPublicClient, createWalletClient } from 'viem';
 import { createBundlerClient } from 'viem/account-abstraction';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { recordLate } from '../src/confirm/timing.js';
 import { withHashspan } from '../src/index.js';
 import { mockBundler, stubAccount, USER_OP_HASH } from './mock-bundler.js';
 import { FROM, HASH, mockTransport } from './mock-transport.js';
@@ -83,4 +84,25 @@ describe('a wait on a client without a chain', () => {
       expectLateConfirm('confirm 8453', tool.spanContext().spanId, settled);
     },
   );
+});
+
+describe('recordLate', () => {
+  it('starts the confirm span in the context it is given, whatever context it runs in', async () => {
+    const tool = trace.getTracer('test').startSpan('execute_tool pay');
+    const ctx = trace.setSpan(ROOT_CONTEXT, tool);
+    let active: unknown;
+    await context.with(ROOT_CONTEXT, () =>
+      recordLate(
+        ctx,
+        Promise.resolve(),
+        () => Promise.resolve(8453),
+        () => {
+          active = trace.getActiveSpan();
+        },
+        async () => {},
+      ),
+    );
+    tool.end();
+    expect(active).toBe(tool);
+  });
 });
