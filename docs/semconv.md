@@ -28,7 +28,10 @@ wait for one hash ends with the receipt of another (a transaction with the same 
 confirm span of the awaited hash ends as `replaced`, without block, gas or fee, and the receipt goes to the confirm
 span of the mined hash. If that span is created for this purpose, it has the same parent and start time as the
 replaced one and links to it and to both `send` spans when known. Dashboards counting confirmations should exclude
-`blockchain.tx.status = replaced`. See [ADR 0008](adr/0008-replaced-transactions.md).
+`blockchain.tx.status = replaced`. See [ADR 0008](adr/0008-replaced-transactions.md). A replacement needs the same
+sender and nonce: where the instrumented library reports replacements (viem), a receipt of another hash that it did
+not report as one, such as an endpoint's answer for an unrelated transaction, is not recorded, and the confirm span
+ends with `error.type` `_OTHER`.
 
 **Chain reorganisations.** A confirm span records the receipt its wait ended with and is not revised afterwards: when
 a reorganisation removes the receipt's block, the span keeps its status and block number, and a later wait for the
@@ -86,6 +89,7 @@ no span; after a timeout or failure, a retry gets a new span. The same holds for
 | Gave up waiting for the receipt (its timeout, or `flush()` gave up) | confirm | error | `timeout` | none; see below |
 | Replaced by another transaction (same sender and nonce) | confirm of the replaced hash | unset | none | `replaced` |
 | Receipt with an invalid transaction hash | confirm | error | `_OTHER` | none |
+| Receipt of another transaction that is not a reported replacement | confirm | error | `_OTHER` | none |
 | Receipt with a status other than success or reverted, or one that cannot be read | confirm | error | `_OTHER` | none |
 | Retrieving the receipt failed | confirm | error | error class name, else `_OTHER` | none |
 | User operation receipt with success | confirm | unset | none | none; `blockchain.user_operation.success` is `true` |

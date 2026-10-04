@@ -153,6 +153,20 @@ export function createConfirmation({
         replacement !== undefined &&
         sameHex(replacement.transactionReceipt.transactionHash, receipt.transactionHash);
       const replacementReason = reported ? replacement.reason : undefined;
+      // A receipt of another hash belongs to this transaction only as a replacement viem reported, which it matches on
+      // sender and nonce (docs/adr/0008-replaced-transactions.md). Otherwise the endpoint answered with an unrelated
+      // transaction's receipt: none of its data is recorded, and the span ends as a failure.
+      if (
+        !reported &&
+        typeof receipt.transactionHash === 'string' &&
+        !sameHex(receipt.transactionHash, hash)
+      ) {
+        diag.debug(
+          'hashspan: the wait resolved with the receipt of another transaction; not recording it',
+        );
+        handle.fail(undefined, unreadable(endTimeOf()));
+        return;
+      }
       let recorded = toReceiptLike(receipt);
       let endAt = endTimeOf;
       if (isPreconfirmed(receipt)) {

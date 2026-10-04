@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-09-27
+- Amended: 2026-10-05: the viem adapter records a receipt of another hash only as a replacement viem reported.
 
 ## Context
 
@@ -95,3 +96,12 @@ through the redaction hook like every attribute, and are kept when the hook fail
   fields but may ignore them, so correct attribution of replaced transactions is guaranteed for `createTxTracker()`
   only; a custom tracker that ignores `transactionHash` records the receipt under the original hash as before.
 - Amended by [ADR 0014](0014-core-api-boundary.md): trackers are no longer meant to be implemented outside the core.
+
+## Amendment (2026-10-05): only a reported replacement
+
+The core attributes any receipt whose `transactionHash` differs from the awaited hash as a replacement. An endpoint
+that answers a receipt request with another transaction's receipt (a mixed-up response) therefore produced a
+`replaced` span with an unrelated transaction's block and fee. The viem adapter now passes a receipt of another hash
+to the core only when viem reported it through `onReplaced`, which viem matches on sender and nonce. Any other
+receipt of another hash is not recorded: the confirm span ends with `error.type` `_OTHER`
+([semantic conventions](../semconv.md)). The caller's result is unchanged.

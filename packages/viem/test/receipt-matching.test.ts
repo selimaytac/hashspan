@@ -48,27 +48,21 @@ describe('the revert reason of a replacing transaction', () => {
 
   /**
    * Sends `transfer` with the custom errors' ABI to `TO`, then waits on a client that reports a replacement from
-   * `replacedTo` to `replacingTo` (unless `report` is false) and returns the reverted receipt of the replacing one.
+   * `replacedTo` to `replacingTo` and returns the reverted receipt of the replacing one.
    */
-  async function revertReasonOfReplacing(
-    replacedTo: string | null,
-    replacingTo: string | null,
-    report = true,
-  ) {
+  async function revertReasonOfReplacing(replacedTo: string | null, replacingTo: string | null) {
     const { transport } = mockTransport({ callRevertData: insufficient });
     const hashspan = withHashspan();
     const wallet = createWalletClient({ account: FROM, chain: base, transport }).extend(hashspan);
     const reader = createPublicClient({ chain: base, transport })
       .extend(() => ({
         waitForTransactionReceipt: async (args: { onReplaced?: (r: unknown) => void }) => {
-          if (report) {
-            args.onReplaced?.({
-              reason: 'repriced',
-              replacedTransaction: { to: replacedTo },
-              transaction: { to: replacingTo },
-              transactionReceipt: minedReverted,
-            });
-          }
+          args.onReplaced?.({
+            reason: 'repriced',
+            replacedTransaction: { to: replacedTo },
+            transaction: { to: replacingTo },
+            transactionReceipt: minedReverted,
+          });
           return minedReverted;
         },
       }))
@@ -107,10 +101,6 @@ describe('the revert reason of a replacing transaction', () => {
         insufficient.slice(0, 10),
       );
     }
-  });
-
-  it('is only the error selector when the library did not report the replacement', async () => {
-    await expect(revertReasonOfReplacing(TO, TO, false)).resolves.toBe(insufficient.slice(0, 10));
   });
 });
 
