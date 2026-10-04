@@ -316,6 +316,15 @@ describe('repository docs', () => {
     expect(stated.filter(({ version }) => !allowed.includes(version))).toEqual([]);
     expect(read('CONTRIBUTING.md')).toContain(`development needs Node.js ${development}`);
   });
+
+  it('runs the Jaeger of the local lab in the docker run line of docs/backends.md', () => {
+    const lab = read('docker/compose.yaml').match(/image: (jaegertracing\/jaeger:[^@\s]+)/)?.[1];
+    const documented = read('docs/backends.md').match(
+      /docker run [^\n]* (jaegertracing\/jaeger:\S+)/,
+    )?.[1];
+    expect(lab).toBeDefined();
+    expect(documented).toBe(lab);
+  });
 });
 
 describe('code examples', () => {
