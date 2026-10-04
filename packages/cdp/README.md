@@ -136,9 +136,23 @@ network-scoped account created from an RPC URL, is passed through untraced, with
 Each call gets its own send span: retrying a call with the same `idempotencyKey` records a second send span, even
 when CDP returns the transaction of the first attempt; the confirm span is shared.
 
-Not traced yet: EIP-7702 delegated accounts; Solana (`cdp.solana`); `requestFaucet`, which Coinbase sends; `signTransaction`,
-which does not broadcast (send the signed transaction with a client extended by `@hashspan/viem`). Accounts turned
-into viem accounts with `toAccount()` are sent through your viem client: extend it with `@hashspan/viem`.
+## Known limits
+
+- Not traced: EIP-7702 delegated accounts; Solana (`cdp.solana`); `requestFaucet`, which Coinbase sends;
+  `signTransaction`, which does not broadcast.
+- Accounts turned into viem accounts with `toAccount()` are sent through your viem client: extend it with
+  `@hashspan/viem`, whose own limits then apply
+  ([`@hashspan/viem` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.10.0/packages/viem#known-limits)).
+- Networks without a chain id in `CDP_NETWORK_CHAIN_IDS`, and network-scoped accounts created from an RPC URL, are
+  passed through untraced, as are accounts that do not come from the factories listed under [traced](#traced).
+- Without a `reader`, only send spans are recorded, except for the SDK's waits; a network-scoped
+  `waitForTransactionReceipt` then records no revert reason, and no fees for a flashblocks preconfirmation
+  ([usage](#usage), [traced](#traced)).
+- A user operation gets a confirm span only from `waitForUserOperation`; without a reader it records only the bundle
+  transaction's hash, and the bundle transaction's status and fee are never recorded ([smart accounts](#smart-accounts)).
+- A retry with the same `idempotencyKey` records a second send span ([traced](#traced)).
+- The limits of the core apply too
+  ([`@hashspan/core` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.10.0/packages/core#known-limits)).
 
 ## The SDK's own telemetry
 

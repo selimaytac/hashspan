@@ -102,11 +102,6 @@ info), and `'off'` nothing; see
 settlement reports the amount it settled, it is recorded as `blockchain.payment.settled_amount`, as reported: with the
 `upto` scheme, it can be less than the amount signed for.
 
-Not traced: x402 v1 payments (`registerExactEvmScheme` registers v1 networks too) and networks other than `eip155`,
-with a `diag` warning once per version or network; payments that client policies or spend controls refuse, which
-happens before any hook runs. If another `onPaymentCreationFailure` hook recovers a failed payment, its span still
-records the failure.
-
 ## Payment, request and task outcomes
 
 The payment span records the payment, not the paid request or your tool: the x402 client hooks never see the
@@ -128,6 +123,24 @@ tool call or task spent is the `amount` of each settled payment (the `settled_am
 `blockchain.payment.asset`: amounts of different assets do not add up. The settlement's gas was paid by the
 facilitator, not by the agent. Spans are not an accounting record: a trace that a sampler dropped, or that was not
 exported, misses its payments.
+
+## Known limits
+
+- Only the paying client is traced: resource servers and facilitators are not
+  ([#164](https://github.com/selimaytac/hashspan/issues/164)), and no `send` span is recorded, since the facilitator
+  sends the transaction ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.10.0/docs/adr/0013-x402-payments.md)).
+- Not traced: x402 v1 payments (`registerExactEvmScheme` registers v1 networks too) and networks other than `eip155`,
+  with a `diag` warning once per version or network; payments that client policies or spend controls refuse, which
+  happens before any hook runs.
+- A hook registered before hashspan's can keep it from seeing the outcome, which then ends as `timeout`; if another
+  `onPaymentCreationFailure` hook recovers a failed payment, its span still records the failure ([usage](#usage)).
+- `blockchain.payment.verified` needs a `reader` and covers `exact` payments authorized with EIP-3009 or Permit2 and
+  `upto` with Permit2; other schemes, such as `batch-settlement`, are not checked ([usage](#usage)).
+- The payment span records the payment, not the paid request's status or your tool's outcome
+  ([payment, request and task outcomes](#payment-request-and-task-outcomes)).
+- The limits of `@hashspan/viem`'s confirmations and of the core apply to the confirm span
+  ([`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@0.10.0/packages/viem#known-limits),
+  [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@0.10.0/packages/core#known-limits)).
 
 ## License
 

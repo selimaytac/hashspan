@@ -97,7 +97,8 @@ Exit criteria:
 - [x] Every public export and `withHashspan` option of the four packages is documented, and the export pins in each
   package's `test/exports.test.ts` match the docs: the API report of each package (`packages/*/etc/*.api.md`) lists
   every export, and `pnpm api:check` fails in CI on a stale report or an undocumented export (#362)
-- [ ] No open P0 or P1 issue; the known limits of each adapter are stated in its README
+- [x] No open P0 or P1 issue; the known limits of each adapter are stated in its README (a `Known limits` section in
+  each package README)
 - [x] Span and attribute names reviewed once as a whole, for consistent naming across transaction, user operation,
   payment and call batch spans; renames done through deprecation: `blockchain.system.name` is recorded next to
   `blockchain.system` until 1.0 (#365), the other names are kept and the reasons documented (#364)
