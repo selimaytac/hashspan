@@ -1,4 +1,4 @@
-import { type Context, context, type Tracer, trace } from '@opentelemetry/api';
+import { type Context, context, diag, type Tracer, trace } from '@opentelemetry/api';
 import { ConfirmRegistry } from './confirm-registry.js';
 import { LinkStore } from './link-store.js';
 import { createTxMetrics } from './metrics.js';
@@ -30,6 +30,7 @@ import {
   noopUserOperationSend,
   type UserOperationConfirmSpan,
 } from './tracker/user-operation.js';
+import { isChainId } from './tracker/values.js';
 import type {
   CallBatchConfirmHandle,
   CallBatchConfirmInput,
@@ -116,15 +117,14 @@ export interface TxTracker {
  * no network calls; the caller passes hashes and receipts. Its methods and handles never throw: failures are logged
  * via `diag`, and a method that fails returns a handle that records nothing.
  */
-export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
-  const links = new LinkStore({
+export function createTxTracker(given: TxTrackerOptions = {}): TxTracker {
+  const options = readOptions(given);
+  const bounds = {
     ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
     maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
-  });
-  const confirmations = new ConfirmRegistry<ConfirmSpan>({
-    ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
-    maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
-  });
+  };
+  const links = new LinkStore(bounds);
+  const confirmations = new ConfirmRegistry<ConfirmSpan>(bounds);
   const formatAddress: AddressFormatter = safely(
     'configure address mode',
     () => resolveAddressFormatter(options.address),
@@ -141,23 +141,11 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     'off',
   );
   // User operations have their own key space (docs/adr/0021-user-operations.md), with the same bounds.
-  const userOperationLinks = new LinkStore({
-    ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
-    maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
-  });
-  const userOperationConfirmations = new ConfirmRegistry<UserOperationConfirmSpan>({
-    ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
-    maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
-  });
+  const userOperationLinks = new LinkStore(bounds);
+  const userOperationConfirmations = new ConfirmRegistry<UserOperationConfirmSpan>(bounds);
   // Call batches have a third key space (docs/adr/0022-call-batches.md), with the same bounds.
-  const callBatchLinks = new LinkStore({
-    ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
-    maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
-  });
-  const callBatchConfirmations = new ConfirmRegistry<CallBatchConfirmSpan>({
-    ttlMs: options.linkTtlMs ?? DEFAULT_LINK_TTL_MS,
-    maxEntries: options.maxTrackedTransactions ?? DEFAULT_MAX_TRACKED,
-  });
+  const callBatchLinks = new LinkStore(bounds);
+  const callBatchConfirmations = new ConfirmRegistry<CallBatchConfirmSpan>(bounds);
   const txMetrics = createTxMetrics(options.meterProvider, INSTRUMENTATION_NAME, VERSION);
   let tracer: Tracer | undefined;
   const getTracer = (): Tracer => {
@@ -201,40 +189,100 @@ export function createTxTracker(options: TxTrackerOptions = {}): TxTracker {
     recording,
   });
 
+  /**
+   * Starts a span with `start`, or returns `noop` when the input names no valid chain id: the chain id is in the span
+   * name and a metric label, so a call without one records nothing (ADR 0025 rule 3).
+   */
+  const started = <I, H>(
+    what: string,
+    start: (input: I, parent?: Context) => H,
+    noop: () => H,
+  ): ((input: I, parent?: Context) => H) => {
+    return (input, parent) =>
+      safely(
+        `start ${what} span`,
+        () => {
+          if (!isChainId((input as { chainId?: unknown } | undefined)?.chainId)) {
+            diag.debug(`hashspan: not recording a ${what} without a valid chain id`);
+            return noop();
+          }
+          return start(input, parent);
+        },
+        noop(),
+      );
+  };
+  const parentOf = (parent?: Context): Context => parent ?? context.active();
+
   return {
     startSend: (input, parent) =>
-      safely(
-        'start send span',
-        () => startSend(input, parent),
-        noopSend(parent ?? context.active()),
-      ),
-    startConfirm: (input, parent) =>
-      safely('start confirm span', () => startConfirm(input, parent), NOOP_CONFIRM),
-    startPayment: (input, parent) =>
-      safely('start payment span', () => startPayment(input, parent), NOOP_PAYMENT),
+      started('send', startSend, () => noopSend(parentOf(parent)))(input, parent),
+    startConfirm: started('confirm', startConfirm, () => NOOP_CONFIRM),
+    startPayment: started('payment', startPayment, () => NOOP_PAYMENT),
     startUserOperationSend: (input, parent) =>
-      safely(
-        'start user operation send span',
-        () => startUserOperationSend(input, parent),
-        noopUserOperationSend(parent ?? context.active()),
-      ),
-    startUserOperationConfirm: (input, parent) =>
-      safely(
-        'start user operation confirm span',
-        () => startUserOperationConfirm(input, parent),
-        NOOP_USER_OPERATION_CONFIRM,
-      ),
+      started('user operation send', startUserOperationSend, () =>
+        noopUserOperationSend(parentOf(parent)),
+      )(input, parent),
+    startUserOperationConfirm: started(
+      'user operation confirm',
+      startUserOperationConfirm,
+      () => NOOP_USER_OPERATION_CONFIRM,
+    ),
     startCallBatchSend: (input, parent) =>
-      safely(
-        'start call batch send span',
-        () => startCallBatchSend(input, parent),
-        noopCallBatchSend(parent ?? context.active()),
+      started('call batch send', startCallBatchSend, () => noopCallBatchSend(parentOf(parent)))(
+        input,
+        parent,
       ),
-    startCallBatchConfirm: (input, parent) =>
-      safely(
-        'start call batch confirm span',
-        () => startCallBatchConfirm(input, parent),
-        NOOP_CALL_BATCH_CONFIRM,
-      ),
+    startCallBatchConfirm: started(
+      'call batch confirm',
+      startCallBatchConfirm,
+      () => NOOP_CALL_BATCH_CONFIRM,
+    ),
   };
+}
+
+/** The options `createTxTracker()` reads, each once. */
+const OPTION_KEYS = [
+  'tracerProvider',
+  'meterProvider',
+  'address',
+  'errorMessages',
+  'paymentResource',
+  'recordFunctionArguments',
+  'agent',
+  'agentFromBaggage',
+  'redact',
+  'linkTtlMs',
+  'maxTrackedTransactions',
+] as const satisfies readonly (keyof TxTrackerOptions)[];
+
+/**
+ * A copy of `given` with each option read once, guarded: options that cannot be read are left at their default, and
+ * so are bounds that are not positive numbers (ADR 0025). Never throws.
+ */
+function readOptions(given: unknown): TxTrackerOptions {
+  const options: Record<string, unknown> = {};
+  if ((typeof given !== 'object' && typeof given !== 'function') || given === null) {
+    if (given !== undefined)
+      diag.warn('hashspan: tracker options must be an object; using defaults');
+    return options;
+  }
+  for (const key of OPTION_KEYS) {
+    try {
+      const value: unknown = (given as Record<string, unknown>)[key];
+      if (value !== undefined) options[key] = value;
+    } catch {
+      diag.warn(`hashspan: could not read the ${key} option; using its default`);
+    }
+  }
+  const ttl = options.linkTtlMs;
+  if (ttl !== undefined && !(typeof ttl === 'number' && Number.isFinite(ttl) && ttl > 0)) {
+    diag.warn('hashspan: linkTtlMs must be a positive number; using its default');
+    delete options.linkTtlMs;
+  }
+  const max = options.maxTrackedTransactions;
+  if (max !== undefined && !(typeof max === 'number' && Number.isSafeInteger(max) && max > 0)) {
+    diag.warn('hashspan: maxTrackedTransactions must be a positive integer; using its default');
+    delete options.maxTrackedTransactions;
+  }
+  return options as TxTrackerOptions;
 }

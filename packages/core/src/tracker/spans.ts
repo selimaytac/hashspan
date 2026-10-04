@@ -25,12 +25,13 @@ import {
   ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS,
   ATTR_ERROR_TYPE,
   BLOCKCHAIN_SYSTEM_VALUE_EVM,
+  ERROR_TYPE_VALUE_OTHER,
 } from '../attributes.js';
 import { toEpochMs } from '../metrics.js';
 import { type AddressFormatter, formatAddressesIn, sanitizeErrorMessage } from '../privacy.js';
 import type { ErrorMessageMode, TxTrackerOptions } from '../types.js';
 import { safely } from './handles.js';
-import { ADDRESS } from './values.js';
+import { ADDRESS, identifier } from './values.js';
 
 /** OpenTelemetry exception event and attributes. */
 const EXCEPTION_EVENT = 'exception';
@@ -141,11 +142,13 @@ export function createSpanRecording({
     error?: unknown,
     exceptionName: string = errorName,
   ): string => {
-    const type = formatAddressesIn(errorName, formatAddress);
+    // Checked here too, so no caller can record free text as a type (ADR 0025).
+    const type = formatAddressesIn(identifier(errorName) ?? ERROR_TYPE_VALUE_OTHER, formatAddress);
     let message: string | undefined;
     if (error !== undefined) {
+      const exceptionType = identifier(exceptionName) ?? ERROR_TYPE_VALUE_OTHER;
       const exception = redact(
-        exceptionAttributes(formatAddressesIn(exceptionName, formatAddress), error),
+        exceptionAttributes(formatAddressesIn(exceptionType, formatAddress), error),
       );
       span.addEvent(EXCEPTION_EVENT, exception);
       const recorded = exception[ATTR_EXCEPTION_MESSAGE];

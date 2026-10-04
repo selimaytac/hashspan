@@ -32,7 +32,7 @@ import {
 import type { ConfirmRegistry, SharedConfirm } from '../confirm-registry.js';
 import type { LinkStore } from '../link-store.js';
 import { type TxMetrics, toEpochMs } from '../metrics.js';
-import { type AddressFormatter, formatAddressesIn } from '../privacy.js';
+import { type AddressFormatter, boundRevertReason } from '../privacy.js';
 import type {
   UserOperationConfirmHandle,
   UserOperationConfirmInput,
@@ -199,7 +199,7 @@ export function createUserOperationSpans({
     setRemoteAddress(attributes, ATTR_BLOCKCHAIN_USER_OPERATION_ENTRY_POINT, receipt.entryPoint);
     const reason: unknown = receipt.revertReason;
     if (typeof reason === 'string') {
-      attributes[ATTR_BLOCKCHAIN_TX_REVERT_REASON] = formatAddressesIn(reason, formatAddress);
+      attributes[ATTR_BLOCKCHAIN_TX_REVERT_REASON] = boundRevertReason(reason, formatAddress);
     }
     const bundle: unknown = receipt.transactionHash;
     if (typeof bundle === 'string' && TX_HASH.test(bundle))

@@ -238,8 +238,6 @@ const ROWS: Row[] = [
     scenario: paying((pay, value) => {
       pay.error = value;
     }),
-    // finding: core-error-name reached through x402: an error's name is recorded unbounded.
-    findings: { records: 'core-error-name' },
   },
   // The receipt of the settlement, which the reader returns for the check of ADR 0017.
   ...['status', 'logs', 'to', 'from', 'transactionHash'].map(

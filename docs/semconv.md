@@ -111,7 +111,8 @@ unknown. Up to 0.4, such spans also recorded `blockchain.tx.status` `timeout`; q
 
 An adapter whose library reports a stable, machine-readable error code records it as `error.type` of a failed send,
 if it is a short identifier (`[A-Za-z0-9_.-]`, at most 64 characters); `exception.type` stays the class name. The CDP
-adapter records the CDP API's error type, e.g. `insufficient_balance`.
+adapter records the CDP API's error type, e.g. `insufficient_balance`. An error class name is recorded, as `error.type`
+and as `exception.type`, only if it is such a short identifier too; any other name is recorded as `_OTHER`.
 
 Failures with an error object add an `exception` event following the OpenTelemetry exception conventions. By
 default it carries only `exception.type`; `exception.message` and `exception.stacktrace` depend on the tracker's
@@ -245,6 +246,12 @@ APIs often carry user or account identifiers, so `x402.resource` records only th
 `paymentResource: 'path'` it records the path too, never the query string, fragment or user info, which can carry
 credentials ([ADR 0004](adr/0004-privacy-defaults.md)). A user operation's hash and receipt come from the bundler and are checked the
 same way; its nonce, gas and cost may also be `0x` hex quantities.
+What a caller or an adapter passes to the tracker is checked as well ([ADR 0025](adr/0025-untrusted-input.md)): a
+call without a positive safe integer chain id, or a confirmation without a 32-byte hex hash, records no span; a send
+records only well-formed addresses, a value that is a non-negative integer of at most 256 bits, a nonce that is a
+non-negative safe integer, a Solidity function name and a 4-byte selector. Nothing is recorded from a transaction
+receipt whose block number or gas used is not a non-negative safe integer; its gas price and L1 fee are recorded only
+as non-negative integers, and `blockchain.tx.fee` only when every part of it is known.
 
 The EIP-7702 attributes describe what the sent transaction asks for, not what took effect: the protocol skips an
 authorization whose signature, nonce or chain id does not hold, without failing the transaction. The account that
@@ -259,14 +266,15 @@ of each package check the bounds against the values that split at them.
 
 | Value | Bound | A longer value becomes |
 |---|---|---|
-| `blockchain.tx.revert.reason`, as the viem adapter decodes it | 1024 characters | its first 1024 characters, followed by `...`; a hex value the cut would split is dropped whole |
-| `exception.message` in `sanitized` mode | 256 characters of the first line | its first 256 characters, followed by `...` |
-| `blockchain.contract.function.arguments` | 4096 characters, nesting depth 32 | the JSON up to the value that crosses 4096 characters, cut there and followed by `...`; arguments nested deeper are not recorded |
+| `blockchain.tx.revert.reason` | 1024 characters | its first 1024 characters, followed by `...`; a hex value the cut would split is dropped whole. A reason an adapter already cut this way is kept as it is |
+| `error.type` and `exception.type` from an error's name | 64 characters of `[A-Za-z0-9_.-]` | `_OTHER` |
+| `exception.message` in `sanitized` mode | 256 characters of the first line | its first 256 characters, followed by `...`; a hex value the cut would split is dropped whole |
+| `blockchain.contract.function.arguments` | 4096 characters, nesting depth 32 | the JSON up to the value that crosses 4096 characters, cut there and followed by `...`; a hex value the cut would split is dropped whole; arguments nested deeper are not recorded |
 | `blockchain.contract.function.selector` of `writeContract` | an ABI of 10 000 items and 100 000 copied values; for an overloaded function, 100 000 copied argument values | no selector; past the ABI bound, no ABI is used for telemetry either, so custom errors in the revert reason show as their selector |
 | `x402.resource` | 512 characters | its first 512 characters, followed by `...`; a hex value the cut would split is dropped whole |
 | `blockchain.call_batch.id` | 256 characters | its first 256 characters; an id that is not hex or longer than 8194 characters is not recorded |
 | `blockchain.tx.authorization.addresses` and `.chain_ids` | 64 entries | the first 64 well-formed entries; `blockchain.tx.authorization.count` keeps the full length, and no further entry is read |
-| `blockchain.call_batch.transaction_hashes` | 64 hashes | the first 64 distinct well-formed hashes |
+| `blockchain.call_batch.transaction_hashes` | 64 hashes | the first 64 distinct well-formed hashes among the first 64 receipts of a status, or of the hashes a send returned; no further entry is read, and `blockchain.block.number` is the highest among those receipts |
 | x402 payments waiting for their response | 1000 per `withHashspan()` | the oldest payment span ends as `timeout` |
 | Background confirmations polling at once | 256 per `withHashspan()` (`maxBackgroundConfirmations`) | the transaction gets no background confirm span; a `diag` warning is logged |
 | Sent transactions, user operations and call batches kept for links | 10 000 each, for 10 minutes (`maxTrackedTransactions`, `linkTtlMs`) | the oldest is forgotten: its confirm span has no link |

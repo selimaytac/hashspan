@@ -128,26 +128,6 @@ function exercise(tracker: TxTracker): void {
   tracker.startCallBatchConfirm(CALL_BATCH_CONFIRM).end(CALL_BATCH_STATUS);
 }
 
-// --- Findings: rules that do not hold yet, one tag per root cause --------------------------------------------------
-
-// finding: core-chain-id. The chain id is recorded unchecked: span attribute, span name and metric label.
-const CHAIN_ID_FINDING = { records: 'core-chain-id', metrics: 'core-chain-id' } as const;
-// finding: core-send-address. startSend records `from` and `to` without checking that they are addresses.
-const SEND_ADDRESS_FINDING = { records: 'core-send-address' } as const;
-// finding: core-send-input. startSend records value, nonce, function name and selector unchecked and unbounded.
-const SEND_INPUT_FINDING = { records: 'core-send-input' } as const;
-// finding: core-tx-hash. SendHandle.end and startConfirm record any string as blockchain.tx.hash.
-const TX_HASH_FINDING = { records: 'core-tx-hash' } as const;
-// finding: core-receipt-quantities. Receipt block number, gas used, gas price and L1 fee are recorded unchecked.
-const RECEIPT_QUANTITY_FINDING = { records: 'core-receipt-quantities' } as const;
-// finding: core-revert-reason. The core does not bound revert reasons; only the viem adapter's decoder does.
-const REVERT_REASON_FINDING = { records: 'core-revert-reason' } as const;
-// finding: core-error-name. error.type and exception.type take an error's name unbounded.
-const ERROR_NAME_FINDING = { records: 'core-error-name' } as const;
-// finding: core-options. Options are not checked: createTxTracker(null) throws, and a TTL or bound that is not a
-// number makes handle methods throw or leaves spans open.
-const OPTIONS_FINDING = { throws: 'core-options' } as const;
-
 // --- The table -----------------------------------------------------------------------------------------------------
 
 type Rule = 'throws' | 'records' | 'metrics';
@@ -199,19 +179,10 @@ function fields(
 
 const ROWS: Row[] = [
   // startSend and its handle.
-  ...fields('startSend', SEND, (t, input) => t.startSend(input as never).end({ hash: HASH }), {
-    chainId: CHAIN_ID_FINDING,
-    from: SEND_ADDRESS_FINDING,
-    to: SEND_ADDRESS_FINDING,
-    value: SEND_INPUT_FINDING,
-    nonce: SEND_INPUT_FINDING,
-    functionName: SEND_INPUT_FINDING,
-    functionSelector: SEND_INPUT_FINDING,
-  }),
+  ...fields('startSend', SEND, (t, input) => t.startSend(input as never).end({ hash: HASH })),
   {
     name: 'startSend input',
     run: (t, value) => t.startSend(value as never).end({ hash: HASH }),
-    findings: { metrics: 'core-chain-id' },
   },
   {
     name: 'startSend startTime',
@@ -224,12 +195,10 @@ const ROWS: Row[] = [
   {
     name: 'SendHandle.end result',
     run: (t, value) => t.startSend(SEND).end(value as never),
-    findings: TX_HASH_FINDING,
   },
   {
     name: 'SendHandle.end result.hash',
     run: (t, value) => t.startSend(SEND).end({ hash: value as never }),
-    findings: TX_HASH_FINDING,
   },
   {
     name: 'SendHandle.end options',
@@ -239,7 +208,6 @@ const ROWS: Row[] = [
     name: 'SendHandle.fail error',
     values: errors,
     run: (t, value) => t.startSend(SEND).fail(value),
-    findings: ERROR_NAME_FINDING,
   },
   {
     name: 'SendHandle.fail options',
@@ -251,29 +219,15 @@ const ROWS: Row[] = [
   },
 
   // startConfirm and its handle.
-  ...fields(
-    'startConfirm',
-    CONFIRM,
-    (t, input) => t.startConfirm(input as never).end(RECEIPT as never),
-    {
-      chainId: CHAIN_ID_FINDING,
-      hash: TX_HASH_FINDING,
-    },
+  ...fields('startConfirm', CONFIRM, (t, input) =>
+    t.startConfirm(input as never).end(RECEIPT as never),
   ),
   {
     name: 'startConfirm input',
     run: (t, value) => t.startConfirm(value as never).end(RECEIPT as never),
   },
-  ...fields(
-    'ConfirmHandle.end receipt',
-    RECEIPT,
-    (t, receipt) => t.startConfirm(CONFIRM).end(receipt as never),
-    {
-      blockNumber: RECEIPT_QUANTITY_FINDING,
-      gasUsed: RECEIPT_QUANTITY_FINDING,
-      effectiveGasPrice: RECEIPT_QUANTITY_FINDING,
-      l1Fee: RECEIPT_QUANTITY_FINDING,
-    },
+  ...fields('ConfirmHandle.end receipt', RECEIPT, (t, receipt) =>
+    t.startConfirm(CONFIRM).end(receipt as never),
   ),
   {
     name: 'ConfirmHandle.end receipt',
@@ -283,7 +237,6 @@ const ROWS: Row[] = [
     name: 'ConfirmHandle.end receipt.revertReason',
     run: (t, value) =>
       t.startConfirm(CONFIRM).end({ ...RECEIPT, status: 'reverted', revertReason: value } as never),
-    findings: REVERT_REASON_FINDING,
   },
   {
     name: 'ConfirmHandle.end receipt.replacementReason',
@@ -304,15 +257,11 @@ const ROWS: Row[] = [
     name: 'ConfirmHandle.fail error',
     values: errors,
     run: (t, value) => t.startConfirm(CONFIRM).fail(value),
-    findings: ERROR_NAME_FINDING,
   },
 
   // startPayment and its handle.
-  ...fields(
-    'startPayment',
-    PAYMENT,
-    (t, input) => t.startPayment(input as never).end(SETTLEMENT as never),
-    { chainId: { records: 'core-chain-id' } },
+  ...fields('startPayment', PAYMENT, (t, input) =>
+    t.startPayment(input as never).end(SETTLEMENT as never),
   ),
   {
     name: 'startPayment x402.scheme',
@@ -344,7 +293,6 @@ const ROWS: Row[] = [
     name: 'PaymentHandle.fail error',
     values: errors,
     run: (t, value) => t.startPayment(PAYMENT).fail(value),
-    findings: ERROR_NAME_FINDING,
   },
   {
     name: 'PaymentHandle.fail options.errorType',
@@ -364,16 +312,12 @@ const ROWS: Row[] = [
   },
 
   // User operations.
-  ...fields(
-    'startUserOperationSend',
-    USER_OPERATION,
-    (t, input) => t.startUserOperationSend(input as never).end({ userOpHash: HASH }),
-    { chainId: CHAIN_ID_FINDING },
+  ...fields('startUserOperationSend', USER_OPERATION, (t, input) =>
+    t.startUserOperationSend(input as never).end({ userOpHash: HASH }),
   ),
   {
     name: 'startUserOperationSend input',
     run: (t, value) => t.startUserOperationSend(value as never).end({ userOpHash: HASH }),
-    findings: { metrics: 'core-chain-id' },
   },
   {
     name: 'UserOperationSendHandle.end result',
@@ -387,19 +331,12 @@ const ROWS: Row[] = [
     name: 'UserOperationSendHandle.fail error',
     values: errors,
     run: (t, value) => t.startUserOperationSend(USER_OPERATION).fail(value),
-    findings: ERROR_NAME_FINDING,
   },
-  ...fields(
-    'startUserOperationConfirm',
-    USER_OPERATION_CONFIRM,
-    (t, input) => t.startUserOperationConfirm(input as never).end(USER_OPERATION_RECEIPT),
-    { chainId: CHAIN_ID_FINDING },
+  ...fields('startUserOperationConfirm', USER_OPERATION_CONFIRM, (t, input) =>
+    t.startUserOperationConfirm(input as never).end(USER_OPERATION_RECEIPT),
   ),
-  ...fields(
-    'UserOperationConfirmHandle.end receipt',
-    USER_OPERATION_RECEIPT,
-    (t, receipt) => t.startUserOperationConfirm(USER_OPERATION_CONFIRM).end(receipt as never),
-    { revertReason: REVERT_REASON_FINDING },
+  ...fields('UserOperationConfirmHandle.end receipt', USER_OPERATION_RECEIPT, (t, receipt) =>
+    t.startUserOperationConfirm(USER_OPERATION_CONFIRM).end(receipt as never),
   ),
   {
     name: 'UserOperationConfirmHandle.end receipt',
@@ -413,15 +350,11 @@ const ROWS: Row[] = [
     name: 'UserOperationConfirmHandle.fail error',
     values: errors,
     run: (t, value) => t.startUserOperationConfirm(USER_OPERATION_CONFIRM).fail(value),
-    findings: ERROR_NAME_FINDING,
   },
 
   // Call batches.
-  ...fields(
-    'startCallBatchSend',
-    CALL_BATCH,
-    (t, input) => t.startCallBatchSend(input as never).end({ id: BATCH_ID }),
-    { chainId: CHAIN_ID_FINDING },
+  ...fields('startCallBatchSend', CALL_BATCH, (t, input) =>
+    t.startCallBatchSend(input as never).end({ id: BATCH_ID }),
   ),
   {
     name: 'CallBatchSendHandle.end result',
@@ -442,13 +375,9 @@ const ROWS: Row[] = [
     name: 'CallBatchSendHandle.fail error',
     values: errors,
     run: (t, value) => t.startCallBatchSend(CALL_BATCH).fail(value),
-    findings: ERROR_NAME_FINDING,
   },
-  ...fields(
-    'startCallBatchConfirm',
-    CALL_BATCH_CONFIRM,
-    (t, input) => t.startCallBatchConfirm(input as never).end(CALL_BATCH_STATUS),
-    { chainId: CHAIN_ID_FINDING },
+  ...fields('startCallBatchConfirm', CALL_BATCH_CONFIRM, (t, input) =>
+    t.startCallBatchConfirm(input as never).end(CALL_BATCH_STATUS),
   ),
   ...fields('CallBatchConfirmHandle.end status', CALL_BATCH_STATUS, (t, status) =>
     t.startCallBatchConfirm(CALL_BATCH_CONFIRM).end(status as never),
@@ -480,7 +409,6 @@ const ROWS: Row[] = [
     name: 'CallBatchConfirmHandle.fail error',
     values: errors,
     run: (t, value) => t.startCallBatchConfirm(CALL_BATCH_CONFIRM).fail(value),
-    findings: ERROR_NAME_FINDING,
   },
 
   // createTxTracker() options, each with every entry point used once.
@@ -510,9 +438,6 @@ const ROWS: Row[] = [
           : {}),
       // The agent identity is the user's own text, recorded as given.
       ...(key === 'agent' ? { rules: ['throws', 'metrics'] as const } : {}),
-      ...(key === 'linkTtlMs' || key === 'maxTrackedTransactions'
-        ? { findings: OPTIONS_FINDING }
-        : {}),
     }),
   ),
   {
@@ -537,7 +462,6 @@ const ROWS: Row[] = [
     options: (value) => value as never,
     modes: () => ({}),
     run: exercise,
-    findings: OPTIONS_FINDING,
   },
 ];
 
@@ -632,8 +556,6 @@ const TEXT_BOUNDS: TextBound[] = [
       createTxTracker({ errorMessages: 'sanitized' }).startSend(SEND).fail(new Error(text));
       return eventAttribute('exception.message');
     },
-    // finding: core-cut-splits-hex. Sanitized messages are cut without regard to a hex value across the cut.
-    findings: { split: 'core-cut-splits-hex' },
   },
   {
     name: 'blockchain.contract.function.arguments',
@@ -644,8 +566,6 @@ const TEXT_BOUNDS: TextBound[] = [
         .end({ hash: HASH });
       return spanAttribute('blockchain.contract.function.arguments');
     },
-    // finding: core-cut-splits-hex. Function arguments are cut without regard to a hex value across the cut.
-    findings: { split: 'core-cut-splits-hex' },
   },
   {
     name: 'x402.resource (path)',
@@ -667,8 +587,6 @@ const TEXT_BOUNDS: TextBound[] = [
         .end({ ...RECEIPT, status: 'reverted', revertReason: text } as never);
       return spanAttribute('blockchain.tx.revert.reason');
     },
-    // finding: core-revert-reason (see above). Nothing is cut, so nothing is split either.
-    findings: { length: 'core-revert-reason' },
   },
 ];
 
@@ -764,8 +682,7 @@ describe('bounds', () => {
     );
   });
 
-  // finding: core-list-read-in-full. The receipts of a call batch status are read in full, though 64 hashes are kept.
-  it.fails('reads no more call batch receipts than it records [finding: core-list-read-in-full]', () => {
+  it('reads no more call batch receipts than it records', () => {
     const receipts = budgeted(dense({ transactionHash: HASH, blockNumber: 1n }));
     createTxTracker()
       .startCallBatchConfirm(CALL_BATCH_CONFIRM)
@@ -773,8 +690,7 @@ describe('bounds', () => {
     expect(receipts.reads()).toBeLessThanOrEqual(BOUNDS.callBatchTransactionHashes * 2);
   });
 
-  // finding: core-list-read-in-full. The transaction hashes of a call batch send are read in full.
-  it.fails('reads a bounded number of call batch transaction hashes [finding: core-list-read-in-full]', () => {
+  it('reads a bounded number of call batch transaction hashes', () => {
     const hashes = budgeted(dense(HASH));
     createTxTracker()
       .startCallBatchSend(CALL_BATCH)
