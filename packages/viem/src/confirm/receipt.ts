@@ -163,12 +163,13 @@ export function toUserOperationReceiptLike(
 /**
  * viem gives up waiting when a node returns a mined transaction before its receipt: it looks for a replacement,
  * finds the transaction itself in the block and fails to fetch its receipt again. Background confirmation waits
- * again after these errors, until its timeout.
+ * again after these errors, as after a failed request, until its timeout.
  */
 export function isReceiptLag(error: unknown): boolean {
   const name = nameOf(error);
   return name === 'TransactionReceiptNotFoundError' || name === 'TransactionNotFoundError';
 }
+/** How long background confirmation waits before it polls again, for a client without a polling interval. */
 export const RECEIPT_LAG_RETRY_MS = 1_000;
 
 /**

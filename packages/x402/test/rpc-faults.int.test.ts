@@ -3,8 +3,7 @@
 // the faults. The settlement names a transfer mined on Anvil, as a stand-in; the fake payment carries no
 // authorization, so `blockchain.payment.verified` is not checked here (see settlement.int.test.ts). For each fault:
 // the paid request returns as it does untraced, the payment span keeps its settlement, the confirm span ends as
-// `watch()`'s does, nothing is left pending and no rejection is unhandled. An ending that is a defect also has an
-// `it.fails` test with the ending it should have, tagged with its issue (`// finding: #<issue>`).
+// `watch()`'s does, nothing is left pending and no rejection is unhandled.
 import { SpanStatusCode } from '@opentelemetry/api';
 import { wrapFetchWithPayment } from '@x402/fetch';
 import { Instance } from 'prool';
@@ -58,24 +57,24 @@ afterEach(async () => {
 
 /**
  * Faults on the receipt requests of the confirmation through `watch()`, with the `error.type` its confirm span ends
- * with today, as in `../../viem/test/rpc-faults.int.test.ts` (which covers more). `finding` names the issue of an
- * ending that is a defect: the confirmation should then end with the receipt.
+ * with, or undefined for one that ends with the receipt, as in `../../viem/test/rpc-faults.int.test.ts` (which covers
+ * more). `watch()` polls again after a failed request, so a fault that lasts ends as a timeout.
  */
 const RECEIPT_FAULTS: Record<
   string,
-  { faults: Record<string, Fault | FaultRule | FaultRule[]>; errorType: string; finding?: string }
+  { faults: Record<string, Fault | FaultRule | FaultRule[]>; errorType: string | undefined }
 > = {
   'a request that never answers': {
     faults: { eth_getTransactionReceipt: { kind: 'hang' } },
-    errorType: 'TimeoutError',
+    errorType: 'timeout',
   },
   'HTTP 429': {
     faults: { eth_getTransactionReceipt: { kind: 'http', status: 429 } },
-    errorType: 'HttpRequestError',
+    errorType: 'timeout',
   },
   'JSON-RPC -32603 (internal error)': {
     faults: { eth_getTransactionReceipt: { kind: 'rpc-error', code: -32603 } },
-    errorType: 'InternalRpcError',
+    errorType: 'timeout',
   },
   'a receipt that stays null': {
     faults: { eth_getTransactionReceipt: { kind: 'result', result: () => null } },
@@ -89,8 +88,7 @@ const RECEIPT_FAULTS: Record<
         { fault: { kind: 'rpc-error', code: -32603 }, after: 1, times: 1 },
       ],
     },
-    errorType: 'InternalRpcError',
-    finding: '#310',
+    errorType: undefined,
   },
 };
 
@@ -172,19 +170,12 @@ describe('a payment whose reader fails while confirming the settlement', () => {
     expect(payment.attributes['blockchain.tx.hash']).toBe(transaction);
     const confirms = tracing.spans().filter((s) => s.name === CONFIRM_SPAN);
     expect(confirms).toHaveLength(1);
-    expect(confirms[0]?.status.code).toBe(SpanStatusCode.ERROR);
+    expect(confirms[0]?.status.code).toBe(
+      errorType === undefined ? SpanStatusCode.UNSET : SpanStatusCode.ERROR,
+    );
     expect(confirms[0]?.attributes['error.type']).toBe(errorType);
-    expect(confirms[0]?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(confirms[0]?.attributes['blockchain.tx.status']).toBe(
+      errorType === undefined ? 'success' : undefined,
+    );
   });
-
-  for (const [fault, { faults, finding }] of Object.entries(RECEIPT_FAULTS)) {
-    if (!finding) continue;
-    // finding: see the row's issue.
-    it.fails(`${fault}: confirms the settlement [finding: ${finding}]`, async () => {
-      const transaction = await settlementTransaction();
-      proxy.set(faults);
-      await pay(transaction);
-      expect(tracing.spanNamed(CONFIRM_SPAN).attributes['blockchain.tx.status']).toBe('success');
-    });
-  }
 });

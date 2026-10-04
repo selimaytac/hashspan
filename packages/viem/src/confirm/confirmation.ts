@@ -279,12 +279,15 @@ export function createConfirmation({
             onReplaced: capturing(capture, undefined) as never,
           })) as ViemReceipt;
         } catch (error) {
-          if (!isReceiptLag(error) || capture.replacement) throw error;
+          // viem rejects on the first failed request of its poll; only its timeout and a replacement are final.
+          if (isTimeout(error) || capture.replacement) throw error;
           const remaining = deadline - Date.now();
           if (remaining <= 0)
             throw new WaitForTransactionReceiptTimeoutError({ hash: hash as `0x${string}` });
           diag.debug(
-            'hashspan: the node returned the transaction before its receipt; waiting again',
+            isReceiptLag(error)
+              ? 'hashspan: the node returned the transaction before its receipt; waiting again'
+              : `hashspan: a receipt request failed (${errorName(error)}); waiting again`,
           );
           await delay(Math.min(retryMs, remaining));
         }
