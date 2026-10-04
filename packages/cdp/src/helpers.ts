@@ -8,8 +8,13 @@ export const timers = globalThis as unknown as {
   clearTimeout(timer: unknown): void;
 };
 
+/** The name of `error` for a `diag` message; never throws, also for an error whose name cannot be read. */
 export function errorName(error: unknown): string {
-  return error instanceof Error && error.name ? error.name : 'unknown error';
+  try {
+    return error instanceof Error && error.name ? error.name : 'unknown error';
+  } catch {
+    return 'unknown error';
+  }
 }
 
 /**
