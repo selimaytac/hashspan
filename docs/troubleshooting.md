@@ -41,6 +41,27 @@ hashspan's spans are children of the span that is active when the transaction is
   and give `@hashspan/cdp` and `@hashspan/x402` the same `tracker`. Links are kept for the tracker's `linkTtlMs`
   (10 minutes by default; [core options](../packages/core/README.md#options)).
 
+## A confirm span with no send span next to it
+
+A confirm span usually sits next to its send span, under the same parent: the span active at the wait, or the send
+span's parent for a confirmation in the background or through `watch()`
+([confirm span parent](semconv.md#spans)). When no span was active at the send, the send span has no
+parent, and the confirm span then starts a trace of its own: only its span link relates it to the send.
+
+- **The backend keeps no span links.** Langfuse does not store them, so a confirm span in a trace of its own shows no
+  relation to its send there ([which backends keep links](backends.md#span-links)). Run the send inside an active
+  span, so that both spans share a parent and a trace, or relate them by the key both carry:
+
+  | Span | Key on both spans |
+  |---|---|
+  | transaction (`send`, `confirm`; a `payment` span carries its settlement's) | `blockchain.tx.hash` |
+  | user operation | `blockchain.user_operation.hash`, with `blockchain.chain.id` |
+  | call batch | `blockchain.call_batch.id` |
+
+  In Grafana Tempo, for example, `{span.blockchain.tx.hash = "0x…"}` finds the trace of the send and the trace of the
+  confirm span.
+- **The confirm span has no link either.** See [a confirm span is not linked to its send span](#spans-in-a-separate-trace-from-the-agents).
+
 ## A send span but no confirm span
 
 - **The process exited before the confirmation ended.** Background confirmations, revert reasons and sealed receipts

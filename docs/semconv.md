@@ -20,7 +20,8 @@ recorded after the call, and not for x402's paid request
 **Confirm span parent**, in order: an explicitly passed context; otherwise the active span (whatever is waiting
 for the receipt); otherwise the parent of the `send` span (confirmation in the background); otherwise none.
 The link to the `send` span is added whenever the transaction was sent through the same tracker within the link
-TTL (default 10 minutes).
+TTL (default 10 minutes). With no parent, the confirm span is in a trace of its own, related to the send only by the
+link; some backends do not keep links ([troubleshooting](troubleshooting.md#a-confirm-span-with-no-send-span-next-to-it)).
 
 **Replaced transactions.** A receipt is recorded on the confirm span of the transaction that was mined. When a
 wait for one hash ends with the receipt of another (a transaction with the same sender and nonce replaced it), the

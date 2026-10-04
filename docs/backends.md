@@ -111,6 +111,20 @@ Use an ingest key from your environment's API keys. The spans land in a dataset 
 GenAI spans, so the agent span shows its model and token usage. See
 [Honeycomb's OpenTelemetry docs](https://docs.honeycomb.io/send-data/opentelemetry/).
 
+## Span links
+
+A confirm span links to its send or payment span. Where no span was active at the send, the confirm span is in a
+trace of its own and the link is the only relation between them
+([troubleshooting](troubleshooting.md#a-confirm-span-with-no-send-span-next-to-it)). Checked with hashspan 0.9.0 on
+2026-10-04, unless noted:
+
+| Backend | Keeps span links | How it was checked |
+|---|---|---|
+| Jaeger 2.21.0 | yes | both query APIs return the link: `/api/v3/traces` as an OTLP link, `/api/traces` as a `FOLLOWS_FROM` reference |
+| Grafana Tempo 3.0.0 | yes | `/api/v2/traces/{traceId}` returns the link; how Grafana shows it was not checked |
+| Langfuse 4.49.0 | no | no link in the observations API (`/api/public/v2/observations`) or in its storage; see [langfuse/langfuse#12337](https://github.com/langfuse/langfuse/issues/12337) |
+| Honeycomb | yes | the link shows on the span (hashspan 0.5.0, 2026-10-02, [above](#honeycomb)) |
+
 ## Grafana dashboard for the metrics
 
 hashspan's tracker records three histograms ([metrics](semconv.md#metrics)): send duration, confirmation duration and
