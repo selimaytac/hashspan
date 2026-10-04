@@ -2,7 +2,8 @@
  * Attribute keys emitted by hashspan.
  *
  * Stability: development. See https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/semconv.md for
- * definitions and value types. These names are a public contract: changes follow the deprecation policy in AGENTS.md.
+ * definitions and value types. These names are a public contract: changes follow the change policy at
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/semconv.md#change-policy.
  */
 export const ATTR_BLOCKCHAIN_SYSTEM = 'blockchain.system' as const;
 /** EIP-155 chain id, e.g. `8453`; on every span. */
