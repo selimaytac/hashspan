@@ -61,6 +61,11 @@ hashspan's spans are children of the span that is active when the transaction is
 A confirm span that gave up waiting is not missing: it ends with error status and `error.type` `timeout`
 ([semantic conventions](semconv.md#span-status)).
 
+## A confirm span disagrees with the chain after a reorganisation
+
+A confirm span keeps the receipt its wait ended with; what a reorganisation changes afterwards, or during a wait for
+several confirmations, is described under [chain reorganisations](semconv.md#spans).
+
 ## Fees missing from a confirm span
 
 - **The receipt was a flashblocks preconfirmation** (Base) and no sealed receipt came in time, or `flush()` could
