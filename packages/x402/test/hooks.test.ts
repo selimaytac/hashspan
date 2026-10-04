@@ -1,5 +1,12 @@
 import { createTxTracker, type TxTracker } from '@hashspan/core';
-import { diag } from '@opentelemetry/api';
+import { context, diag, propagation, trace } from '@opentelemetry/api';
+import {
+  InMemorySpanExporter,
+  ParentBasedSampler,
+  SimpleSpanProcessor,
+  TraceIdRatioBasedSampler,
+} from '@opentelemetry/sdk-trace-base';
+import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { createPublicClient, encodeErrorResult, parseAbi } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -252,5 +259,53 @@ describe('clients and trackers it cannot trace with', () => {
     withHashspan(Object.freeze(client));
     pay().respond();
     expect(tracing.spans()).toHaveLength(1);
+  });
+});
+
+describe('a parent-based ratio sampler', () => {
+  // The settlement's confirm span is recorded after the paid request returned and the tool span ended; with a
+  // parent-based sampler it follows the payment span's decision (issue #333, docs/troubleshooting.md).
+  it('samples the payment span and the confirm span of its settlement together', async () => {
+    await tracing.teardown();
+    const exporter = new InMemorySpanExporter();
+    const provider = new NodeTracerProvider({
+      sampler: new ParentBasedSampler({ root: new TraceIdRatioBasedSampler(0.5) }),
+      spanProcessors: [new SimpleSpanProcessor(exporter)],
+    });
+    provider.register();
+    try {
+      const outcomes: { payment: boolean; confirm: boolean }[] = [];
+      for (let run = 0; run < 60; run++) {
+        exporter.reset();
+        const reader = createPublicClient({
+          chain: baseSepolia,
+          transport: mockTransport({ chainIdHex: '0x14a34' }).transport,
+          pollingInterval: 10,
+        });
+        const { client, pay } = capturingClient();
+        const hashspan = withHashspan(client, { reader });
+        const { respond } = trace.getTracer('agent').startActiveSpan('tool', (span) => {
+          const payment = pay(paymentRequired(), { success: true, transaction: RECEIPT_HASH });
+          span.end();
+          return payment;
+        });
+        respond();
+        await hashspan.flush();
+        const names = exporter.getFinishedSpans().map((s) => s.name);
+        outcomes.push({
+          payment: names.some((name) => name.startsWith('payment ')),
+          confirm: names.some((name) => name.startsWith('confirm ')),
+        });
+      }
+      expect(outcomes.filter(({ payment, confirm }) => payment !== confirm)).toEqual([]);
+      expect(outcomes.some(({ payment }) => payment)).toBe(true);
+      expect(outcomes.some(({ payment }) => !payment)).toBe(true);
+    } finally {
+      await provider.shutdown();
+      trace.disable();
+      context.disable();
+      propagation.disable();
+      tracing = setupTracing();
+    }
   });
 });
