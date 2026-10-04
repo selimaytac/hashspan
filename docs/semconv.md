@@ -185,6 +185,19 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `x402.resource` | string | payment | origin | the resource paid for, per the tracker's `paymentResource` mode: `origin` (default) records scheme, host and port only, `path` the URL without query string, fragment or user info, `off` nothing; at most 512 characters, and nothing for text whose user info contains `?` or `#` |
 | `error.type` | string | all | on | see *Span status*; reused from OpenTelemetry general conventions |
 
+The fee fields follow the receipt of each chain family, as the viem adapter reads it (tested in
+`packages/viem/test/fee-models.test.ts`):
+
+| Family | `blockchain.tx.l1_fee` | `blockchain.tx.fee` |
+|---|---|---|
+| Ethereum and other L1s | not recorded | `gas.used × effective_gas_price` |
+| OP Stack (Base, OP Mainnet, Celo) and Scroll | the receipt's `l1Fee` | plus `l1_fee`; not the OP Stack operator fee |
+| Arbitrum | not recorded: `gasUsed` already includes the L1 component (`gasUsedForL1`) | `gas.used × effective_gas_price` |
+| ZKsync | not recorded | `gas.used × effective_gas_price` |
+
+Values are recorded as the receipt gives them. A fee paid in another currency (Celo's fee currencies) is not
+converted.
+
 Agent identity is recorded with the GenAI conventions `gen_ai.agent.id` and `gen_ai.agent.name`. A field set in the
 tracker's static `agent` option always wins; fields it leaves unset are taken from OpenTelemetry Baggage entries with
 the same keys, unless `agentFromBaggage` is false ([ADR 0011](adr/0011-agent-identity-precedence.md)). This lets

@@ -1,4 +1,4 @@
-import { custom, RpcRequestError } from 'viem';
+import { custom, RpcRequestError, type Transport } from 'viem';
 
 export const FROM = '0x1111111111111111111111111111111111111111' as const;
 export const TO = '0x2222222222222222222222222222222222222222' as const;
@@ -43,6 +43,8 @@ export interface MockOptions {
   callsStatus?: (call: number) => Record<string, unknown>;
   /** Called with each request's method as the request starts, in the context it was made in. */
   onRequest?: (method: string) => void;
+  /** How often viem retries a failed request (viem's default: 3, with a growing delay). */
+  retryCount?: number;
 }
 
 /** EIP-1193 transport answering the handful of methods the adapter's code paths use. */
@@ -77,7 +79,7 @@ export function mockTransport(options: MockOptions = {}) {
       ? options.transaction(hash)
       : options.transaction),
   });
-  const transport = custom({
+  const answering = custom({
     async request({ method, params }: { method: string; params?: unknown }) {
       calls.push(method);
       requests.push({ method, params });
@@ -200,5 +202,8 @@ export function mockTransport(options: MockOptions = {}) {
       }
     },
   });
+  const { retryCount } = options;
+  const transport: Transport =
+    retryCount === undefined ? answering : (params) => answering({ ...params, retryCount });
   return { transport, calls, requests };
 }

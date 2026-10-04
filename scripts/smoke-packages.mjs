@@ -1,12 +1,14 @@
 // Smoke test of the published packages: packs @hashspan/core, viem, cdp and x402 (`pnpm pack`), installs the tarballs
 // and their peer dependencies into an empty project, and loads each with `require()` and `import` under the Node.js
-// that runs the checks. No chain and no network beyond the npm registry install.
+// that runs the checks, or under Bun or Deno. No chain and no network beyond the npm registry install.
 //
 //   node scripts/smoke-packages.mjs                 pack, install and check with the current Node.js
 //   node scripts/smoke-packages.mjs --matrix        print the Node.js versions CI checks, as JSON
 //   node scripts/smoke-packages.mjs --prepare-only --dir <dir>   pack and install into <dir>, check nothing
 //   node scripts/smoke-packages.mjs --check-only --dir <dir>     check a prepared <dir> (CI prepares it with the
 //                                                               Node.js of .nvmrc and checks with an older one)
+//   node scripts/smoke-packages.mjs --check-only --dir <dir> --runtime bun|deno   the same checks under Bun or Deno
+//                                                               (`bun` or `deno` on PATH)
 //
 // Build first (`pnpm build`): the tarballs hold each package's dist.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -128,7 +130,11 @@ const { x402Client } = await load('@x402/core/client');
   assert.equal(await traced.flush(), true);
 }
 
-console.log(JSON.stringify({ node: process.version, keys }));
+const runtime =
+  typeof Bun !== 'undefined' ? 'Bun ' + Bun.version
+  : typeof Deno !== 'undefined' ? 'Deno ' + Deno.version.deno
+  : 'Node.js ' + process.version;
+console.log(JSON.stringify({ runtime, keys }));
 `;
 
 const checkFiles = {
@@ -184,13 +190,23 @@ function prepare(dir) {
   );
 }
 
-function check(dir) {
+/** How each runtime runs a check file. */
+const runtimes = {
+  node: (file) => [process.execPath, [file]],
+  bun: (file) => ['bun', [file]],
+  // Deno resolves the packages from the project's node_modules, as Node.js does.
+  deno: (file) => ['deno', ['run', '--allow-all', '--node-modules-dir=manual', file]],
+};
+
+function check(dir, runtime) {
   const results = {};
   for (const [file, source] of Object.entries(checkFiles)) writeFileSync(join(dir, file), source);
   for (const file of Object.keys(checkFiles)) {
-    const run = spawnSync(process.execPath, [file], { cwd: dir, encoding: 'utf8' });
-    process.stderr.write(run.stderr);
-    if (run.status !== 0) throw new Error(`${file} failed on Node.js ${process.version}`);
+    const [command, commandArgs] = runtimes[runtime](file);
+    const run = spawnSync(command, commandArgs, { cwd: dir, encoding: 'utf8' });
+    process.stderr.write(run.stderr ?? '');
+    if (run.status !== 0)
+      throw new Error(`${file} failed on ${runtime} (${run.error ?? `exit ${run.status}`})`);
     results[file] = JSON.parse(run.stdout.trim().split('\n').at(-1));
   }
   const [cjs, esm] = [results['check.cjs'], results['check.mjs']];
@@ -199,9 +215,7 @@ function check(dir) {
       `require() and import export different names:\n${JSON.stringify(cjs.keys)}\n${JSON.stringify(esm.keys)}`,
     );
   }
-  console.log(
-    `ok: require() and import of ${packageNames.length} packages on Node.js ${process.version}`,
-  );
+  console.log(`ok: require() and import of ${packageNames.length} packages on ${esm.runtime}`);
 }
 
 const args = process.argv.slice(2);
@@ -212,5 +226,7 @@ if (args.includes('--matrix')) {
   const at = args.indexOf('--dir');
   const dir = at === -1 ? mkdtempSync(join(tmpdir(), 'hashspan-smoke-')) : resolve(args[at + 1]);
   if (!args.includes('--check-only')) prepare(dir);
-  if (!args.includes('--prepare-only')) check(dir);
+  const runtime = args.includes('--runtime') ? args[args.indexOf('--runtime') + 1] : 'node';
+  if (!Object.hasOwn(runtimes, runtime)) throw new Error(`unknown runtime ${runtime}`);
+  if (!args.includes('--prepare-only')) check(dir, runtime);
 }
