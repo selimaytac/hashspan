@@ -5,7 +5,7 @@ import { errorName } from '../safe-tracker.js';
 import type { ViemClientLike, WatchOptions } from '../types.js';
 import { type Confirmation, DEFAULT_BACKGROUND_TIMEOUT_MS } from './confirmation.js';
 import { confirmKey, type Recent } from './recent.js';
-import { chainIdOfClient, within } from './timing.js';
+import { chainIdOfClient, isChainId, within } from './timing.js';
 
 export interface WatchDependencies {
   abis: Recent<Abi>;
@@ -32,9 +32,13 @@ export function createWatch({
       }
     };
     try {
-      const chainId = options.chainId ?? client.chain?.id;
-      if (chainId === undefined) {
-        diag.debug('hashspan: watch() needs a chain id or a client with a chain; not recording it');
+      const clientChain: unknown = client.chain?.id;
+      const chainId: unknown = options.chainId ?? clientChain;
+      // A chain id is a positive safe integer (ADR 0025 rule 3): no span is recorded with another one.
+      if (!isChainId(chainId)) {
+        diag.debug(
+          'hashspan: watch() needs a valid chain id or a client with a valid chain; not recording it',
+        );
         onReceipt(undefined);
         return;
       }
@@ -54,8 +58,13 @@ export function createWatch({
         if (!confirmThrough(client, chainId, options.hash, timeoutMs, onReceipt))
           onReceipt(undefined);
       };
-      if (client.chain?.id !== undefined) {
-        confirmOn(client.chain.id);
+      if (clientChain !== undefined) {
+        if (!isChainId(clientChain)) {
+          diag.debug('hashspan: watch() got a client whose chain id is not one; not recording it');
+          onReceipt(undefined);
+          return;
+        }
+        confirmOn(clientChain);
         return;
       }
       // A client without a chain can be on any chain, and the chain id asked for can come from elsewhere, such as

@@ -26,8 +26,11 @@ export interface StartedSend<R = string> {
 
 /** How `traceSend` records one kind of send: a transaction, a user operation or a call batch. */
 export interface SendTrace<R = string> {
-  /** The chain id when it is known before the call. Reads the call's arguments, so it may throw. */
-  chainId(): number | undefined;
+  /**
+   * The chain id when it is known before the call, undefined when it is not, or null when the call names a chain
+   * whose id is not one, so the call is not traced. Reads the call's arguments, so it may throw.
+   */
+  chainId(): number | null | undefined;
   /** Starts the send span, in the active context. */
   start(chainId: number, startTime?: Date): StartedSend<R>;
   /** Work after a successful send. */
@@ -36,8 +39,11 @@ export interface SendTrace<R = string> {
 
 /** Send tracing of one extended client, shared by its traced actions. */
 export interface SendTracing {
-  /** The chain id of a call: its `chain` argument, else the client's chain. */
-  knownChainId(args: { chain?: { id: number } | null | undefined }): number | undefined;
+  /**
+   * The chain id of a call: its `chain` argument, else the client's chain; null when the call's `chain` names an id
+   * that is not a chain id, so the call is not traced.
+   */
+  knownChainId(args: { chain?: { id: number } | null | undefined }): number | null | undefined;
   /** Asks a client without a chain for its chain id; concurrent calls share one request. */
   queryChainId(): Promise<number>;
   traceSend<R>(sendTrace: SendTrace<R>, send: () => Promise<R>): Promise<R>;
@@ -51,11 +57,11 @@ export function createSendTracing(
 ): SendTracing {
   const knownChainId = (args: {
     chain?: { id: number } | null | undefined;
-  }): number | undefined => {
+  }): number | null | undefined => {
     const id = own(own(args, 'chain'), 'id');
     // A chain the call names with an id that is not one is not replaced by the client's: the span would be recorded
-    // for a chain the call did not send on.
-    if (id !== undefined) return isChainId(id) ? id : undefined;
+    // for a chain the call did not send on. Such a call is not traced (ADR 0025 rule 3).
+    if (id !== undefined) return isChainId(id) ? id : null;
     const clientId = client.chain?.id;
     return isChainId(clientId) ? clientId : undefined;
   };
@@ -119,11 +125,15 @@ export function createSendTracing(
   };
 
   const traceSend = async <R>(sendTrace: SendTrace<R>, send: () => Promise<R>): Promise<R> => {
-    let chainId: number | undefined;
+    let chainId: number | null | undefined;
     try {
       chainId = sendTrace.chainId();
     } catch (error) {
       untraced(error);
+      return send();
+    }
+    if (chainId === null) {
+      diag.debug('hashspan: the call names a chain whose id is not a chain id; call not traced');
       return send();
     }
     if (chainId === undefined) {

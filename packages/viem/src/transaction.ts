@@ -213,7 +213,8 @@ export function addTransactionActions(
 
     /**
      * What tracing a wait needs, read without running a getter, or undefined when the wait is not traced: an
-     * inherited hash, a hash or callback behind an accessor, or arguments that throw when read.
+     * inherited hash, a hash or callback behind an accessor, a `chain` whose id is not a chain id, or arguments that
+     * throw when read.
      */
     const prepareWait = (args: WaitArgs) => {
       try {
@@ -226,8 +227,10 @@ export function addTransactionActions(
         }
         // Always wrapped, so that a replacement is attributed however the span is recorded (docs/adr/0008).
         const capture: ReplacementCapture = {};
+        const chainId = knownChainId(args);
+        if (chainId === null) return undefined;
         const waitArgs = shadowing(args, 'onReplaced', capturing(capture, onReplaced?.value));
-        return { hash, chainId: knownChainId(args), capture, waitArgs };
+        return { hash, chainId, capture, waitArgs };
       } catch (error) {
         untraced(error);
         return undefined;
