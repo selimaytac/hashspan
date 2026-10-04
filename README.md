@@ -64,29 +64,61 @@ npm install @hashspan/viem @opentelemetry/api viem
 npm install @opentelemetry/sdk-node   # unless your app already sets up an OpenTelemetry SDK
 ```
 
-hashspan records spans through `@opentelemetry/api`, so nothing is exported, and nothing is reported, until an
-OpenTelemetry SDK is registered. For a first run, start one before the code below:
-`new NodeSDK({ serviceName: 'my-agent' }).start()` from `@opentelemetry/sdk-node` exports over OTLP to
-`http://localhost:4318`, where the [local lab](#local-lab)'s Jaeger listens; [backends](docs/backends.md) lists other
-setups.
+Start a local chain with `anvil` from [Foundry](https://getfoundry.sh) and a trace backend: the
+[local lab](#local-lab) in a checkout of this repository, or the one-line [Jaeger container](docs/backends.md#jaeger).
+Then save this file as `agent.ts`:
 
 ```ts
-import { createPublicClient, createWalletClient, http } from 'viem';
-import { baseSepolia } from 'viem/chains';
+import { trace } from '@opentelemetry/api';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { createPublicClient, createWalletClient, http, parseEther } from 'viem';
+import { mnemonicToAccount } from 'viem/accounts';
+import { foundry } from 'viem/chains';
 import { withHashspan } from '@hashspan/viem';
 
-const hashspan = withHashspan();
-const wallet = createWalletClient({ account, chain: baseSepolia, transport: http() }).extend(hashspan);
-const reader = createPublicClient({ chain: baseSepolia, transport: http() }).extend(hashspan);
+// Exports over OTLP to http://localhost:4318. Start it before the first transaction.
+const sdk = new NodeSDK({ serviceName: 'my-agent' });
+sdk.start();
 
-// Inside an agent tool: send + confirm spans appear under the tool span.
-const hash = await wallet.sendTransaction({ to, value });
-await reader.waitForTransactionReceipt({ hash });
+// Anvil's public test mnemonic: its first account is funded on every Anvil chain.
+const account = mnemonicToAccount('test test test test test test test test test test test junk');
+const transport = http('http://127.0.0.1:8545');
+
+const hashspan = withHashspan();
+const wallet = createWalletClient({ account, chain: foundry, transport }).extend(hashspan);
+const reader = createPublicClient({ chain: foundry, transport }).extend(hashspan);
+
+// Stands in for your agent's tool call: the send and confirm spans become its children.
+await trace.getTracer('my-agent').startActiveSpan('pay_vendor', async (span) => {
+  try {
+    const to = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'; // Anvil's second account
+    const hash = await wallet.sendTransaction({ to, value: parseEther('0.01') });
+    await reader.waitForTransactionReceipt({ hash });
+  } finally {
+    span.end();
+  }
+});
+
+// Before the process exits: hashspan's pending spans first, then the SDK.
+await hashspan.flush();
+await sdk.shutdown();
 ```
 
-A script that exits right after its last transaction should `await hashspan.flush()` and shut the SDK down first,
-or its last spans are lost ([shutting down](packages/viem/README.md#shutting-down)). See
-[`@hashspan/viem`](packages/viem) for details and [`@hashspan/core`](packages/core) to instrument other send paths.
+- **ES module:** the file uses top-level `await`, so set `"type": "module"` in `package.json`
+  (`npm pkg set type=module`). The packages themselves load with both `import` and `require()`.
+- **Run it** with `npx tsx agent.ts`, or with `node agent.ts` on Node.js 22.18 or later, which strips the types.
+- **Start order:** hashspan gets its tracer and meter from `@opentelemetry/api` when the first transaction is sent,
+  so `withHashspan()` and the clients may be created before or after `sdk.start()`, but the SDK must be started
+  before the first transaction. Until an SDK is registered, nothing is recorded.
+- **See it** in Jaeger on `http://localhost:16686`: service `my-agent`, trace `pay_vendor`, with the children
+  `send 31337` and `confirm 31337` (the chain id), and the confirm span [linked](docs/backends.md#span-links) to the
+  send span. [Backends](docs/backends.md) lists other setups.
+- **Base Sepolia:** use `baseSepolia` from `viem/chains`, `http()` or your RPC URL, and a funded key from the
+  environment, `privateKeyToAccount(process.env.PRIVATE_KEY)` from `viem/accounts`, instead.
+
+`flush()` matters in any process that exits after its last transaction
+([shutting down](packages/viem/README.md#shutting-down)). See [`@hashspan/viem`](packages/viem) for details and
+[`@hashspan/core`](packages/core) to instrument other send paths.
 
 ## Try it
 
