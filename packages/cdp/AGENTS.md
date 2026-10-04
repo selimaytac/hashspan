@@ -17,6 +17,7 @@ Capture adapter for the Coinbase CDP SDK (ADR 0012). Root rules: [AGENTS.md](../
 - `test/mock-cdp-api.ts` local stand-in for the CDP API that broadcasts on Anvil; tests never leave localhost
 - `test/rpc-faults.int.test.ts` puts the reader behind the viem tests' fault proxy (`../viem/test/fault-proxy.ts`)
 - `test/sdk-drift.test.ts` compares the adapter's copies of SDK rules with the installed SDK;
-  `.github/workflows/cdp-sdk-latest.yml` runs the cdp tests weekly against the newest SDK in the peer range
+  `.github/workflows/cdp-sdk-range.yml` runs the cdp tests weekly against the newest and the oldest SDK in the peer
+  range
 - `test/hostile-input.test.ts` applies the hostile-input table (`../core/test/hostile.ts`, ADR 0025) to the wrapped SDK
   methods, with hostile arguments, SDK results, reader, tracker and client; a new wrapped method adds rows there

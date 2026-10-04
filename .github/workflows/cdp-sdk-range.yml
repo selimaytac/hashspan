@@ -1,0 +1,56 @@
+name: CDP SDK range
+
+# The CDP adapter wraps SDK objects whose shapes are not a public contract, and copies rules the SDK does not export
+# (network names, the chains on which network-scoped accounts send through the API). CI tests the SDK of the
+# lockfile; this job tests both ends of the peer range, so that a change shows up before users report it: the newest
+# release and the oldest version the range allows, each with typecheck and every cdp test. Tests run offline, as in
+# CI. The updated lockfile is not committed. The job also runs on a pull request that changes it.
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/cdp-sdk-range.yml
+
+permissions: {}
+
+concurrency:
+  group: cdp-sdk-range-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cdp:
+    name: CDP adapter against the ${{ matrix.end }} SDK in range
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        end: [newest, oldest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          # No pnpm cache: this job installs other SDK releases than the lockfile, and a store it saved would be
+          # restored under the same key by the release workflow.
+      - run: pnpm install --frozen-lockfile
+      # Within the range in package.json (^1), so a new major is a deliberate change rather than a failing job.
+      - name: Update @coinbase/cdp-sdk to the newest release in range
+        if: matrix.end == 'newest'
+        run: pnpm --filter @hashspan/cdp update @coinbase/cdp-sdk
+      - name: Install the oldest @coinbase/cdp-sdk of the peer range
+        if: matrix.end == 'oldest'
+        run: | # zizmor: ignore[adhoc-packages] installs the floor of the peer range on purpose; not committed
+          floor=$(node -p "require('./packages/cdp/package.json').peerDependencies['@coinbase/cdp-sdk'].replace(/^\^/, '')")
+          pnpm --filter @hashspan/cdp add -D "@coinbase/cdp-sdk@$floor"
+      - run: pnpm --filter @hashspan/cdp list @coinbase/cdp-sdk --depth 0
+      - run: ./scripts/install-anvil.sh
+      - run: pnpm typecheck
+      - name: CDP unit and integration tests
+        run: pnpm vitest run packages/cdp
