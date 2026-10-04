@@ -75,6 +75,8 @@ export const NOOP_CALL_BATCH_CONFIRM: CallBatchConfirmHandle = {
 /** The confirm span of one call batch and how to end it; shared by all its handles. */
 export interface CallBatchConfirmSpan extends SharedConfirm {
   status(status: CallBatchStatusLike, endTime?: TimeInput): void;
+  /** Ends as a failure without any status data, for a status that cannot be read. */
+  unreadable(endTime?: TimeInput): void;
   timeout(endTime?: TimeInput): void;
   fail(error: unknown, options: HandleOptions): void;
 }
@@ -315,6 +317,15 @@ export function createCallBatchSpans({
           },
           endTime,
         ),
+      unreadable: (endTime) =>
+        finish(
+          'record unreadable call batch status',
+          () =>
+            recordConfirmation(endTime, {
+              [ATTR_ERROR_TYPE]: markError(span, ERROR_TYPE_VALUE_OTHER),
+            }),
+          endTime,
+        ),
       timeout: (endTime) =>
         finish(
           'record call batch confirmation timeout',
@@ -356,9 +367,20 @@ export function createCallBatchSpans({
     return {
       end: (status, second) => {
         const { endTime } = handleOptions(second);
+        let pending: boolean;
+        try {
+          pending = isPendingCallBatch(status);
+        } catch {
+          // A status that cannot be read ends the span as `_OTHER` and releases the key for a later wait (ADR 0025).
+          diag.debug('hashspan: could not read a call batch status');
+          if (!claim.receive()) return;
+          callBatchConfirmations.release(chainId, id, shared);
+          shared.unreadable(endTime);
+          return;
+        }
         // A pending result is an observer outcome, like a timeout: it withdraws this wait, and ends the span only as
         // the last one still waiting, releasing the key for a later wait (ADR 0007, ADR 0016).
-        if (isPendingCallBatch(status)) {
+        if (pending) {
           claim.withdraw(() => shared.status(status, endTime));
           return;
         }

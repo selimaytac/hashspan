@@ -209,9 +209,6 @@ const ROWS: Row[] = [
       scenario: paying((pay, value) => {
         pay[key] = value;
       }),
-      // finding: x402-response-open-span. A settlement response that cannot be read leaves the payment span open
-      // until its deadline (up to an hour) or a flush, instead of ending it.
-      ...(key === 'settleResponse' ? { findings: { same: 'x402-response-open-span' } } : {}),
     }),
   ),
   // What the paid server asks for.
@@ -263,14 +260,6 @@ const ROWS: Row[] = [
       rules: ['same'],
       options: (value) => ({ [key]: value }),
       scenario: paying(() => {}),
-      // finding: adapter-setup. withHashspan() reads the tracker, and viem's withHashspan() the decodeRevertReason
-      // option, unguarded: one it cannot read throws. finding: viem-watch-timeout. A confirmTimeoutMs that is not a
-      // number leaves the settlement's confirm span open.
-      ...(key === 'tracker' || key === 'decodeRevertReason'
-        ? { findings: { same: 'adapter-setup' } }
-        : key === 'confirmTimeoutMs'
-          ? { findings: { same: 'viem-watch-timeout' } }
-          : {}),
     }),
   ),
   {
@@ -357,8 +346,7 @@ describe('bounds', () => {
 });
 
 describe('the client withHashspan() gets', () => {
-  // finding: adapter-setup. withHashspan() reads the client unguarded: null, undefined or a Proxy throws.
-  it.fails('never throws for a client it cannot register hooks on [finding: adapter-setup]', () => {
+  it('never throws for a client it cannot register hooks on', () => {
     const problems: string[] = [];
     for (const [label, client] of [
       ...hostileValues(),
