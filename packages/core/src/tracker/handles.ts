@@ -1,11 +1,38 @@
 // What every handle shares: never throwing, the options of its methods and the `error.type` of a failure.
-import { diag, type TimeInput } from '@opentelemetry/api';
+import { type Context, diag, type TimeInput } from '@opentelemetry/api';
 import { ERROR_TYPE_VALUE_OTHER } from '../attributes.js';
-import type { FailOptions } from '../types.js';
+import type {
+  CallBatchConfirmHandle,
+  CallBatchSendHandle,
+  ConfirmHandle,
+  FailOptions,
+  SendHandle,
+  UserOperationConfirmHandle,
+  UserOperationSendHandle,
+} from '../types.js';
 import { identifier } from './values.js';
 
 /** `error.type` of a wait that gave up: a confirmation or a payment whose outcome was never learned. */
 export const OBSERVER_TIMEOUT = 'timeout';
+
+/**
+ * A send handle of any kind that records nothing; its context is the parent, so a call run in it still nests under
+ * the caller.
+ */
+export const noopSend = (
+  parent: Context,
+): SendHandle & UserOperationSendHandle & CallBatchSendHandle => ({
+  context: parent,
+  end: () => {},
+  fail: () => {},
+});
+
+/** A confirm handle of any kind that records nothing. */
+export const NOOP_CONFIRM: ConfirmHandle & UserOperationConfirmHandle & CallBatchConfirmHandle = {
+  end: () => {},
+  timeout: () => {},
+  fail: () => {},
+};
 
 /** Runs `fn`, logging instead of throwing: instrumentation must never break the caller. */
 export function safely<T>(what: string, fn: () => T, fallback: T): T {

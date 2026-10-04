@@ -67,6 +67,7 @@ import { joinConfirm } from './confirm-claim.js';
 import {
   errorType,
   handleOptions,
+  NOOP_CONFIRM,
   OBSERVER_TIMEOUT,
   reportedErrorType,
   safely,
@@ -99,15 +100,6 @@ const REPLACEMENT_REASONS: ReadonlySet<string> = new Set([
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_REPLACED,
 ]);
-
-/** Records nothing; its context is the parent, so a call run in it still nests under the caller. */
-export const noopSend = (parent: Context): SendHandle => ({
-  context: parent,
-  end: () => {},
-  fail: () => {},
-});
-
-export const NOOP_CONFIRM: ConfirmHandle = { end: () => {}, timeout: () => {}, fail: () => {} };
 
 /** The confirm span of one transaction and how to end it; shared by all its handles. */
 export interface ConfirmSpan extends SharedConfirm {
@@ -235,7 +227,8 @@ export function createTransactionSpans({
 
     return {
       context: trace.setSpan(parent, span),
-      end: (result: SendResult | string, second?: EndOptions | TimeInput): void =>
+      end: (result: SendResult | string, second?: EndOptions | TimeInput): void => {
+        const { endTime } = handleOptions(second);
         finish(
           'record transaction hash',
           () => {
@@ -246,10 +239,11 @@ export function createTransactionSpans({
             }
             links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
             span.setAttributes(redact({ [ATTR_BLOCKCHAIN_TX_HASH]: hash }));
-            recordSend(handleOptions(second).endTime);
+            recordSend(endTime);
           },
-          handleOptions(second).endTime,
-        ),
+          endTime,
+        );
+      },
       fail: (error: unknown, second?: FailOptions | TimeInput, third?: FailOptions): void => {
         const options = handleOptions(second, third);
         finish(

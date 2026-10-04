@@ -2,6 +2,8 @@
 // and remote parties (ADR 0025 rule 3). A value that fails is not recorded; none of these functions throws.
 
 export const TX_HASH: RegExp = /^0x[0-9a-fA-F]{64}$/;
+/** The all-zero hash, which a wallet reports for a call of a batch that failed to send (ADR 0022). */
+export const ZERO_TX_HASH: RegExp = /^0x0{64}$/;
 export const ADDRESS: RegExp = /^0x[0-9a-fA-F]{40}$/;
 
 /** The value of an own data property of `target`; undefined for an accessor, so no getter of the caller runs. */
