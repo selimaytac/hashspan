@@ -9,9 +9,10 @@ import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast, viemHasAction } from './viem-version.js';
 
 // A wallet client's sendCalls and waitForCallsStatus came with viem 2.28.0 (before, sendCalls was an experimental
-// extension, docs/adr/0022-call-batches.md), sendCallsSync with 2.38.0.
+// extension, docs/adr/0022-call-batches.md), sendCallsSync with 2.38.0. Its spans need 2.45.2, the first release whose
+// sendCallsSync calls the client's own sendCalls and waitForCallsStatus (through getAction); before, it is untraced.
 const withoutCallBatches = !viemHasAction('waitForCallsStatus');
-const withoutSendCallsSync = !viemHasAction('sendCallsSync');
+const withoutSendCallsSync = !viemAtLeast('2.45.2');
 
 let tracing: TestTracing;
 beforeEach(() => {
@@ -392,21 +393,25 @@ describe.skipIf(!viemAtLeast('2.51.2'))("viem's fallback with a call that fails 
   });
 });
 
-describe.skipIf(withoutSendCallsSync)('with a tracker from a core without call batches', () => {
-  it('records no call batch spans, and the calls work', async () => {
-    const full = createTxTracker();
-    const older = {
-      startSend: full.startSend,
-      startConfirm: full.startConfirm,
-      startPayment: full.startPayment,
-      startUserOperationSend: full.startUserOperationSend,
-      startUserOperationConfirm: full.startUserOperationConfirm,
-    } as unknown as TxTracker;
-    const { client, hashspan } = wallet({}, withHashspan({ tracker: older }));
-    const status = await client.sendCallsSync({ calls });
-    await hashspan.flush();
+// No spans are expected here, so it also holds from 2.38.0 to 2.45.1.
+describe.skipIf(!viemHasAction('sendCallsSync'))(
+  'with a tracker from a core without call batches',
+  () => {
+    it('records no call batch spans, and the calls work', async () => {
+      const full = createTxTracker();
+      const older = {
+        startSend: full.startSend,
+        startConfirm: full.startConfirm,
+        startPayment: full.startPayment,
+        startUserOperationSend: full.startUserOperationSend,
+        startUserOperationConfirm: full.startUserOperationConfirm,
+      } as unknown as TxTracker;
+      const { client, hashspan } = wallet({}, withHashspan({ tracker: older }));
+      const status = await client.sendCallsSync({ calls });
+      await hashspan.flush();
 
-    expect(status.status).toBe('success');
-    expect(tracing.spans()).toHaveLength(0);
-  });
-});
+      expect(status.status).toBe('success');
+      expect(tracing.spans()).toHaveLength(0);
+    });
+  },
+);

@@ -245,7 +245,9 @@ await wallet.waitForCallsStatus({ id }); // confirm span, linked to the send spa
   recorded whether or not background confirmation is on.
 - `sendCallsSync` records one send span and one confirm span: viem's own `sendCallsSync` runs with the traced
   `sendCalls` and `waitForCallsStatus`, so an extension applied before this one that replaces `sendCallsSync` itself
-  is not called ([apply it last](#apply-it-last)). `getCallsStatus` is not traced: polling it yourself records
+  is not called ([apply it last](#apply-it-last)). This needs viem 2.45.2 or later: from 2.38.0 to 2.45.1, viem's
+  `sendCallsSync` calls the two actions directly, so the batch is sent and waited for untraced, with its result
+  unchanged. `getCallsStatus` is not traced: polling it yourself records
   nothing, as with `getTransactionReceipt`. Background confirmation and `watch()` do not cover batches.
 - See [ADR 0022](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.9.0/docs/adr/0022-call-batches.md).
 

@@ -6,7 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { withHashspan } from '../src/index.js';
 import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
-import { viemHasAction } from './viem-version.js';
+import { viemAtLeast, viemHasAction } from './viem-version.js';
 
 const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
@@ -84,9 +84,10 @@ function standInWallet() {
   });
 }
 
-// A wallet client's sendCalls and waitForCallsStatus came with viem 2.28.0, sendCallsSync with 2.38.0.
+// A wallet client's sendCalls and waitForCallsStatus came with viem 2.28.0, sendCallsSync with 2.38.0; its spans need
+// 2.45.2, whose sendCallsSync calls the client's own actions (the viem README, call batches).
 describe.skipIf(!viemHasAction('waitForCallsStatus'))('call batches on Anvil', () => {
-  it.skipIf(!viemHasAction('sendCallsSync'))(
+  it.skipIf(!viemAtLeast('2.45.2'))(
     "traces viem's fallback as a batch whose transactions are confirmed as transactions",
     async () => {
       // Without background confirmation: the fallback's transactions are confirmed anyway.
