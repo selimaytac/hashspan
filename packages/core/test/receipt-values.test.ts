@@ -62,21 +62,50 @@ function recordingMeterProvider() {
 }
 
 describe('receipt values', () => {
-  it('records nothing from a receipt whose block number is not a finite number or bigint', () => {
-    const error = vi.spyOn(diag, 'error').mockImplementation(() => {});
-    const tracker = createTxTracker();
-    const malformed = ['123', Number.NaN, Number.POSITIVE_INFINITY];
-    malformed.forEach((blockNumber, i) => {
+  it('ends the confirm span as a failure for a receipt whose block number or gas used cannot be read', () => {
+    const warn = vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const meters = recordingMeterProvider();
+    const tracker = createTxTracker({ meterProvider: meters.provider });
+    const malformed = [
+      { blockNumber: '123' },
+      { blockNumber: Number.NaN },
+      { blockNumber: Number.POSITIVE_INFINITY },
+      { gasUsed: null },
+      { blockNumber: null, gasUsed: null, status: null, effectiveGasPrice: null },
+    ];
+    malformed.forEach((values, i) => {
       tracker
         .startConfirm({ chainId: CHAIN_ID, hash: `0x${String(i).padStart(64, '0')}` })
-        .end({ ...receipt, blockNumber: blockNumber as never });
+        .end({ ...receipt, ...values } as never);
     });
     expect(tracing.spans()).toHaveLength(malformed.length);
     for (const span of tracing.spans()) {
       expect(span.attributes['blockchain.block.number']).toBeUndefined();
       expect(span.attributes['blockchain.tx.status']).toBeUndefined();
+      expect(span.status.code).toBe(SpanStatusCode.ERROR);
+      expect(span.attributes['error.type']).toBe('_OTHER');
     }
-    expect(error).toHaveBeenCalledTimes(malformed.length);
+    // One confirmation sample each, as a failure; no fee.
+    expect(
+      meters
+        .recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)
+        .map(({ attributes }) => attributes['error.type']),
+    ).toEqual(malformed.map(() => '_OTHER'));
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(malformed.length);
+  });
+
+  it('lets a later wait record the receipt after one that could not be read (#311)', () => {
+    vi.spyOn(diag, 'warn').mockImplementation(() => {});
+    const tracker = createTxTracker();
+    tracker
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end({ ...receipt, gasUsed: null } as never);
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
+    expect(confirmsOf(HASH).map((span) => span.attributes['blockchain.tx.status'])).toEqual([
+      undefined,
+      'success',
+    ]);
   });
 
   it('records a block number and gas used given as numbers', () => {
