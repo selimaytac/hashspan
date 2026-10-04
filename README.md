@@ -56,7 +56,8 @@ against the newest SDK releases in their ranges every week, and the x402 adapter
 
 ## Quick start
 
-Requires Node.js 22.3 or later.
+Requires Node.js 22.3 or later. CI also loads the packed packages on Bun 1.x and Deno 2.x (`require()`,
+`import` and a traced send, without a chain); other runtimes are not tested.
 
 ```sh
 npm install @hashspan/viem @opentelemetry/api viem
