@@ -5,8 +5,9 @@
 //
 // Each layer goes through `changeset pack` and `changeset publish --from-pack-dir` with a plan of that layer only.
 // Both append to the report file in CHANGESETS_OUTPUT, from which changesets/action creates the git tags and GitHub
-// releases, as it does for a single `changeset publish`. After the last layer, every published version is installed
-// from the registry into an empty project and imported, so a release that cannot be installed fails the job.
+// releases, as it does for a single `changeset publish`. The script then waits until every published version is
+// visible; installing and importing them runs in a job of its own (scripts/check-published.mjs), so no code of a
+// dependency runs in the job that can publish.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -47,29 +48,6 @@ async function waitUntilVisible(releases) {
   }
 }
 
-/** Installs every published version into an empty project and imports it, as a user would. */
-function checkInstall(releases) {
-  const project = mkdtempSync(join(tmpdir(), 'hashspan-install-'));
-  try {
-    writeFileSync(join(project, 'package.json'), '{"private":true,"type":"module"}\n');
-    run(
-      'npm',
-      ['install', '--no-audit', '--no-fund', ...releases.map((r) => `${r.name}@${r.version}`)],
-      {
-        cwd: project,
-      },
-    );
-    for (const { name } of releases) {
-      run('node', ['--input-type=module', '-e', `await import(${JSON.stringify(name)})`], {
-        cwd: project,
-      });
-      console.log(`${name} installs and imports.`);
-    }
-  } finally {
-    rmSync(project, { recursive: true, force: true });
-  }
-}
-
 const work = mkdtempSync(join(tmpdir(), 'hashspan-publish-'));
 try {
   const planFile = join(work, 'plan.json');
@@ -84,13 +62,10 @@ try {
     run('pnpm', ['changeset', 'publish', '--from-pack-dir', packDir]);
     const releases = layer.filter((release) => release.kind === 'publish');
     published.push(...releases);
-    // The next layer requires this one; the last layer is checked by the install below.
+    // The next layer requires this one; the last layer is awaited below.
     if (index < plan.length - 1) await waitUntilVisible(releases);
   }
-  if (published.length > 0) {
-    await waitUntilVisible(published);
-    checkInstall(published);
-  }
+  if (published.length > 0) await waitUntilVisible(published);
 } finally {
   rmSync(work, { recursive: true, force: true });
 }

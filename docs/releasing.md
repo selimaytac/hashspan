@@ -23,8 +23,10 @@ keeps its own, so versions can differ between packages.
 
    `pnpm release` runs `scripts/publish-in-order.mjs`: it publishes one dependency layer at a time (core, then viem,
    then the adapters built on both) and waits until a layer's versions are visible on the registry before publishing
-   what requires them, since npm can make versions visible minutes after accepting them, in any order. It then
-   installs every published version into an empty project and imports it; if that fails, the job fails.
+   what requires them, since npm can make versions visible minutes after accepting them, in any order. A last job
+   then installs every published version into an empty project and imports it (`scripts/check-published.mjs`); if
+   that fails, the run fails. It runs apart from the publish job, with read-only permissions, since installing runs
+   the code of every dependency.
 5. Check the result: `npm view @hashspan/core` shows the version, and the npm page shows the provenance badge.
    After the run, the [SBOM workflow](../.github/workflows/sbom.yml) attaches `sbom.cdx.json`, a CycloneDX SBOM of
    the root workspace's lockfile, to each new GitHub release. The test-only trees of `integrations/` and
