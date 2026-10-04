@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { listeningPort } from './start-anvil.js';
 
-const BANNER = '\n\n    1.8.3 (cae51ad458 2026-09-15T10:34:23.361078000Z)\n    https://github.com/foundry-rs/foundry\n\n';
+const BANNER =
+  '\n\n    1.8.3 (cae51ad458 2026-09-15T10:34:23.361078000Z)\n    https://github.com/foundry-rs/foundry\n\n';
 
 describe('reading the port from what Anvil printed', () => {
   it('reads it from the "Listening on" line after the banner', () => {

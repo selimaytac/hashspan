@@ -13,20 +13,17 @@ import { registerExactEvmScheme as registerClientScheme } from '@x402/evm/exact/
 import { registerExactEvmScheme as registerFacilitatorScheme } from '@x402/evm/exact/facilitator';
 import { registerExactEvmScheme as registerServerScheme } from '@x402/evm/exact/server';
 import { wrapFetchWithPayment } from '@x402/fetch';
-import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, http, publicActions } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { freePort } from '../../viem/test/free-port.js';
+import { startAnvil } from '../../viem/test/start-anvil.js';
 import { withHashspan } from '../src/index.js';
 import { testUsdAbi, testUsdBytecode } from './token/test-usd.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
 // Settles real EIP-3009 payments on Anvil through the SDK's own resource server, facilitator and client, all in
 // this process; nothing leaves localhost.
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const NETWORK = `eip155:${foundry.id}` as const;
 const PRICE = 10_000n;
 const PAY_TO = '0x00000000000000000000000000000000000000cc';
@@ -37,9 +34,8 @@ const agent = privateKeyToAccount(generatePrivateKey());
 const PAYMENT_SPAN = `payment ${foundry.id}`;
 const CONFIRM_SPAN = `confirm ${foundry.id}`;
 
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
   chainId: foundry.id,
 });
 const reader = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
@@ -51,7 +47,6 @@ const facilitatorWallet = createWalletClient({
 let token: Address;
 
 beforeAll(async () => {
-  await instance.start();
   const deployed = await facilitatorWallet.deployContract({
     abi: testUsdAbi,
     bytecode: testUsdBytecode,

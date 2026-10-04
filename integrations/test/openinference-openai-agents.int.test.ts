@@ -6,7 +6,6 @@ import * as agents from '@openai/agents';
 import type { Hex } from 'viem';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { freePort } from '../../packages/viem/test/free-port.js';
 import { offline } from './offline.js';
 import {
   inAgentSpan,
@@ -17,8 +16,6 @@ import {
   TOOL_SPAN,
   tracedWallet,
 } from './openinference.js';
-
-const PORT = await freePort();
 
 /** A model that calls the `pay_vendor` tool on its first turn and answers on its second; it never sends a request. */
 class ScriptedModel implements agents.Model {
@@ -56,7 +53,7 @@ let anvil: Awaited<ReturnType<typeof startAnvil>>;
 let instrumentation: OpenAIAgentsInstrumentation;
 
 beforeAll(async () => {
-  anvil = await startAnvil(PORT);
+  anvil = await startAnvil();
   // OpenInference's documented setup for ESM. The default (exclusive) mode replaces the SDK's trace processors, so
   // the SDK's own exporter to OpenAI is removed; offline.ts would answer it otherwise, and the tests check it is not
   // called. The SDK turns its tracing off when NODE_ENV is `test`, as under Vitest, so it is turned back on here:

@@ -4,7 +4,6 @@
 // bundle transactions and their `UserOperationEvent` logs. What is not: signature validation, gas accounting and
 // paymasters of a real EntryPoint, and a bundler's simulation (docs/adr/0021, Implementation notes).
 import { SpanStatusCode } from '@opentelemetry/api';
-import { Instance } from 'prool';
 import {
   type Address,
   createPublicClient,
@@ -28,13 +27,11 @@ import {
   testAccountCode,
   testEntryPointCode,
 } from './entry-point/test-entry-point.js';
-import { freePort } from './free-port.js';
+import { startAnvil } from './start-anvil.js';
 import { testBundler } from './test-bundler.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast } from './viem-version.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const ACCOUNT = '0x00000000000000000000000000000000000A11cE' as const;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 const REVERTER = '0x00000000000000000000000000000000000000a1' as const;
@@ -42,9 +39,8 @@ const SIGNATURE = `0x${'11'.repeat(65)}` as const;
 /** A nonce key in the upper 192 bits: the recorded nonce is then larger than any int attribute. */
 const NONCE_KEY = 7n;
 
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
 });
 const reader = createPublicClient({ chain: anvil, transport: http(RPC_URL) });
 
@@ -52,7 +48,6 @@ let tracing: TestTracing;
 let bundler: ReturnType<typeof testBundler>;
 
 beforeAll(async () => {
-  await instance.start();
   const setCode = (address: Address, code: Hex) =>
     reader.request({ method: 'anvil_setCode' as never, params: [address, code] as never });
   await setCode(entryPoint07Address, testEntryPointCode);

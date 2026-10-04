@@ -18,7 +18,6 @@ import {
 } from '@coinbase/agentkit';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { withHashspan } from '@hashspan/cdp';
-import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, type Hex, http } from 'viem';
 import { entryPoint07Address } from 'viem/account-abstraction';
 import { baseSepolia } from 'viem/chains';
@@ -28,14 +27,12 @@ import {
   testAccountCode,
   testEntryPointCode,
 } from '../../packages/viem/test/entry-point/test-entry-point.js';
-import { freePort } from '../../packages/viem/test/free-port.js';
+import { startAnvil } from '../../packages/viem/test/start-anvil.js';
 import { setupTracing, type TestTracing } from '../../packages/viem/test/tracing.js';
 import { testUsdAbi, testUsdBytecode } from '../../packages/x402/test/token/test-usd.js';
 import { multicall3CreationCode } from './multicall3.js';
 import { offline } from './offline.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 const SMART_ACCOUNT = '0x00000000000000000000000000000000000A11cE' as const;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 const SPENDER = '0x00000000000000000000000000000000000000dd' as const;
@@ -48,9 +45,8 @@ process.env.DISABLE_CDP_ERROR_REPORTING = 'true';
 
 // Anvil with Base Sepolia's chain id, so the real CDP network name applies; on `base`, the SDK would default the
 // paymaster to CDP's node.
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
   chainId: baseSepolia.id,
 });
 // The provider's public client, as `configureWithWallet({ rpcUrl })` creates it. Base Sepolia names Multicall3 at
@@ -66,7 +62,6 @@ let tracing: TestTracing;
 let token: Address;
 
 beforeAll(async () => {
-  await instance.start();
   tracing = setupTracing();
   const setCode = (address: Address, code: Hex) =>
     publicClient.request({ method: 'anvil_setCode' as never, params: [address, code] as never });

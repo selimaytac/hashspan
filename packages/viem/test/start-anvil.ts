@@ -1,6 +1,7 @@
 import { Instance } from 'prool';
 
-type AnvilParameters = Omit<NonNullable<Parameters<typeof Instance.anvil>[0]>, 'port'>;
+/** What the test files pass to Anvil; the port is always 0. */
+type AnvilParameters = { binary: string; chainId?: number | undefined };
 
 export type StartedAnvil = {
   instance: ReturnType<typeof Instance.anvil>;
@@ -23,7 +24,7 @@ export function listeningPort(output: string): number | undefined {
  * such as a test's proxy listening on port 0, could take it (#324). Call it at module level, behind the same condition
  * as the tests if the whole file can be skipped, and stop `instance` in `afterAll`.
  */
-export async function startAnvil(parameters: AnvilParameters = {}): Promise<StartedAnvil> {
+export async function startAnvil(parameters: AnvilParameters): Promise<StartedAnvil> {
   const instance = Instance.anvil({ ...parameters, port: 0 }, { timeout: START_TIMEOUT_MS });
   await instance.start();
   try {
@@ -43,7 +44,9 @@ function portOf(instance: StartedAnvil['instance']): Promise<number> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       instance.off('message', onMessage);
-      reject(new Error(`Anvil started, but printed no "Listening on" line with a port: ${output()}`));
+      reject(
+        new Error(`Anvil started, but printed no "Listening on" line with a port: ${output()}`),
+      );
     }, START_TIMEOUT_MS);
     const onMessage = () => {
       const found = listeningPort(output());

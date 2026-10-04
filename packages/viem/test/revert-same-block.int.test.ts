@@ -1,4 +1,3 @@
-import { Instance } from 'prool';
 import {
   createPublicClient,
   createWalletClient,
@@ -11,11 +10,9 @@ import {
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
-import { freePort } from './free-port.js';
+import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
-const PORT = await freePort();
-const RPC_URL = `http://127.0.0.1:${PORT}`;
 // Anvil's first test account, which Anvil signs for.
 const ACCOUNT = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
 const vault = parseAbi(['error WithdrawalLimitExceeded(uint256 limit, uint256 requested)']);
@@ -34,13 +31,10 @@ function revertingContract(payload: Hex): Hex {
   return `0x60${length}80600b6000396000f3${runtime}`;
 }
 
-const instance = Instance.anvil({
+const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
-  port: PORT,
 });
-beforeAll(async () => {
-  await instance.start();
-});
+beforeAll(async () => {});
 afterAll(async () => {
   await instance.stop();
 });
