@@ -31,7 +31,9 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
   assigns as Anvil binds it, not with `test/free-port.ts`, whose port another process can take before Anvil binds it
 - `test/fault-proxy.ts` an HTTP proxy in front of Anvil that injects RPC faults per JSON-RPC method (timeouts, HTTP
   errors, JSON-RPC errors, resets, rewritten or mixed-up results); `test/rpc-faults.int.test.ts` runs the
-  transaction send and confirm paths through it, and the cdp and x402 tests can use it too
+  transaction send and confirm paths through it, `test/call-batch-faults.int.test.ts` the call batch paths, and the
+  `bundler faults` rows of `test/user-operation.int.test.ts` the bundler methods; `test/fault-checks.ts` holds the
+  checks they share with the cdp and x402 fault rows
 - `.github/workflows/viem-range.yml` runs the viem tests weekly against both ends of the viem peer range; a test that
   needs an action or a behaviour of a newer viem than the floor is gated by `test/viem-version.ts` (`viemHasAction()`,
   `viemAtLeast()`), with a comment naming the release that introduced it

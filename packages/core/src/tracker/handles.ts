@@ -1,10 +1,38 @@
 // What every handle shares: never throwing, the options of its methods and the `error.type` of a failure.
-import { diag, type TimeInput } from '@opentelemetry/api';
+import { type Context, diag, type TimeInput } from '@opentelemetry/api';
 import { ERROR_TYPE_VALUE_OTHER } from '../attributes.js';
-import type { FailOptions } from '../types.js';
+import type {
+  CallBatchConfirmHandle,
+  CallBatchSendHandle,
+  ConfirmHandle,
+  FailOptions,
+  SendHandle,
+  UserOperationConfirmHandle,
+  UserOperationSendHandle,
+} from '../types.js';
+import { identifier } from './values.js';
 
 /** `error.type` of a wait that gave up: a confirmation or a payment whose outcome was never learned. */
 export const OBSERVER_TIMEOUT = 'timeout';
+
+/**
+ * A send handle of any kind that records nothing; its context is the parent, so a call run in it still nests under
+ * the caller.
+ */
+export const noopSend = (
+  parent: Context,
+): SendHandle & UserOperationSendHandle & CallBatchSendHandle => ({
+  context: parent,
+  end: () => {},
+  fail: () => {},
+});
+
+/** A confirm handle of any kind that records nothing. */
+export const NOOP_CONFIRM: ConfirmHandle & UserOperationConfirmHandle & CallBatchConfirmHandle = {
+  end: () => {},
+  timeout: () => {},
+  fail: () => {},
+};
 
 /** Runs `fn`, logging instead of throwing: instrumentation must never break the caller. */
 export function safely<T>(what: string, fn: () => T, fallback: T): T {
@@ -16,15 +44,16 @@ export function safely<T>(what: string, fn: () => T, fallback: T): T {
   }
 }
 
+/**
+ * The class name of `error` if it is a short identifier, else `_OTHER`: an error's name is free text from any library
+ * or remote party, so a long or odd one is not recorded (ADR 0025). Never throws, also for a name getter that does.
+ */
 export function errorType(error: unknown): string {
-  return error instanceof Error && error.name ? error.name : ERROR_TYPE_VALUE_OTHER;
-}
-
-const ERROR_TYPE_OVERRIDE = /^[A-Za-z0-9_.-]{1,64}$/;
-
-/** `value` if it is a short identifier, the only kind of free text recorded from a remote party. */
-export function identifier(value: unknown): string | undefined {
-  return typeof value === 'string' && ERROR_TYPE_OVERRIDE.test(value) ? value : undefined;
+  try {
+    return (error instanceof Error && identifier(error.name)) || ERROR_TYPE_VALUE_OTHER;
+  } catch {
+    return ERROR_TYPE_VALUE_OTHER;
+  }
 }
 
 /** A finite number, an `HrTime` pair or a `Date`: what the deprecated positional `endTime` argument takes. */
@@ -77,7 +106,8 @@ export function handleOptions(second: unknown, third?: unknown): HandleOptions {
 export function reportedErrorType(error: unknown, options: HandleOptions | undefined): string {
   const override = options?.errorType;
   if (override === undefined) return errorType(error);
-  if (typeof override === 'string' && ERROR_TYPE_OVERRIDE.test(override)) return override;
+  const kept = identifier(override);
+  if (kept !== undefined) return kept;
   diag.debug('hashspan: ignoring an error type that is not a short identifier');
   return errorType(error);
 }

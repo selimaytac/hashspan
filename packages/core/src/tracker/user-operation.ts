@@ -11,6 +11,7 @@ import {
 } from '@opentelemetry/api';
 import {
   ATTR_BLOCKCHAIN_BLOCK_NUMBER,
+  ATTR_BLOCKCHAIN_FEE_PAYER,
   ATTR_BLOCKCHAIN_OPERATION_SUBJECT,
   ATTR_BLOCKCHAIN_TX_HASH,
   ATTR_BLOCKCHAIN_TX_REVERT_REASON,
@@ -24,6 +25,7 @@ import {
   ATTR_BLOCKCHAIN_USER_OPERATION_SENDER,
   ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS,
   ATTR_ERROR_TYPE,
+  BLOCKCHAIN_FEE_PAYER_VALUE_PAYMASTER,
   BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
   BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION,
@@ -32,7 +34,7 @@ import {
 import type { ConfirmRegistry, SharedConfirm } from '../confirm-registry.js';
 import type { LinkStore } from '../link-store.js';
 import { type TxMetrics, toEpochMs } from '../metrics.js';
-import { type AddressFormatter, formatAddressesIn } from '../privacy.js';
+import { type AddressFormatter, boundRevertReason } from '../privacy.js';
 import type {
   UserOperationConfirmHandle,
   UserOperationConfirmInput,
@@ -45,6 +47,7 @@ import {
   errorType,
   type HandleOptions,
   handleOptions,
+  NOOP_CONFIRM,
   OBSERVER_TIMEOUT,
   reportedErrorType,
 } from './handles.js';
@@ -52,18 +55,6 @@ import { metricAttributes, type SpanRecording, secondsSince } from './spans.js';
 import { quantity, smallQuantity, TX_HASH } from './values.js';
 
 const ZERO_ADDRESS = /^0x0{40}$/;
-
-export const noopUserOperationSend = (parent: Context): UserOperationSendHandle => ({
-  context: parent,
-  end: () => {},
-  fail: () => {},
-});
-
-export const NOOP_USER_OPERATION_CONFIRM: UserOperationConfirmHandle = {
-  end: () => {},
-  timeout: () => {},
-  fail: () => {},
-};
 
 /** The confirm span of one user operation and how to end it; shared by all its handles. */
 export interface UserOperationConfirmSpan extends SharedConfirm {
@@ -199,7 +190,7 @@ export function createUserOperationSpans({
     setRemoteAddress(attributes, ATTR_BLOCKCHAIN_USER_OPERATION_ENTRY_POINT, receipt.entryPoint);
     const reason: unknown = receipt.revertReason;
     if (typeof reason === 'string') {
-      attributes[ATTR_BLOCKCHAIN_TX_REVERT_REASON] = formatAddressesIn(reason, formatAddress);
+      attributes[ATTR_BLOCKCHAIN_TX_REVERT_REASON] = boundRevertReason(reason, formatAddress);
     }
     const bundle: unknown = receipt.transactionHash;
     if (typeof bundle === 'string' && TX_HASH.test(bundle))
@@ -257,7 +248,21 @@ export function createUserOperationSpans({
             recordConfirmation(endTime, outcome);
             const cost = attributes[ATTR_BLOCKCHAIN_USER_OPERATION_GAS_COST];
             if (typeof cost === 'string') {
-              txMetrics.fee(BigInt(cost), userOperationMetricAttributes(chainId, outcome));
+              // A paymaster, not the sender, paid the operation's cost (ADR 0020).
+              const paymaster: unknown = receipt?.paymaster;
+              const sponsored = typeof paymaster === 'string' && !ZERO_ADDRESS.test(paymaster);
+              txMetrics.fee(
+                BigInt(cost),
+                userOperationMetricAttributes(
+                  chainId,
+                  sponsored
+                    ? {
+                        ...outcome,
+                        [ATTR_BLOCKCHAIN_FEE_PAYER]: BLOCKCHAIN_FEE_PAYER_VALUE_PAYMASTER,
+                      }
+                    : outcome,
+                ),
+              );
             }
           },
           endTime,
@@ -293,12 +298,12 @@ export function createUserOperationSpans({
     const { chainId, userOpHash } = input;
     if (typeof userOpHash !== 'string' || !TX_HASH.test(userOpHash)) {
       diag.debug('hashspan: not confirming a user operation without a valid hash');
-      return NOOP_USER_OPERATION_CONFIRM;
+      return NOOP_CONFIRM;
     }
     const claim = joinConfirm(userOperationConfirmations, chainId, userOpHash, () =>
       openUserOperationConfirm(input, parentCtx),
     );
-    if (!claim) return NOOP_USER_OPERATION_CONFIRM;
+    if (!claim) return NOOP_CONFIRM;
     const { shared } = claim;
     return {
       end: (receipt, second) => {

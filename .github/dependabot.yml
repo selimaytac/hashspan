@@ -17,6 +17,16 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+  # The local lab's images (docker/compose.yaml), pinned by digest.
+  - package-ecosystem: docker-compose
+    directory: /docker
+    schedule: { interval: monthly }
+    cooldown: { default-days: 7 }
+  # The bundler the integration tests start (scripts/bundler), CI only and installed with --ignore-scripts.
+  - package-ecosystem: npm
+    directory: /scripts/bundler
+    schedule: { interval: monthly }
+    cooldown: { default-days: 7 }
   # integrations/ (a workspace of its own, never published) has no entry: .github/workflows/integrations.yml updates
   # every dependency there to the newest release within its range each week and runs the tests, so version update
   # pull requests would duplicate that.

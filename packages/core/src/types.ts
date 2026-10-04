@@ -9,13 +9,13 @@ import type {
 /**
  * How wallet addresses are recorded: `raw` in lower case, `hashed` as a hash of the lower-cased address, `off` not at
  * all. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0004-privacy-defaults.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0004-privacy-defaults.md.
  */
 export type AddressMode = 'raw' | 'hashed' | 'off';
 
 /**
  * How error messages are recorded on exception events and span status. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0006-error-privacy.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0006-error-privacy.md.
  * - `off`: error type only
  * - `sanitized`: first line, addresses per address mode, other long hex data removed
  * - `raw`: full message and stack trace, as thrown
@@ -31,6 +31,7 @@ export type ErrorMessageMode = 'off' | 'sanitized' | 'raw';
  */
 export type PaymentResourceMode = 'origin' | 'path' | 'off';
 
+/** Address recording mode with options; see {@link TxTrackerOptions.address}. */
 export interface AddressOptions {
   /** How addresses are recorded; `hash` applies to `hashed` mode only. */
   mode: AddressMode;
@@ -52,6 +53,7 @@ export interface AgentIdentity {
   name?: string | undefined;
 }
 
+/** Options of `createTxTracker()`; the adapters' `withHashspan()` options extend them. */
 export interface TxTrackerOptions {
   /** Defaults to the globally registered tracer provider. */
   tracerProvider?: TracerProvider | undefined;
@@ -78,7 +80,7 @@ export interface TxTrackerOptions {
   /**
    * Agent identity. A field set here always wins; fields left unset are taken from the Baggage entries
    * `gen_ai.agent.id` / `gen_ai.agent.name` unless `agentFromBaggage` is false
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0011-agent-identity-precedence.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0011-agent-identity-precedence.md).
    */
   agent?: AgentIdentity | undefined;
   /**
@@ -106,6 +108,7 @@ export interface TxTrackerOptions {
   maxTrackedTransactions?: number | undefined;
 }
 
+/** A transaction about to be sent, for {@link TxTracker.startSend}. */
 export interface SendInput {
   /** EIP-155 chain id. */
   chainId: number;
@@ -131,7 +134,7 @@ export interface SendInput {
   authorizations?: readonly AuthorizationInput[] | undefined;
   /**
    * When the send started, for adapters that record it after the fact
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0009-telemetry-off-the-call-path.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0009-telemetry-off-the-call-path.md).
    * Omit it otherwise: with an explicit start time, the SDK measures the span by the wall clock, so pass the end time
    * to the handle too.
    */
@@ -142,30 +145,39 @@ export interface SendInput {
 export interface AuthorizationInput {
   /** The delegated contract address; `0x000...0` clears a delegation. */
   address: string;
+  /** Chain id the authorization is valid on; 0 means every chain. */
   chainId: number;
 }
 
 /**
  * Ends a send span. Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface SendHandle {
   /**
    * The parent context with the send span set. Run the call that sends the transaction in it, e.g.
    * `await context.with(send.context, () => sendSomehow())`, so that spans of wallet, RPC or HTTP instrumentation
    * nest under the send span
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0015-send-span-as-active-context.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0015-send-span-as-active-context.md).
    * Run only that call in it: a confirm span started in it becomes a child of the send span.
    */
   readonly context: Context;
   /** Ends the send span successfully once the transaction hash is known. */
   end(result: SendResult, options?: EndOptions): void;
-  /** @deprecated Use `end({ hash }, { endTime })`; removed in 1.0. */
+  /**
+   * Ends the send span successfully with the transaction hash.
+   *
+   * @deprecated Use `end({ hash }, { endTime })`; removed in 1.0.
+   */
   end(hash: string, endTime?: TimeInput): void;
   /** Ends the send span with an error (signing, simulation or broadcast failure). */
   fail(error: unknown, options?: FailOptions): void;
-  /** @deprecated Use `fail(error, { endTime, errorType })`; removed in 1.0. */
+  /**
+   * Ends the send span with an error.
+   *
+   * @deprecated Use `fail(error, { endTime, errorType })`; removed in 1.0.
+   */
   fail(error: unknown, endTime: TimeInput | undefined, options?: FailOptions): void;
 }
 
@@ -184,6 +196,7 @@ export interface EndOptions {
   endTime?: TimeInput | undefined;
 }
 
+/** Options of the `fail` methods of handles. */
 export interface FailOptions extends EndOptions {
   /**
    * `error.type` to record instead of the error's class name, for adapters whose library reports a stable,
@@ -194,6 +207,7 @@ export interface FailOptions extends EndOptions {
   errorType?: string | undefined;
 }
 
+/** A transaction whose receipt is awaited, for {@link TxTracker.startConfirm}. */
 export interface ConfirmInput {
   /** EIP-155 chain id; with `hash`, it identifies the transaction and its confirm span. */
   chainId: number;
@@ -210,7 +224,9 @@ export type ReplacementReason = 'repriced' | 'cancelled' | 'replaced';
 export interface ReceiptLike {
   /** `reverted` ends the confirm span with an error status and `error.type` `reverted`. */
   status: 'success' | 'reverted';
+  /** Block the transaction was included in. */
   blockNumber: bigint | number;
+  /** Gas the transaction used. */
   gasUsed: bigint | number;
   /** Wei per gas actually paid. */
   effectiveGasPrice?: bigint | undefined;
@@ -224,10 +240,10 @@ export interface ReceiptLike {
   /**
    * Hash of the mined transaction. When it differs from the awaited hash, the awaited transaction was replaced: its
    * confirm span ends as `replaced` and the receipt is recorded for this hash
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0008-replaced-transactions.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0008-replaced-transactions.md).
    */
   transactionHash?: string | undefined;
-  /** Replacement reason reported by the library, when {@link transactionHash} differs from the awaited hash. */
+  /** Replacement reason reported by the library, when `transactionHash` differs from the awaited hash. */
   replacementReason?: ReplacementReason | undefined;
 }
 
@@ -235,32 +251,44 @@ export interface ReceiptLike {
  * One wait for a transaction's receipt, joined to the transaction's shared confirm span. Only the first call counts;
  * methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface ConfirmHandle {
   /** Ends the shared confirm span with the receipt, for every handle of the transaction. */
   end(receipt: ReceiptLike, options?: EndOptions): void;
-  /** @deprecated Use `end(receipt, { endTime })`; removed in 1.0. */
+  /**
+   * Ends the shared confirm span with the receipt.
+   *
+   * @deprecated Use `end(receipt, { endTime })`; removed in 1.0.
+   */
   end(receipt: ReceiptLike, endTime?: TimeInput): void;
   /**
    * Withdraws this handle because waiting for the receipt timed out. The confirm span ends as `timeout` only if
    * no other handle of the transaction is still waiting.
    */
   timeout(options?: EndOptions): void;
-  /** @deprecated Use `timeout({ endTime })`; removed in 1.0. */
+  /**
+   * Withdraws this handle because waiting for the receipt timed out.
+   *
+   * @deprecated Use `timeout({ endTime })`; removed in 1.0.
+   */
   timeout(endTime?: TimeInput): void;
   /**
    * Withdraws this handle because retrieving the receipt failed. The confirm span ends as a failure only if no
    * other handle of the transaction is still waiting.
    */
   fail(error: unknown, options?: EndOptions): void;
-  /** @deprecated Use `fail(error, { endTime })`; removed in 1.0. */
+  /**
+   * Withdraws this handle because retrieving the receipt failed.
+   *
+   * @deprecated Use `fail(error, { endTime })`; removed in 1.0.
+   */
   fail(error: unknown, endTime?: TimeInput): void;
 }
 
 /**
  * A payment the agent authorizes and another party settles on chain, e.g. an x402 facilitator
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0013-x402-payments.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0013-x402-payments.md).
  * Values often come from a remote server: addresses, amounts and identifiers that are malformed are not recorded.
  */
 export interface PaymentInput {
@@ -282,6 +310,7 @@ export interface PaymentInput {
   startTime?: TimeInput | undefined;
 }
 
+/** Fields of x402 payments, in {@link PaymentInput.x402}. */
 export interface X402PaymentDetails {
   /** Payment scheme, e.g. `exact`; recorded only if it is a short identifier. */
   scheme?: string | undefined;
@@ -294,6 +323,7 @@ export type PaymentStatus = 'settled' | 'pending' | 'failed';
 
 /** The settlement of a payment, as reported by the party that settled it. */
 export interface PaymentSettlement {
+  /** How the settlement ended, recorded as `blockchain.payment.status`. */
   status: PaymentStatus;
   /** Hash of the settling transaction; with it, a confirm span for this hash links to the payment span. */
   hash?: string | undefined;
@@ -316,7 +346,7 @@ export interface PaymentSettlement {
 /**
  * Ends a payment span. Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface PaymentHandle {
   /** Ends the payment span with its settlement. */
@@ -342,7 +372,7 @@ export interface PaymentHandle {
 
 /**
  * A user operation of an ERC-4337 smart account, handed to a bundler
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0021-user-operations.md). It has no
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0021-user-operations.md). It has no
  * transaction of its own: the bundler includes it in a bundle transaction that the bundler sends.
  */
 export interface UserOperationInput {
@@ -367,7 +397,7 @@ export interface UserOperationResult {
 /**
  * Ends the send span of a user operation. Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface UserOperationSendHandle {
   /**
@@ -381,6 +411,7 @@ export interface UserOperationSendHandle {
   fail(error: unknown, options?: FailOptions): void;
 }
 
+/** A user operation whose receipt is awaited, for {@link TxTracker.startUserOperationConfirm}. */
 export interface UserOperationConfirmInput {
   /** EIP-155 chain id; with `userOpHash`, it identifies the user operation and its confirm span. */
   chainId: number;
@@ -428,7 +459,7 @@ export interface UserOperationReceiptLike {
  * One wait for a user operation's receipt, joined to the operation's shared confirm span, as for transactions
  * ({@link ConfirmHandle}). Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface UserOperationConfirmHandle {
   /** Ends the shared confirm span with the receipt, for every handle of the user operation. */
@@ -449,7 +480,7 @@ export interface UserOperationConfirmHandle {
 
 /**
  * A batch of calls handed to a wallet with EIP-5792 `wallet_sendCalls`
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0022-call-batches.md). The wallet decides
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0022-call-batches.md). The wallet decides
  * how the calls reach the chain: in one transaction, several, or a user operation.
  */
 export interface CallBatchInput {
@@ -480,7 +511,7 @@ export interface CallBatchResult {
 /**
  * Ends the send span of a call batch. Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface CallBatchSendHandle {
   /**
@@ -494,6 +525,7 @@ export interface CallBatchSendHandle {
   fail(error: unknown, options?: FailOptions): void;
 }
 
+/** A call batch whose status is awaited, for {@link TxTracker.startCallBatchConfirm}. */
 export interface CallBatchConfirmInput {
   /** EIP-155 chain id; with `id`, it identifies the batch and its confirm span. */
   chainId: number;
@@ -533,7 +565,7 @@ export interface CallBatchStatusLike {
  * One wait for a call batch's status, joined to the batch's shared confirm span, as for transactions
  * ({@link ConfirmHandle}). Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.9.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.10.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface CallBatchConfirmHandle {
   /** Ends the shared confirm span with the status, for every handle of the batch. */

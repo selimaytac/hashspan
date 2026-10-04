@@ -1,5 +1,6 @@
 import { parseAbi, toFunctionSelector } from 'viem';
 import { afterEach, beforeEach, expect, it } from 'vitest';
+import { abiForTelemetry } from '../src/arguments.js';
 import { withHashspan } from '../src/index.js';
 import { HASH, TO } from './mock-transport.js';
 import { setupTracing, type TestTracing } from './tracing.js';
@@ -88,4 +89,17 @@ it('reads only the length of an ABI longer than its bound', async () => {
   );
   expect(readsAtCall()).toBe(1);
   expect(selector()).toBeUndefined();
+});
+
+it('copies an ABI once per function name, so transactions to one contract share the copy', () => {
+  const abi = parseAbi([
+    'function transfer(address to, uint256 amount)',
+    'function approve(address spender, uint256 amount)',
+    'error Unauthorized(address caller)',
+  ]);
+  const first = abiForTelemetry(abi, 'transfer');
+  expect(first).toHaveLength(2);
+  expect(abiForTelemetry(abi, 'transfer')).toBe(first);
+  expect(abiForTelemetry(abi, 'approve')).not.toBe(first);
+  expect(abiForTelemetry([...abi], 'transfer')).not.toBe(first);
 });

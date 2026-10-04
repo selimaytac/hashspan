@@ -1,7 +1,9 @@
 // RPC faults on the reader of `@hashspan/cdp`, through the fault proxy of the viem tests in front of Anvil. The send
 // goes through the CDP API (here a local stand-in), so only the confirmation, through the reader and `watch()`, sees
 // the faults. For each fault: the SDK call returns as it does untraced, the send span is untouched, the confirm span
-// ends as `watch()`'s does, nothing is left pending and no rejection is unhandled.
+// ends as `watch()`'s does, nothing is left pending and no rejection is unhandled. A network-scoped account without a
+// reader waits through the SDK's own client instead, on the stand-in API's node, which a second stand-in points at the
+// proxy.
 import { SpanStatusCode } from '@opentelemetry/api';
 import { type Address, createPublicClient, createWalletClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
@@ -161,6 +163,78 @@ describe('an account sendTransaction whose reader fails', () => {
     expect(send.attributes['blockchain.tx.hash']).toBe(result.transactionHash);
     const confirms = tracing.spans().filter((s) => s.name === 'confirm 84532');
     expect(confirms).toHaveLength(1);
+    expect(confirms[0]?.status.code).toBe(
+      errorType === undefined ? SpanStatusCode.UNSET : SpanStatusCode.ERROR,
+    );
+    expect(confirms[0]?.attributes['error.type']).toBe(errorType);
+    expect(confirms[0]?.attributes['blockchain.tx.status']).toBe(
+      errorType === undefined ? 'success' : undefined,
+    );
+  });
+});
+
+describe("a network-scoped account's wait without a reader, whose node fails", () => {
+  // The account waits through the SDK's own client on the CDP node (here the stand-in API, which forwards to the
+  // fault proxy). The confirm span records the error the caller got, by class name, as the caller's own wait does
+  // in `../../viem/test/rpc-faults.int.test.ts` (issue #317).
+  const errorTypes: Record<keyof typeof RECEIPT_FAULTS, string | undefined> = {
+    'a request that never answers': 'timeout',
+    'HTTP 429': 'HttpRequestError',
+    'JSON-RPC -32603 (internal error)': 'InternalRpcError',
+    'a receipt that stays null': 'TransactionReceiptNotFoundError',
+    'one failed receipt request between good ones': undefined,
+  };
+  let scopedApi: Awaited<ReturnType<typeof startMockCdpApi>>;
+  beforeAll(async () => {
+    const [account] = (await createWalletClient({ transport: http(RPC_URL) }).getAddresses()) as [
+      Address,
+    ];
+    scopedApi = await startMockCdpApi({ rpcUrl: proxy.url, account });
+  });
+  afterAll(async () => {
+    await scopedApi.close();
+  });
+
+  /** Sends a transfer through a network-scoped account, then waits for it while `faults` apply. */
+  async function sendAndWait(faults: (typeof RECEIPT_FAULTS)[string]['faults'], traced: boolean) {
+    proxy.set({});
+    const { CdpClient } = await import('@coinbase/cdp-sdk');
+    const cdp = new CdpClient({ ...throwawayCredentials(), basePath: scopedApi.basePath });
+    const hashspan = traced
+      ? withHashspan(cdp, { confirmTimeoutMs: CONFIRM_TIMEOUT_MS })
+      : undefined;
+    const account = await cdp.evm.createAccount();
+    const scoped = await account.useNetwork('base-sepolia');
+    const { transactionHash } = await scoped.sendTransaction({
+      transaction: { to: RECIPIENT, value: 1n },
+    });
+    proxy.set(faults);
+    const waited = await scoped
+      .waitForTransactionReceipt({
+        hash: transactionHash,
+        timeout: CONFIRM_TIMEOUT_MS,
+        pollingInterval: 50,
+      } as never)
+      .then(
+        (receipt) => ({ resolved: (receipt as { status: string }).status }),
+        (error: { name?: string }) => ({ rejected: error.name }),
+      );
+    return { waited, flushed: await hashspan?.flush({ timeoutMs: 10_000 }) };
+  }
+
+  it.each(Object.entries(RECEIPT_FAULTS))('%s', async (fault, { faults }) => {
+    const untraced = await sendAndWait(faults, false);
+    const [{ waited, flushed }, rejections] = await collectingRejections(() =>
+      sendAndWait(faults, true),
+    );
+
+    expect(waited).toEqual(untraced.waited);
+    expect(rejections).toEqual([]);
+    expect(flushed).toBe(true);
+    expect(tracing.spanNamed('send 84532').status.code).toBe(SpanStatusCode.UNSET);
+    const confirms = tracing.spans().filter((s) => s.name === 'confirm 84532');
+    expect(confirms).toHaveLength(1);
+    const errorType = errorTypes[fault];
     expect(confirms[0]?.status.code).toBe(
       errorType === undefined ? SpanStatusCode.UNSET : SpanStatusCode.ERROR,
     );

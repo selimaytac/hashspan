@@ -160,38 +160,19 @@ const SEND = {
   network: 'base',
   transaction: { to: TO, value: 1n, data: '0xa9059cbb' },
 };
-// finding: core-tx-hash reached through cdp: the SDK's transactionHash is recorded unchecked.
-const TX_HASH_FINDING = { records: 'core-tx-hash' } as const;
-// finding: core-send-address reached through cdp: addresses of the call are recorded unchecked.
-const SEND_ADDRESS_FINDING = { records: 'core-send-address' } as const;
 
 const ROWS: Row[] = [
   // The caller's arguments.
-  ...argumentRows('cdp.evm.sendTransaction', SEND, on(sendTransaction), {
-    address: SEND_ADDRESS_FINDING,
-  }),
+  ...argumentRows('cdp.evm.sendTransaction', SEND, on(sendTransaction)),
   ...argumentRows(
     'cdp.evm.sendTransaction transaction',
     { to: TO, value: 1n, nonce: 1, data: '0xa9059cbb' },
     on((evm, transaction) => evm.sendTransaction({ ...SEND, transaction })),
-    {
-      to: SEND_ADDRESS_FINDING,
-      // finding: viem-selector reached through cdp: the selector is the first 10 characters of `data`, hex or not.
-      data: { records: 'viem-selector' },
-      // finding: core-send-input reached through cdp: a nonce is recorded if it is any number, a value if any bigint.
-      nonce: { records: 'core-send-input' },
-      value: { records: 'core-send-input' },
-    },
   ),
   ...argumentRows(
     'account.transfer',
     { to: TO, amount: 1n, token: 'eth', network: 'base' },
     on(async (evm, args) => (await evm.getOrCreateAccount({ name: 'a' })).transfer(args)),
-    {
-      to: SEND_ADDRESS_FINDING,
-      token: SEND_ADDRESS_FINDING,
-      amount: { records: 'core-send-input' },
-    },
   ),
   ...argumentRows(
     'cdp.evm.sendUserOperation',
@@ -213,7 +194,6 @@ const ROWS: Row[] = [
       const scoped = await (await evm.getOrCreateAccount({ name: 'a' })).useNetwork('base');
       return scoped.waitForTransactionReceipt(args);
     }),
-    { hash: TX_HASH_FINDING },
   ),
 
   // What the SDK returns.
@@ -226,7 +206,6 @@ const ROWS: Row[] = [
     'SDK answer to sendTransaction transactionHash',
     (value) => ({ send: () => ({ transactionHash: value }) }),
     (evm) => evm.sendTransaction(SEND),
-    TX_HASH_FINDING,
   ),
   answerRow(
     'SDK answer to sendUserOperation userOpHash',
@@ -281,8 +260,6 @@ const ROWS: Row[] = [
       },
     }),
     (evm) => evm.sendTransaction(SEND),
-    // finding: core-error-name reached through cdp: an error's name is recorded unbounded.
-    { records: 'core-error-name' },
   ),
   answerRow(
     'SDK rejection of sendUserOperation',
@@ -293,8 +270,6 @@ const ROWS: Row[] = [
     }),
     (evm) =>
       evm.sendUserOperation({ smartAccount: { address: SMART }, network: 'base', calls: [] }),
-    // finding: core-error-name reached through cdp: an error's name is recorded unbounded.
-    { records: 'core-error-name' },
   ),
 
   // A reader and a tracker passed in: the user's, so only rule 1 applies.

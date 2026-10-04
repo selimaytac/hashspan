@@ -1,6 +1,6 @@
 // User operations of smart accounts: `sendUserOperation` and `waitForUserOperationReceipt` of a bundler client.
 import type { TxTracker, UserOperationConfirmHandle, UserOperationInput } from '@hashspan/core';
-import { type Context, context, diag, type TimeInput } from '@opentelemetry/api';
+import { context, diag, type TimeInput } from '@opentelemetry/api';
 import { addressOf, own } from './arguments.js';
 import type { Pending } from './confirm/pending.js';
 import {
@@ -10,7 +10,7 @@ import {
   unreadable,
   type ViemUserOperationReceipt,
 } from './confirm/receipt.js';
-import { chainIdOrGiveUp } from './confirm/timing.js';
+import { recordLate } from './confirm/timing.js';
 import { errorName } from './safe-tracker.js';
 import type { SendTracing } from './send.js';
 import type { AnyAction, BaseActions, TracedAction, ViemClientLike } from './types.js';
@@ -124,35 +124,6 @@ export function addUserOperationActions(
       return Promise.race([record(), confirmation.ended]);
     };
 
-    /** Records a wait whose chain id was unknown when it started, once it is known. Never rejects. */
-    const recordLateUserOperationReceipt = async (
-      ctx: Context,
-      startTime: Date,
-      chainId: Promise<number>,
-      userOpHash: string,
-      wait: Promise<ViemUserOperationReceipt>,
-    ): Promise<void> => {
-      let endTime: Date | undefined;
-      const settled = wait.then(
-        () => {
-          endTime = new Date();
-        },
-        () => {
-          endTime = new Date();
-        },
-      );
-      const id = await chainIdOrGiveUp(chainId, settled);
-      if (id === undefined) return;
-      try {
-        const handle = context.with(ctx, () =>
-          tracker.startUserOperationConfirm({ chainId: id, userOpHash, startTime }),
-        );
-        await recordUserOperationReceipt(handle, wait, () => endTime ?? new Date());
-      } catch (error) {
-        diag.error(`hashspan: failed to record confirm span (${errorName(error)})`);
-      }
-    };
-
     actions.waitForUserOperationReceipt = (args: unknown) => {
       let userOpHash: unknown;
       let chainId: number | undefined;
@@ -183,7 +154,18 @@ export function addUserOperationActions(
         track(recordUserOperationReceipt(handle, wait));
       } else if (late) {
         track(
-          recordLateUserOperationReceipt(late.ctx, late.startTime, late.chainId, userOpHash, wait),
+          recordLate(
+            late.ctx,
+            wait,
+            () => late.chainId,
+            (id) =>
+              tracker.startUserOperationConfirm({
+                chainId: id,
+                userOpHash,
+                startTime: late.startTime,
+              }),
+            (lateHandle, _id, endTimeOf) => recordUserOperationReceipt(lateHandle, wait, endTimeOf),
+          ),
         );
       }
       return wait;

@@ -93,11 +93,33 @@ export function dataOnly(
 }
 
 /**
+ * Copies made by {@link abiForTelemetry}, per ABI array and function name: a contract called many times is copied
+ * once, and the transactions it sends share that copy instead of each holding one of their own. Later changes to the
+ * caller's array are not seen; ABIs are written once.
+ */
+const abiCopies = new WeakMap<object, Map<string, Abi | undefined>>();
+/** Function names cached per ABI; calls naming more functions of one ABI are copied each time. */
+const MAX_COPIES_PER_ABI = 64;
+
+/**
  * The ABI items telemetry needs, copied without accessors: the functions named `functionName`, for the selector,
  * and the errors, to decode revert reasons. viem gets this copy, never the caller's ABI, so no getter in it runs.
  */
 export function abiForTelemetry(abi: unknown, functionName: unknown): Abi | undefined {
   if (!Array.isArray(abi)) return undefined;
+  if (typeof functionName !== 'string') return copyAbi(abi, functionName);
+  let copies = abiCopies.get(abi);
+  if (copies?.has(functionName)) return copies.get(functionName);
+  const copy = copyAbi(abi, functionName);
+  if (!copies) {
+    copies = new Map();
+    abiCopies.set(abi, copies);
+  }
+  if (copies.size < MAX_COPIES_PER_ABI) copies.set(functionName, copy);
+  return copy;
+}
+
+function copyAbi(abi: unknown[], functionName: unknown): Abi | undefined {
   const length = own(abi, 'length');
   const count = typeof length === 'number' ? length : 0;
   if (count > MAX_ABI_ITEMS) return undefined;

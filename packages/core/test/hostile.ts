@@ -513,6 +513,7 @@ const ATTRIBUTE_CHECKS: Record<string, Check> = {
   'blockchain.call_batch.sender': address,
   'blockchain.call_batch.call_count': count,
   'blockchain.call_batch.status': oneOf('success', 'reverted', 'partially_reverted'),
+  'blockchain.fee.payer': oneOf('facilitator', 'paymaster'),
   'blockchain.call_batch.status_code': count,
   'blockchain.call_batch.atomic': boolean,
   'blockchain.call_batch.transaction_hashes': list(
@@ -607,6 +608,7 @@ const METRIC_KEYS = new Set([
   'blockchain.system',
   'blockchain.chain.id',
   'blockchain.operation.subject',
+  'blockchain.fee.payer',
   'blockchain.tx.status',
   'blockchain.user_operation.success',
   'blockchain.call_batch.status',
@@ -644,10 +646,33 @@ export type Outcome =
   | { threw: false; value: unknown }
   | { threw: true; name: string; message: string };
 
-/** Runs `call`, returning its outcome instead of throwing; awaits a returned promise. */
-export async function outcomeOf(call: () => unknown): Promise<Outcome> {
+/** How long the adapter runner waits for one call or flush to settle. */
+export const SETTLE_LIMIT_MS = 10_000;
+
+/**
+ * Runs `call`, returning its outcome instead of throwing; awaits a returned promise, for at most `limitMs` when
+ * given: a promise that never settles is an outcome of its own, so a run reports it instead of waiting forever.
+ */
+export async function outcomeOf(call: () => unknown, limitMs?: number): Promise<Outcome> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    return { threw: false, value: await call() };
+    const result = call();
+    if (limitMs === undefined) return { threw: false, value: await result };
+    const unsettled = new Promise<Outcome>((resolve) => {
+      timer = setTimeout(
+        () =>
+          resolve({
+            threw: true,
+            name: 'unsettled',
+            message: `did not settle within ${limitMs} ms`,
+          }),
+        limitMs,
+      );
+    });
+    return await Promise.race([
+      Promise.resolve(result).then((value): Outcome => ({ threw: false, value })),
+      unsettled,
+    ]);
   } catch (error) {
     let name: string = typeof error;
     let message = '';
@@ -662,6 +687,8 @@ export async function outcomeOf(call: () => unknown): Promise<Outcome> {
       name = 'unreadable';
     }
     return { threw: true, name, message };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -756,13 +783,22 @@ async function runAdapterRow<I>(
   };
   const valuesOf = row.values ?? setup.values;
   const labels = valuesOf().map(([label]) => label);
+  // A request can carry the hostile value itself (a Proxy that throws when read): it is then compared by method only.
   const sentBy = (scenario: AdapterScenario): string =>
-    JSON.stringify(
-      (scenario.requests?.() ?? []).filter((request) => setup.sending?.has(request.method)),
-      (_key, value: unknown) => (typeof value === 'bigint' ? `${value}n` : value),
-    );
+    (scenario.requests?.() ?? [])
+      .filter((request) => setup.sending?.has(request.method))
+      .map((request) => {
+        try {
+          return JSON.stringify(request, (_key, value: unknown) =>
+            typeof value === 'bigint' ? `${value}n` : value,
+          );
+        } catch {
+          return `${request.method} with unreadable params`;
+        }
+      })
+      .join('\n');
   const settle = async (scenario: AdapterScenario, traced: I): Promise<Outcome> =>
-    outcomeOf(() => (scenario.flush ? scenario.flush() : setup.flush(traced)));
+    outcomeOf(() => (scenario.flush ? scenario.flush() : setup.flush(traced)), SETTLE_LIMIT_MS);
   const tracing = setup.tracing();
   for (const modes of setup.modes) {
     for (const [index, name] of labels.entries()) {
@@ -774,7 +810,10 @@ async function runAdapterRow<I>(
       let untraced: { outcome: string; sent: string } | undefined;
       if (row.untraced !== false) {
         const plain = await row.scenario(fresh(), undefined, false);
-        untraced = { outcome: signature(await outcomeOf(() => plain.call())), sent: sentBy(plain) };
+        untraced = {
+          outcome: signature(await outcomeOf(() => plain.call(), SETTLE_LIMIT_MS)),
+          sent: sentBy(plain),
+        };
       }
       const traced = setup.instrument({
         meterProvider: setup.meters.provider,
@@ -782,7 +821,7 @@ async function runAdapterRow<I>(
         ...(row.options?.(fresh()) ?? {}),
       });
       const scenario = await row.scenario(fresh(), traced, false);
-      const outcome = signature(await outcomeOf(() => scenario.call()));
+      const outcome = signature(await outcomeOf(() => scenario.call(), SETTLE_LIMIT_MS));
       const flushed = await settle(scenario, traced);
       if (untraced) {
         if (outcome !== untraced.outcome)
@@ -802,10 +841,10 @@ async function runAdapterRow<I>(
       debugSlow(`${row.name} | ${label}`, Date.now() - began);
       if (row.args && modes === setup.modes[0]) {
         const plain = await row.scenario(fresh(), undefined, true);
-        await outcomeOf(() => plain.call());
+        await outcomeOf(() => plain.call(), SETTLE_LIMIT_MS);
         const tracedGetters = setup.instrument({ meterProvider: setup.meters.provider });
         const counted = await row.scenario(fresh(), tracedGetters, true);
-        await outcomeOf(() => counted.call());
+        await outcomeOf(() => counted.call(), SETTLE_LIMIT_MS);
         await settle(counted, tracedGetters);
         if (counted.reads?.() !== plain.reads?.()) {
           problems.getters.push(
@@ -830,7 +869,9 @@ export function describeAdapterRows<I>(
     describe(row.name, () => {
       let results: Record<AdapterRule, string[]> | undefined;
       beforeAll(async () => {
+        const began = Date.now();
         results = await runAdapterRow(row, setup);
+        debugSlow(`${row.name} | the whole row`, Date.now() - began);
       }, 600_000);
       const rules =
         row.rules ??

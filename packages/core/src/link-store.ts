@@ -1,10 +1,13 @@
 import type { Context, SpanContext } from '@opentelemetry/api';
+import type { BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR } from './attributes.js';
 
 export interface SentTransaction {
   /** Span context of the `send` span, used for the span link. */
   spanContext: SpanContext;
   /** Parent context of the `send` span, used when confirmation happens in the background. */
   parent: Context;
+  /** Set when someone other than the sender pays the transaction's fee, such as a payment's facilitator. */
+  feePayer?: typeof BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR;
 }
 
 interface Entry extends SentTransaction {
