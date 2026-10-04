@@ -1,9 +1,9 @@
 import { diag, SpanStatusCode } from '@opentelemetry/api';
-import { createPublicClient } from 'viem';
+import { createPublicClient, createWalletClient } from 'viem';
 import { base } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
-import { HASH, mockTransport, TO } from './mock-transport.js';
+import { FROM, HASH, mockTransport, TO } from './mock-transport.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
 const MINED = `0x${'cd'.repeat(32)}` as const;
@@ -140,11 +140,15 @@ describe('replaced transactions', () => {
     expect(confirmOf(MINED)?.attributes['blockchain.tx.status']).toBe('success');
   });
 
-  it('records no reason when the library did not report the replacement', async () => {
-    await replacingClient({ report: false }).waitForTransactionReceipt({ hash: HASH });
-    await vi.waitFor(() => expect(confirmOf(MINED)).toBeDefined());
-    expect(confirmOf(HASH)?.attributes['blockchain.tx.status']).toBe('replaced');
-    expect(confirmOf(HASH)?.attributes['blockchain.tx.replacement.reason']).toBeUndefined();
+  it('records no receipt of another hash that the library did not report as a replacement', async () => {
+    await expect(
+      replacingClient({ report: false }).waitForTransactionReceipt({ hash: HASH }),
+    ).resolves.toBe(minedReceipt);
+    await vi.waitFor(() => expect(confirmOf(HASH)).toBeDefined());
+    expect(confirmOf(HASH)?.attributes['error.type']).toBe('_OTHER');
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.replacement.hash']).toBeUndefined();
+    expect(confirmOf(MINED)).toBeUndefined();
   });
 
   it('works without a caller onReplaced', async () => {
@@ -153,5 +157,57 @@ describe('replaced transactions', () => {
     );
     await vi.waitFor(() => expect(confirmOf(MINED)).toBeDefined());
     expect(confirmOf(HASH)?.attributes['blockchain.tx.replacement.reason']).toBe('repriced');
+  });
+});
+
+describe('a receipt of another transaction from the endpoint', () => {
+  // The node answers the receipt request for HASH with the receipt of MINED, which viem returns as is.
+  const node = () => mockTransport({ receipt: { transactionHash: MINED } }).transport;
+  const expectUnrecorded = () => {
+    expect(confirmOf(HASH)?.attributes['error.type']).toBe('_OTHER');
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.replacement.hash']).toBeUndefined();
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.fee']).toBeUndefined();
+    expect(confirmOf(MINED)).toBeUndefined();
+  };
+
+  it("is not recorded on the caller's wait, which still returns it", async () => {
+    const hashspan = withHashspan();
+    const reader = createPublicClient({
+      chain: base,
+      transport: node(),
+      pollingInterval: 10,
+    }).extend(hashspan);
+    await expect(reader.waitForTransactionReceipt({ hash: HASH })).resolves.toMatchObject({
+      transactionHash: MINED,
+    });
+    await expect(hashspan.flush()).resolves.toBe(true);
+    expectUnrecorded();
+  });
+
+  it('is not recorded by background confirmation', async () => {
+    const hashspan = withHashspan({ confirm: { mode: 'background', timeoutMs: 1_000 } });
+    const wallet = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: node(),
+      pollingInterval: 10,
+    }).extend(hashspan);
+    await expect(wallet.sendTransaction({ to: TO })).resolves.toBe(HASH);
+    await expect(hashspan.flush()).resolves.toBe(true);
+    expectUnrecorded();
+  });
+
+  it('is not recorded by watch()', async () => {
+    const hashspan = withHashspan();
+    const reader = createPublicClient({ chain: base, transport: node(), pollingInterval: 10 });
+    const onReceipt = vi.fn();
+    hashspan.watch(reader, { hash: HASH, timeoutMs: 1_000, onReceipt });
+    await expect(hashspan.flush()).resolves.toBe(true);
+    expectUnrecorded();
+    // The caller's callback still gets what viem returned.
+    await vi.waitFor(() =>
+      expect(onReceipt).toHaveBeenCalledWith(expect.objectContaining({ transactionHash: MINED })),
+    );
   });
 });

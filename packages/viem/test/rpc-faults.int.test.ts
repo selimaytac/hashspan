@@ -371,7 +371,7 @@ describe("the caller's waitForTransactionReceipt", () => {
     });
   }
 
-  it('records the receipt of another transaction that a mixed-up response returned as a replacement', async () => {
+  it('records nothing of the receipt of another transaction that a mixed-up response returned', async () => {
     const first = await minedTransfer();
     const second = await minedTransfer();
     /** Waits for both transactions in turn while each receipt request gets the previous one's answer. */
@@ -391,14 +391,15 @@ describe("the caller's waitForTransactionReceipt", () => {
 
     expect(traced).toEqual(untraced);
     expect(rejections).toEqual([]);
-    // The tracker attributes a receipt of another hash as a replacement (ADR 0008), though none was reported.
+    // Not a replacement: viem reported none (ADR 0008 matches one on sender and nonce). The span ends as a failure
+    // without the other transaction's data.
     const confirms = spansNamed('confirm ');
     expect(confirms).toHaveLength(2);
     const ofSecond = confirms.find((s) => s.attributes['blockchain.tx.hash'] === second);
-    expect(ofSecond?.attributes).toMatchObject({
-      'blockchain.tx.status': 'replaced',
-      'blockchain.tx.replacement.hash': first,
-    });
+    expect(ofSecond?.attributes['error.type']).toBe('_OTHER');
+    expect(ofSecond?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(ofSecond?.attributes['blockchain.tx.replacement.hash']).toBeUndefined();
+    expect(ofSecond?.attributes['blockchain.tx.fee']).toBeUndefined();
   });
 });
 
