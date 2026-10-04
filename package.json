@@ -17,6 +17,7 @@
     "test:integration": "vitest run --project integration --passWithNoTests",
     "test:integrations": "pnpm --dir integrations typecheck && pnpm --dir integrations test",
     "test:all": "vitest run",
+    "test:load": "HASHSPAN_LOAD=1 vitest run --project load",
     "changeset": "changeset",
     "release": "pnpm build && node scripts/publish-in-order.mjs",
     "version-packages": "changeset version && node scripts/sync-version.mjs && pnpm install --lockfile-only",
