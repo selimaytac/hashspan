@@ -163,7 +163,7 @@ privacy settings, not hashspan's: see the
     `new Mastra({ agents, observability: new Observability({ configs: { default: { serviceName: 'my-agent',
     bridge: new OtelBridge() } } }) })`. The tool's function sends with a client extended with `withHashspan()`.
   - To try it without a model API key, use a scripted model like the test's: `MockLanguageModelV4` from `ai/test`
-    (`ai` 7) with one `doGenerate` result that calls the tool and one that answers, enough for the agent's
+    (install `ai` 7) with one `doGenerate` result that calls the tool and one that answers, enough for the agent's
     `generate()`. The test file is the complete setup.
   - Mastra's warning that no `storage` is configured and it falls back to an in-memory store is expected: tracing
     needs no storage.

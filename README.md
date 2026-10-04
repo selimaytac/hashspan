@@ -114,7 +114,7 @@ await sdk.shutdown();
   `send 31337` and `confirm 31337` (the chain id), and the confirm span [linked](docs/backends.md#span-links) to the
   send span. [Backends](docs/backends.md) lists other setups.
 - **Base Sepolia:** use `baseSepolia` from `viem/chains`, `http()` or your RPC URL, and a funded key from the
-  environment, `privateKeyToAccount(process.env.PRIVATE_KEY)` from `viem/accounts`, instead.
+  environment instead: `` privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`) `` from `viem/accounts`.
 
 `flush()` matters in any process that exits after its last transaction
 ([shutting down](packages/viem/README.md#shutting-down)). See [`@hashspan/viem`](packages/viem) for details and
