@@ -9,25 +9,13 @@ import {
   resolveErrorMessageMode,
   resolvePaymentResourceMode,
 } from './privacy.js';
-import {
-  type CallBatchConfirmSpan,
-  createCallBatchSpans,
-  NOOP_CALL_BATCH_CONFIRM,
-  noopCallBatchSend,
-} from './tracker/call-batch.js';
-import { safely } from './tracker/handles.js';
+import { type CallBatchConfirmSpan, createCallBatchSpans } from './tracker/call-batch.js';
+import { NOOP_CONFIRM, noopSend, safely } from './tracker/handles.js';
 import { createPaymentSpans, NOOP_PAYMENT } from './tracker/payment.js';
 import { createSpanRecording } from './tracker/spans.js';
-import {
-  type ConfirmSpan,
-  createTransactionSpans,
-  NOOP_CONFIRM,
-  noopSend,
-} from './tracker/transaction.js';
+import { type ConfirmSpan, createTransactionSpans } from './tracker/transaction.js';
 import {
   createUserOperationSpans,
-  NOOP_USER_OPERATION_CONFIRM,
-  noopUserOperationSend,
   type UserOperationConfirmSpan,
 } from './tracker/user-operation.js';
 import { isChainId } from './tracker/values.js';
@@ -219,24 +207,21 @@ export function createTxTracker(given: TxTrackerOptions = {}): TxTracker {
     startConfirm: started('confirm', startConfirm, () => NOOP_CONFIRM),
     startPayment: started('payment', startPayment, () => NOOP_PAYMENT),
     startUserOperationSend: (input, parent) =>
-      started('user operation send', startUserOperationSend, () =>
-        noopUserOperationSend(parentOf(parent)),
-      )(input, parent),
-    startUserOperationConfirm: started(
-      'user operation confirm',
-      startUserOperationConfirm,
-      () => NOOP_USER_OPERATION_CONFIRM,
-    ),
-    startCallBatchSend: (input, parent) =>
-      started('call batch send', startCallBatchSend, () => noopCallBatchSend(parentOf(parent)))(
+      started('user operation send', startUserOperationSend, () => noopSend(parentOf(parent)))(
         input,
         parent,
       ),
-    startCallBatchConfirm: started(
-      'call batch confirm',
-      startCallBatchConfirm,
-      () => NOOP_CALL_BATCH_CONFIRM,
+    startUserOperationConfirm: started(
+      'user operation confirm',
+      startUserOperationConfirm,
+      () => NOOP_CONFIRM,
     ),
+    startCallBatchSend: (input, parent) =>
+      started('call batch send', startCallBatchSend, () => noopSend(parentOf(parent)))(
+        input,
+        parent,
+      ),
+    startCallBatchConfirm: started('call batch confirm', startCallBatchConfirm, () => NOOP_CONFIRM),
   };
 }
 

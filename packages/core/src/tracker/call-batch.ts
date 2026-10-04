@@ -43,11 +43,12 @@ import {
   errorType,
   type HandleOptions,
   handleOptions,
+  NOOP_CONFIRM,
   OBSERVER_TIMEOUT,
   reportedErrorType,
 } from './handles.js';
 import { metricAttributes, type SpanRecording, secondsSince } from './spans.js';
-import { isTxHash, smallQuantity } from './values.js';
+import { isTxHash, smallQuantity, ZERO_TX_HASH } from './values.js';
 
 /** `error.type` of a call batch that failed without being included (EIP-5792 status 400). */
 const CALL_BATCH_FAILED = 'failed';
@@ -72,17 +73,6 @@ function firstItems(list: unknown): unknown[] {
 
 /** EIP-5792 status code of a batch that is still pending. */
 const CALL_BATCH_PENDING = 100;
-
-export const noopCallBatchSend = (parent: Context): CallBatchSendHandle => ({
-  context: parent,
-  end: () => {},
-  fail: () => {},
-});
-export const NOOP_CALL_BATCH_CONFIRM: CallBatchConfirmHandle = {
-  end: () => {},
-  timeout: () => {},
-  fail: () => {},
-};
 
 /** The confirm span of one call batch and how to end it; shared by all its handles. */
 export interface CallBatchConfirmSpan extends SharedConfirm {
@@ -181,7 +171,7 @@ export function createCallBatchSpans({
             // Transactions the account sent itself for the batch are linked like those of a send span.
             const hashes: unknown = result.transactionHashes;
             for (const hash of firstItems(hashes)) {
-              if (isTxHash(hash) && !/^0x0+$/.test(hash)) links.set(chainId, hash, sent);
+              if (isTxHash(hash) && !ZERO_TX_HASH.test(hash)) links.set(chainId, hash, sent);
             }
             span.setAttributes(
               redact({
@@ -367,12 +357,12 @@ export function createCallBatchSpans({
     const { chainId, id } = input;
     if (!isCallBatchId(id)) {
       diag.debug('hashspan: not confirming a call batch without a valid id');
-      return NOOP_CALL_BATCH_CONFIRM;
+      return NOOP_CONFIRM;
     }
     const claim = joinConfirm(callBatchConfirmations, chainId, id, () =>
       openCallBatchConfirm(input, parentCtx),
     );
-    if (!claim) return NOOP_CALL_BATCH_CONFIRM;
+    if (!claim) return NOOP_CONFIRM;
     const { shared } = claim;
     return {
       end: (status, second) => {

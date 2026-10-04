@@ -47,6 +47,7 @@ import {
   errorType,
   type HandleOptions,
   handleOptions,
+  NOOP_CONFIRM,
   OBSERVER_TIMEOUT,
   reportedErrorType,
 } from './handles.js';
@@ -54,18 +55,6 @@ import { metricAttributes, type SpanRecording, secondsSince } from './spans.js';
 import { quantity, smallQuantity, TX_HASH } from './values.js';
 
 const ZERO_ADDRESS = /^0x0{40}$/;
-
-export const noopUserOperationSend = (parent: Context): UserOperationSendHandle => ({
-  context: parent,
-  end: () => {},
-  fail: () => {},
-});
-
-export const NOOP_USER_OPERATION_CONFIRM: UserOperationConfirmHandle = {
-  end: () => {},
-  timeout: () => {},
-  fail: () => {},
-};
 
 /** The confirm span of one user operation and how to end it; shared by all its handles. */
 export interface UserOperationConfirmSpan extends SharedConfirm {
@@ -309,12 +298,12 @@ export function createUserOperationSpans({
     const { chainId, userOpHash } = input;
     if (typeof userOpHash !== 'string' || !TX_HASH.test(userOpHash)) {
       diag.debug('hashspan: not confirming a user operation without a valid hash');
-      return NOOP_USER_OPERATION_CONFIRM;
+      return NOOP_CONFIRM;
     }
     const claim = joinConfirm(userOperationConfirmations, chainId, userOpHash, () =>
       openUserOperationConfirm(input, parentCtx),
     );
-    if (!claim) return NOOP_USER_OPERATION_CONFIRM;
+    if (!claim) return NOOP_CONFIRM;
     const { shared } = claim;
     return {
       end: (receipt, second) => {
