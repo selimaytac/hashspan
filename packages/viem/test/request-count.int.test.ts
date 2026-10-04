@@ -126,8 +126,25 @@ const send = ({ wallet }: Clients, to: Address = RECIPIENT): Promise<Hex> =>
     value: to === RECIPIENT ? 1n : 0n,
     gas: 100_000n,
   });
-const sendAndWait = async (clients: Clients, to?: Address) =>
+/** Sends and waits at once, as an application does: the methods any receipt wait can use. */
+const sendAndWaitAtOnce = async (clients: Clients, to?: Address) =>
   clients.reader.waitForTransactionReceipt({ hash: await send(clients, to) });
+
+/**
+ * Sends and waits for the receipt. Anvil can return the hash a moment before the block is mined; a wait that polls
+ * before then also reads the transaction (viem's replacement check), so two runs could differ by an
+ * `eth_getTransactionByHash`. The wait therefore starts once the receipt is there, and the extra receipt polls are
+ * left out of the exact counts (see POLLING).
+ */
+const sendAndWait = async (clients: Clients, to?: Address) => {
+  const hash = await send(clients, to);
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const receipt = await clients.reader.getTransactionReceipt({ hash }).catch(() => undefined);
+    if (receipt) break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return clients.reader.waitForTransactionReceipt({ hash });
+};
 
 describe('JSON-RPC requests the viem adapter adds', () => {
   // Polling methods are left out of these exact counts (see POLLING); every other method is counted exactly.
@@ -146,8 +163,11 @@ describe('JSON-RPC requests the viem adapter adds', () => {
     });
     // The methods a caller's own wait uses, measured without hashspan. How often viem polls them depends on when
     // blocks arrive, so the methods are pinned, not the number of polls.
-    const wait = difference(await measure(sendAndWait), await measure(send));
-    expect(Object.keys(extra).every((method) => method in wait)).toBe(true);
+    const wait = difference(await measure(sendAndWaitAtOnce), await measure(send));
+    // A wait whose first poll finds no receipt also reads the transaction (viem's replacement check), whether or not
+    // the measured wait happened to.
+    const allowed = new Set([...Object.keys(wait), 'eth_getTransactionByHash']);
+    expect(Object.keys(extra).every((method) => allowed.has(method))).toBe(true);
     expect(extra.eth_getTransactionReceipt).toBeGreaterThanOrEqual(1);
   });
 
