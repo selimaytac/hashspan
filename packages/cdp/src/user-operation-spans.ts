@@ -24,6 +24,8 @@ import { SentUserOperations, userOperationReceiptFromBundle } from './user-opera
 const MAX_SENT_USER_OPERATIONS = 4096;
 // The same default as the confirmations through the reader (`confirmTimeoutMs`).
 const DEFAULT_CONFIRM_TIMEOUT_MS = 120_000;
+// `error.type` of a confirm span whose outcome could not be read.
+const ERROR_TYPE_OTHER = '_OTHER';
 // How often the reader is asked for a bundle receipt when it has no polling interval of its own.
 const DEFAULT_POLLING_INTERVAL_MS = 1000;
 
@@ -196,15 +198,25 @@ export function createUserOperationSpans({
   ): Promise<void> => {
     let ended = false;
     let completed: { receipt: UserOperationReceiptLike; endTime: Date } | undefined;
+    /**
+     * Ends the handle once with `record`, which reads the outcome and calls a handle method. If that throws (an
+     * outcome that cannot be read), the handle still ends, as a failure with `error.type` `_OTHER`; the abandon
+     * callback is removed only once a handle method was called (ADR 0025 rule 1).
+     */
     const end = (record: () => void, what: string): void => {
       if (ended) return;
       ended = true;
-      waiting.delete(abandon);
       try {
         record();
       } catch (error) {
         diag.error(`hashspan: failed to record ${what} (${errorName(error)})`);
+        try {
+          handle.fail(undefined, { errorType: ERROR_TYPE_OTHER });
+        } catch (failure) {
+          diag.error(`hashspan: failed to end the confirm span (${errorName(failure)})`);
+        }
       }
+      waiting.delete(abandon);
     };
     const abandon = (): void =>
       end(
@@ -249,7 +261,7 @@ export function createUserOperationSpans({
         end(
           () =>
             // The SDK's wait gives up with a TimeoutError; the operation may still complete.
-            error instanceof Error && error.name === 'TimeoutError'
+            error instanceof Error && own(error, 'name') === 'TimeoutError'
               ? handle.timeout()
               : handle.fail(error),
           'confirmation failure',
