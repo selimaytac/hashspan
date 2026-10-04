@@ -51,6 +51,21 @@ const HOOKS = [
 ] as const;
 // The same default as @hashspan/viem's flush().
 const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
+
+/**
+ * The `timeoutMs` of flush options, read as an own data property, as @hashspan/viem's flush() reads it: the default for
+ * options without a usable one, or that cannot be read (such as a revoked Proxy), so `flush()` always resolves.
+ */
+function flushTimeoutOf(options: unknown): number {
+  try {
+    const value = own(options, 'timeoutMs');
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? Math.min(value, 2 ** 31 - 1)
+      : DEFAULT_FLUSH_TIMEOUT_MS;
+  } catch {
+    return DEFAULT_FLUSH_TIMEOUT_MS;
+  }
+}
 /** How long a payment may wait for its response: its authorization's validity, plus a grace period, bounded. */
 const DEFAULT_VALIDITY_S = 300;
 const GRACE_MS = 30_000;
@@ -802,8 +817,8 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
 
   const handle: HashspanX402 = {
     flush: async (flushOptions) => {
+      const deadline = Date.now() + flushTimeoutOf(flushOptions);
       try {
-        const deadline = Date.now() + (flushOptions?.timeoutMs ?? DEFAULT_FLUSH_TIMEOUT_MS);
         // In order: a response that arrives while payments are awaited can start a confirmation for viem to await.
         const paymentsDone = await flushPayments(deadline);
         const viemDone = await viem.flush({ timeoutMs: Math.max(0, deadline - Date.now()) });

@@ -92,3 +92,43 @@ describe('flush', () => {
     await expect(hashspan.flush({ timeoutMs: 50 })).resolves.toBe(true);
   });
 });
+
+/** Flush options telemetry cannot read: null, a revoked Proxy, a getter or a `get` trap that throws. */
+function unreadableOptions(): [string, unknown][] {
+  const { proxy: revoked, revoke } = Proxy.revocable({}, {});
+  revoke();
+  const getter = {};
+  Object.defineProperty(getter, 'timeoutMs', {
+    enumerable: true,
+    get: () => {
+      throw new Error('getter');
+    },
+  });
+  const trap = new Proxy(
+    {},
+    {
+      get() {
+        throw new Error('trap');
+      },
+      getOwnPropertyDescriptor() {
+        throw new Error('trap');
+      },
+    },
+  );
+  return [
+    ['null', null],
+    ['a revoked Proxy', revoked],
+    ['a throwing getter', getter],
+    ['a throwing Proxy', trap],
+  ];
+}
+
+describe('flush() with options it cannot read', () => {
+  it.each(unreadableOptions())(
+    'resolves with %s, waiting as long as by default',
+    async (_, options) => {
+      const hashspan = withHashspan();
+      await expect(hashspan.flush(options as never)).resolves.toBe(true);
+    },
+  );
+});
