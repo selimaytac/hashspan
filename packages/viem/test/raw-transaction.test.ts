@@ -1,7 +1,7 @@
 // sendRawTransaction and sendRawTransactionSync: a transaction signed elsewhere and broadcast through viem gets a send
 // span from the signed transaction's own fields, without its sender (#33).
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
-import { createWalletClient, type Hex } from 'viem';
+import { createPublicClient, createWalletClient, type Hex } from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { sendTransaction } from 'viem/actions';
 import { base, optimism } from 'viem/chains';
@@ -181,6 +181,25 @@ describe('sendRawTransaction', () => {
     const send = tracing.spanNamed('send 8453');
     const confirm = tracing.spanNamed('confirm 8453');
     expect(confirm.links[0]?.context.spanId).toBe(send.spanContext().spanId);
+  });
+});
+
+describe('on a public client', () => {
+  it('records the raw send of a relayer that broadcasts through a public client', async () => {
+    const hashspan = withHashspan();
+    const reader = createPublicClient({ chain: base, transport: mockTransport().transport }).extend(
+      hashspan,
+    );
+
+    const hash = await reader.sendRawTransaction({ serializedTransaction: await signed() });
+    await reader.waitForTransactionReceipt({ hash });
+    await hashspan.flush();
+
+    const send = tracing.spanNamed('send 8453');
+    expect(send.attributes['blockchain.tx.to']).toBe(TO);
+    expect(tracing.spanNamed('confirm 8453').links[0]?.context.spanId).toBe(
+      send.spanContext().spanId,
+    );
   });
 });
 
