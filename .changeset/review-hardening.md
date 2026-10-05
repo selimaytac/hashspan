@@ -8,8 +8,8 @@
 More bounds on what telemetry reads:
 
 - A sanitized error message scans at most the first 4096 characters of its first line for URLs and hex values (a hex
-  value cut there is still recorded as without the cut); the recorded message is cut to 256 characters as before. A
-  URL cut at that bound inside its user info is recorded as `<url>`.
+  value cut there is still recorded as without the cut); text past that bound is not recorded, and the recorded
+  message is cut to 256 characters as before. A URL cut at that bound before its path is recorded as `<url>`.
 - `waitForTransactionReceipt` in `@hashspan/viem`, and the wait of a network-scoped account in `@hashspan/cdp`, read at
   most 64 objects of the arguments' prototype chain when they look up `onReplaced`; arguments with a longer chain are
   passed on untraced and unchanged, as arguments that cannot be read are.
