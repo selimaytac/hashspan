@@ -398,8 +398,9 @@ When a framework extends the client you pass in, check whether confirm spans app
 - A transaction sent while `maxBackgroundConfirmations` confirmations are polling gets no background confirm span, and
   in serverless runtimes that freeze after the response, background confirmations may not complete
   ([background confirmation](#background-confirmation)).
-- A wait that resolves with the receipt of another transaction records it as a replacement, also when it is not one,
-  as after a mixed-up RPC response ([#355](https://github.com/selimaytac/hashspan/issues/355)).
+- A wait that resolves with the receipt of another transaction that viem did not report as a replacement, as after a
+  mixed-up RPC response, ends the confirm span with `error.type` `_OTHER` and records none of that receipt's data;
+  the transaction's own outcome is not recorded ([#355](https://github.com/selimaytac/hashspan/issues/355)).
 - A preconfirmed receipt whose sealed receipt does not come in time is recorded without fees
   ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)).
 - Revert reasons are best effort: a provider without historical state cannot replay the transaction, and earlier
