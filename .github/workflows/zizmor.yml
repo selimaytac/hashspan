@@ -1,10 +1,10 @@
 name: Workflow audit
 
 # zizmor checks the GitHub Actions workflows for injection, excessive permissions, credential persistence and
-# unpinned actions (ADR 0025). Findings go to code scanning.
+# unpinned actions (ADR 0025). Findings go to code scanning. It runs on every pull request, so that `main` can require
+# it: a required check that a path filter skips would leave a pull request waiting.
 on:
   pull_request:
-    paths: ['.github/workflows/**', '.github/actions/**']
   push:
     branches: [main]
     paths: ['.github/workflows/**', '.github/actions/**']

@@ -81,8 +81,12 @@ done
 ```
 
 **2. Restrict releases to `main`.** Protect `main` with a ruleset: pull requests required (squash merge, no
-required approvals and no required status checks, since the version pull request opened by GitHub Actions runs no CI),
-force pushes and deletion blocked, no bypass. Then create a GitHub environment named `npm` (Settings, Environments)
+required approvals), force pushes and deletion blocked, and these status checks required: `Lint, typecheck, unit
+tests, build`, `Integration tests (Anvil)`, `Dependency audit and licenses`, `Secret scan`, `zizmor`, and CodeQL's
+`Analyze (actions)` and `Analyze (javascript-typescript)` (code scanning default setup). Repository admins may bypass
+it for pull request merges only. In Settings, Actions, General, allow only actions by GitHub and the third-party
+actions the workflows use, and require actions to be pinned to a full-length commit SHA; a new third-party action is
+added to that list in the pull request that starts using it. Then create a GitHub environment named `npm` (Settings, Environments)
 with deployment branches limited to `main` and a maintainer as required reviewer. The release job runs in that environment, so GitHub refuses to run it from any
 other branch, even if the workflow file is changed there.
 
