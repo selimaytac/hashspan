@@ -110,6 +110,26 @@ describe('a wallet service with an EIP-1193 provider, through custom()', () => {
     expect(methods.filter((method) => method !== 'eth_chainId')).toEqual(['eth_sendTransaction']);
   });
 
+  it('confirms through watch() on a public client when the provider answers no reads', async () => {
+    const { provider } = serviceProvider();
+    const hashspan = withHashspan();
+    const wallet = createWalletClient({
+      account: serviceKey.address,
+      chain: anvil,
+      transport: custom(provider),
+    }).extend(hashspan);
+    const reader = createPublicClient({ chain: anvil, transport: http(RPC_URL) });
+
+    const hash = await wallet.sendTransaction({ to: RECIPIENT, value: 1n });
+    hashspan.watch(reader, { hash });
+    await hashspan.flush();
+
+    const send = tracing.spanNamed('send 31337');
+    const confirm = tracing.spanNamed('confirm 31337');
+    expect(confirm.links[0]?.context.spanId).toBe(send.spanContext().spanId);
+    expect(confirm.attributes['blockchain.tx.status']).toBe('success');
+  });
+
   it('ends the send span with the error when the service refuses, and rethrows it unchanged', async () => {
     const { provider } = serviceProvider({ deny: true });
     const wallet = createWalletClient({

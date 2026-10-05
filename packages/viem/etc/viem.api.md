@@ -30,7 +30,7 @@ export interface HashspanExtension {
 }
 
 // @public
-export type TracedAction = "sendTransaction" | "writeContract" | "sendTransactionSync" | "writeContractSync" | "waitForTransactionReceipt" | "sendUserOperation" | "waitForUserOperationReceipt" | "sendCalls" | "sendCallsSync" | "waitForCallsStatus";
+export type TracedAction = "sendTransaction" | "writeContract" | "sendTransactionSync" | "writeContractSync" | "sendRawTransaction" | "sendRawTransactionSync" | "waitForTransactionReceipt" | "sendUserOperation" | "waitForUserOperationReceipt" | "sendCalls" | "sendCallsSync" | "waitForCallsStatus";
 
 // @public
 export function traceTransport<TTransport extends Transport>(transport: TTransport, options?: TraceTransportOptions): TTransport;

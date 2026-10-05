@@ -118,7 +118,7 @@ Exit criteria:
 
 Not scheduled: each needs a user or an integration that asks for it.
 
-- viem `deployContract` and `sendRawTransaction` (#36, #33)
+- viem `deployContract` (#36)
 - x402 resource servers and facilitators (#164; ADR 0023 proposed in #199)
 - ethers v6 adapter
 - Non-EVM chains

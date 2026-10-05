@@ -70,6 +70,28 @@ in the revert reason, and `onReceipt`, called once when the watch ends with the 
 with `undefined` when none was retrieved; it never affects the confirm span. `watch()` never throws or waits;
 `flush()` awaits the confirmation, not the callback.
 
+To get a send span as well, record the call that sends with the core's tracker and give `withHashspan()` the same
+tracker (install `@hashspan/core` too, at the minor of `@hashspan/viem`): the send span then covers the call,
+including the service's queue and approval steps, and the confirm span links to it.
+
+```ts
+const tracker = createTxTracker();
+const hashspan = withHashspan({ tracker });
+const reader = createPublicClient({ chain: baseSepolia, transport: http() });
+
+const send = tracker.startSend({ chainId: baseSepolia.id, from, to, value });
+let hash: `0x${string}`;
+try {
+  // The API call runs in the send span's context, so its HTTP span nests under the send span.
+  ({ transactionHash: hash } = await context.with(send.context, () => walletApi.send(tx)));
+  send.end({ hash });
+} catch (error) {
+  send.fail(error);
+  throw error;
+}
+hashspan.watch(reader, { hash }); // linked to the send span
+```
+
 The confirm span's parent is the span active when `watch()` is called. Without one, it is the send span's parent when
 the same tracker sent the transaction; otherwise, as for a hash sent by another tracker or by something untraced, the
 confirm span is in a trace of its own, with no send span and no link
@@ -193,6 +215,27 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
   [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/adr/0018-background-confirmation-limit.md).
 - In serverless runtimes that freeze after the response, background confirmations may not complete.
 
+## Many transactions
+
+In a worker or a bot that sends many transactions, these limits decide what is recorded:
+
+- **Background confirmations at once.** Past `maxBackgroundConfirmations`, a transaction gets no background confirm
+  span and so no confirmation or fee sample ([background confirmation](#background-confirmation)). Size it to the
+  transactions you send per second times how long one takes to confirm, or wait for receipts yourself: your own waits
+  are not counted.
+- **Requests to your provider.** Each background confirmation polls for its receipt through the sending client, at
+  the client's `pollingInterval`
+  ([JSON-RPC requests hashspan adds](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/architecture.md#json-rpc-requests-hashspan-adds)).
+- **Links to the send.** The tracker keeps a send for `linkTtlMs` after it ended, and at most
+  `maxTrackedTransactions` sends ([core options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.12.0/packages/core#options)). A confirmation that starts later, or
+  after that many newer sends, has no link, and without an active span starts a trace of its own. Background
+  confirmation starts at the send and is not affected; a wait or a `watch()` you start later is, so raise both when
+  you confirm in batches long after sending.
+- **Sampling.** The send, confirmation and fee [metrics](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/semconv.md#metrics) record every transaction
+  whatever the sampler decides, so their percentiles stay complete while you sample traces. With a parent-based
+  sampler, a send and its confirm span are kept or dropped together
+  ([troubleshooting](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/troubleshooting.md#a-send-span-but-no-confirm-span)).
+
 ## Smart accounts (ERC-4337)
 
 A smart account sends user operations, not transactions: a bundler includes them in a bundle transaction that the
@@ -301,6 +344,8 @@ const wallet = createWalletClient({
 | `sendTransaction` | `send` | chain id, from, to, value, nonce (when the call passes one), function selector, hash, and the EIP-7702 authorizations of a type 4 transaction (count, delegated addresses, chain ids; never signatures) |
 | `writeContract` | `send` | as above, plus the function name, and the call arguments with `recordFunctionArguments: true` |
 | `sendTransactionSync`, `writeContractSync` | `send` and `confirm` | as `sendTransaction` or `writeContract` and `waitForTransactionReceipt`; both spans cover the call, since viem returns the hash only with the receipt |
+| `sendRawTransaction` | `send` | on a wallet or a public client, from the signed transaction: chain id (the client's when it has none), to, value, nonce, function selector, hash and EIP-7702 authorizations; no sender, which only the signature gives. A transaction that viem cannot parse, or longer than 128 KiB, records the chain id and hash only |
+| `sendRawTransactionSync` | `send` and `confirm` | as `sendRawTransaction` and `waitForTransactionReceipt`, over the call like the other sync forms |
 | `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack) and total fee from the sealed receipt ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)), revert reason, replacement |
 | `sendUserOperation` | `send` | chain id, smart account, EntryPoint, number of calls, user operation hash; see [Smart accounts](#smart-accounts-erc-4337) |
 | `waitForUserOperationReceipt` | `confirm` | success, gas used, cost, nonce, paymaster, revert reason, bundle transaction hash and block |
@@ -308,7 +353,8 @@ const wallet = createWalletClient({
 | `waitForCallsStatus` | `confirm` | outcome, status code, atomicity, transaction hashes, highest block |
 | `sendCallsSync` | `send` and `confirm` | as `sendCalls` and `waitForCallsStatus` |
 
-While `sendTransaction`, `writeContract` (or their sync forms), `sendUserOperation` or `sendCalls` runs, its send span is the active span, so spans that your RPC or HTTP
+While `sendTransaction`, `writeContract`, `sendRawTransaction` (or their sync forms), `sendUserOperation` or
+`sendCalls` runs, its send span is the active span, so spans that your RPC or HTTP
 instrumentation creates for the request nest under it; the code after the call stays in your own context.
 
 Failed sends, reverted receipts and receipt timeouts set error status; the original error is always rethrown
@@ -331,18 +377,18 @@ When a framework extends the client you pass in, check whether confirm spans app
 
 ## Known limits
 
-- Not traced: `deployContract` ([#36](https://github.com/selimaytac/hashspan/issues/36)), `sendRawTransaction`
-  ([#33](https://github.com/selimaytac/hashspan/issues/33)) and `sendRawTransactionSync`, which start from a signed
-  transaction.
+- Not traced: `deployContract` ([#36](https://github.com/selimaytac/hashspan/issues/36)).
 - `sendTransactionSync` and `writeContractSync` (viem 2.38.0) send and wait in one call: their send span ends when
   the receipt arrives, and a wait that times out inside the call is recorded as a failed send without a hash and no
   confirm span.
-- Only actions called as methods of an extended client are traced: a library that calls viem's actions as functions
-  or creates its own client bypasses the extension
+- Only actions called as methods of an extended client are traced as such: a library that calls viem's actions as
+  functions bypasses the extension for that action, and one that creates its own client bypasses it entirely. A
+  function is recorded only through the client actions viem calls inside it, with less detail
   ([libraries that take a viem client](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/integrations.md#libraries-that-take-a-viem-client)),
   and an extension applied after `withHashspan()` can hide the traced actions ([apply it last](#apply-it-last)).
 - A transaction sent by a wallet API or a wallet provider that creates its own client gets a confirm span through
-  `watch()`, but no send span ([transactions sent elsewhere](#transactions-sent-elsewhere)).
+  `watch()`, and a send span only when you record the call that sends with the same tracker
+  ([transactions sent elsewhere](#transactions-sent-elsewhere)).
 - Only waits are traced: polling `getTransactionReceipt` or `getCallsStatus` yourself records nothing
   ([call batches](#call-batches-eip-5792)).
 - Background confirmation and `watch()` cover transactions only: a user operation or a call batch gets a confirm span

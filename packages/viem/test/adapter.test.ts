@@ -403,7 +403,15 @@ describe('robustness', () => {
     const extension = withHashspan()(
       createPublicClient({ chain: base, transport: mockTransport().transport }),
     );
-    expect(Object.keys(extension)).toEqual(['waitForTransactionReceipt']);
+    // A public client broadcasts signed transactions too (sendRawTransaction and, from viem 2.38.0, its sync form).
+    expect(Object.keys(extension).sort()).toEqual(
+      ['sendRawTransaction', 'sendRawTransactionSync', 'waitForTransactionReceipt'].filter(
+        (action) =>
+          typeof (
+            createPublicClient({ chain: base, transport: mockTransport().transport }) as never
+          )[action] === 'function',
+      ),
+    );
   });
 
   it('is shadowed by publicActions applied afterwards, so it must be applied last', async () => {
