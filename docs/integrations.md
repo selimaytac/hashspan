@@ -1,7 +1,8 @@
 # Integrations
 
-Agents rarely call viem or the CDP SDK directly: a toolkit, a framework or a wallet service sits in between. hashspan
-traces the client those libraries send through, so most integrations come down to handing them a traced client.
+Agents and services rarely call viem or the CDP SDK directly: a toolkit, a framework or a wallet service sits in
+between. hashspan traces the client those libraries send through, so most integrations come down to handing them a
+traced client.
 This page collects the setups that were checked; each code block is compiled in CI. When a span is missing, see
 [troubleshooting](troubleshooting.md).
 
@@ -22,7 +23,8 @@ This page collects the setups that were checked; each code block is compiled in 
 | Mastra | `@hashspan/viem` | Mastra's OpenTelemetry bridge | the bridge is experimental ([setup](#agent-frameworks)) | `integrations/` |
 | LangChain JS, OpenAI Agents SDK (OpenInference) | `@hashspan/viem` | run tools in an active span of your own | tool spans are not active ([setup](#agent-frameworks)) | `integrations/` |
 | ElizaOS `plugin-evm` | none | none | not traced: it creates its own wallet client ([details](#agent-frameworks)) | no |
-| Wallet services with a viem account | `@hashspan/viem` | none | none ([setup](#wallet-services)) | as viem clients |
+| Wallet services with a viem account (Turnkey, Privy) | `@hashspan/viem` | none | none ([setup](#wallet-services)) | as viem clients |
+| Wallet services with an EIP-1193 provider (Circle, Fireblocks) | `@hashspan/viem` on a `custom()` transport | a public client as reader when the provider does not answer reads | Circle smart contract accounts not checked ([setup](#wallet-services)) | no |
 | Wallet services that send through their API | `@hashspan/viem` `watch()` | a public client | no send span ([setup](#wallet-services)) | no |
 
 ## Libraries that take a viem client
@@ -290,9 +292,36 @@ async function payVendor(): Promise<`0x${string}`> {
 
 ## Wallet services
 
-- **Services that provide a viem account**, such as Privy's server wallets through `createViemAccount` or Turnkey's
-  viem integration, sign while viem sends: create a wallet client with that account and extend it as in the
-  [viem quick start](../packages/viem/README.md#usage). Every transaction is traced like one signed locally.
-- **Services that send through their own API**, such as a server wallet API that returns a transaction hash: record
-  the transaction with [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) and a public client of
-  your own. The confirm span then covers the wait; there is no send span, since the send happened elsewhere.
+How a wallet service sends decides what hashspan records:
+
+- **Services that provide a viem account** sign while viem sends: create a wallet client with that account and extend
+  it as in the [viem quick start](../packages/viem/README.md#usage). Every transaction is traced like one signed
+  locally.
+- **Services that provide an EIP-1193 provider** send when the provider receives `eth_sendTransaction` and return the
+  hash: create a wallet client with `custom(provider)`, the wallet's address as `account` and the chain, and extend it
+  with `withHashspan()`. viem sends `eth_sendTransaction` for an address-only account, so the send span covers the
+  service's call; wait for receipts through an extended public client on an RPC endpoint when the provider does not
+  answer reads.
+- **Services that send through their own API** return a transaction hash, sometimes only after polling: record the
+  transaction with [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) and a public client of your
+  own. The confirm span then covers the wait; there is no send span, since the send happened elsewhere.
+
+These services were checked against the source of their published packages, on the versions named; none of them
+runs in CI.
+
+| Service | How it sends | Use | Spans |
+|---|---|---|---|
+| Turnkey (`@turnkey/viem` 0.14) | `createAccount()` returns a viem account | `withHashspan()` on the wallet client | send, confirm |
+| Privy (`@privy-io/node` 0.35) | `createViemAccount()` from `@privy-io/node/viem` returns a viem account | `withHashspan()` on the wallet client | send, confirm |
+| Privy API | `wallets().ethereum().sendTransaction()` returns the `hash` | `watch()` | confirm |
+| Privy x402 (`createX402Client()` from `@privy-io/node/x402`, experimental) | returns an `x402Client` | [`@hashspan/x402`](../packages/x402/README.md#usage) on that client, with `@x402/core` 2.13 or later | payment, confirm |
+| Circle developer-controlled wallets (`@circle-fin/developer-controlled-wallets` 10.8) | `createEIP1193Provider()` from `/evm`: `eth_sendTransaction` creates the transaction and resolves with its hash once Circle has sent it; other reads go to its `fallback` provider, if one is set | `custom(provider)`; a public client on your RPC endpoint for receipts | send, confirm |
+| Circle API | `createTransaction()` returns an id; `getTransaction({ id, waitForState: 'SENT' })` returns the `txHash` | `watch()` | confirm |
+| Fireblocks (`@fireblocks/fireblocks-web3-provider` 1.5) | an EIP-1193 provider: `eth_sendTransaction` creates a Fireblocks transaction and returns its hash; other requests go to its `rpcUrl` | `custom(provider)` with the vault account's address | send, confirm |
+
+- **Send duration:** with an account or a provider from a service, the send span also covers the service's queue and
+  its policy or approval steps, so it lasts longer than a local signer's.
+- **Privy:** `@privy-io/server-auth` is deprecated in favour of `@privy-io/node`; its `createViemAccount()` works
+  the same way.
+- **Circle smart contract accounts (ERC-4337):** Circle reports their hash only once the transaction is confirmed;
+  this path was not checked.

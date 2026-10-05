@@ -1,6 +1,7 @@
 # @hashspan/core
 
-Transaction lifecycle tracing for the on-chain actions of AI agents, built on OpenTelemetry.
+Transaction lifecycle tracing for the on-chain actions of AI agents and other services that send transactions,
+built on OpenTelemetry.
 
 `@hashspan/core` turns a transaction into two spans inside your existing trace:
 

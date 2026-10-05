@@ -1,7 +1,7 @@
 {
   "name": "hashspan",
   "private": true,
-  "description": "OpenTelemetry tracing for on-chain transactions sent by AI agents.",
+  "description": "OpenTelemetry tracing for on-chain transactions sent by AI agents and other services.",
   "license": "Apache-2.0",
   "type": "module",
   "packageManager": "pnpm@10.30.3",

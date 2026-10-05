@@ -18,6 +18,7 @@
     "tracing",
     "viem",
     "evm",
+    "transactions",
     "ai-agents",
     "observability"
   ],
