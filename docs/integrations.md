@@ -51,15 +51,45 @@ without extra code.
 ### `ViemWalletProvider`
 
 The provider sends with the wallet client you give it, and waits for receipts with a public client it creates
-itself, so the setup needs background confirmation:
+itself, so the setup needs background confirmation. On Anvil, with the OpenTelemetry SDK started as in the
+[quick start](../README.md#quick-start):
 
 ```ts
+import { ViemWalletProvider } from '@coinbase/agentkit';
+import { withHashspan } from '@hashspan/viem';
+import { trace } from '@opentelemetry/api';
+import { createWalletClient, http, parseEther } from 'viem';
+import { mnemonicToAccount } from 'viem/accounts';
+import { foundry } from 'viem/chains';
+
+// Start the OpenTelemetry SDK before this, as in the quick start.
+const rpcUrl = 'http://127.0.0.1:8545'; // Anvil
+const account = mnemonicToAccount('test test test test test test test test test test test junk');
+
 // The provider waits for receipts on a client of its own: background confirmation records them.
 const hashspan = withHashspan({ confirm: { mode: 'background' } });
-const walletClient = createWalletClient({ account, chain, transport: http() }).extend(hashspan);
-const walletProvider = new ViemWalletProvider(walletClient);
+const walletClient = createWalletClient({ account, chain: foundry, transport: http(rpcUrl) }).extend(
+  hashspan,
+);
+const walletProvider = new ViemWalletProvider(
+  // AgentKit pins its own viem: see below.
+  walletClient as unknown as ConstructorParameters<typeof ViemWalletProvider>[0],
+  { rpcUrl },
+);
 
-// Before a short-lived process exits:
+await trace.getTracer('my-agent').startActiveSpan('pay_vendor', async (span) => {
+  try {
+    // The amount in wei, as a decimal string.
+    await walletProvider.nativeTransfer(
+      '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+      parseEther('0.01').toString(),
+    );
+  } finally {
+    span.end();
+  }
+});
+
+// Before a short-lived process exits, then shut the SDK down:
 await hashspan.flush();
 ```
 
@@ -77,7 +107,10 @@ Two details of the provider apply with or without hashspan:
   TypeScript rejects the wallet client in `new ViemWalletProvider(walletClient)`, while the client works at runtime.
   Cast it as the test does, with or without hashspan:
   `new ViemWalletProvider(walletClient as unknown as ConstructorParameters<typeof ViemWalletProvider>[0])`. With the
-  same viem version as AgentKit, no cast is needed.
+  same viem version as AgentKit, no cast is needed. tsx does not check types, so without the cast the error shows
+  only under `tsc`.
+- `nativeTransfer(to, value)` takes the amount in wei as a decimal string: `'0.01'` throws, while
+  `parseEther('0.01').toString()` sends 0.01 ETH.
 
 ### `CdpEvmWalletProvider`
 
@@ -117,8 +150,9 @@ provider with the constructor that `configureWithWallet()` ends with, around a `
   provider's send call as shown there for a send span.
 
 AgentKit reports each wallet provider's initialization and each action invocation to its analytics endpoint; this
-is AgentKit's own behaviour and independent of hashspan. In 0.10.4, a failed analytics request, for example where a
-firewall blocks the endpoint, ends the Node.js process
+is AgentKit's own behaviour and independent of hashspan. In 0.10.4 the report is not awaited, so any failure, a
+request that cannot connect or a response that is not 2xx, is an unhandled rejection that ends the Node.js process,
+also after the transaction and its spans; AgentKit has no setting to turn the reports off
 ([coinbase/agentkit#1531](https://github.com/coinbase/agentkit/issues/1531)).
 
 ## GOAT SDK

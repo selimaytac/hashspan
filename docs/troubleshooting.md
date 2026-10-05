@@ -3,6 +3,14 @@
 Organised by what you see in your backend. Each entry says why it happens and how to fix it, and links to the place
 where the behaviour is defined. For the setups that were checked, see [integrations](integrations.md).
 
+## The process exits with ECONNREFUSED on port 4318
+
+Nothing listens on the OTLP endpoint, `http://localhost:4318` unless `OTEL_EXPORTER_OTLP_ENDPOINT` says otherwise.
+The spans are recorded and `hashspan.flush()` still resolves, but exporting them fails, and `sdk.shutdown()` rejects
+with the connection error once the exporter gives up: a script that awaits it at top level, as the quick start does,
+exits with code 1. Start a [backend](backends.md), or print the spans in the terminal
+([console](backends.md#console-without-a-backend)).
+
 ## No hashspan spans at all
 
 - **No tracer provider is registered.** hashspan records through `@opentelemetry/api`, which drops spans until an
