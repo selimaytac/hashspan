@@ -72,9 +72,10 @@ npm install -D tsx                    # runs agent.ts below
 anvil                                 # in a second terminal: a local chain
 ```
 
-`anvil` comes with [Foundry](https://getfoundry.sh). Start a trace backend too: the [local lab](#local-lab) in a
-checkout of this repository, or the one-line [Jaeger container](docs/backends.md#jaeger) (needs Docker). Then save
-this file as `agent.ts`:
+`anvil` comes with [Foundry](https://getfoundry.sh) and listens on `127.0.0.1:8545`, the URL in `agent.ts` below.
+Start a trace backend too: the [local lab](#local-lab) in a checkout of this repository, or the one-line
+[Jaeger container](docs/backends.md#jaeger) (needs Docker); without one, print the spans in the terminal instead
+([no backend](docs/backends.md#console-without-a-backend)). Then save this file as `agent.ts`:
 
 ```ts
 import { trace } from '@opentelemetry/api';
