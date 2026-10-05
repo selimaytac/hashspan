@@ -3,6 +3,7 @@
 // requests per case are listed in docs/architecture.md. Counts only, no timing.
 import { Instance } from 'prool';
 import { type Address, createPublicClient, createWalletClient, custom, type Hex, http } from 'viem';
+import { mnemonicToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
@@ -146,10 +147,38 @@ const sendAndWait = async (clients: Clients, to?: Address) => {
   return clients.reader.waitForTransactionReceipt({ hash });
 };
 
+/**
+ * Signs a transfer with Anvil's first account (its public test mnemonic) and broadcasts it with `sendRawTransaction`,
+ * as a service whose transactions are signed elsewhere does; then waits as `sendAndWait` does.
+ */
+const rawSendAndWait = async (clients: Clients) => {
+  const signer = mnemonicToAccount('test test test test test test test test test test test junk');
+  const request = await clients.wallet.prepareTransactionRequest({
+    account: signer,
+    chain: anvil,
+    to: RECIPIENT,
+    value: 1n,
+    gas: 100_000n,
+  });
+  const serializedTransaction = await signer.signTransaction(request as never);
+  const hash = await clients.wallet.sendRawTransaction({ serializedTransaction });
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const receipt = await clients.reader.getTransactionReceipt({ hash }).catch(() => undefined);
+    if (receipt) break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return clients.reader.waitForTransactionReceipt({ hash });
+};
+
 describe('JSON-RPC requests the viem adapter adds', () => {
   // Polling methods are left out of these exact counts (see POLLING); every other method is counted exactly.
   it('none to a send and its wait on a client with a chain', async () => {
     expect(await extraRequests(sendAndWait)).toEqual({});
+  });
+
+  it('none to a raw send and its wait on a client with a chain', async () => {
+    expect(await extraRequests(rawSendAndWait)).toEqual({});
+    expect(tracing.spans().map((span) => span.name)).toContain(`send ${anvil.id}`);
   });
 
   it('one eth_chainId per send on a client without a chain', async () => {

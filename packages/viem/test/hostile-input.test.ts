@@ -9,6 +9,7 @@ import {
   custom,
   encodeErrorResult,
   parseAbi,
+  serializeTransaction,
   type Transport,
 } from 'viem';
 import { createBundlerClient } from 'viem/account-abstraction';
@@ -232,6 +233,21 @@ const SEND_TRANSACTION = { to: TO, value: 1n, data: '0xa9059cbb', nonce: 1, chai
 const WRITE_CONTRACT = { address: TO, abi: erc20, functionName: 'transfer', args: [TO, 1n] };
 const WAIT = { hash: HASH, chain: base, onReplaced: () => {}, timeout: WAIT_MS };
 const CALLS = { calls: [{ to: TO, value: 1n }], chain: base };
+// A transaction viem parses; the mock node never checks a signature.
+const RAW = {
+  serializedTransaction: serializeTransaction({
+    chainId: base.id,
+    to: TO,
+    value: 1n,
+    data: '0xa9059cbb',
+    gas: 21_000n,
+    nonce: 1,
+    maxFeePerGas: 2n,
+    maxPriorityFeePerGas: 1n,
+  }),
+};
+// sendRawTransactionSync came with viem 2.38.0.
+const RAW_SYNC = viemHasAction('sendRawTransactionSync');
 // sendTransactionSync and writeContractSync came with viem 2.38.0.
 const SYNC = viemHasAction('sendTransactionSync') && viemHasAction('writeContractSync');
 
@@ -303,6 +319,16 @@ const ROWS: Row[] = [
   },
   ...argumentRows('writeContract', WRITE_CONTRACT, onWallet('writeContract')),
   ...syncRows(),
+  ...argumentRows('sendRawTransaction', RAW, onWallet('sendRawTransaction')),
+  ...(RAW_SYNC
+    ? argumentRows(
+        'sendRawTransactionSync',
+        { ...RAW, timeout: WAIT_MS },
+        onWallet('sendRawTransactionSync'),
+        {},
+        Object.keys(RAW),
+      )
+    : []),
   ...argumentRows('waitForTransactionReceipt', WAIT, onReader('waitForTransactionReceipt')),
   // Gas fields are left valid: they are not telemetry's, and without them viem asks the bundler for an estimate.
   ...argumentRows(
@@ -476,6 +502,24 @@ const ROWS: Row[] = [
     },
   },
 
+  {
+    name: 'sendRawTransaction rejected with',
+    values: hostileErrors,
+    scenario: (value, hashspan) => {
+      const { client, mock } = wallet(hashspan, {}, (t) =>
+        overriding(t, {
+          eth_sendRawTransaction: () => {
+            throw value;
+          },
+        }),
+      );
+      return {
+        call: () => (client as AnyClient).sendRawTransaction(RAW),
+        requests: () => mock.requests,
+      };
+    },
+  },
+
   // watch() and flush(): no untraced call to compare with; they must not throw or reject.
   ...['hash', 'chainId', 'timeoutMs', 'abi', 'onReceipt'].map(
     (key): Row => ({
@@ -525,6 +569,7 @@ const ROWS: Row[] = [
     [
       'sendTransaction',
       ...(SYNC ? (['sendTransactionSync'] as const) : []),
+      'sendRawTransaction',
       'waitForTransactionReceipt',
       'sendCalls',
       'waitForCallsStatus',
@@ -542,6 +587,7 @@ const ROWS: Row[] = [
           return onWallet('sendTransaction')({ to: TO, value: 1n }, hashspan);
         if (action === 'sendTransactionSync')
           return onWallet('sendTransactionSync')({ to: TO, value: 1n }, hashspan);
+        if (action === 'sendRawTransaction') return onWallet('sendRawTransaction')(RAW, hashspan);
         if (action === 'waitForTransactionReceipt')
           return onReader('waitForTransactionReceipt')(WAIT, hashspan);
         if (action === 'sendCalls') return onWallet('sendCalls')(CALLS, hashspan);

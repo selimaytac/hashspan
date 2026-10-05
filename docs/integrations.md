@@ -13,27 +13,31 @@ This page collects the setups that were checked; each code block is compiled in 
 | viem wallet and public clients | `@hashspan/viem` [`withHashspan()`](../packages/viem/README.md#usage) | apply it last; one result per agent | a library that calls viem's actions as functions is not traced ([below](#libraries-that-take-a-viem-client)) | `packages/viem` tests |
 | viem bundler client (ERC-4337) | `@hashspan/viem` | a tracker from `@hashspan/core` 0.8 or later | no background confirmation or `watch()` for user operations ([smart accounts](../packages/viem/README.md#smart-accounts-erc-4337)) | `packages/viem` tests, a real bundler in CI only |
 | EIP-5792 wallet (`sendCalls`) | `@hashspan/viem` | none | no fees on the batch; `getCallsStatus` is not traced ([call batches](../packages/viem/README.md#call-batches-eip-5792)) | `packages/viem` tests |
-| Transactions sent elsewhere | `@hashspan/viem` [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) | a public client | no send span | `packages/viem` tests |
+| Transactions sent elsewhere | `@hashspan/viem` [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) | a public client; for a send span, the call recorded with the same tracker | a send span only when you record the call | `packages/viem` tests |
 | Coinbase CDP SDK | `@hashspan/cdp` | a `reader` for confirm spans | CommonJS needs Node.js 22.12 ([install](../packages/cdp/README.md#install)); see [known limits](../packages/cdp/README.md#known-limits) | `packages/cdp` tests |
 | x402 client | `@hashspan/x402` | a `reader` for `verified` | x402 v1 and non-`eip155` networks are not traced ([known limits](../packages/x402/README.md#known-limits)) | `packages/x402` tests |
 | AgentKit `ViemWalletProvider` | `@hashspan/viem` | background confirmation | TypeScript needs a cast ([setup](#viemwalletprovider)) | `integrations/` |
 | AgentKit `CdpEvmWalletProvider`, `CdpSmartWalletProvider` | `@hashspan/cdp` on `getClient()` | the provider's public client as `reader` | `configureWithWallet()` itself is not run in CI ([setup](#cdpevmwalletprovider)) | `integrations/` |
-| Other AgentKit wallet providers | `@hashspan/viem` `watch()` | the returned hash | no send span ([setup](#other-wallet-providers)) | no |
+| Other AgentKit wallet providers | `@hashspan/viem` `watch()` | the returned hash | a send span only when you record the call ([setup](#other-wallet-providers)) | no |
 | GOAT | `@hashspan/viem` | background confirmation | no longer maintained ([setup](#goat-sdk)) | `integrations/` |
 | Mastra | `@hashspan/viem` | Mastra's OpenTelemetry bridge | the bridge is experimental ([setup](#agent-frameworks)) | `integrations/` |
 | LangChain JS, OpenAI Agents SDK (OpenInference) | `@hashspan/viem` | run tools in an active span of your own | tool spans are not active ([setup](#agent-frameworks)) | `integrations/` |
 | ElizaOS `plugin-evm` | none | none | not traced: it creates its own wallet client ([details](#agent-frameworks)) | no |
 | Wallet services with a viem account (Turnkey, Privy) | `@hashspan/viem` | none | none ([setup](#wallet-services)) | as viem clients |
-| Wallet services with an EIP-1193 provider (Circle, Fireblocks) | `@hashspan/viem` on a `custom()` transport | a public client as reader when the provider does not answer reads | Circle smart contract accounts not checked ([setup](#wallet-services)) | `packages/viem` tests, with a stand-in provider |
-| Wallet services that send through their API | `@hashspan/viem` `watch()` | a public client | no send span ([setup](#wallet-services)) | no |
+| Wallet services with an EIP-1193 provider (Circle, Fireblocks) | `@hashspan/viem` on a `custom()` transport | a public client for receipts when the provider does not answer reads | Circle smart contract accounts not checked ([setup](#wallet-services)) | the pattern in `packages/viem` tests |
+| Wallet services that send through their API | `@hashspan/viem` `watch()` | a public client; for a send span, the API call recorded with the same tracker | none ([setup](#wallet-services)) | the pattern in `packages/viem` tests |
 
 ## Libraries that take a viem client
 
 When a library accepts a viem wallet client, extend the client before you hand it over:
 
-- `client.extend(withHashspan())` traces `sendTransaction` and `writeContract` as long as the library calls them as
-  methods of that client. A library that calls viem's actions with the client as an argument
-  (`sendTransaction(client, ...)` from `viem/actions`) bypasses client extensions and is not traced.
+- `client.extend(withHashspan())` traces `sendTransaction`, `writeContract` and `sendRawTransaction` as long as the
+  library calls them as methods of that client. A library that calls viem's actions with the client as an argument
+  (`sendTransaction(client, ...)` from `viem/actions`) bypasses the extension for that action; the call is recorded
+  only through the client's own actions viem calls inside it. `writeContract` sends through the client's
+  `sendTransaction` (a send span without the function name); with a local account, `sendTransaction` and
+  `sendTransactionSync` sign and send through the client's `sendRawTransaction` and `sendRawTransactionSync` (without
+  the sender). `sendTransaction` with an address-only account is not traced.
 - If the library waits for receipts on a client of its own, the confirm span is not recorded by that wait. Use
   [background confirmation](../packages/viem/README.md#background-confirmation) so hashspan polls for the receipt
   itself.
@@ -109,7 +113,8 @@ provider with the constructor that `configureWithWallet()` ends with, around a `
 
 - `PrivyEvmWalletProvider`, `PrivyEvmDelegatedEmbeddedWalletProvider`, `ZeroDevWalletProvider` and the legacy CDP
   providers build their clients internally or send through their own APIs. Record their transactions with
-  [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) and the hash the provider returns.
+  [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) and the hash the provider returns, and wrap the
+  provider's send call as shown there for a send span.
 
 AgentKit reports each wallet provider's initialization and each action invocation to its analytics endpoint; this
 is AgentKit's own behaviour and independent of hashspan. In 0.10.4, a failed analytics request, for example where a
@@ -301,24 +306,27 @@ How a wallet service sends decides what hashspan records:
   hash: create a wallet client with `custom(provider)`, the wallet's address as `account` and the chain, and extend it
   with `withHashspan()`. viem sends `eth_sendTransaction` for an address-only account, so the send span covers the
   service's call; wait for receipts through an extended public client on an RPC endpoint when the provider does not
-  answer reads. The provider needs to answer only `eth_chainId`, which viem asks before it sends, and
-  `eth_sendTransaction`; hashspan sends it nothing else.
+  answer reads, or confirm with `watch()` on one. The provider needs to answer only `eth_chainId`, which viem asks
+  before it sends, and `eth_sendTransaction`; hashspan sends it nothing else. Background confirmation polls through
+  the sending client, so it needs a provider that answers reads.
 - **Services that send through their own API** return a transaction hash, sometimes only after polling: record the
-  transaction with [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) and a public client of your
-  own. The confirm span then covers the wait; there is no send span, since the send happened elsewhere.
+  API call as a send span with the core's tracker and the transaction with `watch()` on the same tracker, as in
+  [transactions sent elsewhere](../packages/viem/README.md#transactions-sent-elsewhere). The send span then covers the API call, the confirm span the wait, linked
+  to it. Without the recorded call, there is only the confirm span.
 
 These services were checked against the source of their published packages, on the versions named; none of them
-runs in CI. The EIP-1193 path itself does, with a stand-in provider that sends after a delay and answers only
-`eth_chainId`, `eth_accounts` and `eth_sendTransaction` (`packages/viem/test/eip1193-provider.int.test.ts`).
+runs in CI. Their patterns do, on Anvil: a provider that sends after a delay and answers only `eth_chainId`,
+`eth_accounts` and `eth_sendTransaction` (`packages/viem/test/eip1193-provider.int.test.ts`), and an API call
+recorded as a send (`packages/viem/test/api-wallet.test.ts`).
 
 | Service | How it sends | Use | Spans |
 |---|---|---|---|
 | Turnkey (`@turnkey/viem` 0.14) | `createAccount()` returns a viem account | `withHashspan()` on the wallet client | send, confirm |
 | Privy (`@privy-io/node` 0.35) | `createViemAccount()` from `@privy-io/node/viem` returns a viem account | `withHashspan()` on the wallet client | send, confirm |
-| Privy API | `wallets().ethereum().sendTransaction()` returns the `hash` | `watch()` | confirm |
+| Privy API | `wallets().ethereum().sendTransaction()` returns the `hash` | the call recorded as a send, then `watch()` | send, confirm |
 | Privy x402 (`createX402Client()` from `@privy-io/node/x402`, experimental) | returns an `x402Client` | [`@hashspan/x402`](../packages/x402/README.md#usage) on that client, with `@x402/core` 2.13 or later | payment, confirm |
 | Circle developer-controlled wallets (`@circle-fin/developer-controlled-wallets` 10.8) | `createEIP1193Provider()` from `/evm`: `eth_sendTransaction` creates the transaction and resolves with its hash once Circle has sent it; other reads go to its `fallback` provider, if one is set | `custom(provider)`; a public client on your RPC endpoint for receipts | send, confirm |
-| Circle API | `createTransaction()` returns an id; `getTransaction({ id, waitForState: 'SENT' })` returns the `txHash` | `watch()` | confirm |
+| Circle API | `createTransaction()` returns an id; `getTransaction({ id, waitForState: 'SENT' })` returns the `txHash` | both calls recorded as one send, then `watch()` | send, confirm |
 | Fireblocks (`@fireblocks/fireblocks-web3-provider` 1.5) | an EIP-1193 provider: `eth_sendTransaction` creates a Fireblocks transaction and returns its hash; other requests go to its `rpcUrl` | `custom(provider)` with the vault account's address | send, confirm |
 
 - **Send duration:** with an account or a provider from a service, the send span also covers the service's queue and

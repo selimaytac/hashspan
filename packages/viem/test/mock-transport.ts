@@ -14,7 +14,7 @@ export interface MockOptions {
   receiptAt?: (call: number) => Record<string, unknown>;
   /** Transaction fields merged into the default transaction, such as its `input`; a function gets the hash asked for. */
   transaction?: Record<string, unknown> | ((hash: unknown) => Record<string, unknown>);
-  /** Fails `eth_sendTransaction` and `eth_sendRawTransactionSync` with this error. */
+  /** Fails `eth_sendTransaction`, `eth_sendRawTransaction` and `eth_sendRawTransactionSync` with this error. */
   sendError?: { code: number; message: string };
   /** Fails only this `eth_sendTransaction` call (the first is 1) with `sendError`. */
   sendErrorOnCall?: number;
@@ -170,6 +170,11 @@ export function mockTransport(options: MockOptions = {}) {
             sha3Uncles: `0x${'00'.repeat(32)}`,
             mixHash: `0x${'00'.repeat(32)}`,
           };
+        case 'eth_sendRawTransaction':
+          if (options.sendError) {
+            throw new RpcRequestError({ body: {}, error: options.sendError, url: 'mock' });
+          }
+          return HASH;
         case 'eth_sendRawTransactionSync':
           // EIP-7966: sends and answers with the receipt once the transaction is mined.
           if (options.sendError) {

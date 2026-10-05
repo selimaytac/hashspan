@@ -1,7 +1,8 @@
-// Transactions: `sendTransaction`, `writeContract`, their sync forms, and `waitForTransactionReceipt`.
+// Transactions: `sendTransaction`, `writeContract`, `sendRawTransaction`, their sync forms, and
+// `waitForTransactionReceipt`.
 import type { ConfirmHandle, SendInput, TxTracker } from '@hashspan/core';
 import { type Context, context, diag } from '@opentelemetry/api';
-import { type Abi, getAbiItem, toFunctionSelector } from 'viem';
+import { type Abi, getAbiItem, parseTransaction, toFunctionSelector } from 'viem';
 import {
   abiForTelemetry,
   addressOf,
@@ -26,7 +27,7 @@ import {
   type ViemReplacement,
 } from './confirm/receipt.js';
 import { confirmKey, type Recent } from './confirm/recent.js';
-import { durationOr, recordLate } from './confirm/timing.js';
+import { durationOr, isChainId, recordLate } from './confirm/timing.js';
 import { errorName } from './safe-tracker.js';
 import type { SendArgs, SendTrace, SendTracing } from './send.js';
 import type {
@@ -42,6 +43,28 @@ interface WriteContractArgs extends SendArgs {
   abi: Abi;
   functionName: string;
   args?: readonly unknown[] | undefined;
+}
+
+interface RawArgs {
+  serializedTransaction: string;
+}
+
+/** Longest serialized transaction parsed for telemetry, as hex: nodes accept transactions up to 128 KiB. */
+const MAX_RAW_TRANSACTION_LENGTH = 2 + 2 * 128 * 1024;
+
+/**
+ * The fields of the signed transaction a raw send broadcasts, read from own data properties only; undefined when it
+ * is not one viem can parse, or is longer than {@link MAX_RAW_TRANSACTION_LENGTH}. Never throws.
+ */
+function parsedRaw(args: unknown): Record<string, unknown> | undefined {
+  try {
+    const raw = own(args, 'serializedTransaction');
+    if (typeof raw !== 'string' || raw.length > MAX_RAW_TRANSACTION_LENGTH) return undefined;
+    return parseTransaction(raw as `0x${string}`) as Record<string, unknown>;
+  } catch {
+    // Not a transaction viem can parse: the send span records the chain id only.
+    return undefined;
+  }
 }
 
 interface WaitArgs {
@@ -104,6 +127,8 @@ export function addTransactionActions(
     | 'writeContract'
     | 'sendTransactionSync'
     | 'writeContractSync'
+    | 'sendRawTransaction'
+    | 'sendRawTransactionSync'
     | 'waitForTransactionReceipt'
   >,
   actions: Partial<Record<TracedAction, AnyAction>>,
@@ -122,6 +147,8 @@ export function addTransactionActions(
     writeContract,
     sendTransactionSync,
     writeContractSync,
+    sendRawTransaction,
+    sendRawTransactionSync,
     waitForTransactionReceipt,
   } = base;
 
@@ -341,6 +368,52 @@ export function addTransactionActions(
         return writeContractSync(args);
       }
       return traceSend(syncSend(args, write.describe, write.abi), () => writeContractSync(args));
+    };
+  }
+
+  /**
+   * The chain id and what the send span of a raw send records, from the signed transaction: its own chain id, else
+   * the client's; never its sender, which only its signature gives (#33). Parsed once, before the call.
+   */
+  const rawSend = (
+    args: RawArgs,
+  ): { chainId: () => number | undefined; describe: (chainId: number) => SendInput } => {
+    const parsed = parsedRaw(args);
+    const parsedChainId = parsed?.chainId;
+    return {
+      chainId: () => (isChainId(parsedChainId) ? parsedChainId : (knownChainId({}) ?? undefined)),
+      describe: (chainId) => {
+        const to = parsed?.to;
+        const value = parsed?.value;
+        const nonce = parsed?.nonce;
+        return {
+          chainId,
+          to: typeof to === 'string' ? to : undefined,
+          value: typeof value === 'bigint' ? value : undefined,
+          nonce: typeof nonce === 'number' ? nonce : undefined,
+          functionSelector: selectorOf(parsed?.data as string | undefined),
+          authorizations: authorizationsOf(parsed?.authorizationList),
+        };
+      },
+    };
+  };
+
+  if (typeof sendRawTransaction === 'function') {
+    actions.sendRawTransaction = (args: RawArgs) => {
+      const raw = rawSend(args);
+      return traceSend(
+        { ...transactionSend(args as SendArgs, raw.describe), chainId: raw.chainId },
+        () => sendRawTransaction(args),
+      );
+    };
+  }
+
+  if (typeof sendRawTransactionSync === 'function') {
+    actions.sendRawTransactionSync = (args: RawArgs) => {
+      const raw = rawSend(args);
+      return traceSend({ ...syncSend(args as SendArgs, raw.describe), chainId: raw.chainId }, () =>
+        sendRawTransactionSync(args),
+      );
     };
   }
 

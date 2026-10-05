@@ -3,8 +3,9 @@
 **Trace your AI agents' on-chain transactions with OpenTelemetry.**
 
 hashspan turns every transaction an agent sends into spans, keyed by the transaction hash, inside the agent's
-own OpenTelemetry trace. It works the same for any service that sends transactions: payment and payout workers,
-wallet backends, bots.
+own OpenTelemetry trace. It works the same for any TypeScript service that sends EVM transactions through viem, the
+Coinbase CDP SDK or x402, or through a [wallet service](docs/integrations.md#wallet-services): payment and payout
+workers, wallet backends, bots.
 
 [![CI](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml/badge.svg)](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml)
 [![npm @hashspan/core](https://img.shields.io/npm/v/@hashspan/core?label=%40hashspan%2Fcore)](https://www.npmjs.com/package/@hashspan/core)
@@ -132,18 +133,23 @@ npx tsx agent.ts          # prints nothing on success: the trace is in Jaeger
 
 ## Not an agent?
 
-hashspan does not need an agent. In any service that sends transactions, such as a payment or payout worker, a
-wallet backend or a bot, the [quick start](#quick-start) works as it is: replace the `pay_vendor` span with the span
-your request handler or job already has, and leave out the `agent` option; the service name tells your services
-apart.
+hashspan does not need an agent. In a TypeScript service that sends EVM transactions through viem, the Coinbase CDP
+SDK or x402, or through a wallet service, such as a payment or payout worker, a wallet backend or a bot, the
+[quick start](#quick-start) works as it is: replace the `pay_vendor` span with the span your request handler or job
+already has, and leave out the `agent` option. The `service.name` of your OpenTelemetry resource (the `serviceName`
+in the quick start) tells your services apart. Other libraries, such as ethers, have no adapter, and chains other
+than EVM are not supported.
 
-- **A wallet service sends for you:** [wallet services](docs/integrations.md#wallet-services) lists which services
-  give a send and a confirm span, and which only a confirm span.
+- **A wallet service sends for you:** [wallet services](docs/integrations.md#wallet-services) shows how each kind
+  of service gets its send and confirm spans.
 - **A worker that does not wait for receipts:**
   [background confirmation](packages/viem/README.md#background-confirmation).
 - **Latency and fees across many transactions:** the send, confirmation and fee
-  [histograms](docs/semconv.md#metrics).
+  [histograms](docs/semconv.md#metrics), and the limits that matter at volume
+  ([many transactions](packages/viem/README.md#many-transactions)).
 - **A short-lived job:** call `flush()` before it exits ([shutting down](packages/viem/README.md#shutting-down)).
+- **An example:** [examples/payout-worker](examples/payout-worker), a worker that pays out from a queue, confirmed in
+  the background, run against Anvil in CI.
 
 ## Try it
 
