@@ -12,9 +12,10 @@ workers, wallet backends, bots.
 [![npm @hashspan/viem](https://img.shields.io/npm/v/@hashspan/viem?label=%40hashspan%2Fviem)](https://www.npmjs.com/package/@hashspan/viem)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: early (0.x).** Published with npm provenance; span and attribute names are still marked `development`
-> ([semantic conventions](docs/semconv.md)) and may change in minor releases. Feedback on the schema is very welcome;
-> see the [roadmap](docs/roadmap.md).
+> **Status: 1.0 release candidate** (`npm install @hashspan/viem@rc`). Published with npm provenance. 1.0 freezes the
+> public API ([ADR 0027](docs/adr/0027-what-1-0-freezes.md)); span, attribute and metric names stay `development` and
+> can change in a minor release under their [change policy](docs/semconv.md#change-policy), so check dashboards and
+> alerts when you upgrade. See the [roadmap](docs/roadmap.md).
 
 When an AI agent sends a transaction, the agent trace usually stops at the tool call. Whether the transaction was
 mined, reverted, or what it cost lives somewhere else. hashspan closes that gap: each transaction becomes a
@@ -32,7 +33,8 @@ decoded custom error.</sub>
 - **Agent-aware, not agent-only.** Transaction spans nest under your framework's agent/tool spans and carry
   `gen_ai.agent.id`; without an agent, they nest under whatever span is active, such as an HTTP request or a queue
   job ([not an agent?](#not-an-agent)).
-- **Real cost.** Fees include the L1 data fee on OP-stack chains such as Base.
+- **Real cost.** Fees include the L1 data fee on OP-stack chains such as Base; the OP Stack operator fee (Isthmus and
+  later) is not included yet ([#287](https://github.com/selimaytac/hashspan/issues/287)).
 - **Metrics too.** Send and confirmation latency and fees are also recorded as histograms, and `traceTransport()` can
   add a span per JSON-RPC request ([semantic conventions](docs/semconv.md)).
 - **Small footprint.** `@hashspan/core` has one peer dependency, `@opentelemetry/api`; `@hashspan/viem` adds `viem`,
