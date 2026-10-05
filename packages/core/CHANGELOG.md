@@ -1,5 +1,45 @@
 # @hashspan/core
 
+## 0.12.0
+
+### Minor Changes
+
+- [#383](https://github.com/selimaytac/hashspan/pull/383) [`4fe6f6c`](https://github.com/selimaytac/hashspan/commit/4fe6f6c06e0423baa4ef69d03b42eaeff18f6e50) Thanks [@selimaytac](https://github.com/selimaytac)! - `ConfirmHandle.fail` of a transaction takes `FailOptions`, as the confirm handles of user operations and call batches
+  do: an adapter can record its own `error.type`, and `fail(undefined, { errorType })` records no exception event. The
+  viem adapter uses it for `not_on_chain`, a new `error.type` value of confirm spans and of the confirmation duration
+  histogram.
+
+### Patch Changes
+
+- [#384](https://github.com/selimaytac/hashspan/pull/384) [`43c0e9d`](https://github.com/selimaytac/hashspan/commit/43c0e9d0de5e9aa83ca237088240ad3ee715bc79) Thanks [@selimaytac](https://github.com/selimaytac)! - A tracker whose first transaction is sent before an SDK registers a global meter provider now records metrics once
+  one is registered. It no longer keeps the histograms of `@opentelemetry/api`'s default no-op meter provider, which stay
+  no-op: while no `meterProvider` option is given and the global provider is still the no-op one, the tracker asks again
+  at the next transaction, and keeps the histograms once a real provider answers. Spans already behaved this way.
+  Transactions sent before the SDK started are not recorded.
+
+- [#385](https://github.com/selimaytac/hashspan/pull/385) [`743856f`](https://github.com/selimaytac/hashspan/commit/743856f1fe97b2d83fde3d63d2914fb2feee823b) Thanks [@selimaytac](https://github.com/selimaytac)! - More bounds on what telemetry reads:
+  
+  - A sanitized error message scans at most the first 4096 characters of its first line for URLs and hex values (a hex
+    value cut there is still recorded as without the cut); text past that bound is not recorded, and the recorded
+    message is cut to 256 characters as before. A URL cut at that bound before its path is recorded as `<url>`.
+  - `waitForTransactionReceipt` in `@hashspan/viem`, and the wait of a network-scoped account in `@hashspan/cdp`, read at
+    most 64 objects of the arguments' prototype chain when they look up `onReplaced`; arguments with a longer chain are
+    passed on untraced and unchanged, as arguments that cannot be read are.
+  - `@hashspan/cdp` adds its `onReplaced` to a network-scoped account's wait options only when they are a plain object
+    (prototype `Object.prototype` or `null`). Other options, such as a class instance, are passed to the SDK as they are:
+    the wait is traced, but a replacement viem reports for it is not attributed.
+  
+  The options of `withHashspan()` in `@hashspan/viem`, `@hashspan/cdp` and `@hashspan/x402` are read from the object's
+  own enumerable properties, so options inherited through a prototype are ignored (ADR 0025). This is now stated in the
+  options' documentation and the package READMEs.
+
+- [#380](https://github.com/selimaytac/hashspan/pull/380) [`a3c6f3a`](https://github.com/selimaytac/hashspan/commit/a3c6f3ab62289b6488e0217943124e105b57d826) Thanks [@selimaytac](https://github.com/selimaytac)! - A user operation receipt whose `success` is present but not a boolean (`null`, a string, a number) now ends the
+  confirm span as a failure with `error.type` `_OTHER`, and its confirmation duration sample carries `error.type`
+  `_OTHER`, with no fee sample, as a transaction receipt with an unknown status does. Until now such a span ended
+  without an error status and its sample had no outcome label. A receipt without `success`, as `@hashspan/cdp` reports
+  an operation whose outcome it does not know, ends as before: no error and no outcome label. `success` is read from an
+  own data property only.
+
 ## 0.11.0
 
 ### Minor Changes

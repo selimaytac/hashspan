@@ -1,5 +1,57 @@
 # @hashspan/viem
 
+## 0.12.0
+
+### Minor Changes
+
+- [#383](https://github.com/selimaytac/hashspan/pull/383) [`4fe6f6c`](https://github.com/selimaytac/hashspan/commit/4fe6f6c06e0423baa4ef69d03b42eaeff18f6e50) Thanks [@selimaytac](https://github.com/selimaytac)! - A traced `waitForTransactionReceipt` with `confirmations` above 1 now records the receipt the chain holds when the
+  wait resolved, not the one viem read first. After the caller has its result, the confirm span reads the receipt
+  again, and the block at the receipt's height when that receipt is missing or in another block. When a chain
+  reorganisation during the wait moved the transaction, the span records the receipt in the new block (block number,
+  status, gas and fees); when it removed the transaction, the span ends with error status and the new `error.type`
+  value `not_on_chain`, without `blockchain.tx.status`, and the confirmation duration histogram records that value. A
+  node without that block, a block that still has the caller's hash, a failed request or an answer that cannot be read
+  keeps the caller's receipt. The wait returns what viem returned, and the span ends when the wait resolved. Such a
+  wait makes one more `eth_getTransactionReceipt`, and one `eth_getBlockByNumber` only when the receipt read again is
+  missing or in another block. Background confirmation, `watch()` and replacements are not affected.
+
+- [#377](https://github.com/selimaytac/hashspan/pull/377) [`3624816`](https://github.com/selimaytac/hashspan/commit/36248162cc7171309ed1ff1f075f528ac269189d) Thanks [@selimaytac](https://github.com/selimaytac)! - `sendTransactionSync` and `writeContractSync` (viem 2.38.0 and later), which send a transaction and return its receipt
+  in one call, are now traced: each records a send span and a confirm span, as `sendTransaction` or `writeContract`
+  followed by `waitForTransactionReceipt` do, with the receipt's status, fees and revert reason. viem returns the hash
+  only with the receipt, so both spans cover the call. A call with `throwOnReceiptRevert` that rejects for a reverted
+  transaction is recorded as that reverted receipt, found by the own `name` of the error or one of its causes. The
+  receipt or error returned to the caller is unchanged. `sendRawTransactionSync` stays untraced, as
+  `sendRawTransaction` does.
+
+### Patch Changes
+
+- [#385](https://github.com/selimaytac/hashspan/pull/385) [`743856f`](https://github.com/selimaytac/hashspan/commit/743856f1fe97b2d83fde3d63d2914fb2feee823b) Thanks [@selimaytac](https://github.com/selimaytac)! - More bounds on what telemetry reads:
+  
+  - A sanitized error message scans at most the first 4096 characters of its first line for URLs and hex values (a hex
+    value cut there is still recorded as without the cut); text past that bound is not recorded, and the recorded
+    message is cut to 256 characters as before. A URL cut at that bound before its path is recorded as `<url>`.
+  - `waitForTransactionReceipt` in `@hashspan/viem`, and the wait of a network-scoped account in `@hashspan/cdp`, read at
+    most 64 objects of the arguments' prototype chain when they look up `onReplaced`; arguments with a longer chain are
+    passed on untraced and unchanged, as arguments that cannot be read are.
+  - `@hashspan/cdp` adds its `onReplaced` to a network-scoped account's wait options only when they are a plain object
+    (prototype `Object.prototype` or `null`). Other options, such as a class instance, are passed to the SDK as they are:
+    the wait is traced, but a replacement viem reports for it is not attributed.
+  
+  The options of `withHashspan()` in `@hashspan/viem`, `@hashspan/cdp` and `@hashspan/x402` are read from the object's
+  own enumerable properties, so options inherited through a prototype are ignored (ADR 0025). This is now stated in the
+  options' documentation and the package READMEs.
+
+- [#374](https://github.com/selimaytac/hashspan/pull/374) [`cd105c2`](https://github.com/selimaytac/hashspan/commit/cd105c2d23a5d569d6e2df7fb2fe0d097a22a76d) Thanks [@selimaytac](https://github.com/selimaytac)! - A wait that resolves with the receipt of another transaction which viem did not report as a replacement, such as an
+  endpoint's answer for an unrelated transaction, no longer records that receipt as a replacement: the confirm span
+  ends with `error.type` `_OTHER` and without the other transaction's block, gas or fee. A replacement viem reports
+  (same sender and nonce) is recorded as before. The wait still returns what viem returned. This also applies to the
+  confirmations `@hashspan/cdp` (with a `reader`) and `@hashspan/x402` make through `watch()`.
+
+- [#382](https://github.com/selimaytac/hashspan/pull/382) [`9faa618`](https://github.com/selimaytac/hashspan/commit/9faa618cb0166f6a0ac5f45e340093b22ce90a52) Thanks [@selimaytac](https://github.com/selimaytac)! - README: the parent of a confirm span from `watch()`, and that `flush()` waits only for the work of its own
+  `withHashspan()` result.
+- Updated dependencies [[`4fe6f6c`](https://github.com/selimaytac/hashspan/commit/4fe6f6c06e0423baa4ef69d03b42eaeff18f6e50), [`43c0e9d`](https://github.com/selimaytac/hashspan/commit/43c0e9d0de5e9aa83ca237088240ad3ee715bc79), [`743856f`](https://github.com/selimaytac/hashspan/commit/743856f1fe97b2d83fde3d63d2914fb2feee823b), [`a3c6f3a`](https://github.com/selimaytac/hashspan/commit/a3c6f3ab62289b6488e0217943124e105b57d826)]:
+  - @hashspan/core@0.12.0
+
 ## 0.11.0
 
 ### Patch Changes
