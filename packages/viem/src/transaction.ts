@@ -21,7 +21,6 @@ import {
 } from './confirm/confirmation.js';
 import {
   capturing,
-  nameOf,
   type ReplacementCapture,
   type ViemReceipt,
   type ViemReplacement,
@@ -76,7 +75,8 @@ function revertedReceiptOf(error: unknown): unknown {
   try {
     let current = error;
     for (let depth = 0; depth < MAX_CAUSE_DEPTH && current !== undefined; depth++) {
-      if (nameOf(current) === 'TransactionReceiptRevertedError') return own(current, 'receipt');
+      if (own(current, 'name') === 'TransactionReceiptRevertedError')
+        return own(current, 'receipt');
       current = own(current, 'cause');
     }
   } catch {

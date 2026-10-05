@@ -144,3 +144,19 @@ it('ordinary arguments are still traced', async () => {
     'pay',
   );
 });
+
+it('waitForTransactionReceipt passes arguments whose prototype chain is too long to read on untraced', async () => {
+  const { wallet, calls } = walletWithStandIns();
+  // Each prototype is a new object with the same trap; the chain ends after 10,000 of them.
+  let steps = 0;
+  const handler: ProxyHandler<object> = {
+    getPrototypeOf: () => (++steps < 10_000 ? new Proxy({}, handler) : null),
+  };
+  const args = new Proxy({ hash: HASH }, handler);
+
+  await expect(wallet.waitForTransactionReceipt?.(args)).resolves.toBe(receipt);
+  expect(calls.waitForTransactionReceipt).toHaveLength(1);
+  expect(calls.waitForTransactionReceipt?.[0]).toBe(args);
+  expect(steps).toBeLessThanOrEqual(64);
+  expect(tracing.spans()).toHaveLength(0);
+});

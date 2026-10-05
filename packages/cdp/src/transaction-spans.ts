@@ -18,6 +18,7 @@ import { receiptOf } from './receipt.js';
 import {
   capturing,
   descriptorOf,
+  isPlainObject,
   type ReplacementCapture,
   reportedReplacement,
   sameHex,
@@ -159,7 +160,8 @@ export function createTransactionSpans({
 
   /**
    * The hash and the options a traced wait is made with, or undefined when it is passed on untraced: with a reader,
-   * without a hash, or with an `onReplaced` accessor. viem reports a replacement, matched on sender and nonce, through
+   * without a hash, or with an `onReplaced` accessor; it throws for options that cannot be read, such as a prototype
+   * chain too long to read, and the caller passes those on untraced too. viem reports a replacement, matched on sender and nonce, through
    * `onReplaced` (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.11.0/docs/adr/0008-replaced-transactions.md).
    * The SDK passes viem's wait parameters on unchanged, so a capturing `onReplaced` is added to them; for
    * `{ transactionHash }` it would call viem with the hash alone, so that form is passed on as `{ hash, onReplaced }`,
@@ -179,6 +181,9 @@ export function createTransactionSpans({
     // viem reads the callback through the prototype chain as well.
     const onReplaced = descriptorOf(options as object, 'onReplaced');
     if (onReplaced !== undefined && !('value' in onReplaced)) return undefined;
+    // Options that are not a plain object, such as a class instance, are passed on as they are: the wait is traced,
+    // but a replacement is not attributed.
+    if (!isPlainObject(options as object)) return { hash, waitOptions: options, capture };
     const waitOptions = shadowing(
       options as object,
       'onReplaced',

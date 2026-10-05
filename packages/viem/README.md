@@ -44,6 +44,10 @@ agent identity, redaction hook) plus:
 | `decodeRevertReason` | `true` | Replay reverted transactions to record their revert reason; `{ timeoutMs }` bounds the replay (default 10 000 ms) |
 | `maxBackgroundConfirmations` | `256` | Most background confirmations (background mode and `watch()`) polling at once; see [Background confirmation](#background-confirmation) |
 
+Options are read once, from the object's own enumerable properties: options it inherits through a prototype, such as
+the getters of a class instance, are ignored
+([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0025-untrusted-input.md)).
+
 ## Transactions sent elsewhere
 
 When a transaction is sent by something other than an extended client, such as a wallet API or another library,

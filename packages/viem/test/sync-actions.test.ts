@@ -153,6 +153,35 @@ describe.skipIf(!viemHasAction('sendTransactionSync'))('sendTransactionSync', ()
     expect(tracing.spans().map((s) => s.name)).toEqual(['send 8453']);
   });
 
+  it('reads the names of the rejection and its causes from own data properties only', async () => {
+    const getter = vi.fn(() => 'TransactionReceiptRevertedError');
+    class Reverted extends Error {
+      readonly receipt = { transactionHash: HASH, status: 'reverted', blockNumber: 1n };
+      override get name(): string {
+        return getter();
+      }
+    }
+    const failure = new Error('send failed', { cause: new Reverted('reverted') });
+    const wallet = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: mockTransport().transport,
+    })
+      // Typed as adding nothing: the stand-in replaces viem's action at runtime only.
+      .extend((() => ({
+        sendTransactionSync: async () => {
+          throw failure;
+        },
+      })) as () => Record<never, never>)
+      .extend(withHashspan());
+
+    await expect(wallet.sendTransactionSync({ to: TO })).rejects.toBe(failure);
+
+    expect(getter).not.toHaveBeenCalled();
+    expect(tracing.spanNamed('send 8453').status.code).toBe(SpanStatusCode.ERROR);
+    expect(tracing.spans().map((s) => s.name)).toEqual(['send 8453']);
+  });
+
   it('records a timeout of the wait as a failed send', async () => {
     const { hashspan, traced } = wallets({ receipt: null });
 

@@ -52,7 +52,10 @@ from such a wait, and ends what is left as `timeout` if it cannot wait longer (a
 `@hashspan/viem` (the limit applies to confirmations through the reader), `tracker`, `reader`, and `confirmTimeoutMs`
 (default 120 000 ms; for a user operation CDP reported complete, it also bounds the poll for its bundle receipt). With
 `tracker`, the core options are not used: they configure the tracker the adapter would otherwise create. Call it once
-per client: a second call returns the first handle, ignores its options and logs a `diag` warning.
+per client: a second call returns the first handle, ignores its options and logs a `diag` warning. Options are read
+from the object's own enumerable properties: options it inherits through a prototype, such as the getters of a class
+instance, are ignored
+([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.11.0/docs/adr/0025-untrusted-input.md)).
 
 ### With `@hashspan/viem`
 

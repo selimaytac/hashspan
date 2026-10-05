@@ -140,15 +140,20 @@ function copyAbi(abi: unknown[], functionName: unknown): Abi | undefined {
   return items as Abi;
 }
 
-/** The descriptor of `key` on `target` or the first prototype that has it; reading it runs no getter. */
+/** Most objects of a prototype chain that {@link descriptorOf} reads; a longer chain is not read. */
+const MAX_PROTOTYPE_STEPS = 64;
+
+/**
+ * The descriptor of `key` on `target` or the first prototype that has it; reading it runs no getter. Throws for a
+ * chain longer than `MAX_PROTOTYPE_STEPS`, as for arguments that cannot be read.
+ */
 export function descriptorOf(target: object, key: string): PropertyDescriptor | undefined {
-  for (
-    let object: object | null = target;
-    object !== null;
-    object = Object.getPrototypeOf(object)
-  ) {
+  let object: object | null = target;
+  for (let step = 0; object !== null; step++) {
+    if (step === MAX_PROTOTYPE_STEPS) throw new RangeError('prototype chain too long');
     const descriptor = Object.getOwnPropertyDescriptor(object, key);
     if (descriptor) return descriptor;
+    object = Object.getPrototypeOf(object);
   }
   return undefined;
 }

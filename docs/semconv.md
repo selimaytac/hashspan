@@ -312,7 +312,7 @@ of each package check the bounds against the values that split at them.
 |---|---|---|
 | `blockchain.tx.revert.reason` | 1024 characters | its first 1024 characters, followed by `...`; a hex value the cut would split is dropped whole. A reason an adapter already cut this way is kept as it is |
 | `error.type` and `exception.type` from an error's name | 64 characters of `[A-Za-z0-9_.-]` | `_OTHER` |
-| `exception.message` in `sanitized` mode | 256 characters of the first line | its first 256 characters, followed by `...`; a hex value the cut would split is dropped whole |
+| `exception.message` in `sanitized` mode | 256 characters of the first line, sanitized from its first 4096 characters | its first 256 characters, followed by `...`; a hex value the cut would split is dropped whole. Text past the 4096th character of the first line is not recorded (a hex value cut there is recorded as if whole, a URL cut there before its path as `<url>`) |
 | `blockchain.contract.function.arguments` | 4096 characters, nesting depth 32 | the JSON up to the value that crosses 4096 characters, cut there and followed by `...`; a hex value the cut would split is dropped whole; arguments nested deeper are not recorded |
 | `blockchain.contract.function.selector` of `writeContract` | an ABI of 10 000 items and 100 000 copied values; for an overloaded function, 100 000 copied argument values | no selector; past the ABI bound, no ABI is used for telemetry either, so custom errors in the revert reason show as their selector |
 | `x402.resource` | 512 characters | its first 512 characters, followed by `...`; a hex value the cut would split is dropped whole |

@@ -1,6 +1,6 @@
 import { diag } from '@opentelemetry/api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolveAddressFormatter } from '../src/privacy.js';
+import { resolveAddressFormatter, sanitizeErrorMessage } from '../src/privacy.js';
 
 const ADDRESS = '0xAbCdEf0123456789aBcDeF0123456789AbCdEf01';
 
@@ -40,5 +40,59 @@ describe('resolveAddressFormatter', () => {
   it('uses a custom hash function when provided', () => {
     const format = resolveAddressFormatter({ mode: 'hashed', hash: (a) => `h(${a})` });
     expect(format(ADDRESS)).toBe(`h(${ADDRESS.toLowerCase()})`);
+  });
+});
+
+describe('sanitizeErrorMessage on a long single line', () => {
+  // The URL and hex passes scan the first 4096 characters of the line (and the rest of a hex value cut there); the
+  // recorded message is cut to 256 characters, so what is recorded is the same as without that bound.
+  const modes = {
+    off: resolveAddressFormatter('off'),
+    hashed: resolveAddressFormatter({ mode: 'hashed', hash: (a) => `h(${a})` }),
+    raw: resolveAddressFormatter('raw'),
+  };
+  const MB = 1_000_000;
+
+  describe.each(Object.entries(modes))('in %s address mode', (_, format) => {
+    it('records the first 256 characters of a 1 MB line of letters', () => {
+      const message = `execution failed: ${'lorem ipsum '.repeat(MB / 12)}`;
+      expect(sanitizeErrorMessage(message, format)).toBe(`${message.slice(0, 256)}...`);
+    });
+
+    it('records a 1 MB hex value as <hex>', () => {
+      expect(sanitizeErrorMessage(`call failed: data 0x${'ab'.repeat(MB / 2)}`, format)).toBe(
+        'call failed: data <hex>',
+      );
+    });
+
+    it('records a hex value that the bound splits as it records the whole value', () => {
+      const address = format(ADDRESS) ?? '<address>';
+      // The bound splits the address after its 41st and 16th character and between its `0` and `x`, or falls right
+      // before it.
+      for (const start of [4055, 4080, 4095, 4096]) {
+        // A hex value before it that is recorded as <hex>, so the split value is within the recorded 256 characters.
+        const before = `from ${ADDRESS} 0x${'e'.repeat(start - ADDRESS.length - 9)} `;
+        expect(before).toHaveLength(start);
+        expect(sanitizeErrorMessage(`${before}${ADDRESS} ${'z'.repeat(MB)}`, format)).toBe(
+          `from ${address} <hex> ${address}`,
+        );
+        expect(sanitizeErrorMessage(`${before}0x${'cd'.repeat(MB / 2)}`, format)).toBe(
+          `from ${address} <hex> <hex>`,
+        );
+      }
+    });
+
+    it('reduces a URL that the bound cuts in its path to its origin', () => {
+      const message = `0x${'ab'.repeat(2000)} https://rpc.example.com/v2/${'k'.repeat(MB)}`;
+      expect(sanitizeErrorMessage(message, format)).toBe('<hex> https://rpc.example.com');
+    });
+
+    it('records a URL that the bound cuts in its user info as <url>', () => {
+      // The bound falls inside `secret`.
+      const message = `0x${'ab'.repeat(2038)} https://user:secret@rpc.example.com/v2/key ${'z'.repeat(MB)}`;
+      const sanitized = sanitizeErrorMessage(message, format);
+      expect(sanitized).toBe('<hex> <url>');
+      expect(sanitized).not.toContain('user');
+    });
   });
 });
