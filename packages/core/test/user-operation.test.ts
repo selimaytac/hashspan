@@ -254,13 +254,31 @@ describe('user operation confirm span', () => {
     expect(span.events).toEqual([]);
   });
 
-  it('records a receipt without a success flag as an unknown outcome', () => {
+  it('ends a receipt without a success flag with an unknown outcome and no error (ADR 0021)', () => {
     const tracker = createTxTracker();
     tracker
       .startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH })
-      .end({ transactionHash: BUNDLE_HASH, success: 'false' as unknown as boolean });
+      .end({ transactionHash: BUNDLE_HASH });
     const span = tracing.spanNamed(confirm);
     expect(span.status.code).toBe(SpanStatusCode.UNSET);
+    expect(span.attributes['error.type']).toBeUndefined();
+    expect(span.attributes['blockchain.user_operation.success']).toBeUndefined();
+    expect(span.attributes['blockchain.tx.hash']).toBe(BUNDLE_HASH);
+  });
+
+  // A success flag that is present but not a boolean is malformed (#366).
+  it.each([
+    ['null', { success: null }],
+    ['"true"', { success: 'true' }],
+    ['1', { success: 1 }],
+  ])('ends a receipt whose success flag is %s as a failure with error.type _OTHER', (_, flag) => {
+    const tracker = createTxTracker();
+    tracker
+      .startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH })
+      .end({ transactionHash: BUNDLE_HASH, ...flag } as never);
+    const span = tracing.spanNamed(confirm);
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.attributes['error.type']).toBe('_OTHER');
     expect(span.attributes['blockchain.user_operation.success']).toBeUndefined();
     expect(span.attributes['blockchain.tx.hash']).toBe(BUNDLE_HASH);
   });
@@ -523,17 +541,54 @@ describe('user operation metrics', () => {
     ]);
   });
 
-  it('records no fee without the operation cost, and no success flag when it is unknown', () => {
+  it('records no fee without the operation cost', () => {
     const meters = recordingMeterProvider();
     const tracker = createTxTracker({ meterProvider: meters.provider });
     tracker
       .startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH })
-      .end({ transactionHash: BUNDLE_HASH });
+      .end({ transactionHash: BUNDLE_HASH, success: true });
     expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)).toEqual([]);
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)[0]?.attributes).toEqual({
+      ...base,
+      'blockchain.user_operation.success': true,
+    });
+  });
+
+  const { success: _success, ...withoutFlag } = receipt;
+
+  it('records a receipt without a success flag with no outcome label, as before (ADR 0021)', () => {
+    const meters = recordingMeterProvider();
+    const tracker = createTxTracker({ meterProvider: meters.provider });
+    tracker
+      .startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH })
+      .end(withoutFlag);
     expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)[0]?.attributes).toEqual(
       base,
     );
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)).toEqual([
+      { value: 123_456_789_000, attributes: base },
+    ]);
   });
+
+  // A success flag that is present but not a boolean is malformed (#366).
+  it.each([
+    ['null', { success: null }],
+    ['"true"', { success: 'true' }],
+    ['1', { success: 1 }],
+  ])(
+    'records the confirmation sample of a receipt whose success flag is %s as _OTHER, without a fee',
+    (_, flag) => {
+      const meters = recordingMeterProvider();
+      const tracker = createTxTracker({ meterProvider: meters.provider });
+      tracker
+        .startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH })
+        .end({ ...withoutFlag, ...flag } as never);
+      expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)).toEqual([]);
+      expect(
+        meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)[0]?.attributes,
+      ).toEqual({ ...base, 'error.type': '_OTHER' });
+    },
+  );
 });
 
 describe('user operation safety', () => {

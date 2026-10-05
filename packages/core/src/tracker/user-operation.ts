@@ -30,6 +30,7 @@ import {
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
   BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION,
   BLOCKCHAIN_TX_STATUS_VALUE_REVERTED,
+  ERROR_TYPE_VALUE_OTHER,
 } from '../attributes.js';
 import type { ConfirmRegistry, SharedConfirm } from '../confirm-registry.js';
 import type { LinkStore } from '../link-store.js';
@@ -52,7 +53,7 @@ import {
   reportedErrorType,
 } from './handles.js';
 import { metricAttributes, type SpanRecording, secondsSince } from './spans.js';
-import { quantity, smallQuantity, TX_HASH } from './values.js';
+import { ownValue, quantity, smallQuantity, TX_HASH } from './values.js';
 
 const ZERO_ADDRESS = /^0x0{40}$/;
 
@@ -171,7 +172,7 @@ export function createUserOperationSpans({
    */
   const userOperationReceiptAttributes = (receipt: UserOperationReceiptLike): Attributes => {
     const attributes: Attributes = {};
-    const success: unknown = receipt.success;
+    const success = ownValue(receipt, 'success');
     if (typeof success === 'boolean') attributes[ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS] = success;
     const gasUsed = smallQuantity(receipt.actualGasUsed);
     if (gasUsed !== undefined) attributes[ATTR_BLOCKCHAIN_USER_OPERATION_GAS_USED] = gasUsed;
@@ -239,6 +240,15 @@ export function createUserOperationSpans({
             const attributes = userOperationReceiptAttributes(receipt ?? {});
             span.setAttributes(redact(attributes));
             const success = attributes[ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS];
+            // A success flag that is present but not a boolean is malformed: `_OTHER`, no fee sample, as for a
+            // transaction receipt with an unknown status. Without the flag, the outcome is unknown and not an error:
+            // an adapter that cannot read it leaves it out (ADR 0021).
+            if (typeof success !== 'boolean' && ownValue(receipt, 'success') !== undefined) {
+              recordConfirmation(endTime, {
+                [ATTR_ERROR_TYPE]: markError(span, ERROR_TYPE_VALUE_OTHER),
+              });
+              return;
+            }
             if (success === false) markError(span, BLOCKCHAIN_TX_STATUS_VALUE_REVERTED);
             // The outcome from chain data is the operation's success flag, not the bundle's status (ADR 0020).
             const outcome: Attributes =
