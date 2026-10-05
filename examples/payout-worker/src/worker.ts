@@ -21,7 +21,8 @@ const signer = mnemonicToAccount('test test test test test test test test test t
 
 /**
  * A worker that pays out from a queue. It is not an agent: each payout runs in a span of its own, which hashspan's
- * send and confirm spans nest under, and no agent identity is set; the service name tells the worker apart.
+ * send and confirm spans nest under, and no agent identity is set; the `service.name` of the OpenTelemetry resource
+ * tells the worker apart.
  */
 export function createPayoutWorker(rpcUrl: string) {
   // A worker sends and moves on: hashspan confirms each transaction in the background.

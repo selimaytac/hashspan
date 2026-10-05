@@ -4,7 +4,7 @@ Instructions for AI coding agents and humans contributing to hashspan.
 
 ## Project
 OpenTelemetry tracing for on-chain transactions sent by AI agents and other services: every transaction an agent, or
-any service, triggers becomes a `send` / `confirm` span pair under its own trace, exported to any OTLP backend.
+another service, triggers becomes a `send` / `confirm` span pair under its own trace, exported to any OTLP backend.
 
 ## Setup & commands
 - Node version: see `.nvmrc` (`nvm use`); package manager: pnpm via corepack (`corepack enable pnpm`)

@@ -1,8 +1,8 @@
 # Payout worker example
 
 A worker that pays out from a queue, traced with hashspan. It is not an agent: each payout runs in a span of its own,
-`payout <id>`, and hashspan's `send` and `confirm` spans nest under it. No agent identity is set; the service name,
-`payout-worker`, tells the worker apart.
+`payout <id>`, and hashspan's `send` and `confirm` spans nest under it. No agent identity is set; the `service.name`
+of its OpenTelemetry resource, `payout-worker`, tells the worker apart.
 
 - It signs with a local account and sends through a viem wallet client extended with `withHashspan()`.
 - It does not wait for receipts: `confirm: { mode: 'background' }` records each confirmation, and `flush()` waits for
