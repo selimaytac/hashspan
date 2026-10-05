@@ -33,9 +33,11 @@ When a library accepts a viem wallet client, extend the client before you hand i
 
 - `client.extend(withHashspan())` traces `sendTransaction`, `writeContract` and `sendRawTransaction` as long as the
   library calls them as methods of that client. A library that calls viem's actions with the client as an argument
-  (`sendTransaction(client, ...)` from `viem/actions`) bypasses client extensions and is not traced, with one
-  exception: with a local account, viem's `sendTransaction` signs and sends through the client's
-  `sendRawTransaction`, so the send is recorded, without the sender.
+  (`sendTransaction(client, ...)` from `viem/actions`) bypasses the extension for that action; the call is recorded
+  only through the client's own actions viem calls inside it. `writeContract` sends through the client's
+  `sendTransaction` (a send span without the function name); with a local account, `sendTransaction` and
+  `sendTransactionSync` sign and send through the client's `sendRawTransaction` and `sendRawTransactionSync` (without
+  the sender). `sendTransaction` with an address-only account is not traced.
 - If the library waits for receipts on a client of its own, the confirm span is not recorded by that wait. Use
   [background confirmation](../packages/viem/README.md#background-confirmation) so hashspan polls for the receipt
   itself.

@@ -1,9 +1,9 @@
 // sendRawTransaction and sendRawTransactionSync: a transaction signed elsewhere and broadcast through viem gets a send
 // span from the signed transaction's own fields, without its sender (#33).
 import { context, SpanStatusCode, trace } from '@opentelemetry/api';
-import { createPublicClient, createWalletClient, type Hex } from 'viem';
+import { createPublicClient, createWalletClient, type Hex, parseAbi } from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
-import { sendTransaction } from 'viem/actions';
+import { sendTransaction, sendTransactionSync, writeContract } from 'viem/actions';
 import { base, optimism } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
@@ -129,32 +129,36 @@ describe('sendRawTransaction', () => {
     expect(tracing.spanNamed('send 8453').attributes['blockchain.tx.to']).toBeUndefined();
   });
 
-  it('records the authorizations of a signed type 4 transaction', async () => {
-    const { hashspan, traced } = wallets();
-    // A local account always signs authorizations; the type leaves the method optional.
-    const signAuthorization = signer.signAuthorization as NonNullable<
-      typeof signer.signAuthorization
-    >;
-    const authorization = await signAuthorization({
-      contractAddress: TO,
-      chainId: base.id,
-      nonce: 1,
-    });
-    const serializedTransaction = await signer.signTransaction({
-      type: 'eip7702',
-      chainId: base.id,
-      to: TO,
-      authorizationList: [authorization],
-      ...PREPARED,
-    });
+  // Local accounts sign EIP-7702 authorizations in newer viem releases only.
+  it.skipIf(typeof signer.signAuthorization !== 'function')(
+    'records the authorizations of a signed type 4 transaction',
+    async () => {
+      const { hashspan, traced } = wallets();
+      // A local account always signs authorizations; the type leaves the method optional.
+      const signAuthorization = signer.signAuthorization as NonNullable<
+        typeof signer.signAuthorization
+      >;
+      const authorization = await signAuthorization({
+        contractAddress: TO,
+        chainId: base.id,
+        nonce: 1,
+      });
+      const serializedTransaction = await signer.signTransaction({
+        type: 'eip7702',
+        chainId: base.id,
+        to: TO,
+        authorizationList: [authorization],
+        ...PREPARED,
+      });
 
-    await traced.sendRawTransaction({ serializedTransaction });
-    await hashspan.flush();
+      await traced.sendRawTransaction({ serializedTransaction });
+      await hashspan.flush();
 
-    const send = tracing.spanNamed('send 8453');
-    expect(send.attributes['blockchain.tx.authorization.count']).toBe(1);
-    expect(send.attributes['blockchain.tx.authorization.chain_ids']).toEqual([base.id]);
-  });
+      const send = tracing.spanNamed('send 8453');
+      expect(send.attributes['blockchain.tx.authorization.count']).toBe(1);
+      expect(send.attributes['blockchain.tx.authorization.chain_ids']).toEqual([base.id]);
+    },
+  );
 
   it('records a failed send and rethrows the error unchanged', async () => {
     const node = { sendError: { code: -32000, message: 'nonce too low' } };
@@ -236,6 +240,36 @@ describe('one send span per transaction', () => {
 
     expect(sendSpans()).toHaveLength(0);
   });
+
+  it("records viem's writeContract function through the client's sendTransaction, without the function name", async () => {
+    const { hashspan, traced } = wallets();
+    const abi = parseAbi(['function transfer(address to, uint256 amount) returns (bool)']);
+
+    await writeContract(traced, { address: TO, abi, functionName: 'transfer', args: [TO, 1n] });
+    await hashspan.flush();
+
+    expect(sendSpans()).toHaveLength(1);
+    const send = tracing.spanNamed('send 8453');
+    expect(send.attributes['blockchain.contract.function.selector']).toBe('0xa9059cbb');
+    expect(send.attributes['blockchain.contract.function.name']).toBeUndefined();
+  });
+
+  it.skipIf(!viemHasAction('sendRawTransactionSync'))(
+    "records viem's sendTransactionSync function with a local account through the client's sendRawTransactionSync",
+    async () => {
+      const { hashspan, traced } = wallets({}, signer);
+
+      await sendTransactionSync(traced, { to: TO, value: 1n, ...PREPARED });
+      await hashspan.flush();
+
+      expect(
+        tracing
+          .spans()
+          .map((span) => span.name)
+          .sort(),
+      ).toEqual(['confirm 8453', 'send 8453']);
+    },
+  );
 });
 
 describe.skipIf(!viemHasAction('sendRawTransactionSync'))('sendRawTransactionSync', () => {

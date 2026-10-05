@@ -71,8 +71,8 @@ with `undefined` when none was retrieved; it never affects the confirm span. `wa
 `flush()` awaits the confirmation, not the callback.
 
 To get a send span as well, record the call that sends with the core's tracker and give `withHashspan()` the same
-tracker: the send span then covers the call, including the service's queue and approval steps, and the confirm span
-links to it.
+tracker (install `@hashspan/core` too, at the minor of `@hashspan/viem`): the send span then covers the call,
+including the service's queue and approval steps, and the confirm span links to it.
 
 ```ts
 const tracker = createTxTracker();
@@ -381,10 +381,9 @@ When a framework extends the client you pass in, check whether confirm spans app
 - `sendTransactionSync` and `writeContractSync` (viem 2.38.0) send and wait in one call: their send span ends when
   the receipt arrives, and a wait that times out inside the call is recorded as a failed send without a hash and no
   confirm span.
-- Only actions called as methods of an extended client are traced: a library that calls viem's actions as functions
-  or creates its own client bypasses the extension. One exception: viem's `sendTransaction` function, called with an
-  extended client and a local account, sends through the client's `sendRawTransaction`, so that send is recorded,
-  without the sender
+- Only actions called as methods of an extended client are traced as such: a library that calls viem's actions as
+  functions bypasses the extension for that action, and one that creates its own client bypasses it entirely. A
+  function is recorded only through the client actions viem calls inside it, with less detail
   ([libraries that take a viem client](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/integrations.md#libraries-that-take-a-viem-client)),
   and an extension applied after `withHashspan()` can hide the traced actions ([apply it last](#apply-it-last)).
 - A transaction sent by a wallet API or a wallet provider that creates its own client gets a confirm span through
