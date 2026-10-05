@@ -329,7 +329,9 @@ describe('repository docs', () => {
 
 describe('code examples', () => {
   // Every TypeScript or JavaScript block in the docs is the `#region readme` of a file in packages/*/test/readme/,
-  // which `pnpm typecheck` compiles: an example cannot stop compiling without failing CI.
+  // which `pnpm typecheck` compiles: an example cannot stop compiling without failing CI. An example that needs a
+  // third-party library hashspan does not depend on lives in integrations/test/readme/ instead, which
+  // `pnpm test:integrations` compiles.
   const blocks = markdownFiles().flatMap((file) =>
     [...read(file).matchAll(/^```(ts|typescript|tsx|js|javascript|jsx)\n([\s\S]*?)^```$/gm)].map(
       (m) => ({
@@ -338,8 +340,11 @@ describe('code examples', () => {
       }),
     ),
   );
-  const examples = readdirSync(join(root, 'packages')).flatMap((dir) => {
-    const folder = `packages/${dir}/test/readme`;
+  const folders = [
+    ...readdirSync(join(root, 'packages')).map((dir) => `packages/${dir}/test/readme`),
+    'integrations/test/readme',
+  ];
+  const examples = folders.flatMap((folder) => {
     if (!existsSync(join(root, folder))) return [];
     return readdirSync(join(root, folder)).map((name) => {
       const source = read(`${folder}/${name}`);

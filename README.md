@@ -47,7 +47,7 @@ decoded custom error.</sub>
 | [`@hashspan/cdp`](packages/cdp) | Adapter for Coinbase CDP server and smart accounts | [![npm](https://img.shields.io/npm/v/@hashspan/cdp?label=)](https://www.npmjs.com/package/@hashspan/cdp) |
 | [`@hashspan/x402`](packages/x402) | Adapter for x402 payments | [![npm](https://img.shields.io/npm/v/@hashspan/x402?label=)](https://www.npmjs.com/package/@hashspan/x402) |
 
-Use one release line for every `@hashspan` package you install, such as 0.9.x of each: the adapters depend on the
+Install the same minor version of every `@hashspan` package you use: the adapters depend on the
 `@hashspan/core` of their own minor (and `@hashspan/cdp` and `@hashspan/x402` on the `@hashspan/viem` of it), as
 caret ranges do before 1.0. A tracker from another core release passed as the `tracker` option still works; what it
 does not know is not recorded ([ADR 0014](docs/adr/0014-core-api-boundary.md)). The libraries each package
@@ -62,11 +62,13 @@ Requires Node.js 22.3 or later. CI also loads the packed packages on Bun 1.x and
 ```sh
 npm install @hashspan/viem @opentelemetry/api viem
 npm install @opentelemetry/sdk-node   # unless your app already sets up an OpenTelemetry SDK
+npm install -D tsx                    # runs agent.ts below
+anvil                                 # in a second terminal: a local chain
 ```
 
-Start a local chain with `anvil` from [Foundry](https://getfoundry.sh) and a trace backend: the
-[local lab](#local-lab) in a checkout of this repository, or the one-line [Jaeger container](docs/backends.md#jaeger).
-Then save this file as `agent.ts`:
+`anvil` comes with [Foundry](https://getfoundry.sh). Start a trace backend too: the [local lab](#local-lab) in a
+checkout of this repository, or the one-line [Jaeger container](docs/backends.md#jaeger) (needs Docker). Then save
+this file as `agent.ts`:
 
 ```ts
 import { trace } from '@opentelemetry/api';
@@ -104,9 +106,14 @@ await hashspan.flush();
 await sdk.shutdown();
 ```
 
-- **ES module:** the file uses top-level `await`, so set `"type": "module"` in `package.json`
-  (`npm pkg set type=module`). The packages themselves load with both `import` and `require()`.
-- **Run it** with `npx tsx agent.ts`, or with `node agent.ts` on Node.js 22.18 or later, which strips the types.
+```sh
+npm pkg set type=module   # agent.ts uses top-level await
+npx tsx agent.ts          # prints nothing on success: the trace is in Jaeger
+```
+
+- **ES module:** the packages themselves load with both `import` and `require()`; only `agent.ts` needs
+  `"type": "module"`.
+- **Without tsx:** `node agent.ts` runs the file on Node.js 22.18 or later, which strips the types.
 - **Start order:** hashspan gets its tracer and meter from `@opentelemetry/api` when the first transaction is sent,
   so `withHashspan()` and the clients may be created before or after `sdk.start()`, but the SDK must be started
   before the first transaction. Until an SDK is registered, nothing is recorded.

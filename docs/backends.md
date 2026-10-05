@@ -26,6 +26,13 @@ localhost only:
 docker run --rm -p 127.0.0.1:16686:16686 -p 127.0.0.1:4318:4318 jaegertracing/jaeger:2.21.0
 ```
 
+To check from a terminal, use the v3 query API, since Jaeger 2.x has no v1 `/api/traces`; it requires a start time
+range in RFC 3339:
+
+```sh
+curl 'http://localhost:16686/api/v3/traces?query.service_name=my-agent&query.start_time_min=2026-10-05T00:00:00Z&query.start_time_max=2026-10-06T00:00:00Z'
+```
+
 ## Grafana Tempo
 
 Tested with Tempo 3.0.0 and Grafana 13.2.3, both in Docker, against hashspan 0.5.0 on 2026-10-02.
