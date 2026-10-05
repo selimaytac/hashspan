@@ -850,6 +850,13 @@ describe('sensitive data with default options', () => {
     },
   );
 
+  it('keeps an address after a long hex run at the scan bound out of a sanitized error message', () => {
+    createTxTracker({ address: 'off', errorMessages: 'sanitized' })
+      .startSend(SEND)
+      .fail(new Error(`0x${'f'.repeat(4128)}${ADDRESS} tail`));
+    expect(eventAttribute('exception.message')).not.toContain(ADDRESS_HEX.slice(0, 20));
+  });
+
   it('keeps an address ending in 0 out of a sanitized error message when an x follows it', () => {
     const address = `0x${'2'.repeat(39)}0`;
     createTxTracker({ address: 'off', errorMessages: 'sanitized' })

@@ -136,6 +136,26 @@ describe('sanitizeErrorMessage', () => {
   });
 });
 
+describe('sanitizeErrorMessage around its scan bound', () => {
+  it('leaves no part of an address that follows a long hex run near the bound', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 4000, max: 4200 }),
+        address,
+        fc.constantFrom('', ' tail', 'f'),
+        (run, value, tail) => {
+          const message = `failed 0x${'f'.repeat(run)}${value}${tail}`;
+          for (const mode of [OFF, HASHED]) {
+            expect(leaksPartOf(sanitizeErrorMessage(message, mode), addressesIn(message))).toBe(
+              false,
+            );
+          }
+        },
+      ),
+    );
+  });
+});
+
 describe('paymentResourceOf', () => {
   it('records no query, fragment or user info, within 512 characters and the ellipsis', () => {
     fc.assert(
