@@ -137,8 +137,8 @@ wallet backend or a bot, the [quick start](#quick-start) works as it is: replace
 your request handler or job already has, and leave out the `agent` option; the service name tells your services
 apart.
 
-- **A wallet service sends for you:** [wallet services](docs/integrations.md#wallet-services) lists which services
-  give a send and a confirm span, and which only a confirm span.
+- **A wallet service sends for you:** [wallet services](docs/integrations.md#wallet-services) shows how each kind
+  of service gets its send and confirm spans.
 - **A worker that does not wait for receipts:**
   [background confirmation](packages/viem/README.md#background-confirmation).
 - **Latency and fees across many transactions:** the send, confirmation and fee

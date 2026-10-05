@@ -131,7 +131,11 @@ describe('sendRawTransaction', () => {
 
   it('records the authorizations of a signed type 4 transaction', async () => {
     const { hashspan, traced } = wallets();
-    const authorization = await signer.signAuthorization({
+    // A local account always signs authorizations; the type leaves the method optional.
+    const signAuthorization = signer.signAuthorization as NonNullable<
+      typeof signer.signAuthorization
+    >;
+    const authorization = await signAuthorization({
       contractAddress: TO,
       chainId: base.id,
       nonce: 1,

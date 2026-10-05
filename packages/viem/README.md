@@ -70,6 +70,28 @@ in the revert reason, and `onReceipt`, called once when the watch ends with the 
 with `undefined` when none was retrieved; it never affects the confirm span. `watch()` never throws or waits;
 `flush()` awaits the confirmation, not the callback.
 
+To get a send span as well, record the call that sends with the core's tracker and give `withHashspan()` the same
+tracker: the send span then covers the call, including the service's queue and approval steps, and the confirm span
+links to it.
+
+```ts
+const tracker = createTxTracker();
+const hashspan = withHashspan({ tracker });
+const reader = createPublicClient({ chain: baseSepolia, transport: http() });
+
+const send = tracker.startSend({ chainId: baseSepolia.id, from, to, value });
+let hash: `0x${string}`;
+try {
+  // The API call runs in the send span's context, so its HTTP span nests under the send span.
+  ({ transactionHash: hash } = await context.with(send.context, () => walletApi.send(tx)));
+  send.end({ hash });
+} catch (error) {
+  send.fail(error);
+  throw error;
+}
+hashspan.watch(reader, { hash }); // linked to the send span
+```
+
 The confirm span's parent is the span active when `watch()` is called. Without one, it is the send span's parent when
 the same tracker sent the transaction; otherwise, as for a hash sent by another tracker or by something untraced, the
 confirm span is in a trace of its own, with no send span and no link
@@ -345,7 +367,8 @@ When a framework extends the client you pass in, check whether confirm spans app
   ([libraries that take a viem client](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/integrations.md#libraries-that-take-a-viem-client)),
   and an extension applied after `withHashspan()` can hide the traced actions ([apply it last](#apply-it-last)).
 - A transaction sent by a wallet API or a wallet provider that creates its own client gets a confirm span through
-  `watch()`, but no send span ([transactions sent elsewhere](#transactions-sent-elsewhere)).
+  `watch()`, and a send span only when you record the call that sends with the same tracker
+  ([transactions sent elsewhere](#transactions-sent-elsewhere)).
 - Only waits are traced: polling `getTransactionReceipt` or `getCallsStatus` yourself records nothing
   ([call batches](#call-batches-eip-5792)).
 - Background confirmation and `watch()` cover transactions only: a user operation or a call batch gets a confirm span
