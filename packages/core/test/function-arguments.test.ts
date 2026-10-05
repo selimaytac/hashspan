@@ -23,7 +23,7 @@ const sendWith = (
 ) => {
   createTxTracker(options)
     .startSend({ chainId: CHAIN_ID, functionName: 'transfer', functionArguments })
-    .end(HASH);
+    .end({ hash: HASH });
   return tracing.spanNamed(`send ${CHAIN_ID}`).attributes[ATTR];
 };
 

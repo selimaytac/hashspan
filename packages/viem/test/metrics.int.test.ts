@@ -63,7 +63,6 @@ it('records the send, confirmation and fee of a mined transaction', async () => 
   await hashspan.flush();
 
   const chain = {
-    'blockchain.system': 'evm',
     'blockchain.system.name': 'evm',
     'blockchain.chain.id': 31337,
   };

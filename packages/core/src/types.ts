@@ -92,7 +92,7 @@ export interface TxTrackerOptions {
   /**
    * Runs last on every attribute set, including exception event attributes, and returns the attributes to record.
    * If it throws or returns something other than an attributes object, the tracker fails closed and records only
-   * `blockchain.system.name`, `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`,
+   * `blockchain.system.name`, `blockchain.chain.id`, `blockchain.operation.name`,
    * `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`, `blockchain.tx.replacement.reason`,
    * `blockchain.payment.protocol`, `blockchain.payment.status`, `blockchain.payment.verified`,
    * `blockchain.user_operation.hash`, `blockchain.user_operation.success`, `blockchain.call_batch.id`,
@@ -165,20 +165,8 @@ export interface SendHandle {
   readonly context: Context;
   /** Ends the send span successfully once the transaction hash is known. */
   end(result: SendResult, options?: EndOptions): void;
-  /**
-   * Ends the send span successfully with the transaction hash.
-   *
-   * @deprecated Use `end({ hash }, { endTime })`; removed in 1.0.
-   */
-  end(hash: string, endTime?: TimeInput): void;
   /** Ends the send span with an error (signing, simulation or broadcast failure). */
   fail(error: unknown, options?: FailOptions): void;
-  /**
-   * Ends the send span with an error.
-   *
-   * @deprecated Use `fail(error, { endTime, errorType })`; removed in 1.0.
-   */
-  fail(error: unknown, endTime: TimeInput | undefined, options?: FailOptions): void;
 }
 
 /** What a send produced. */
@@ -257,22 +245,10 @@ export interface ConfirmHandle {
   /** Ends the shared confirm span with the receipt, for every handle of the transaction. */
   end(receipt: ReceiptLike, options?: EndOptions): void;
   /**
-   * Ends the shared confirm span with the receipt.
-   *
-   * @deprecated Use `end(receipt, { endTime })`; removed in 1.0.
-   */
-  end(receipt: ReceiptLike, endTime?: TimeInput): void;
-  /**
    * Withdraws this handle because waiting for the receipt timed out. The confirm span ends as `timeout` only if
    * no other handle of the transaction is still waiting.
    */
   timeout(options?: EndOptions): void;
-  /**
-   * Withdraws this handle because waiting for the receipt timed out.
-   *
-   * @deprecated Use `timeout({ endTime })`; removed in 1.0.
-   */
-  timeout(endTime?: TimeInput): void;
   /**
    * Withdraws this handle because retrieving the receipt failed. The confirm span ends as a failure only if no
    * other handle of the transaction is still waiting. Called without an error, as `fail(undefined, { errorType })`,
@@ -280,12 +256,6 @@ export interface ConfirmHandle {
    * transaction no longer on the chain.
    */
   fail(error: unknown, options?: FailOptions): void;
-  /**
-   * Withdraws this handle because retrieving the receipt failed.
-   *
-   * @deprecated Use `fail(error, { endTime })`; removed in 1.0.
-   */
-  fail(error: unknown, endTime?: TimeInput): void;
 }
 
 /**

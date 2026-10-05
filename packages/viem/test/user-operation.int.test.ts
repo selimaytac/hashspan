@@ -155,7 +155,6 @@ describe('user operations on Anvil', () => {
     const send = tracing.spanNamed('send 31337');
     const [confirm, bundle] = tracing.spans().filter((span) => span.name === 'confirm 31337');
     expect(send.attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': 31337,
       'blockchain.operation.name': 'send',
@@ -166,7 +165,6 @@ describe('user operations on Anvil', () => {
     });
     expect(confirm?.links.map((link) => link.context.spanId)).toEqual([send.spanContext().spanId]);
     expect(confirm?.attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': 31337,
       'blockchain.operation.name': 'confirm',

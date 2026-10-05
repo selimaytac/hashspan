@@ -76,7 +76,6 @@ describe('metrics', () => {
       {
         value: 2.5,
         attributes: {
-          'blockchain.system': 'evm',
           'blockchain.system.name': 'evm',
           'blockchain.chain.id': 8453,
         },
@@ -84,7 +83,6 @@ describe('metrics', () => {
       {
         value: 0.25,
         attributes: {
-          'blockchain.system': 'evm',
           'blockchain.system.name': 'evm',
           'blockchain.chain.id': 8453,
           'error.type': 'TypeError',
@@ -104,10 +102,9 @@ describe('metrics', () => {
     });
     tracker
       .startConfirm({ chainId: 1, hash: OTHER_HASH, startTime: start })
-      .timeout(new Date(130_000));
+      .timeout({ endTime: new Date(130_000) });
 
     const base = {
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': 1,
     };
@@ -236,7 +233,7 @@ describe('metrics', () => {
     });
     tracker
       .startSend({ chainId: 1, from: `0x${'11'.repeat(20)}`, to: `0x${'22'.repeat(20)}` })
-      .end(HASH);
+      .end({ hash: HASH });
     tracker.startConfirm({ chainId: 1, hash: HASH }).end(receipt);
 
     for (const name of [
@@ -246,7 +243,7 @@ describe('metrics', () => {
     ]) {
       for (const { attributes } of meters.recorded(name)) {
         expect(Object.keys(attributes).sort()).toEqual(
-          expect.arrayContaining(['blockchain.chain.id', 'blockchain.system']),
+          expect.arrayContaining(['blockchain.chain.id', 'blockchain.system.name']),
         );
         expect(JSON.stringify(attributes)).not.toMatch(/0x|agent/);
       }
@@ -302,7 +299,7 @@ describe('metrics', () => {
     } as unknown as MeterProvider;
     const tracker = createTxTracker({ meterProvider: broken });
 
-    tracker.startSend({ chainId: 1 }).end(HASH);
+    tracker.startSend({ chainId: 1 }).end({ hash: HASH });
     tracker.startConfirm({ chainId: 1, hash: HASH }).end(receipt);
     expect(tracing.spans().map((s) => s.name)).toEqual(['send 1', 'confirm 1']);
     expect(tracing.spanNamed('confirm 1').attributes['blockchain.tx.status']).toBe('success');

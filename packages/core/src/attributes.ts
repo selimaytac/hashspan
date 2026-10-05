@@ -5,13 +5,6 @@
  * definitions and value types. These names are a public contract: changes follow the change policy at
  * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/semconv.md#change-policy.
  */
-/**
- * The kind of chain: `evm`.
- *
- * @deprecated Renamed to `blockchain.system.name` ({@link ATTR_BLOCKCHAIN_SYSTEM_NAME}). Both are recorded with the
- * same value until 1.0, which removes this attribute and the constant.
- */
-export const ATTR_BLOCKCHAIN_SYSTEM = 'blockchain.system' as const;
 /** The kind of chain, `evm`; on every span except JSON-RPC spans, and on every metric sample. */
 export const ATTR_BLOCKCHAIN_SYSTEM_NAME = 'blockchain.system.name' as const;
 /** EIP-155 chain id, e.g. `8453`; on every span. */
@@ -168,7 +161,7 @@ export const BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_REVERTED = 'reverted' as const;
 /** Some of the calls of the batch reverted. */
 export const BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_PARTIALLY_REVERTED = 'partially_reverted' as const;
 
-/** Values for {@link ATTR_BLOCKCHAIN_SYSTEM_NAME} and the deprecated {@link ATTR_BLOCKCHAIN_SYSTEM}. */
+/** Values for {@link ATTR_BLOCKCHAIN_SYSTEM_NAME}. */
 export const BLOCKCHAIN_SYSTEM_VALUE_EVM = 'evm' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_OPERATION_NAME}. */
@@ -192,14 +185,6 @@ export const BLOCKCHAIN_PAYMENT_STATUS_VALUE_FAILED = 'failed' as const;
 export const BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS = 'success' as const;
 /** The transaction reverted. */
 export const BLOCKCHAIN_TX_STATUS_VALUE_REVERTED = 'reverted' as const;
-/**
- * Formerly the status of a confirm span that gave up waiting for its receipt.
- *
- * @deprecated No longer recorded: a confirm span that gave up waiting records `error.type` `timeout` and no
- * `blockchain.tx.status`. The constant is removed in 1.0. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0016-timeout-is-an-observer-outcome.md.
- */
-export const BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT = 'timeout' as const;
 /** Another transaction with the same sender and nonce was mined instead. */
 export const BLOCKCHAIN_TX_STATUS_VALUE_REPLACED = 'replaced' as const;
 

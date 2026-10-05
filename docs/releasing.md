@@ -43,6 +43,16 @@ declarations link to the docs of their own release. Between releases, those link
 previous release; a package that was never released links to `main`. The same
 script sets each package's status in the package table of the root README: a version badge once it is released.
 
+## Pre-releases
+
+A release candidate goes through the same steps in Changesets' pre mode. `pnpm changeset pre enter rc` writes
+`.changeset/pre.json`; while it is on `main`, the Version Packages pull request numbers the versions `x.y.z-rc.N` and
+the publish step publishes them under the npm dist-tag `rc`, so `npm install @hashspan/core` keeps resolving to the
+last release on `latest` and a candidate is installed with `@rc`. Every changeset merged meanwhile goes into the next
+candidate. `pnpm changeset pre exit` in a pull request of its own ends pre mode; the next Version Packages pull
+request then releases `x.y.z` on `latest`. Pre mode reads every package matching the `@hashspan/*` group, the private
+ones too, so each has a `version` in its `package.json` (the examples have `0.0.0`; `docs.test.ts` checks it).
+
 ## One-time setup
 
 Done once, by a maintainer, before the first release of each package. For a new package, run steps 1, 3 and 4 for

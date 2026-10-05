@@ -66,7 +66,6 @@ describe('sendUserOperation', () => {
     const send = tracing.spanNamed(`send ${CHAIN_ID}`);
     expect(send.parentSpanContext?.spanId).toBe(tool.spanContext().spanId);
     expect(send.attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'send',
@@ -138,7 +137,6 @@ describe('waitForUserOperationReceipt', () => {
     const confirm = tracing.spanNamed(`confirm ${CHAIN_ID}`);
     expect(confirm.links.map((link) => link.context.spanId)).toEqual([send.spanContext().spanId]);
     expect(confirm.attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'confirm',

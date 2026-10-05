@@ -28,7 +28,7 @@ const record = (
   tracing.exporter.reset();
   createTxTracker({ recordFunctionArguments: true, ...options })
     .startSend({ chainId: CHAIN_ID, functionArguments })
-    .end(HASH);
+    .end({ hash: HASH });
   return tracing.spanNamed(`send ${CHAIN_ID}`).attributes[ARGS] as string | undefined;
 };
 
