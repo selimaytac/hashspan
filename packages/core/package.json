@@ -1,6 +1,6 @@
 {
   "name": "@hashspan/core",
-  "version": "0.12.0",
+  "version": "1.0.0-rc.0",
   "description": "Transaction lifecycle tracing for the on-chain actions of AI agents and other services, built on OpenTelemetry.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",

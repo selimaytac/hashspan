@@ -1,6 +1,6 @@
 {
   "name": "@hashspan/viem",
-  "version": "0.12.0",
+  "version": "1.0.0-rc.0",
   "description": "viem adapter for @hashspan/core: traces transactions sent through a viem client.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",

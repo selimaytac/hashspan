@@ -23,7 +23,7 @@ export { CDP_NETWORK_CHAIN_IDS } from './networks.js';
  * Options of {@link withHashspan}: those of `@hashspan/viem`'s `withHashspan()` except `confirm`, and the reader to
  * confirm with. They are read once, from the object's own enumerable properties; options it inherits through a
  * prototype, such as the getters of a class instance, are ignored
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.12.0/docs/adr/0025-untrusted-input.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@1.0.0-rc.0/docs/adr/0025-untrusted-input.md).
  */
 export interface WithHashspanCdpOptions extends Omit<ViemOptions, 'confirm'> {
   /**
@@ -48,7 +48,7 @@ export interface HashspanCdp {
    * waits of network-scoped accounts and `waitForUserOperation` waits), so their spans are ended before the OpenTelemetry SDK shuts down. Resolves
    * true when all of it finished, false on timeout (default 10 000 ms), ending confirm spans still open as `timeout`
    * (a user operation CDP reported complete ends with what is known); never rejects. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.12.0/docs/adr/0010-flush-before-shutdown.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@1.0.0-rc.0/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
 }
@@ -78,8 +78,8 @@ function flushTimeoutOf(options: unknown): number {
 
 /**
  * Traces transactions sent by a Coinbase CDP client's EVM server accounts, and user operations of its smart accounts,
- * with `@hashspan/core` (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.12.0/docs/adr/0012-cdp-adapter.md,
- * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.12.0/docs/adr/0021-user-operations.md). It wraps the
+ * with `@hashspan/core` (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@1.0.0-rc.0/docs/adr/0012-cdp-adapter.md,
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@1.0.0-rc.0/docs/adr/0021-user-operations.md). It wraps the
  * client in place: `cdp.evm.sendTransaction`, its user operation methods and `waitForUserOperation`, the account and
  * smart account factories, and the send methods of every account they return. Call
  * it once, right after creating the client: a second call on the same client returns the first handle, ignores its
