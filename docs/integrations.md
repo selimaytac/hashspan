@@ -18,7 +18,7 @@ This page collects the setups that were checked; each code block is compiled in 
 | x402 client | `@hashspan/x402` | a `reader` for `verified` | x402 v1 and non-`eip155` networks are not traced ([known limits](../packages/x402/README.md#known-limits)) | `packages/x402` tests |
 | AgentKit `ViemWalletProvider` | `@hashspan/viem` | background confirmation | TypeScript needs a cast ([setup](#viemwalletprovider)) | `integrations/` |
 | AgentKit `CdpEvmWalletProvider`, `CdpSmartWalletProvider` | `@hashspan/cdp` on `getClient()` | the provider's public client as `reader` | `configureWithWallet()` itself is not run in CI ([setup](#cdpevmwalletprovider)) | `integrations/` |
-| Other AgentKit wallet providers | `@hashspan/viem` `watch()` | the returned hash | a send span only when you record the call ([setup](#other-wallet-providers)) | no |
+| Other AgentKit wallet providers | `@hashspan/viem` `watch()` | the returned hash | a send span only when you record the call ([setup](#other-wallet-providers)) | the pattern in `packages/viem` tests |
 | GOAT | `@hashspan/viem` | background confirmation | no longer maintained ([setup](#goat-sdk)) | `integrations/` |
 | Mastra | `@hashspan/viem` | Mastra's OpenTelemetry bridge | the bridge is experimental ([setup](#agent-frameworks)) | `integrations/` |
 | LangChain JS, OpenAI Agents SDK (OpenInference) | `@hashspan/viem` | run tools in an active span of your own | tool spans are not active ([setup](#agent-frameworks)) | `integrations/` |
