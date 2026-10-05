@@ -13,6 +13,20 @@ uses `@opentelemetry/exporter-trace-otlp-proto`, which reads both. Each setup be
 the hashspan and backend versions tested are listed with each backend. Keep keys out of shell
 history and out of the repository, for example with `read -rs KEY` before running the command.
 
+## Console, without a backend
+
+To try hashspan without a backend, let the SDK print each span in the terminal instead of exporting it. `NodeSDK`
+reads the standard variable; with the [quick start](../README.md#quick-start):
+
+```sh
+OTEL_TRACES_EXPORTER=console npx tsx agent.ts
+```
+
+Spans print as they end: `send 31337` and `confirm 31337`, whose `parentSpanContext.spanId` is the `id` of
+`pay_vendor`, which prints last; the confirm span's `links` hold the send span's id. Checked with
+`@opentelemetry/sdk-node` 0.222.0. Without a backend and without this variable, the exporter cannot connect and the process exits with an
+error ([troubleshooting](troubleshooting.md#the-process-exits-with-econnrefused-on-port-4318)).
+
 ## Jaeger
 
 The [local lab](../README.md#local-lab) starts Jaeger on `http://localhost:4318`, the exporter's default endpoint, so
