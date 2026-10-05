@@ -107,9 +107,8 @@ Exit criteria:
   [integrations](integrations.md) runs in CI, and each adapter sent real transactions and payments on Base Sepolia
 - [x] A first run needs nothing beyond the docs: the [quick start](../README.md#quick-start) `agent.ts`, run as
   written, gives the trace the README describes, against Anvil in CI (`packages/viem/test/quick-start.int.test.ts`);
-  a run without prior context, from an empty project with the published packages, gets a send and a confirm span
-  once with a viem client and once with a setup from [integrations](integrations.md); every step that needed help is
-  fixed in the docs (#242)
+  from an empty project with the published packages, the docs lead to a send and a confirm span once with a viem
+  client and once with a setup from [integrations](integrations.md) (#242)
 - [x] The published packages smoke-tested on every supported Node.js version (#34)
 - [x] A stated policy for what 1.0 freezes (the public API) and what stays `development` (the semantic conventions,
   under their [change policy](semconv.md#change-policy)): [ADR 0027](adr/0027-what-1-0-freezes.md)
