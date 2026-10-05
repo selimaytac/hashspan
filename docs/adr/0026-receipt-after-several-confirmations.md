@@ -1,6 +1,6 @@
 # 0026. The receipt of a wait for several confirmations is read again
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-04
 
 ## Context
@@ -64,3 +64,7 @@ receipt again for a flashblocks preconfirmation, off the caller's path, bounded,
   client libraries confirm transactions found that none checks a receipt's block at N confirmations and that a null
   receipt alone does not tell a reorganisation from a lagging node. The maintainer approved the decision; the status
   stays proposed until the implementation is compared with it.
+- 2026-10-05: accepted after the implementation was compared with it (#306). The check is bounded by the wait's own
+  `timeout` (viem's default when none is given), and its requests go through the caller's client, with that client's
+  request timeout. A preconfirmed receipt is not read again for this check: its sealed receipt is read instead (ADR
+  0024).

@@ -132,6 +132,35 @@ describe('metrics', () => {
     expect(outcomes).toEqual(['reverted', 'RangeError', 'replaced', 'success']);
   });
 
+  it("records an adapter's error type of a confirmation, without an exception event when there is no error", () => {
+    const meters = recordingMeterProvider();
+    const tracker = createTxTracker({ meterProvider: meters.provider });
+
+    // A transaction a chain reorganisation removed (docs/adr/0026-receipt-after-several-confirmations.md).
+    tracker
+      .startConfirm({ chainId: 1, hash: HASH })
+      .fail(undefined, { endTime: new Date(), errorType: 'not_on_chain' });
+    tracker
+      .startConfirm({ chainId: 1, hash: OTHER_HASH })
+      .fail(new RangeError('x'), { errorType: 'not_on_chain' });
+
+    expect(
+      meters
+        .recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)
+        .map(({ attributes }) => [attributes['error.type'], attributes['blockchain.tx.status']]),
+    ).toEqual([
+      ['not_on_chain', undefined],
+      ['not_on_chain', undefined],
+    ]);
+    const [removed, failed] = tracing.spans();
+    expect(removed?.attributes['error.type']).toBe('not_on_chain');
+    expect(removed?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(removed?.status.code).toBe(2); // SpanStatusCode.ERROR
+    expect(removed?.events).toEqual([]);
+    // With an error, the exception event keeps the error's class name.
+    expect(failed?.events[0]?.attributes?.['exception.type']).toBe('RangeError');
+  });
+
   it("records who paid a fee that the sender did not: a payment's facilitator, or a paymaster", () => {
     const meters = recordingMeterProvider();
     const tracker = createTxTracker({ meterProvider: meters.provider });

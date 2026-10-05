@@ -312,7 +312,7 @@ export interface ConfirmHandle {
     end(receipt: ReceiptLike, options?: EndOptions): void;
     // @deprecated
     end(receipt: ReceiptLike, endTime?: TimeInput): void;
-    fail(error: unknown, options?: EndOptions): void;
+    fail(error: unknown, options?: FailOptions): void;
     // @deprecated
     fail(error: unknown, endTime?: TimeInput): void;
     timeout(options?: EndOptions): void;

@@ -14,7 +14,11 @@ import {
   selectorOf,
   shadowing,
 } from './arguments.js';
-import { type Confirmation, DEFAULT_BACKGROUND_TIMEOUT_MS } from './confirm/confirmation.js';
+import {
+  type Confirmation,
+  DEFAULT_BACKGROUND_TIMEOUT_MS,
+  type RecheckOptions,
+} from './confirm/confirmation.js';
 import {
   capturing,
   nameOf,
@@ -23,7 +27,7 @@ import {
   type ViemReplacement,
 } from './confirm/receipt.js';
 import { confirmKey, type Recent } from './confirm/recent.js';
-import { recordLate } from './confirm/timing.js';
+import { durationOr, recordLate } from './confirm/timing.js';
 import { errorName } from './safe-tracker.js';
 import type { SendArgs, SendTrace, SendTracing } from './send.js';
 import type {
@@ -45,6 +49,19 @@ interface WaitArgs {
   hash: string;
   chain?: { id: number } | null | undefined;
   onReplaced?: ((replacement: ViemReplacement) => void) | undefined;
+}
+
+/** viem's default `timeout` of `waitForTransactionReceipt`. */
+const VIEM_WAIT_TIMEOUT_MS = 180_000;
+
+/**
+ * For a wait with `confirmations` above 1, how its receipt is read again once it resolved (ADR 0026); undefined for any
+ * other wait. Read from own data properties only.
+ */
+function recheckOf(args: unknown): RecheckOptions | undefined {
+  const confirmations = own(args, 'confirmations');
+  if (typeof confirmations !== 'number' || !(confirmations > 1)) return undefined;
+  return { timeoutMs: durationOr(own(args, 'timeout'), VIEM_WAIT_TIMEOUT_MS) };
 }
 
 /** Most `cause` links followed to find the receipt in the rejection of a sync action. */
@@ -347,7 +364,7 @@ export function addTransactionActions(
         const chainId = knownChainId(args);
         if (chainId === null) return undefined;
         const waitArgs = shadowing(args, 'onReplaced', capturing(capture, onReplaced?.value));
-        return { hash, chainId, capture, waitArgs };
+        return { hash, chainId, capture, waitArgs, recheck: recheckOf(args) };
       } catch (error) {
         untraced(error);
         return undefined;
@@ -357,7 +374,7 @@ export function addTransactionActions(
     actions.waitForTransactionReceipt = async (args: WaitArgs) => {
       const prepared = prepareWait(args);
       if (!prepared) return waitForTransactionReceipt(args);
-      const { hash, chainId, capture, waitArgs } = prepared;
+      const { hash, chainId, capture, waitArgs, recheck } = prepared;
       let handle: ConfirmHandle | undefined;
       if (chainId !== undefined) {
         try {
@@ -372,7 +389,19 @@ export function addTransactionActions(
           : undefined;
       const wait = waitForTransactionReceipt(waitArgs) as Promise<ViemReceipt>;
       if (handle && chainId !== undefined) {
-        track(recordConfirmation(chainId, hash, handle, wait, capture, client));
+        track(
+          recordConfirmation(
+            chainId,
+            hash,
+            handle,
+            wait,
+            capture,
+            client,
+            undefined,
+            undefined,
+            recheck,
+          ),
+        );
       } else if (late) {
         track(
           recordLate(
@@ -381,7 +410,17 @@ export function addTransactionActions(
             () => late.chainId,
             (id) => tracker.startConfirm({ chainId: id, hash, startTime: late.startTime }),
             (lateHandle, id, endTimeOf) =>
-              recordConfirmation(id, hash, lateHandle, wait, capture, client, endTimeOf),
+              recordConfirmation(
+                id,
+                hash,
+                lateHandle,
+                wait,
+                capture,
+                client,
+                endTimeOf,
+                undefined,
+                recheck,
+              ),
           ),
         );
       }

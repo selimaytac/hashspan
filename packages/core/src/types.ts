@@ -275,9 +275,11 @@ export interface ConfirmHandle {
   timeout(endTime?: TimeInput): void;
   /**
    * Withdraws this handle because retrieving the receipt failed. The confirm span ends as a failure only if no
-   * other handle of the transaction is still waiting.
+   * other handle of the transaction is still waiting. Called without an error, as `fail(undefined, { errorType })`,
+   * it records no exception event: for an outcome the adapter observed rather than an error it got, such as a
+   * transaction no longer on the chain.
    */
-  fail(error: unknown, options?: EndOptions): void;
+  fail(error: unknown, options?: FailOptions): void;
   /**
    * Withdraws this handle because retrieving the receipt failed.
    *

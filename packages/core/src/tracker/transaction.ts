@@ -66,6 +66,7 @@ import type {
 import { joinConfirm } from './confirm-claim.js';
 import {
   errorType,
+  type HandleOptions,
   handleOptions,
   NOOP_CONFIRM,
   OBSERVER_TIMEOUT,
@@ -110,7 +111,7 @@ export interface ConfirmSpan extends SharedConfirm {
   origin: ConfirmOrigin;
   receipt(receipt: ReceiptLike, endTime?: TimeInput): void;
   timeout(endTime?: TimeInput): void;
-  fail(error: unknown, endTime?: TimeInput): void;
+  fail(error: unknown, options: HandleOptions): void;
   /** Ends as replaced by the transaction `hash`. */
   replaced(hash: string, reason: ReplacementReason | undefined, endTime?: TimeInput): void;
   /** Ends as a failure without any receipt data, for a receipt that cannot be attributed. */
@@ -392,14 +393,19 @@ export function createTransactionSpans({
             recordConfirmation(endTime, { [ATTR_ERROR_TYPE]: markError(span, OBSERVER_TIMEOUT) }),
           endTime,
         ),
-      fail: (error, endTime) =>
+      fail: (error, read) =>
         finish(
           'record confirmation failure',
           () =>
-            recordConfirmation(endTime, {
-              [ATTR_ERROR_TYPE]: markError(span, errorType(error), error),
+            recordConfirmation(read.endTime, {
+              [ATTR_ERROR_TYPE]: markError(
+                span,
+                reportedErrorType(error, read),
+                error,
+                errorType(error),
+              ),
             }),
-          endTime,
+          read.endTime,
         ),
       replaced: (hash, reason, endTime) =>
         finish(
@@ -537,9 +543,9 @@ export function createTransactionSpans({
         const { endTime } = handleOptions(second);
         claim.withdraw(() => shared.timeout(endTime));
       },
-      fail: (error: unknown, second?: EndOptions | TimeInput): void => {
-        const { endTime } = handleOptions(second);
-        claim.withdraw(() => shared.fail(error, endTime));
+      fail: (error: unknown, second?: FailOptions | TimeInput): void => {
+        const read = handleOptions(second);
+        claim.withdraw(() => shared.fail(error, read));
       },
     };
   };
