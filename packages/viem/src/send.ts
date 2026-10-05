@@ -69,7 +69,7 @@ export function createSendTracing(
   /**
    * Asks a client without a chain for its chain id. Concurrent calls share one request; the answer is not cached,
    * since a wallet can switch networks. Callers never await it before the call they trace
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/adr/0009-telemetry-off-the-call-path.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0-rc.0/docs/adr/0009-telemetry-off-the-call-path.md).
    */
   let pendingChainId: Promise<number> | undefined;
   const queryChainId = (): Promise<number> => {

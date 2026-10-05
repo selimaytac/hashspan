@@ -6,7 +6,7 @@ With x402, an agent pays for an API call by signing an authorization; the API's 
 settling transaction from its own account. This adapter records each payment as a `payment {chainId}` span inside
 your agent's trace, with what was paid, to whom, for which resource and whether it settled, and, with a reader, a
 linked `confirm {chainId}` span with block, gas and fees. It records no `send` span, since the agent did not send the
-transaction ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.12.0/docs/adr/0013-x402-payments.md)).
+transaction ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.0.0-rc.0/docs/adr/0013-x402-payments.md)).
 
 ## Install
 
@@ -60,7 +60,7 @@ The client's spend controls (`@x402/core` 2.23 and later) refuse a payment befor
 is not traced ([known limits](#known-limits)). They accept only the scheme's default assets, such as USDC: to pay in
 another token, add it with `client.setSpendControls({ allowedAssets: [{ network, asset }] })`.
 
-`withHashspan(client, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@0.12.0/packages/core#options)
+`withHashspan(client, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@1.0.0-rc.0/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem` but off by default,
 `maxBackgroundConfirmations` as in `@hashspan/viem` (it limits the confirmations through the reader; a payment whose
 confirmation is not started gets no `verified`), `tracker`, `reader` (a viem public client, or a function returning
@@ -68,7 +68,7 @@ one for a chain id) and `confirmTimeoutMs` (default 120 000 ms). Without a reade
 Give it the same `tracker` as `@hashspan/viem` or `@hashspan/cdp` to share one tracker between adapters; with
 `tracker`, the core options are not used. Options are read once, from the object's own enumerable properties: options
 it inherits through a prototype, such as the getters of a class instance, are ignored
-([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.12.0/docs/adr/0025-untrusted-input.md)).
+([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.0.0-rc.0/docs/adr/0025-untrusted-input.md)).
 
 The settlement and its transaction hash come from the server you pay. With a reader, the payment span records
 `blockchain.payment.verified`: `true` when the reported transaction's receipt carries your payment, `false` when it
@@ -85,7 +85,7 @@ settlement on another network, an authorization that does not match the requirem
 `batch-settlement`). With a reader, the payment span is exported once the receipt is checked; its end time stays
 when the response came. The revert reason of a reverted settlement, which would be text from a contract the server
 chooses, is only recorded with `decodeRevertReason: true`. See
-[ADR 0017](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.12.0/docs/adr/0017-x402-payment-verification.md).
+[ADR 0017](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.0.0-rc.0/docs/adr/0017-x402-payment-verification.md).
 
 `flush({ timeoutMs })` (default 10 000 ms) waits for payments still waiting for their response, then for
 confirmations through the reader, and ends what is left as `timeout` (a payment already settled and waiting for its
@@ -94,12 +94,12 @@ receipt check ends as settled, without `verified`). Call it before a short-lived
 ## Try it locally
 
 A payment can be made and traced on a local [Anvil](https://getfoundry.sh) chain, with no public facilitator and no
-funds. The [settlement integration test](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.12.0/packages/x402/test/settlement.int.test.ts)
+funds. The [settlement integration test](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.0.0-rc.0/packages/x402/test/settlement.int.test.ts)
 is the complete recipe: a vitest file that uses the repository's test helpers, to read rather than to copy as is. Take
 from it:
 
 - The token: an EIP-3009 token that you deploy and mint to the paying account, such as the test's
-  [`TestUsd.sol`](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.12.0/packages/x402/test/token/TestUsd.sol) (anyone can mint
+  [`TestUsd.sol`](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.0.0-rc.0/packages/x402/test/token/TestUsd.sol) (anyone can mint
   it; for tests only). The `beforeAll` block deploys and mints it.
 - The paid API, `paidApi()`: a facilitator in your process (`x402Facilitator` from `@x402/core/facilitator`, with
   `registerExactEvmScheme` from `@x402/evm/exact/facilitator` and `toFacilitatorEvmSigner` from `@x402/evm` for an
@@ -111,7 +111,7 @@ from it:
   the token in its [spend controls](#usage). The paying account only signs and needs no ether.
 
 To run your version as a script, see the root
-[quick start](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.12.0/README.md#quick-start) for
+[quick start](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.0.0-rc.0/README.md#quick-start) for
 `"type": "module"` and tsx.
 
 ## Recorded
@@ -129,7 +129,7 @@ Every payment span records the payer, recipient (`payTo`), asset, the amount the
 origin of the resource URL, e.g. `https://api.example.com`: paths of paid APIs often carry user or account
 identifiers. The core option `paymentResource: 'path'` records the path too (never the query string, fragment or user
 info), and `'off'` nothing; see
-[docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.12.0/docs/semconv.md). When the
+[docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.0.0-rc.0/docs/semconv.md). When the
 settlement reports the amount it settled, it is recorded as `blockchain.payment.settled_amount`, as reported: with the
 `upto` scheme, it can be less than the amount signed for.
 
@@ -159,7 +159,7 @@ exported, misses its payments.
 
 - Only the paying client is traced: resource servers and facilitators are not
   ([#164](https://github.com/selimaytac/hashspan/issues/164)), and no `send` span is recorded, since the facilitator
-  sends the transaction ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.12.0/docs/adr/0013-x402-payments.md)).
+  sends the transaction ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.0.0-rc.0/docs/adr/0013-x402-payments.md)).
 - Not traced: x402 v1 payments (`registerExactEvmScheme` registers v1 networks too) and networks other than `eip155`,
   with a `diag` warning once per version or network; payments that client policies or spend controls refuse, which
   happens before any hook runs.
@@ -170,8 +170,8 @@ exported, misses its payments.
 - The payment span records the payment, not the paid request's status or your tool's outcome
   ([payment, request and task outcomes](#payment-request-and-task-outcomes)).
 - The limits of `@hashspan/viem`'s confirmations and of the core apply to the confirm span
-  ([`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@0.12.0/packages/viem#known-limits),
-  [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@0.12.0/packages/core#known-limits)).
+  ([`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@1.0.0-rc.0/packages/viem#known-limits),
+  [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@1.0.0-rc.0/packages/core#known-limits)).
 
 ## License
 
