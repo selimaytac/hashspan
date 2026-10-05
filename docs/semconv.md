@@ -221,8 +221,16 @@ The fee fields follow the receipt of each chain family, as the viem adapter read
 | Arbitrum | not recorded: `gasUsed` already includes the L1 component (`gasUsedForL1`) | `gas.used × effective_gas_price` |
 | ZKsync | not recorded | `gas.used × effective_gas_price` |
 
-Values are recorded as the receipt gives them. A fee paid in another currency (Celo's fee currencies) is not
-converted.
+Values are recorded as the receipt gives them, in the unit the chain charges gas in, which is not always wei of its
+native currency; no attribute names the asset yet ([#401](https://github.com/selimaytac/hashspan/issues/401)), and
+nothing is converted:
+
+- Celo, a transaction with a `feeCurrency` (type `0x7b`): the receipt's `effectiveGasPrice`, and so the fee, are in
+  that fee currency, which only the transaction names.
+- Tempo (type `0x76`): in attodollars (10^-18 USD) per gas, charged in the transaction's fee token; viem's Tempo
+  chain declares 6 decimals for its currency, so formatting the fee with it is off by 10^12.
+
+On such a chain the `blockchain.client.fee` histogram mixes these units with fees paid in the native currency.
 
 Agent identity is recorded with the GenAI conventions `gen_ai.agent.id` and `gen_ai.agent.name`. A field set in the
 tracker's static `agent` option always wins; fields it leaves unset are taken from OpenTelemetry Baggage entries with

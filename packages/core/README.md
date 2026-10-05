@@ -186,6 +186,10 @@ These hold for every adapter; each adapter's README lists its own.
 - `blockchain.tx.fee` and the fee histogram leave out the OP Stack operator fee, so on a chain that charges one the
   fee is too low ([attributes](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0-rc.0/docs/semconv.md#attributes),
   [#287](https://github.com/selimaytac/hashspan/issues/287)).
+- On chains that charge gas in a token (Celo fee currencies, Tempo), `blockchain.tx.fee` and the fee histogram are in
+  that token's unit, and no attribute names it yet
+  ([fee fields](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0-rc.0/docs/semconv.md#attributes),
+  [#401](https://github.com/selimaytac/hashspan/issues/401)).
 - A confirm span is not revised after it ended: a reorganisation that removes its block leaves its status and block
   number ([chain reorganisations](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0-rc.0/docs/semconv.md#spans)).
 - Values from outside are bounded: longer ones are cut or dropped, and past `maxTrackedTransactions` or `linkTtlMs` a
