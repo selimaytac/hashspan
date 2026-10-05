@@ -68,7 +68,7 @@ export interface WatchOptions {
    * Called once when the watch ends: with the receipt of the mined transaction (of a replacing transaction, if one
    * was mined instead), or with `undefined` when no receipt was retrieved (timeout, failure, or nothing watched). Its
    * result and errors are ignored; it never affects the confirm span. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0017-x402-payment-verification.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/adr/0017-x402-payment-verification.md.
    */
   onReceipt?: ((receipt: TransactionReceipt | undefined) => void) | undefined;
 }

@@ -162,7 +162,7 @@ export function createTransactionSpans({
    * The hash and the options a traced wait is made with, or undefined when it is passed on untraced: with a reader,
    * without a hash, or with an `onReplaced` accessor; it throws for options that cannot be read, such as a prototype
    * chain too long to read, and the caller passes those on untraced too. viem reports a replacement, matched on sender and nonce, through
-   * `onReplaced` (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.11.0/docs/adr/0008-replaced-transactions.md).
+   * `onReplaced` (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.12.0/docs/adr/0008-replaced-transactions.md).
    * The SDK passes viem's wait parameters on unchanged, so a capturing `onReplaced` is added to them; for
    * `{ transactionHash }` it would call viem with the hash alone, so that form is passed on as `{ hash, onReplaced }`,
    * the same viem call.
@@ -195,7 +195,7 @@ export function createTransactionSpans({
   /**
    * Ends `handle` from the outcome of the user's wait; never rejects. It is tracked, so `flush()` waits for it and
    * ends it as `timeout` if it cannot wait longer
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.11.0/docs/adr/0010-flush-before-shutdown.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@0.12.0/docs/adr/0010-flush-before-shutdown.md).
    */
   const recordWait = (
     handle: ReturnType<TxTracker['startConfirm']>,
