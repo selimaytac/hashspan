@@ -179,6 +179,25 @@ describe('JSON-RPC requests the viem adapter adds', () => {
     );
   });
 
+  it('one eth_getTransactionReceipt for a wait for several confirmations', async () => {
+    const direct = createPublicClient({ chain: anvil, transport: http(RPC_URL), cacheTime: 0 });
+    /**
+     * Waits for 2 confirmations of a mined transfer. The receipt is read and the next block mined outside the counted
+     * transport first, so viem resolves on its first receipt request and both runs poll alike.
+     */
+    const waitFor2 = async (clients: Clients) => {
+      const hash = await send(clients);
+      await direct.waitForTransactionReceipt({ hash, pollingInterval: 10 });
+      await direct.request({ method: 'evm_mine' as never });
+      return clients.reader.waitForTransactionReceipt({ hash, confirmations: 2 });
+    };
+    // The receipt is read once more after the wait resolved; the block only when that receipt is missing or in
+    // another block (docs/adr/0026-receipt-after-several-confirmations.md).
+    expect(await extraRequests(waitFor2, { polling: true })).toEqual({
+      eth_getTransactionReceipt: 1,
+    });
+  });
+
   it('none for a reverted transaction with decodeRevertReason off', async () => {
     const revert = (clients: Clients) => sendAndWait(clients, REVERTER);
     expect(await extraRequests(revert, { hashspan: { decodeRevertReason: false } })).toEqual({});

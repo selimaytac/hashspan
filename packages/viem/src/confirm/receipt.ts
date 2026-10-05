@@ -6,7 +6,10 @@ import {
   type UserOperationReceiptLike,
 } from '@hashspan/core';
 import { diag, type TimeInput } from '@opentelemetry/api';
-import { getTransactionReceipt as viemGetTransactionReceipt } from 'viem/actions';
+import {
+  getBlock as viemGetBlock,
+  getTransactionReceipt as viemGetTransactionReceipt,
+} from 'viem/actions';
 import { formatRevertData } from '../revert-reason.js';
 import { errorName } from '../safe-tracker.js';
 import { delay } from './timing.js';
@@ -195,6 +198,97 @@ export async function sealedReceipt(
     const remaining = deadline - Date.now();
     if (remaining <= 0) return undefined;
     await delay(Math.min(retryMs, remaining));
+  }
+}
+
+/** A block hash: 32 bytes of hex. */
+const BLOCK_HASH = /^0x[0-9a-fA-F]{64}$/;
+
+/** Whether `receipt` carries a block hash that the check of a wait for several confirmations can compare. */
+export function hasBlockHash(receipt: ViemReceipt): boolean {
+  return typeof receipt.blockHash === 'string' && BLOCK_HASH.test(receipt.blockHash);
+}
+
+/**
+ * What reading the receipt of a wait for several confirmations again found
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0026-receipt-after-several-confirmations.md):
+ * the caller's receipt holds (`kept`), the transaction is in another block (`moved`), or it is no longer on the chain
+ * (`gone`).
+ */
+export type Recheck = { kind: 'kept' } | { kind: 'moved'; receipt: ViemReceipt } | { kind: 'gone' };
+
+const KEPT: Recheck = { kind: 'kept' };
+
+/** The receipt read again; undefined when the node has none. Rejects for a failed request or an unreadable answer. */
+async function rereadReceipt(client: unknown, hash: string): Promise<ViemReceipt | undefined> {
+  let receipt: ViemReceipt;
+  try {
+    receipt = (await viemGetTransactionReceipt(client as never, {
+      hash: hash as `0x${string}`,
+    })) as ViemReceipt;
+  } catch (error) {
+    if (nameOf(error) === 'TransactionReceiptNotFoundError') return undefined;
+    throw error;
+  }
+  if (
+    receipt === null ||
+    typeof receipt !== 'object' ||
+    !sameHex(receipt.transactionHash, hash) ||
+    typeof receipt.blockNumber !== 'bigint' ||
+    typeof receipt.gasUsed !== 'bigint' ||
+    (receipt.status !== 'success' && receipt.status !== 'reverted') ||
+    !hasBlockHash(receipt) ||
+    isPreconfirmed(receipt)
+  ) {
+    throw new TypeError('not a receipt of the transaction');
+  }
+  return receipt;
+}
+
+/**
+ * The hash of the block at `blockNumber`; undefined when the node has no block there. Rejects for a failed request or
+ * an unreadable answer.
+ */
+async function blockHashAt(client: unknown, blockNumber: bigint): Promise<string | undefined> {
+  let block: { hash?: unknown } | null;
+  try {
+    block = (await viemGetBlock(client as never, { blockNumber })) as { hash?: unknown } | null;
+  } catch (error) {
+    if (nameOf(error) === 'BlockNotFoundError') return undefined;
+    throw error;
+  }
+  const hash = block !== null && typeof block === 'object' ? block.hash : undefined;
+  if (typeof hash !== 'string' || !BLOCK_HASH.test(hash)) throw new TypeError('not a block');
+  return hash;
+}
+
+/**
+ * Reads the receipt of a wait for several confirmations again through `client`, to find whether a chain
+ * reorganisation during the wait moved the transaction or removed it. Only when that receipt is missing or in another
+ * block, it also reads the block at the height of `receipt`: a node without that block is behind, and a block that
+ * still has the caller's hash means the receipt read again is not trusted. Never rejects: a failed request or an
+ * unreadable answer, including a preconfirmation, keeps the caller's receipt. `receipt` must have a block hash
+ * (`hasBlockHash`).
+ */
+export async function recheckReceipt(client: unknown, receipt: ViemReceipt): Promise<Recheck> {
+  try {
+    const reread = await rereadReceipt(client, receipt.transactionHash);
+    if (reread && sameHex(reread.blockHash, receipt.blockHash)) return KEPT;
+    const blockHash = await blockHashAt(client, receipt.blockNumber);
+    if (blockHash === undefined) {
+      diag.debug(
+        'hashspan: the node has no block at the height of the receipt; keeping the receipt',
+      );
+      return KEPT;
+    }
+    if (sameHex(blockHash, receipt.blockHash)) {
+      diag.debug("hashspan: the receipt's block is still on the chain; keeping the receipt");
+      return KEPT;
+    }
+    return reread ? { kind: 'moved', receipt: reread } : { kind: 'gone' };
+  } catch (error) {
+    diag.debug(`hashspan: could not read the receipt again; keeping it (${errorName(error)})`);
+    return KEPT;
   }
 }
 

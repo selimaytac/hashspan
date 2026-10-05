@@ -36,9 +36,14 @@ ends with `error.type` `_OTHER`.
 **Chain reorganisations.** A confirm span records the receipt its wait ended with and is not revised afterwards: when
 a reorganisation removes the receipt's block, the span keeps its status and block number, and a later wait for the
 transaction within the link TTL adds no span, as the transaction stays settled (see one confirm span per transaction,
-below). A wait with `confirmations` above 1 ends with the receipt it read first, also when a reorganisation during the
-wait moved the transaction to another block or removed it, since viem returns that receipt to the caller
-([#306](https://github.com/selimaytac/hashspan/issues/306)). A transaction removed before a wait, `watch()` or
+below). A wait with `confirmations` above 1 records the receipt it read last: viem returns the receipt it read first,
+so once the wait resolved, the confirm span reads the receipt again (viem). If that receipt is missing or in another
+block, it also reads the block at the height of the caller's receipt: when that block has another hash, a reorganisation
+during the wait moved the transaction, and the span records the receipt in the new block, or removed it, and the span
+ends with error status and `error.type` `not_on_chain`, without `blockchain.tx.status`. A node without that block, a
+block that still has the caller's hash, a failed request or an answer that cannot be read keeps the caller's receipt.
+The caller's result never changes, and the span ends when the wait resolved
+([ADR 0026](adr/0026-receipt-after-several-confirmations.md)). A transaction removed before a wait, `watch()` or
 background confirmation read its receipt, and not included again, ends as a timeout.
 
 **Payments.** A `payment` span records a payment that the agent authorizes and another party settles on chain, such
@@ -87,6 +92,7 @@ no span; after a timeout or failure, a retry gets a new span. The same holds for
 | Receipt with status success | confirm | unset | none | `success` |
 | Receipt with status reverted | confirm | error | `reverted` | `reverted` |
 | Gave up waiting for the receipt (its timeout, or `flush()` gave up) | confirm | error | `timeout` | none; see below |
+| A reorganisation during a wait for several confirmations removed the transaction (viem; see [chain reorganisations](#spans)) | confirm | error | `not_on_chain` | none |
 | Replaced by another transaction (same sender and nonce) | confirm of the replaced hash | unset | none | `replaced` |
 | Receipt with an invalid transaction hash | confirm | error | `_OTHER` | none |
 | Receipt of another transaction that is not a reported replacement | confirm | error | `_OTHER` | none |
@@ -238,7 +244,7 @@ its outcome, as the table lists them; never an address, a hash or the agent iden
 | Metric | Instrument | Unit | Attributes | Recorded when |
 |---|---|---|---|---|
 | `blockchain.client.send.duration` | histogram | `s` | chain; `blockchain.operation.subject` for a user operation or call batch; `error.type` if the send failed | a send span ends with a hash or id, or fails: from the start of the sending call until then |
-| `blockchain.client.confirmation.duration` | histogram | `s` | chain; `blockchain.operation.subject` for a user operation or call batch; the outcome from chain data, `blockchain.tx.status` (for a user operation, `blockchain.user_operation.success`; for a call batch, `blockchain.call_batch.status`), else `error.type` (`timeout`, an adapter's error type, an error class name, or `_OTHER`) | a confirm span ends: from the start of the wait until the receipt or batch status, a replacement, a timeout or a failure; not for a call batch that ended while still pending |
+| `blockchain.client.confirmation.duration` | histogram | `s` | chain; `blockchain.operation.subject` for a user operation or call batch; the outcome from chain data, `blockchain.tx.status` (for a user operation, `blockchain.user_operation.success`; for a call batch, `blockchain.call_batch.status`), else `error.type` (`timeout`, `not_on_chain`, an adapter's error type, an error class name, or `_OTHER`) | a confirm span ends: from the start of the wait until the receipt or batch status, a replacement, a timeout or a failure; not for a call batch that ended while still pending |
 | `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.operation.subject` for a user operation; `blockchain.tx.status` (for a user operation, `blockchain.user_operation.success`); `blockchain.fee.payer` when someone other than the sender paid | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number; for a user operation, a receipt with its cost: `blockchain.user_operation.gas.cost` |
 
 A confirmation sample is a success when its outcome from chain data says so: `blockchain.tx.status` `success`,

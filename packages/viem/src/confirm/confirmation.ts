@@ -1,5 +1,5 @@
-// Confirming a transaction through a client: the receipt, a sealed receipt after a preconfirmation, the revert
-// reason, and background confirmation within its limit.
+// Confirming a transaction through a client: the receipt, a sealed receipt after a preconfirmation, the receipt of a
+// wait for several confirmations read again, the revert reason, and background confirmation within its limit.
 import type { ConfirmHandle, TxTracker } from '@hashspan/core';
 import { diag, type TimeInput } from '@opentelemetry/api';
 import { type Abi, type TransactionReceipt, WaitForTransactionReceiptTimeoutError } from 'viem';
@@ -10,12 +10,14 @@ import type { ViemClientLike } from '../types.js';
 import type { PendingConfirmation } from './pending.js';
 import {
   capturing,
+  hasBlockHash,
   isPreconfirmed,
   isReadable,
   isReceiptLag,
   isTimeout,
   RECEIPT_LAG_RETRY_MS,
   type ReplacementCapture,
+  recheckReceipt,
   sameHex,
   sealedReceipt,
   toReceiptLike,
@@ -29,6 +31,17 @@ import { delay, durationOr, within } from './timing.js';
 export const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
 /** How long telemetry waits for the sealed receipt of a preconfirmed transaction before it records it without fees. */
 const SEALED_RECEIPT_TIMEOUT_MS = 30_000;
+/** `error.type` of a confirm span whose transaction a chain reorganisation removed during a wait (ADR 0026). */
+const NOT_ON_CHAIN = 'not_on_chain';
+
+/**
+ * For a caller's wait with `confirmations` above 1: its receipt is read again once the wait resolved, for at most
+ * `timeoutMs`, the wait's own timeout
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0026-receipt-after-several-confirmations.md).
+ */
+export interface RecheckOptions {
+  timeoutMs: number;
+}
 
 /** What confirming needs from the `withHashspan()` call it belongs to. */
 export interface ConfirmationOptions {
@@ -59,6 +72,7 @@ export interface Confirmation {
     client: unknown,
     endTimeOf?: () => TimeInput | undefined,
     deadline?: number,
+    recheck?: RecheckOptions,
   ): Promise<void>;
   /**
    * Starts a confirm span for `hash` and polls for its receipt through `client`, off the caller's path. Returns false,
@@ -120,7 +134,9 @@ export function createConfirmation({
    * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0008-replaced-transactions.md). For
    * reverted receipts, the span ends after the revert reason was fetched with `client`. For a preconfirmed receipt, it
    * ends with the sealed receipt, read with `client` until `deadline` at the latest
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0024-sealed-receipt-fees.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0024-sealed-receipt-fees.md). With
+   * `recheck`, the receipt of the transaction itself is read again first, and the span records what the chain holds
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0026-receipt-after-several-confirmations.md).
    */
   const recordReceipt = async (
     chainId: number,
@@ -131,6 +147,7 @@ export function createConfirmation({
     client: unknown,
     endTimeOf: () => TimeInput | undefined = () => undefined,
     deadline?: number,
+    recheck?: RecheckOptions,
   ): Promise<void> => {
     const { handle } = confirmation;
     let receipt: ViemReceipt;
@@ -169,6 +186,30 @@ export function createConfirmation({
       }
       let recorded = toReceiptLike(receipt);
       let endAt = endTimeOf;
+      // A replacement keeps its own path (docs/adr/0008-replaced-transactions.md), and a preconfirmation the sealed
+      // receipt's below: neither is read again.
+      if (recheck && !reported && !isPreconfirmed(receipt) && hasBlockHash(receipt)) {
+        // The span ends when the caller's wait resolved, not when the check finished.
+        const resolvedAt = endTimeOf() ?? new Date();
+        endAt = () => resolvedAt;
+        // A flush that cannot wait records the caller's receipt.
+        const kept = recorded;
+        confirmation.onAbandon((underlying) => underlying.end(kept, endAt()));
+        const found = await within(
+          recheckReceipt(client, receipt),
+          recheck.timeoutMs,
+          'read the receipt again',
+        );
+        if (found?.kind === 'gone') {
+          // The outcome on the chain is not known: no blockchain.tx.status (docs/adr/0016).
+          handle.fail(undefined, { endTime: resolvedAt, errorType: NOT_ON_CHAIN });
+          return;
+        }
+        if (found?.kind === 'moved') {
+          receipt = found.receipt;
+          recorded = toReceiptLike(found.receipt);
+        }
+      }
       if (isPreconfirmed(receipt)) {
         // The span ends when the receipt arrived, not when the sealed one was read, so its duration stays the wait's.
         const arrivedAt = endTimeOf() ?? new Date();
@@ -232,10 +273,21 @@ export function createConfirmation({
     client: unknown,
     endTimeOf: () => TimeInput | undefined = () => undefined,
     deadline?: number,
+    recheck?: RecheckOptions,
   ): Promise<void> => {
     const confirmation = settleOnce(waitingHandle);
     return Promise.race([
-      recordReceipt(chainId, hash, confirmation, wait, capture, client, endTimeOf, deadline),
+      recordReceipt(
+        chainId,
+        hash,
+        confirmation,
+        wait,
+        capture,
+        client,
+        endTimeOf,
+        deadline,
+        recheck,
+      ),
       confirmation.ended,
     ]);
   };

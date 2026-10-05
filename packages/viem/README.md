@@ -73,8 +73,9 @@ confirm span is in a trace of its own, with no send span and no link
 ## Shutting down
 
 Some spans end after the traced call returned: background confirmations, confirmations of reverted transactions,
-which wait for the revert reason, and confirmations of [preconfirmed receipts](#preconfirmed-receipts-flashblocks),
-which wait for the sealed receipt. In scripts, CLI agents and serverless functions, flush them before
+which wait for the revert reason, confirmations of [preconfirmed receipts](#preconfirmed-receipts-flashblocks),
+which wait for the sealed receipt, and waits with `confirmations` above 1, whose receipt is read again once the wait
+resolved. In scripts, CLI agents and serverless functions, flush them before
 shutting the OpenTelemetry SDK down, or they are lost:
 
 ```ts
@@ -346,8 +347,6 @@ When a framework extends the client you pass in, check whether confirm spans app
 - A transaction sent while `maxBackgroundConfirmations` confirmations are polling gets no background confirm span, and
   in serverless runtimes that freeze after the response, background confirmations may not complete
   ([background confirmation](#background-confirmation)).
-- A wait with `confirmations` above 1 records the receipt it read first, also when a reorganisation during the wait
-  moved or removed the transaction ([#306](https://github.com/selimaytac/hashspan/issues/306)).
 - A wait that resolves with the receipt of another transaction records it as a replacement, also when it is not one,
   as after a mixed-up RPC response ([#355](https://github.com/selimaytac/hashspan/issues/355)).
 - A preconfirmed receipt whose sealed receipt does not come in time is recorded without fees

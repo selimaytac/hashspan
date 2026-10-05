@@ -403,6 +403,100 @@ describe("the caller's waitForTransactionReceipt", () => {
   });
 });
 
+describe("the caller's waitForTransactionReceipt with confirmations: 2", () => {
+  // Once the wait resolved, the confirm span reads the receipt again, and the block at its height when that receipt is
+  // missing or in another block (docs/adr/0026-receipt-after-several-confirmations.md). A failed request or an answer
+  // that cannot be read keeps the caller's receipt. The block after the transaction is mined before the wait, so viem
+  // resolves on its first receipt request and the second is the one read again.
+  const AGAIN = { after: 1 };
+  const NULL_RECEIPT_AGAIN = {
+    [RECEIPT]: { ...AGAIN, fault: { kind: 'result', result: () => null } },
+  } satisfies Faults;
+  const checkFaults = {
+    'a failed request when the receipt is read again': {
+      [RECEIPT]: { ...AGAIN, fault: { kind: 'rpc-error', code: -32603 } },
+    },
+    'a request that never answers when the receipt is read again': {
+      [RECEIPT]: { ...AGAIN, fault: { kind: 'hang' } },
+    },
+    'a malformed receipt when it is read again': {
+      [RECEIPT]: {
+        ...AGAIN,
+        fault: {
+          kind: 'result',
+          result: (receipt) => ({ ...(receipt as object), blockNumber: '0xzz' }),
+        },
+      },
+    },
+    'a null receipt from a node without the block at its height': {
+      ...NULL_RECEIPT_AGAIN,
+      eth_getBlockByNumber: { kind: 'result', result: () => null },
+    },
+    "a null receipt from a node whose block at that height still has the caller's hash":
+      NULL_RECEIPT_AGAIN,
+    'a null receipt and a failed block request': {
+      ...NULL_RECEIPT_AGAIN,
+      eth_getBlockByNumber: { kind: 'rpc-error', code: -32603 },
+    },
+    'a null receipt and a block that cannot be read': {
+      ...NULL_RECEIPT_AGAIN,
+      eth_getBlockByNumber: {
+        kind: 'result',
+        result: (block) => ({ ...(block as object), hash: 'none' }),
+      },
+    },
+  } satisfies Record<string, Faults>;
+  /** Whether the check reads the block: only when the receipt read again is missing. */
+  const readsBlock = (faults: Faults): boolean =>
+    faults === NULL_RECEIPT_AGAIN || 'eth_getBlockByNumber' in faults;
+
+  const reader = () =>
+    createPublicClient({ chain: anvil, transport: proxied(), pollingInterval: 50 });
+  const wait = (
+    client: { waitForTransactionReceipt: (args: never) => Promise<unknown> },
+    hash: Hex,
+  ) =>
+    settle(
+      client.waitForTransactionReceipt({
+        hash,
+        confirmations: 2,
+        timeout: WAIT_TIMEOUT_MS,
+        retryCount: 0,
+        retryDelay: 10,
+      } as never),
+    );
+
+  it.each(Object.keys(checkFaults) as (keyof typeof checkFaults)[])('%s', async (fault) => {
+    const faults: Faults = checkFaults[fault];
+    const hash = await minedTransfer();
+    await control.request({ method: 'evm_mine' as never });
+    proxy.set(faults);
+    const untraced = await wait(reader(), hash);
+    expect(untraced).toMatchObject({ resolved: { transactionHash: hash } });
+
+    const [{ outcome, meters, flushed }, rejections] = await collectingRejections(async () => {
+      proxy.set(faults);
+      const meters = recordingMeterProvider();
+      const hashspan = withHashspan({ meterProvider: meters.provider });
+      const outcome = await wait(reader().extend(hashspan), hash);
+      return { outcome, meters, flushed: await hashspan.flush({ timeoutMs: 5_000 }) };
+    });
+
+    expect(outcome).toEqual(untraced);
+    expect(rejections).toEqual([]);
+    expect(flushed).toBe(true);
+    // The check ran: the receipt was read again, and the block when that receipt was missing.
+    expect(proxy.requests(RECEIPT)).toBe(2);
+    expect(proxy.requests('eth_getBlockByNumber') > 0).toBe(readsBlock(faults));
+    expect(spansNamed('confirm ')).toHaveLength(1);
+    expectEnding(spansNamed('confirm ')[0], SUCCESS);
+    expect(spansNamed('confirm ')[0]?.attributes['blockchain.block.number']).toBe(
+      Number((untraced as { resolved: { blockNumber: bigint } }).resolved.blockNumber),
+    );
+    expect(meters.recorded('blockchain.client.confirmation.duration')).toHaveLength(1);
+  });
+});
+
 describe.each(['background confirmation', 'watch()'] as const)('%s', (path) => {
   // Background confirmation and watch() poll through viem's wait as well. They wait again after a missing receipt or
   // a failed request, one polling interval later, until their timeout: a fault that lasts ends as a timeout.

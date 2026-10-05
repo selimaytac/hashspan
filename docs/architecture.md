@@ -58,6 +58,7 @@ method, not by number.
 | A send on a client without a chain (viem) | one `eth_chainId` per send | give the client a chain |
 | Background confirmation and `watch()` (viem; cdp and x402 confirm through `watch()`) | the receipt polling of one `waitForTransactionReceipt` per transaction | `confirm`, `maxBackgroundConfirmations`, `timeoutMs` |
 | A reverted transaction (viem, cdp) | one `eth_getTransactionByHash` and one `eth_call` to replay it; one more `eth_call` when the contract was created in the same block ([ADR 0005](adr/0005-revert-reason-replay.md)) | `decodeRevertReason: false` |
+| A wait with `confirmations` above 1 (viem) | one `eth_getTransactionReceipt` after the wait resolved; one `eth_getBlockByNumber` more only when that receipt is missing or in another block ([ADR 0026](adr/0026-receipt-after-several-confirmations.md)) | |
 | A preconfirmed receipt (flashblocks) | `eth_getTransactionReceipt` once per polling interval until the sealed receipt, at most 30 s ([Preconfirmed receipts](../packages/viem/README.md#preconfirmed-receipts-flashblocks)) | |
 | A user operation (viem bundler client) | none | |
 | A user operation of a CDP smart account, with a reader | `eth_getTransactionReceipt` of the bundle transaction, polled until found or `confirmTimeoutMs` ([ADR 0021](adr/0021-user-operations.md)) | no `reader` |

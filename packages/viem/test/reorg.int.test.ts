@@ -1,7 +1,8 @@
-// Chain reorganisations on Anvil (`anvil_reorg`, `anvil_rollback`): pins what confirm spans record today when a block
-// that held a transaction is removed, after or during a wait. The behaviour is stated in docs/semconv.md (Spans,
-// "Chain reorganisations"). `watch()` and background confirmation take no `confirmations` option: they end on the
-// first receipt, so the cases with confirmations above 1 apply only to the caller's own wait.
+// Chain reorganisations on Anvil (`anvil_reorg`, `anvil_rollback`): pins what confirm spans record when a block that
+// held a transaction is removed, after or during a wait. The behaviour is stated in docs/semconv.md (Spans, "Chain
+// reorganisations"). `watch()` and background confirmation take no `confirmations` option: they end on the first
+// receipt, so the cases with confirmations above 1 apply only to the caller's own wait, whose receipt is read again
+// once it resolved (docs/adr/0026-receipt-after-several-confirmations.md).
 import { type Address, createPublicClient, createWalletClient, custom, type Hex, http } from 'viem';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -200,7 +201,7 @@ describe('a chain reorganisation while a wait with confirmations above 1 runs', 
     return { hashspan, hash, blockNumber, wait };
   }
 
-  it('ends with the receipt read before the reorganisation when the transaction moved to another block', async () => {
+  it('ends with the receipt in the new block when the transaction moved to another block', async () => {
     const { hashspan, hash, blockNumber, wait } = await waitingForConfirmations();
     const raw = await rpc('eth_getRawTransactionByHash', [hash]);
     // Replaces the transaction's block and the one before it; the transaction is now in the lower one.
@@ -215,29 +216,43 @@ describe('a chain reorganisation while a wait with confirmations above 1 runs', 
     expect(receipt.blockHash).not.toBe(moved.blockHash);
     await expect(hashspan.flush()).resolves.toBe(true);
 
+    // The span records the receipt the chain holds once the wait resolved.
     expect(confirmSpans()).toHaveLength(1);
     expect(confirmSpans()[0]?.attributes).toMatchObject({
       'blockchain.tx.hash': hash,
       'blockchain.tx.status': 'success',
-      'blockchain.block.number': Number(blockNumber),
+      'blockchain.block.number': Number(moved.blockNumber),
     });
+    expect(confirmSpans()[0]?.attributes['error.type']).toBeUndefined();
   });
 
-  // Defect #306: the span records success for a transaction the reorganisation removed, as the caller's wait
-  // resolves with the receipt it read before. Changing that is a change of span semantics and needs an ADR.
-  it('ends as success with the removed receipt when the transaction was dropped', async () => {
+  it('ends as not_on_chain, without a status, when the transaction was dropped', async () => {
     const { hashspan, hash, blockNumber, wait } = await waitingForConfirmations();
     await rpc('anvil_reorg', [1, []]);
     expect(await hasReceipt(hash)).toBe(false);
     await rpc('anvil_mine', ['0x2']);
 
+    // The caller still gets the receipt viem read first.
     await expect(wait).resolves.toMatchObject({ transactionHash: hash, blockNumber });
     await expect(hashspan.flush()).resolves.toBe(true);
     expect(await hasReceipt(hash)).toBe(false);
 
     expect(confirmSpans()).toHaveLength(1);
+    const [span] = confirmSpans();
+    expect(span?.attributes['blockchain.tx.hash']).toBe(hash);
+    expect(span?.attributes['error.type']).toBe('not_on_chain');
+    expect(span?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(span?.attributes['blockchain.block.number']).toBeUndefined();
+    expect(span?.status.code).toBe(2); // SpanStatusCode.ERROR
+  });
+
+  it('ends with the receipt it read when no reorganisation happened', async () => {
+    const { hashspan, blockNumber, wait } = await waitingForConfirmations();
+    await rpc('anvil_mine', ['0x2']);
+
+    await expect(wait).resolves.toMatchObject({ blockNumber });
+    await expect(hashspan.flush()).resolves.toBe(true);
     expect(confirmSpans()[0]?.attributes).toMatchObject({
-      'blockchain.tx.hash': hash,
       'blockchain.tx.status': 'success',
       'blockchain.block.number': Number(blockNumber),
     });
