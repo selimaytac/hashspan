@@ -1,6 +1,9 @@
 {
   "extends": "../../tsconfig.test.json",
   "compilerOptions": {
-    "paths": { "@hashspan/core": ["../../../core/src/index.ts"] }
+    "paths": {
+      "@hashspan/core": ["../../../core/src/index.ts"],
+      "@hashspan/viem": ["../../src/index.ts"]
+    }
   }
 }
