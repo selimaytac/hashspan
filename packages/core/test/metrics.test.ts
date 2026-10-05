@@ -7,6 +7,7 @@ import {
   type MetricOptions,
   metrics,
 } from '@opentelemetry/api';
+import { AlwaysOffSampler, BasicTracerProvider } from '@opentelemetry/sdk-trace-base';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createTxTracker,
@@ -368,5 +369,26 @@ describe('metrics through the global meter provider', () => {
 
     expect(first.recorded(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION)).toHaveLength(2);
     expect(second.recorded(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION)).toHaveLength(0);
+  });
+});
+
+describe('metrics and trace sampling', () => {
+  it('records every sample when the sampler drops the spans', () => {
+    const meters = recordingMeterProvider();
+    // A tracer provider that samples nothing: the spans are not recorded, the metrics still are.
+    const tracerProvider = new BasicTracerProvider({ sampler: new AlwaysOffSampler() });
+    const tracker = createTxTracker({ meterProvider: meters.provider, tracerProvider });
+
+    tracker
+      .startSend({ chainId: 8453, startTime: new Date(1_000) })
+      .end({ hash: HASH }, { endTime: new Date(2_000) });
+    tracker
+      .startConfirm({ chainId: 8453, hash: HASH, startTime: new Date(2_000) })
+      .end(receipt, { endTime: new Date(4_000) });
+
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION)).toHaveLength(1);
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)).toHaveLength(1);
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)).toHaveLength(1);
+    expect(tracing.spans()).toHaveLength(0);
   });
 });

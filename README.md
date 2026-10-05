@@ -142,7 +142,8 @@ apart.
 - **A worker that does not wait for receipts:**
   [background confirmation](packages/viem/README.md#background-confirmation).
 - **Latency and fees across many transactions:** the send, confirmation and fee
-  [histograms](docs/semconv.md#metrics).
+  [histograms](docs/semconv.md#metrics), and the limits that matter at volume
+  ([many transactions](packages/viem/README.md#many-transactions)).
 - **A short-lived job:** call `flush()` before it exits ([shutting down](packages/viem/README.md#shutting-down)).
 
 ## Try it

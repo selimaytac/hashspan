@@ -215,6 +215,27 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
   [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/adr/0018-background-confirmation-limit.md).
 - In serverless runtimes that freeze after the response, background confirmations may not complete.
 
+## Many transactions
+
+In a worker or a bot that sends many transactions, these limits decide what is recorded:
+
+- **Background confirmations at once.** Past `maxBackgroundConfirmations`, a transaction gets no background confirm
+  span and so no confirmation or fee sample ([background confirmation](#background-confirmation)). Size it to the
+  transactions you send per second times how long one takes to confirm, or wait for receipts yourself: your own waits
+  are not counted.
+- **Requests to your provider.** Each background confirmation polls for its receipt through the sending client, at
+  the client's `pollingInterval`
+  ([JSON-RPC requests hashspan adds](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/architecture.md#json-rpc-requests-hashspan-adds)).
+- **Links to the send.** The tracker keeps a send for `linkTtlMs` after it ended, and at most
+  `maxTrackedTransactions` sends ([core options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@0.12.0/packages/core#options)). A confirmation that starts later, or
+  after that many newer sends, has no link, and without an active span starts a trace of its own. Background
+  confirmation starts at the send and is not affected; a wait or a `watch()` you start later is, so raise both when
+  you confirm in batches long after sending.
+- **Sampling.** The send, confirmation and fee [metrics](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/semconv.md#metrics) record every transaction
+  whatever the sampler decides, so their percentiles stay complete while you sample traces. With a parent-based
+  sampler, a send and its confirm span are kept or dropped together
+  ([troubleshooting](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/troubleshooting.md#a-send-span-but-no-confirm-span)).
+
 ## Smart accounts (ERC-4337)
 
 A smart account sends user operations, not transactions: a bundler includes them in a bundle transaction that the
