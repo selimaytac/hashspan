@@ -91,7 +91,7 @@ const MAX_SCANNED_LENGTH = 4096;
 /**
  * `line` cut to `MAX_SCANNED_LENGTH` characters. A hex value that the cut splits (also between its `0` and `x`) keeps up
  * to `MAX_HEX_LENGTH` + 1 more digits: a short one stays whole, and a long one stays longer than any hex kept, so the
- * passes record it as they would without the cut.
+ * passes record it as they would without the cut. A short value still split at the end of that window is dropped.
  */
 function scanBound(line: string): string {
   if (line.length <= MAX_SCANNED_LENGTH) return line;
@@ -99,7 +99,13 @@ function scanBound(line: string): string {
   const most = Math.min(line.length, MAX_SCANNED_LENGTH + MAX_HEX_LENGTH + 3);
   let end = MAX_SCANNED_LENGTH;
   while (end < most && (HEX_DIGIT.test(line.charAt(end)) || startsHex(line, end))) end++;
-  return line.slice(0, end);
+  const scanned = line.slice(0, end);
+  if (end === line.length || !(HEX_DIGIT.test(line.charAt(end)) || startsHex(line, end)))
+    return scanned;
+  // Still inside hex: the last value may have started after the cut (a `0x` inside a long run starts a new one), so
+  // one no longer than any hex kept is dropped rather than recorded in part.
+  const last = /0[xX][0-9a-fA-F]*$/.exec(scanned);
+  return last && last[0].length <= MAX_HEX_LENGTH ? scanned.slice(0, last.index) : scanned;
 }
 
 const HEX_DIGIT = /^[0-9a-fA-F]$/;
