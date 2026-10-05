@@ -51,7 +51,7 @@ the publish step publishes them under the npm dist-tag `rc`, so `npm install @ha
 last release on `latest` and a candidate is installed with `@rc`. Every changeset merged meanwhile goes into the next
 candidate. `pnpm changeset pre exit` in a pull request of its own ends pre mode; the next Version Packages pull
 request then releases `x.y.z` on `latest`. Pre mode reads every package matching the `@hashspan/*` group, the private
-ones too, so each has a `version` in its `package.json` (the example agent has `0.0.0`).
+ones too, so each has a `version` in its `package.json` (the examples have `0.0.0`; `docs.test.ts` checks it).
 
 ## One-time setup
 
