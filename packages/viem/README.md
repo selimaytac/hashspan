@@ -65,6 +65,11 @@ in the revert reason, and `onReceipt`, called once when the watch ends with the 
 with `undefined` when none was retrieved; it never affects the confirm span. `watch()` never throws or waits;
 `flush()` awaits the confirmation, not the callback.
 
+The confirm span's parent is the span active when `watch()` is called. Without one, it is the send span's parent when
+the same tracker sent the transaction; otherwise, as for a hash sent by another tracker or by something untraced, the
+confirm span is in a trace of its own, with no send span and no link
+([confirm span parent](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/semconv.md#spans)).
+
 ## Shutting down
 
 Some spans end after the traced call returned: background confirmations, confirmations of reverted transactions,
@@ -85,6 +90,9 @@ confirmations keep polling until their own `timeoutMs`, so short-lived processes
 your own `waitForTransactionReceipt` calls that are still waiting, and a receipt they return later is not recorded:
 call `flush()` only when the process is shutting down. Long-running services do not need
 `flush()`.
+
+`flush()` waits only for the work of its own `withHashspan()` result, even when results share one `tracker`: an app
+with several results, or with other hashspan adapters, flushes each of them.
 
 ## Revert reasons
 

@@ -50,9 +50,15 @@ it with `x402Client.fromConfig(config)` and pass it to both instead. An `x402MCP
 `paymentClient`. The adapter only registers hooks; it replaces no method, and its hooks never throw and never change
 a payment.
 
-Call `withHashspan` right after creating the client, before registering hooks of your own: the client runs hooks in
-the order they were registered, and stops at the first that recovers a failed payment or a response, so a hook
-registered earlier can keep hashspan from seeing the outcome, which then ends as `timeout`.
+Call `withHashspan` before registering hooks of your own (`onBeforePaymentCreation`, `onAfterPaymentCreation`,
+`onPaymentCreationFailure`, `onPaymentResponse`): the client runs them in the order they were registered, and stops at
+the first that recovers a failed payment or a response, so a hook registered earlier can keep hashspan from seeing the
+outcome, which then ends as `timeout`. Registering a scheme (`registerExactEvmScheme`), a policy or an extension is not
+a hook and may come first, as in the example: the hooks of schemes and extensions run after the client's own.
+
+The client's spend controls (`@x402/core` 2.23 and later) refuse a payment before it is signed, and a refused payment
+is not traced ([known limits](#known-limits)). They accept only the scheme's default assets, such as USDC: to pay in
+another token, add it with `client.setSpendControls({ allowedAssets: [{ network, asset }] })`.
 
 `withHashspan(client, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@0.11.0/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem` but off by default,
@@ -82,6 +88,29 @@ chooses, is only recorded with `decodeRevertReason: true`. See
 `flush({ timeoutMs })` (default 10 000 ms) waits for payments still waiting for their response, then for
 confirmations through the reader, and ends what is left as `timeout` (a payment already settled and waiting for its
 receipt check ends as settled, without `verified`). Call it before a short-lived process exits.
+
+## Try it locally
+
+A payment can be made and traced on a local [Anvil](https://getfoundry.sh) chain, with no public facilitator and no
+funds. The [settlement integration test](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.11.0/packages/x402/test/settlement.int.test.ts)
+is the complete recipe: a vitest file that uses the repository's test helpers, to read rather than to copy as is. Take
+from it:
+
+- The token: an EIP-3009 token that you deploy and mint to the paying account, such as the test's
+  [`TestUsd.sol`](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.11.0/packages/x402/test/token/TestUsd.sol) (anyone can mint
+  it; for tests only). The `beforeAll` block deploys and mints it.
+- The paid API, `paidApi()`: a facilitator in your process (`x402Facilitator` from `@x402/core/facilitator`, with
+  `registerExactEvmScheme` from `@x402/evm/exact/facilitator` and `toFacilitatorEvmSigner` from `@x402/evm` for an
+  Anvil account with ether, which sends the settling transaction) and a resource server (`x402ResourceServer` and
+  `x402HTTPResourceServer` from `@x402/core/server`, with `registerExactEvmScheme` from `@x402/evm/exact/server`),
+  served as a function that stands in for `fetch`, so no port is opened. The route's `price` names the token as
+  `asset`, with its EIP-712 domain (`name` and `version`) in `extra`.
+- The paying client, `agentClient()`: as in [usage](#usage), with a reader on Anvil (`foundry` from `viem/chains`) and
+  the token in its [spend controls](#usage). The paying account only signs and needs no ether.
+
+To run your version as a script, see the root
+[quick start](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.11.0/README.md#quick-start) for
+`"type": "module"` and tsx.
 
 ## Recorded
 
