@@ -7,7 +7,7 @@
   "linter": { "rules": { "preset": "recommended" } },
   "overrides": [
     {
-      "includes": ["packages/*/test/readme/**"],
+      "includes": ["packages/*/test/readme/**", "integrations/test/readme/**"],
       "formatter": { "enabled": false },
       "assist": { "enabled": false },
       "linter": { "rules": { "correctness": { "noUnusedVariables": "off" } } }

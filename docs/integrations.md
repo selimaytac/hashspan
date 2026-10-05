@@ -158,15 +158,100 @@ privacy settings, not hashspan's: see the
   `@mastra/otel-bridge` 1.5.13 on, in [`integrations/test/mastra.int.test.ts`](../integrations/test/mastra.int.test.ts).
   Mastra marks the bridge as experimental. To set it up:
   - Install `@mastra/core @mastra/observability @mastra/otel-bridge zod @opentelemetry/sdk-node` next to the
-    packages of the [quick start](../README.md#quick-start).
-  - Start the Node SDK before the agent runs a tool, as in the quick start, and give Mastra (from `@mastra/core`) the bridge:
-    `new Mastra({ agents, observability: new Observability({ configs: { default: { serviceName: 'my-agent',
-    bridge: new OtelBridge() } } }) })`. The tool's function sends with a client extended with `withHashspan()`.
-  - To try it without a model API key, use a scripted model like the test's: `MockLanguageModelV4` from `ai/test`
-    (install `ai` 7) with one `doGenerate` result that calls the tool and one that answers, enough for the agent's
-    `generate()`. The test file is the complete setup.
+    packages of the [quick start](../README.md#quick-start), and `ai` 7 for the scripted model below: it stands in
+    for a model provider so the example needs no API key, and an agent with a real model does not need `ai`.
+  - Start the Node SDK before the agent runs a tool, give Mastra the bridge, and send from the tool with a client
+    extended with `withHashspan()`, as in this `agent.ts`. It runs against Anvil like the quick start, prints the
+    agent's answer, and the trace shows in Jaeger under the service `my-agent`: `execute_tool pay_vendor`, with
+    `send 31337` and `confirm 31337` under it. CI runs the file as written against Anvil in
+    [`integrations/test/mastra-agent.int.test.ts`](../integrations/test/mastra-agent.int.test.ts).
+  - Flush before the process exits, as the example does: `await hashspan.flush()`, then `await sdk.shutdown()`
+    ([shutting down](../packages/viem/README.md#shutting-down)).
   - Mastra's warning that no `storage` is configured and it falls back to an in-memory store is expected: tracing
     needs no storage.
+
+```ts
+import { Mastra } from '@mastra/core';
+import { Agent } from '@mastra/core/agent';
+import { createTool } from '@mastra/core/tools';
+import { Observability } from '@mastra/observability';
+import { OtelBridge } from '@mastra/otel-bridge';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { MockLanguageModelV4 } from 'ai/test';
+import { createPublicClient, createWalletClient, http, parseEther } from 'viem';
+import { mnemonicToAccount } from 'viem/accounts';
+import { foundry } from 'viem/chains';
+import { z } from 'zod';
+import { withHashspan } from '@hashspan/viem';
+
+// Exports over OTLP to http://localhost:4318. Start it before the agent runs a tool.
+const sdk = new NodeSDK({ serviceName: 'my-agent' });
+sdk.start();
+
+// Anvil's public test mnemonic: its first account is funded on every Anvil chain.
+const account = mnemonicToAccount('test test test test test test test test test test test junk');
+const transport = http('http://127.0.0.1:8545');
+const hashspan = withHashspan();
+const wallet = createWalletClient({ account, chain: foundry, transport }).extend(hashspan);
+const reader = createPublicClient({ chain: foundry, transport }).extend(hashspan);
+
+const payVendor = createTool({
+  id: 'pay_vendor',
+  description: 'Pays the vendor an amount of ETH.',
+  inputSchema: z.object({ amountEth: z.string() }),
+  execute: async ({ amountEth }) => {
+    const to = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'; // Anvil's second account
+    const hash = await wallet.sendTransaction({ to, value: parseEther(amountEth) });
+    const receipt = await reader.waitForTransactionReceipt({ hash });
+    return { hash, status: receipt.status };
+  },
+});
+
+// A scripted model instead of a provider, so no API key is needed: it calls the tool once, then answers.
+const usage = {
+  inputTokens: { total: 50, noCache: 50, cacheRead: 0, cacheWrite: 0 },
+  outputTokens: { total: 20, text: 20, reasoning: 0 },
+};
+const model = new MockLanguageModelV4({
+  doGenerate: [
+    {
+      content: [{ type: 'tool-call', toolCallId: 'call_1', toolName: 'pay_vendor', input: '{"amountEth":"0.01"}' }],
+      finishReason: { unified: 'tool-calls', raw: undefined },
+      usage,
+      warnings: [],
+    },
+    {
+      content: [{ type: 'text', text: 'Paid the vendor 0.01 ETH.' }],
+      finishReason: { unified: 'stop', raw: undefined },
+      usage,
+      warnings: [],
+    },
+  ],
+});
+
+const agent = new Agent({
+  id: 'treasury',
+  name: 'treasury',
+  instructions: 'Pay vendors when asked.',
+  model,
+  tools: { pay_vendor: payVendor },
+});
+// The bridge runs each tool inside its execute_tool span, so the send and confirm spans become its children.
+new Mastra({
+  agents: { treasury: agent },
+  observability: new Observability({
+    configs: { default: { serviceName: 'my-agent', bridge: new OtelBridge() } },
+  }),
+});
+
+const result = await agent.generate('Pay the vendor 0.01 ETH.');
+console.log(result.text);
+
+// Before the process exits: hashspan's pending spans first, then the SDK.
+await hashspan.flush();
+await sdk.shutdown();
+```
+
 - **LangChain JS and the OpenAI Agents SDK:** OpenInference's instrumentations
   (`@arizeai/openinference-instrumentation-langchain` 4.1.4, `@arizeai/openinference-instrumentation-openai-agents`
   0.3.2) record tool spans but do not make them active, so hashspan's spans attach to whatever span was active
