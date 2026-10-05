@@ -16,7 +16,6 @@ import {
   ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL,
   ATTR_BLOCKCHAIN_PAYMENT_STATUS,
   ATTR_BLOCKCHAIN_PAYMENT_VERIFIED,
-  ATTR_BLOCKCHAIN_SYSTEM,
   ATTR_BLOCKCHAIN_SYSTEM_NAME,
   ATTR_BLOCKCHAIN_TX_HASH,
   ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH,
@@ -42,7 +41,6 @@ const ATTR_EXCEPTION_STACKTRACE = 'exception.stacktrace';
 
 /** Attributes kept when the redaction hook fails (fail closed). */
 const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
-  ATTR_BLOCKCHAIN_SYSTEM,
   ATTR_BLOCKCHAIN_SYSTEM_NAME,
   ATTR_BLOCKCHAIN_CHAIN_ID,
   ATTR_BLOCKCHAIN_OPERATION_NAME,
@@ -61,12 +59,8 @@ const NON_SENSITIVE_KEYS: ReadonlySet<string> = new Set([
   ATTR_EXCEPTION_TYPE,
 ]);
 
-// The system of every span and metric sample: under its new name and, until 1.0, under the deprecated one too
-// (docs/semconv.md, change policy).
-const SYSTEM: Attributes = {
-  [ATTR_BLOCKCHAIN_SYSTEM_NAME]: BLOCKCHAIN_SYSTEM_VALUE_EVM,
-  [ATTR_BLOCKCHAIN_SYSTEM]: BLOCKCHAIN_SYSTEM_VALUE_EVM,
-};
+// The system of every span and metric sample.
+const SYSTEM: Attributes = { [ATTR_BLOCKCHAIN_SYSTEM_NAME]: BLOCKCHAIN_SYSTEM_VALUE_EVM };
 
 /** Attributes of a metric: low-cardinality only, never an address, hash or agent identity. */
 export const metricAttributes = (chainId: number, extra: Attributes = {}): Attributes => ({

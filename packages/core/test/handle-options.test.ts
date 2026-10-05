@@ -67,37 +67,45 @@ describe('handle methods with an options object', () => {
   });
 });
 
-describe('deprecated positional end times', () => {
+// The positional forms were removed in 1.0 (ADR 0027): a caller still using them, from JavaScript or through a cast,
+// ends the span now and records no hash from a string, and nothing throws.
+describe('positional arguments, removed in 1.0', () => {
   it.each([
     ['a Date', END],
     ['an HrTime', END_HR],
     ['milliseconds', END.getTime()],
-  ])('accept %s', (_, endTime) => {
+  ])('are ignored: %s as the end time', (_, endTime) => {
+    vi.spyOn(diag, 'debug').mockImplementation(() => {});
     const tracker = createTxTracker();
-    tracker.startSend(late).end(HASH, endTime);
-    tracker.startSend(late).fail(new Error('x'), endTime);
-    tracker.startConfirm({ ...late, hash: HASH }).end(RECEIPT, endTime);
-    tracker.startConfirm({ ...late, hash: `0x${'cd'.repeat(32)}` }).timeout(endTime);
-    tracker.startConfirm({ ...late, hash: `0x${'ef'.repeat(32)}` }).fail(new Error('x'), endTime);
-    expect(endTimes()).toEqual(Array(5).fill(END_HR));
-    expect(tracing.spans()[0]?.attributes['blockchain.tx.hash']).toBe(HASH);
+    const before = Date.now();
+    const positional = endTime as unknown as EndOptions;
+    expect(() => {
+      tracker.startSend(late).end({ hash: HASH }, positional);
+      tracker.startSend(late).fail(new Error('x'), positional);
+      tracker.startConfirm({ ...late, hash: HASH }).end(RECEIPT, positional);
+      tracker.startConfirm({ ...late, hash: `0x${'cd'.repeat(32)}` }).timeout(positional);
+      tracker
+        .startConfirm({ ...late, hash: `0x${'ef'.repeat(32)}` })
+        .fail(new Error('x'), positional);
+    }).not.toThrow();
+    expect(tracing.spans()).toHaveLength(5);
+    for (const [seconds] of endTimes())
+      expect(seconds).toBeGreaterThanOrEqual(Math.floor(before / 1000));
   });
 
-  it('keep the error type after a positional end time, given or not', () => {
-    const tracker = createTxTracker();
-    tracker.startSend(late).fail(new TypeError('x'), END, { errorType: 'first' });
-    tracker.startSend({ chainId: CHAIN_ID }).fail(new TypeError('x'), undefined, {
-      errorType: 'second',
-    });
-    expect(tracing.spans().map((s) => s.attributes['error.type'])).toEqual(['first', 'second']);
-    expect(endTimes()[0]).toEqual(END_HR);
-  });
-
-  it('win over the end time in the options', () => {
+  it('record no hash given as a string', () => {
+    vi.spyOn(diag, 'debug').mockImplementation(() => {});
     createTxTracker()
-      .startSend(late)
-      .fail(new Error('x'), END, { endTime: new Date(), errorType: 'rejected' } as EndOptions);
-    expect(endTimes()).toEqual([END_HR]);
+      .startSend({ chainId: CHAIN_ID })
+      .end(HASH as unknown as { hash: string });
+    expect(tracing.spans()[0]?.attributes['blockchain.tx.hash']).toBeUndefined();
+  });
+
+  it('ignore options after a positional end time', () => {
+    vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const fail = createTxTracker().startSend(late).fail as unknown as (...args: unknown[]) => void;
+    fail(new TypeError('x'), END, { errorType: 'first' });
+    expect(tracing.spans()[0]?.attributes['error.type']).toBe('TypeError');
   });
 });
 

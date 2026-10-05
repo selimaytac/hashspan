@@ -1,7 +1,6 @@
 import type { Attributes, Histogram, MeterProvider } from '@opentelemetry/api';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  ATTR_BLOCKCHAIN_SYSTEM,
   ATTR_BLOCKCHAIN_SYSTEM_NAME,
   BLOCKCHAIN_SYSTEM_VALUE_EVM,
   createTxTracker,
@@ -13,8 +12,8 @@ import {
 } from '../src/index.js';
 import { setupTracing, type TestTracing } from './helpers.js';
 
-// blockchain.system is renamed to blockchain.system.name: until 1.0 every span and metric sample that records the
-// old name records the new one too, with the same value (docs/semconv.md, change policy).
+// blockchain.system was renamed to blockchain.system.name; 0.11 and 0.12 recorded both, and 1.0 records only the new
+// name, on every span and metric sample (docs/semconv.md, change policy).
 
 /** A meter provider that keeps the attributes of every sample, per histogram. */
 function recordingMeterProvider() {
@@ -97,9 +96,8 @@ afterEach(async () => {
 });
 
 describe('blockchain.system.name', () => {
-  it('names the new attribute and keeps the old one', () => {
+  it('names the attribute', () => {
     expect(ATTR_BLOCKCHAIN_SYSTEM_NAME).toBe('blockchain.system.name');
-    expect(ATTR_BLOCKCHAIN_SYSTEM).toBe('blockchain.system');
   });
 
   it.each<[string, TxTrackerOptions]>([
@@ -112,7 +110,7 @@ describe('blockchain.system.name', () => {
         },
       },
     ],
-  ])('is on every span and every metric sample with the old name, %s', (_, options) => {
+  ])('is on every span and every metric sample, without the old name, %s', (_, options) => {
     const meters = recordingMeterProvider();
     exercise(createTxTracker({ ...options, meterProvider: meters.provider }));
 
@@ -123,7 +121,7 @@ describe('blockchain.system.name', () => {
       expect(span.attributes[ATTR_BLOCKCHAIN_SYSTEM_NAME], span.name).toBe(
         BLOCKCHAIN_SYSTEM_VALUE_EVM,
       );
-      expect(span.attributes[ATTR_BLOCKCHAIN_SYSTEM], span.name).toBe(BLOCKCHAIN_SYSTEM_VALUE_EVM);
+      expect(span.attributes['blockchain.system'], span.name).toBeUndefined();
     }
 
     for (const name of METRICS) {
@@ -131,7 +129,7 @@ describe('blockchain.system.name', () => {
       expect(samples.length, name).toBeGreaterThan(0);
       for (const attributes of samples) {
         expect(attributes[ATTR_BLOCKCHAIN_SYSTEM_NAME], name).toBe(BLOCKCHAIN_SYSTEM_VALUE_EVM);
-        expect(attributes[ATTR_BLOCKCHAIN_SYSTEM], name).toBe(BLOCKCHAIN_SYSTEM_VALUE_EVM);
+        expect(attributes['blockchain.system'], name).toBeUndefined();
       }
     }
     // Each subject, and a fee another party paid, is among the samples.
