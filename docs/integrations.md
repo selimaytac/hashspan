@@ -24,7 +24,7 @@ This page collects the setups that were checked; each code block is compiled in 
 | LangChain JS, OpenAI Agents SDK (OpenInference) | `@hashspan/viem` | run tools in an active span of your own | tool spans are not active ([setup](#agent-frameworks)) | `integrations/` |
 | ElizaOS `plugin-evm` | none | none | not traced: it creates its own wallet client ([details](#agent-frameworks)) | no |
 | Wallet services with a viem account (Turnkey, Privy) | `@hashspan/viem` | none | none ([setup](#wallet-services)) | as viem clients |
-| Wallet services with an EIP-1193 provider (Circle, Fireblocks) | `@hashspan/viem` on a `custom()` transport | a public client as reader when the provider does not answer reads | Circle smart contract accounts not checked ([setup](#wallet-services)) | no |
+| Wallet services with an EIP-1193 provider (Circle, Fireblocks) | `@hashspan/viem` on a `custom()` transport | a public client as reader when the provider does not answer reads | Circle smart contract accounts not checked ([setup](#wallet-services)) | `packages/viem` tests, with a stand-in provider |
 | Wallet services that send through their API | `@hashspan/viem` `watch()` | a public client | no send span ([setup](#wallet-services)) | no |
 
 ## Libraries that take a viem client
@@ -301,13 +301,15 @@ How a wallet service sends decides what hashspan records:
   hash: create a wallet client with `custom(provider)`, the wallet's address as `account` and the chain, and extend it
   with `withHashspan()`. viem sends `eth_sendTransaction` for an address-only account, so the send span covers the
   service's call; wait for receipts through an extended public client on an RPC endpoint when the provider does not
-  answer reads.
+  answer reads. The provider needs to answer only `eth_chainId`, which viem asks before it sends, and
+  `eth_sendTransaction`; hashspan sends it nothing else.
 - **Services that send through their own API** return a transaction hash, sometimes only after polling: record the
   transaction with [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) and a public client of your
   own. The confirm span then covers the wait; there is no send span, since the send happened elsewhere.
 
 These services were checked against the source of their published packages, on the versions named; none of them
-runs in CI.
+runs in CI. The EIP-1193 path itself does, with a stand-in provider that sends after a delay and answers only
+`eth_chainId`, `eth_accounts` and `eth_sendTransaction` (`packages/viem/test/eip1193-provider.int.test.ts`).
 
 | Service | How it sends | Use | Spans |
 |---|---|---|---|
