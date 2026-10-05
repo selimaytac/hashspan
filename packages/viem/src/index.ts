@@ -166,6 +166,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     const {
       sendTransaction,
       writeContract,
+      sendTransactionSync,
+      writeContractSync,
       waitForTransactionReceipt,
       sendUserOperation,
       waitForUserOperationReceipt,
@@ -175,7 +177,13 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     } = client;
     addTransactionActions(
       client,
-      { sendTransaction, writeContract, waitForTransactionReceipt },
+      {
+        sendTransaction,
+        writeContract,
+        sendTransactionSync,
+        writeContractSync,
+        waitForTransactionReceipt,
+      },
       actions,
       { tracker, confirm, abis, track, recordConfirmation, confirmThrough, sending },
     );

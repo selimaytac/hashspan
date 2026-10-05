@@ -2,11 +2,13 @@
 
 Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
 
-- `src/index.ts` `withHashspan()`: a `client.extend()` extension wrapping `sendTransaction`, `writeContract` and
-  `waitForTransactionReceipt` (with a transaction's EIP-7702 authorizations), a bundler client's
-  `sendUserOperation` and `waitForUserOperationReceipt` (ADR 0021), and a wallet client's `sendCalls`,
-  `waitForCallsStatus` and `sendCallsSync` (ADR 0022); it calls the base client's actions, so internal viem calls
-  are not traced twice. It only wires the modules below; the public types the modules share are in `src/types.ts`.
+- `src/index.ts` `withHashspan()`: a `client.extend()` extension wrapping `sendTransaction`, `writeContract`, their
+  sync forms (`sendTransactionSync`, `writeContractSync`: one call that sends and returns the receipt, recorded as a
+  send and a confirm span over the call) and `waitForTransactionReceipt` (with a transaction's EIP-7702
+  authorizations), a bundler client's `sendUserOperation` and `waitForUserOperationReceipt` (ADR 0021), and a wallet
+  client's `sendCalls`, `waitForCallsStatus` and `sendCallsSync` (ADR 0022); it calls the base client's actions, so
+  internal viem calls are not traced twice. It only wires the modules below; the public types the modules share are
+  in `src/types.ts`.
   - State shared by every client extended with one `withHashspan()` result (tracker, ABIs, revert reasons) is built
     in that call and passed to the modules' factories; confirm deduplication lives in the tracker (ADR 0007).
   - One module per send path, each adding its traced actions for one client: `src/transaction.ts`,

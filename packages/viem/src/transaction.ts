@@ -1,6 +1,6 @@
-// Transactions: `sendTransaction`, `writeContract` and `waitForTransactionReceipt`.
+// Transactions: `sendTransaction`, `writeContract`, their sync forms, and `waitForTransactionReceipt`.
 import type { ConfirmHandle, SendInput, TxTracker } from '@hashspan/core';
-import { context, diag } from '@opentelemetry/api';
+import { type Context, context, diag } from '@opentelemetry/api';
 import { type Abi, getAbiItem, toFunctionSelector } from 'viem';
 import {
   abiForTelemetry,
@@ -17,6 +17,7 @@ import {
 import { type Confirmation, DEFAULT_BACKGROUND_TIMEOUT_MS } from './confirm/confirmation.js';
 import {
   capturing,
+  nameOf,
   type ReplacementCapture,
   type ViemReceipt,
   type ViemReplacement,
@@ -46,6 +47,27 @@ interface WaitArgs {
   onReplaced?: ((replacement: ViemReplacement) => void) | undefined;
 }
 
+/** Most `cause` links followed to find the receipt in the rejection of a sync action. */
+const MAX_CAUSE_DEPTH = 8;
+
+/**
+ * The receipt in the rejection of a sync action called with `throwOnReceiptRevert`: viem throws its
+ * `TransactionReceiptRevertedError`, wrapped in a transaction error (and a contract error), once the transaction
+ * reverted. Read from own data properties only; undefined for any other rejection, also when reading it throws.
+ */
+function revertedReceiptOf(error: unknown): unknown {
+  try {
+    let current = error;
+    for (let depth = 0; depth < MAX_CAUSE_DEPTH && current !== undefined; depth++) {
+      if (nameOf(current) === 'TransactionReceiptRevertedError') return own(current, 'receipt');
+      current = own(current, 'cause');
+    }
+  } catch {
+    // A rejection that cannot be read is recorded as a failed send.
+  }
+  return undefined;
+}
+
 /** What the transaction actions need from the `withHashspan()` call and the extended client. */
 export interface TransactionDependencies {
   tracker: TxTracker;
@@ -60,7 +82,13 @@ export interface TransactionDependencies {
 /** Adds the traced transaction actions of `client` to `actions`; `base` holds the client's own. */
 export function addTransactionActions(
   client: ViemClientLike,
-  base: BaseActions<'sendTransaction' | 'writeContract' | 'waitForTransactionReceipt'>,
+  base: BaseActions<
+    | 'sendTransaction'
+    | 'writeContract'
+    | 'sendTransactionSync'
+    | 'writeContractSync'
+    | 'waitForTransactionReceipt'
+  >,
   actions: Partial<Record<TracedAction, AnyAction>>,
   {
     tracker,
@@ -72,7 +100,13 @@ export function addTransactionActions(
     sending: { knownChainId, queryChainId, traceSend, untraced },
   }: TransactionDependencies,
 ): void {
-  const { sendTransaction, writeContract, waitForTransactionReceipt } = base;
+  const {
+    sendTransaction,
+    writeContract,
+    sendTransactionSync,
+    writeContractSync,
+    waitForTransactionReceipt,
+  } = base;
 
   /** Work after a successful send: remember the ABI and start background confirmation. */
   const afterSend = (chainId: number, hash: string, abi: Abi | undefined): void => {
@@ -119,65 +153,177 @@ export function addTransactionActions(
     authorizations: authorizationsOf(own(args, 'authorizationList')),
   });
 
+  /**
+   * What the send span of a contract write records, and the ABI that decodes its revert reason; read from own data
+   * properties only. Throws when reading the arguments throws: the call is then made untraced.
+   */
+  const contractWrite = (
+    args: WriteContractArgs,
+  ): { abi: Abi | undefined; describe: (chainId: number) => SendInput } => {
+    const functionName = own(args, 'functionName') as string | undefined;
+    const abi = abiForTelemetry(own(args, 'abi'), functionName);
+    const functionArguments = own(args, 'args') as readonly unknown[] | undefined;
+    const describe = (chainId: number): SendInput => {
+      let functionSelector: string | undefined;
+      try {
+        // `abi` holds only the functions named `functionName` (and the errors).
+        const functions = abi?.filter((item) => item.type === 'function') ?? [];
+        const item =
+          functions.length > 1
+            ? getAbiItem({
+                abi,
+                name: functionName,
+                // Only overload matching reads the arguments, deeply: it gets a bounded copy without accessors.
+                args: dataOnly(functionArguments, MAX_ARGUMENTS_COPY_DEPTH, {
+                  left: MAX_ARGUMENTS_COPY_VALUES,
+                }),
+              } as never)
+            : functions[0];
+        functionSelector = item ? toFunctionSelector(item as never) : undefined;
+      } catch {
+        // Unknown or ambiguous ABI item, or arguments past the copy bound: record the function name only.
+      }
+      return {
+        ...sendInput(args, own(args, 'address') as string | undefined, chainId),
+        functionName,
+        functionSelector,
+        functionArguments,
+      };
+    };
+    return { abi, describe };
+  };
+
+  /** What the send span of `sendTransaction(args)` and `sendTransactionSync(args)` records. */
+  const transactionInput = (args: SendArgs, chainId: number): SendInput => ({
+    ...sendInput(args, own(args, 'to') as string | undefined, chainId),
+    functionSelector: selectorOf(own(args, 'data') as string | undefined),
+  });
+
   if (typeof sendTransaction === 'function') {
     actions.sendTransaction = (args: SendArgs) =>
       traceSend(
-        transactionSend(args, (chainId) => ({
-          ...sendInput(args, own(args, 'to') as string | undefined, chainId),
-          functionSelector: selectorOf(own(args, 'data') as string | undefined),
-        })),
+        transactionSend(args, (chainId) => transactionInput(args, chainId)),
         () => sendTransaction(args),
       );
   }
 
   if (typeof writeContract === 'function') {
     actions.writeContract = (args: WriteContractArgs) => {
-      let functionName: string | undefined;
-      let abi: Abi | undefined;
-      let functionArguments: readonly unknown[] | undefined;
+      let write: ReturnType<typeof contractWrite>;
       try {
-        functionName = own(args, 'functionName') as string | undefined;
-        abi = abiForTelemetry(own(args, 'abi'), functionName);
-        functionArguments = own(args, 'args') as readonly unknown[] | undefined;
+        write = contractWrite(args);
       } catch (error) {
         untraced(error);
         return writeContract(args);
       }
-      return traceSend(
-        transactionSend(
-          args,
-          (chainId) => {
-            let functionSelector: string | undefined;
-            try {
-              // `abi` holds only the functions named `functionName` (and the errors).
-              const functions = abi?.filter((item) => item.type === 'function') ?? [];
-              const item =
-                functions.length > 1
-                  ? getAbiItem({
-                      abi,
-                      name: functionName,
-                      // Only overload matching reads the arguments, deeply: it gets a bounded copy without
-                      // accessors.
-                      args: dataOnly(functionArguments, MAX_ARGUMENTS_COPY_DEPTH, {
-                        left: MAX_ARGUMENTS_COPY_VALUES,
-                      }),
-                    } as never)
-                  : functions[0];
-              functionSelector = item ? toFunctionSelector(item as never) : undefined;
-            } catch {
-              // Unknown or ambiguous ABI item, or arguments past the copy bound: record the function name only.
-            }
-            return {
-              ...sendInput(args, own(args, 'address') as string | undefined, chainId),
-              functionName,
-              functionSelector,
-              functionArguments,
-            };
-          },
-          abi,
+      return traceSend(transactionSend(args, write.describe, write.abi), () => writeContract(args));
+    };
+  }
+
+  /**
+   * Records the receipt a sync action returned, or threw with, on a confirm span from `startTime` to `endTime`: the
+   * call's own, since viem sends and waits in it. Never awaited by the call, so the revert reason replay runs after it
+   * returned (ADR 0009).
+   */
+  const confirmReceipt = (
+    parent: Context,
+    chainId: number,
+    hash: string,
+    receipt: unknown,
+    abi: Abi | undefined,
+    startTime: Date,
+    endTime: Date,
+  ): void => {
+    try {
+      if (abi) abis.set(confirmKey(chainId, hash), abi);
+      const handle = context.with(parent, () => tracker.startConfirm({ chainId, hash, startTime }));
+      track(
+        recordConfirmation(
+          chainId,
+          hash,
+          handle,
+          Promise.resolve(receipt as ViemReceipt),
+          {},
+          client,
+          () => endTime,
         ),
-        () => writeContract(args),
       );
+    } catch (error) {
+      diag.error(`hashspan: failed to record the receipt (${errorName(error)})`);
+    }
+  };
+
+  /**
+   * Records a sync action, which sends a transaction and waits for its receipt in one call (viem 2.38.0): the send
+   * span covers the call and ends with the hash of the receipt, as viem returns the hash only with the receipt, and a
+   * confirm span with the same start and end records the receipt. A rejection that carries the receipt of a reverted
+   * transaction (`throwOnReceiptRevert`) is recorded as that receipt; nothing else of the call's result is read.
+   */
+  const syncSend = (
+    args: SendArgs,
+    describe: (chainId: number) => SendInput,
+    abi?: Abi,
+  ): SendTrace<unknown> => ({
+    chainId: () => knownChainId(args),
+    start: (chainId, startTime) => {
+      const callStart = startTime ?? new Date();
+      // The caller's context: the confirm span is started in it, as a wait the caller makes after a send would be.
+      const parent = context.active();
+      const handle = tracker.startSend({ ...describe(chainId), startTime: callStart });
+      /** Ends the send span with the hash of `receipt` and records the receipt; false when it has no hash. */
+      const received = (receipt: unknown, endTime: Date): boolean => {
+        const hash = own(receipt, 'transactionHash');
+        if (typeof hash !== 'string') return false;
+        handle.end({ hash }, { endTime });
+        confirmReceipt(parent, chainId, hash, receipt, abi, callStart, endTime);
+        return true;
+      };
+      return {
+        context: handle.context,
+        end: (receipt, endTime) => {
+          const at = endTime instanceof Date ? endTime : new Date();
+          try {
+            if (received(receipt, at)) return;
+          } catch (error) {
+            diag.error(`hashspan: failed to read the receipt (${errorName(error)})`);
+          }
+          // A receipt without a readable hash: the send succeeded, but nothing can be confirmed.
+          handle.end({ hash: '' }, { endTime: at });
+        },
+        fail: (error, endTime) => {
+          const at = endTime instanceof Date ? endTime : new Date();
+          const receipt = revertedReceiptOf(error);
+          try {
+            if (receipt !== undefined && received(receipt, at)) return;
+          } catch (thrown) {
+            diag.error(`hashspan: failed to read the receipt (${errorName(thrown)})`);
+          }
+          handle.fail(error, { endTime: at });
+        },
+      };
+    },
+    // The receipt is recorded as the send span ends: nothing to confirm in the background.
+    after: () => {},
+  });
+
+  if (typeof sendTransactionSync === 'function') {
+    actions.sendTransactionSync = (args: SendArgs) =>
+      traceSend(
+        syncSend(args, (chainId) => transactionInput(args, chainId)),
+        () => sendTransactionSync(args),
+      );
+  }
+
+  if (typeof writeContractSync === 'function') {
+    actions.writeContractSync = (args: WriteContractArgs) => {
+      let write: ReturnType<typeof contractWrite>;
+      try {
+        write = contractWrite(args);
+      } catch (error) {
+        untraced(error);
+        return writeContractSync(args);
+      }
+      return traceSend(syncSend(args, write.describe, write.abi), () => writeContractSync(args));
     };
   }
 
