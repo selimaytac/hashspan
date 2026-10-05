@@ -440,3 +440,23 @@ describe('package README options', () => {
     expect(options.filter((option) => !readme.includes(`\`${option}\``))).toEqual([]);
   });
 });
+
+describe('docs/releasing.md', () => {
+  // Pre-releases: Changesets' pre mode reads every workspace package of the `@hashspan/*` linked group, the private
+  // ones too, and fails on one without a version.
+  it('gives every @hashspan workspace package a version', () => {
+    const manifests = ['packages', 'examples']
+      .flatMap((dir) =>
+        readdirSync(join(root, dir)).map((name) => join(root, dir, name, 'package.json')),
+      )
+      .filter((file) => existsSync(file))
+      .map((file) => JSON.parse(readFileSync(file, 'utf8')) as { name?: string; version?: string });
+    const unversioned = manifests
+      .filter(
+        (manifest) => manifest.name?.startsWith('@hashspan/') && manifest.version === undefined,
+      )
+      .map((manifest) => manifest.name);
+    expect(manifests.length).toBeGreaterThan(4);
+    expect(unversioned).toEqual([]);
+  });
+});

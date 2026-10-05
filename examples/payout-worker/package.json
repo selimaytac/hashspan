@@ -1,5 +1,6 @@
 {
   "name": "@hashspan/example-payout-worker",
+  "version": "0.0.0",
   "private": true,
   "description": "A payout worker, not an agent, whose on-chain transactions are traced with hashspan.",
   "license": "Apache-2.0",

@@ -20,7 +20,7 @@ const argumentsOf = (functionArguments: readonly unknown[]) => {
   tracing.exporter.reset();
   createTxTracker({ recordFunctionArguments: true })
     .startSend({ chainId: CHAIN_ID, functionName: 'call', functionArguments })
-    .end(HASH);
+    .end({ hash: HASH });
   return tracing.spanNamed(`send ${CHAIN_ID}`).attributes[ARGS];
 };
 

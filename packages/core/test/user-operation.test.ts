@@ -73,7 +73,6 @@ describe('user operation send span', () => {
       span.spanContext().spanId,
     );
     expect(span.attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'send',
@@ -116,7 +115,6 @@ describe('user operation send span', () => {
       expect(Object.keys(span.attributes).sort()).toEqual([
         'blockchain.chain.id',
         'blockchain.operation.name',
-        'blockchain.system',
         'blockchain.system.name',
         'blockchain.user_operation.hash',
       ]);
@@ -168,7 +166,6 @@ describe('user operation confirm span', () => {
     expect(span.links.map((link) => link.context.spanId)).toEqual([sent.spanContext().spanId]);
     expect(span.parentSpanContext?.spanId).toBe(tool.spanContext().spanId);
     expect(span.attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'confirm',
@@ -307,7 +304,6 @@ describe('user operation confirm span', () => {
       expect(Object.keys(span.attributes).sort()).toEqual([
         'blockchain.chain.id',
         'blockchain.operation.name',
-        'blockchain.system',
         'blockchain.system.name',
         'blockchain.user_operation.hash',
       ]);
@@ -459,14 +455,12 @@ describe('user operation privacy', () => {
       .end({ userOpHash: USER_OP_HASH });
     tracker.startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH }).end(receipt);
     expect(tracing.spanNamed(send).attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'send',
       'blockchain.user_operation.hash': USER_OP_HASH,
     });
     expect(tracing.spanNamed(confirm).attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'confirm',
@@ -495,7 +489,6 @@ describe('user operation metrics', () => {
     return { provider, recorded: (name: string) => recorded.get(name) ?? [] };
   }
   const base = {
-    'blockchain.system': 'evm',
     'blockchain.system.name': 'evm',
     'blockchain.chain.id': CHAIN_ID,
     'blockchain.operation.subject': 'user_operation',

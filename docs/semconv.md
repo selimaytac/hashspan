@@ -1,6 +1,6 @@
 # Semantic conventions (draft)
 
-Schema version: `0.3.0-dev` · Stability: **development** for everything below.
+Schema version: `0.4.0-dev` · Stability: **development** for everything below.
 Rationale: [ADR 0003](adr/0003-attribute-namespace.md). Privacy defaults: [ADR 0004](adr/0004-privacy-defaults.md).
 
 ## Spans
@@ -146,7 +146,6 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 
 | Attribute | Type | Spans | Default | Description |
 |---|---|---|---|---|
-| `blockchain.system` | string | send, confirm, payment | on | `evm`; deprecated: renamed to `blockchain.system.name`, recorded with the same value until 1.0, which removes it |
 | `blockchain.system.name` | string | send, confirm, payment | on | `evm` |
 | `blockchain.chain.id` | int | all | on | EIP-155 chain id, e.g. `8453` |
 | `blockchain.operation.name` | string | send, confirm, payment | on | `send` \| `confirm` \| `payment` |
@@ -236,7 +235,7 @@ must stay internal belong in the static `agent` option, which is never propagate
 
 The tracker records these histograms through the meter provider (the global one unless `meterProvider` is given),
 so every adapter gets them ([ADR 0020](adr/0020-metrics.md)). Their attributes are low-cardinality only:
-`blockchain.system.name` (and the deprecated `blockchain.system`), `blockchain.chain.id`, what the sample is about and
+`blockchain.system.name`, `blockchain.chain.id`, what the sample is about and
 its outcome, as the table lists them; never an address, a hash or the agent identity. Samples of user operations
 ([ADR 0021](adr/0021-user-operations.md)) and call batches ([ADR 0022](adr/0022-call-batches.md)) carry
 `blockchain.operation.subject`; a call batch's raw status code is never recorded on metrics, and batches record no fee.
@@ -269,7 +268,7 @@ lower case), `hashed` (`sha256:` + first 32 hex characters of SHA-256 of the low
 function) or `off`. Neither depends on how the source wrote the address, so one address has one value on every
 span, whether it came checksummed from the call's arguments or lower-cased from a receipt.
 A redaction hook runs last on every attribute set of the tracker's spans, not on metrics or JSON-RPC spans; if it
-throws or returns something other than an attributes object, only `blockchain.system.name`, `blockchain.system`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
+throws or returns something other than an attributes object, only `blockchain.system.name`, `blockchain.chain.id`, `blockchain.operation.name`, `blockchain.tx.hash`, `blockchain.tx.status`, `blockchain.tx.replacement.hash`,
 `blockchain.tx.replacement.reason`, `blockchain.payment.protocol`, `blockchain.payment.status`,
 `blockchain.payment.verified`, `blockchain.user_operation.hash`, `blockchain.user_operation.success`,
 `blockchain.call_batch.id`, `blockchain.call_batch.status` and `error.type` are recorded.

@@ -72,7 +72,7 @@ describe('watch', () => {
 
   it('links to a send span recorded by the same tracker', async () => {
     const tracker = createTxTracker();
-    tracker.startSend({ chainId: 8453 }).end(HASH);
+    tracker.startSend({ chainId: 8453 }).end({ hash: HASH });
     const hashspan = withHashspan({ tracker });
     const reader = createPublicClient({
       chain: base,

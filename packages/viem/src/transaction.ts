@@ -178,8 +178,8 @@ export function addTransactionActions(
       );
       return {
         context: handle.context,
-        end: (hash, endTime) => handle.end(hash, endTime),
-        fail: (error, endTime) => handle.fail(error, endTime),
+        end: (hash, endTime) => handle.end({ hash }, { endTime }),
+        fail: (error, endTime) => handle.fail(error, { endTime }),
       };
     },
     after: (chainId, hash) => afterSend(chainId, hash, abi),

@@ -173,8 +173,8 @@ describe('a custom tracker', () => {
 
     await wallet.sendTransaction({ to: TO, chain: null });
     await vi.waitFor(() => expect(ended).toHaveLength(1));
-    expect(ended[0]?.[0]).toBe(HASH);
-    expect(ended[0]?.[1]).toBeInstanceOf(Date);
+    expect(ended[0]?.[0]).toEqual({ hash: HASH });
+    expect(ended[0]?.[1]).toEqual({ endTime: expect.any(Date) });
     expect((inputs[0] as { startTime?: unknown }).startTime).toBeInstanceOf(Date);
   });
 });
