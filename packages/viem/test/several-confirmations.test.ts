@@ -229,6 +229,23 @@ describe('a wait for several confirmations', () => {
     expectCallerReceipt(span.attributes);
   });
 
+  it('checks the wait of a client without a chain, once its chain id is known', async () => {
+    const chain = node({ reread: null, block: { hash: NEW_BLOCK_AT_HEIGHT } });
+    const hashspan = withHashspan();
+    // No chain: the chain id comes from eth_chainId (0x2105) after the wait started.
+    const reader = createPublicClient({ transport: chain.transport, pollingInterval: 10 }).extend(
+      hashspan,
+    );
+
+    const receipt = await reader.waitForTransactionReceipt({ hash: HASH, confirmations: 2 });
+    await expect(hashspan.flush()).resolves.toBe(true);
+
+    expect(receipt.blockNumber).toBe(123n);
+    const [span] = tracing.spans().filter((s) => s.name === 'confirm 8453');
+    expect(span?.attributes['error.type']).toBe('not_on_chain');
+    expect(span?.attributes['blockchain.tx.status']).toBeUndefined();
+  });
+
   it('reads nothing again for a wait for one confirmation', async () => {
     const chain = node({ reread: null, block: { hash: NEW_BLOCK_AT_HEIGHT } });
     const { span } = await waitFor2(chain, { confirmations: 1 });
