@@ -44,7 +44,8 @@ before changing there.
 - `packages/viem` → capture adapter for viem clients ([AGENTS.md](packages/viem/AGENTS.md))
 - `packages/cdp` → capture adapter for the Coinbase CDP SDK ([AGENTS.md](packages/cdp/AGENTS.md))
 - `packages/x402` → adapter for x402 payments ([AGENTS.md](packages/x402/AGENTS.md))
-- `examples/` → runnable agent integrations ([ai-sdk-agent](examples/ai-sdk-agent/AGENTS.md))
+- `examples/` → runnable integrations: an agent ([ai-sdk-agent](examples/ai-sdk-agent/AGENTS.md)) and a service that is
+  not one ([payout-worker](examples/payout-worker/AGENTS.md))
 - `integrations/` → private tests of the setups in docs/integrations.md with the third-party libraries they name, a
   workspace of its own ([AGENTS.md](integrations/AGENTS.md))
 - `docker/`, `scripts/`, `Makefile` → local lab and release tooling; `make lab-metrics` adds Prometheus and Grafana

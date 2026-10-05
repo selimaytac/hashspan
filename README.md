@@ -145,6 +145,8 @@ apart.
   [histograms](docs/semconv.md#metrics), and the limits that matter at volume
   ([many transactions](packages/viem/README.md#many-transactions)).
 - **A short-lived job:** call `flush()` before it exits ([shutting down](packages/viem/README.md#shutting-down)).
+- **An example:** [examples/payout-worker](examples/payout-worker), a worker that pays out from a queue, confirmed in
+  the background, run against Anvil in CI.
 
 ## Try it
 
