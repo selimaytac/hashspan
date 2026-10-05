@@ -2,8 +2,9 @@
 
 ## Reporting a vulnerability
 
-Please **do not** open a public issue. Report vulnerabilities privately through GitHub:
-**Security → Report a vulnerability** on this repository (private vulnerability reporting).
+Please **do not** open a public issue. Report vulnerabilities privately through GitHub's private vulnerability
+reporting: <https://github.com/selimaytac/hashspan/security/advisories/new> (or **Security → Report a vulnerability**
+on this repository).
 
 Please include the affected package and version, the configuration (address mode, error message mode, adapter), a
 reproduction or a test that shows the problem, and the impact you see.
