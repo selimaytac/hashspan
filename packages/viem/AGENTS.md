@@ -37,6 +37,9 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
   transaction send and confirm paths through it, `test/call-batch-faults.int.test.ts` the call batch paths, and the
   `bundler faults` rows of `test/user-operation.int.test.ts` the bundler methods; `test/fault-checks.ts` holds the
   checks they share with the cdp and x402 fault rows
+- `test/quick-start.int.test.ts` runs the README quick start's `agent.ts`, taken from README.md as it is (only the RPC
+  URL changes), with tsx in a process of its own and checks the trace it exports over OTLP; a change to that block
+  must keep the trace the README describes
 - `.github/workflows/viem-range.yml` runs the viem tests weekly against both ends of the viem peer range; a test that
   needs an action or a behaviour of a newer viem than the floor is gated by `test/viem-version.ts` (`viemHasAction()`,
   `viemAtLeast()`), with a comment naming the release that introduced it

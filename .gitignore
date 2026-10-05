@@ -18,3 +18,5 @@ CLAUDE.local.md
 .idea/
 .vscode/*
 !.vscode/extensions.json
+# Left behind by an interrupted packages/viem/test/quick-start.int.test.ts
+packages/viem/test/fixtures/quick-start-*/

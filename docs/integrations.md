@@ -306,17 +306,18 @@ How a wallet service sends decides what hashspan records:
   hash: create a wallet client with `custom(provider)`, the wallet's address as `account` and the chain, and extend it
   with `withHashspan()`. viem sends `eth_sendTransaction` for an address-only account, so the send span covers the
   service's call; wait for receipts through an extended public client on an RPC endpoint when the provider does not
-  answer reads, or confirm with `watch()` on one. Background confirmation polls through the sending client, so it
-  needs a provider that answers reads.
+  answer reads, or confirm with `watch()` on one. The provider needs to answer only `eth_chainId`, which viem asks
+  before it sends, and `eth_sendTransaction`; hashspan sends it nothing else. Background confirmation polls through
+  the sending client, so it needs a provider that answers reads.
 - **Services that send through their own API** return a transaction hash, sometimes only after polling: record the
   API call as a send span with the core's tracker and the transaction with `watch()` on the same tracker, as in
   [transactions sent elsewhere](../packages/viem/README.md#transactions-sent-elsewhere). The send span then covers the API call, the confirm span the wait, linked
   to it. Without the recorded call, there is only the confirm span.
 
 These services were checked against the source of their published packages, on the versions named; none of them
-runs in CI. Their patterns do, on Anvil: a provider whose `eth_sendTransaction` answers late and that answers no reads
-(`packages/viem/test/eip1193-provider.int.test.ts`), and an API call recorded as a send
-(`packages/viem/test/api-wallet.test.ts`).
+runs in CI. Their patterns do, on Anvil: a provider that sends after a delay and answers only `eth_chainId`,
+`eth_accounts` and `eth_sendTransaction` (`packages/viem/test/eip1193-provider.int.test.ts`), and an API call
+recorded as a send (`packages/viem/test/api-wallet.test.ts`).
 
 | Service | How it sends | Use | Spans |
 |---|---|---|---|

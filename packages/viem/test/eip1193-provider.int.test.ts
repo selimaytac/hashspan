@@ -1,104 +1,120 @@
-// A wallet service's EIP-1193 provider (as Circle's developer-controlled wallets and Fireblocks offer) used through
-// viem's custom() transport with an address-only account: viem sends eth_sendTransaction to the provider, which
-// creates the transaction with the service, waits until it is sent, and answers with the hash. The provider here
-// stands in for the service on Anvil: it delays eth_sendTransaction and answers no reads, as a provider without a
-// fallback does, so receipts come through a public client of its own (docs/integrations.md, "Wallet services").
+// A wallet service that hands out an EIP-1193 provider (docs/integrations.md#wallet-services): the provider sends when
+// it receives eth_sendTransaction and returns the hash, and answers no reads. The stand-in below signs with a key of
+// its own and sends to Anvil, after a delay that stands for the service's queue, as such a service does.
 import { SpanStatusCode } from '@opentelemetry/api';
 import {
-  type Address,
   createPublicClient,
   createWalletClient,
   custom,
+  type EIP1193RequestFn,
+  type Hex,
   http,
-  MethodNotFoundRpcError,
+  type TransactionRequest,
+  toHex,
 } from 'viem';
+import { mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
 import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 
+// Anvil's third account, held by the service; the test never signs with it.
+const serviceKey = privateKeyToAccount(
+  toHex(
+    mnemonicToAccount('test test test test test test test test test test test junk', {
+      addressIndex: 2,
+    }).getHdKey().privateKey as Uint8Array,
+  ),
+);
+const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
+const QUEUE_MS = 50;
+
 const { instance, rpcUrl: RPC_URL } = await startAnvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
 });
-const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
-/** How long the service takes to send a transaction: its queue and policy checks. */
-const SERVICE_DELAY_MS = 150;
 
-let tracing: TestTracing;
-let account: Address;
-
-beforeAll(async () => {
-  [account] = (await createWalletClient({
+/** The provider a wallet service returns: it sends, and refuses every read but the chain id and its accounts. */
+function serviceProvider(options: { deny?: boolean } = {}) {
+  const methods: string[] = [];
+  const signer = createWalletClient({
+    account: serviceKey,
     chain: anvil,
     transport: http(RPC_URL),
-  }).getAddresses()) as [Address];
-});
-afterAll(async () => {
-  await instance.stop();
-});
+  });
+  const request = (async ({ method, params }: { method: string; params?: unknown }) => {
+    methods.push(method);
+    switch (method) {
+      case 'eth_chainId':
+        return toHex(anvil.id);
+      case 'eth_accounts':
+      case 'eth_requestAccounts':
+        return [serviceKey.address];
+      case 'eth_sendTransaction': {
+        await new Promise((resolve) => setTimeout(resolve, QUEUE_MS));
+        if (options.deny) {
+          throw Object.assign(new Error('Transaction denied by policy'), { code: 4001 });
+        }
+        const [transaction] = params as [TransactionRequest<Hex>];
+        return signer.sendTransaction({
+          to: transaction.to,
+          value: transaction.value === undefined ? undefined : BigInt(transaction.value),
+          data: transaction.data,
+        });
+      }
+      default:
+        throw Object.assign(new Error(`${method} is not supported`), { code: 4200 });
+    }
+  }) as EIP1193RequestFn;
+  return { provider: { request }, methods };
+}
+
+let tracing: TestTracing;
 beforeEach(() => {
   tracing = setupTracing();
 });
 afterEach(async () => {
   await tracing.teardown();
 });
+afterAll(async () => {
+  await instance.stop();
+});
 
-/** The service's provider: sends after a delay through Anvil, answers the chain id, and refuses every other method. */
-function serviceProvider(options: { reject?: string } = {}) {
-  const node = http(RPC_URL)({ chain: anvil });
-  const methods: string[] = [];
-  const provider = {
-    async request({ method, params }: { method: string; params?: unknown }) {
-      methods.push(method);
-      if (method === 'eth_chainId') return node.request({ method } as never);
-      if (method === 'eth_sendTransaction') {
-        await new Promise((resolve) => setTimeout(resolve, SERVICE_DELAY_MS));
-        if (options.reject) throw new Error(options.reject);
-        return node.request({ method, params } as never);
-      }
-      throw new MethodNotFoundRpcError(new Error(`${method} is not supported`));
-    },
-  };
-  return { provider, methods };
-}
-
-const toMs = (t: [number, number] | undefined) => (t ? t[0] * 1e3 + t[1] / 1e6 : Number.NaN);
-
-describe('a wallet service EIP-1193 provider through custom()', () => {
-  it("records a send span over the service's call and a linked confirm span from a public client", async () => {
-    const hashspan = withHashspan();
+describe('a wallet service with an EIP-1193 provider, through custom()', () => {
+  it('traces the send through the provider and the confirmation through a reader on the RPC endpoint', async () => {
     const { provider, methods } = serviceProvider();
+    const hashspan = withHashspan();
     const wallet = createWalletClient({
-      account,
+      account: serviceKey.address,
       chain: anvil,
       transport: custom(provider),
     }).extend(hashspan);
     const reader = createPublicClient({ chain: anvil, transport: http(RPC_URL) }).extend(hashspan);
 
     const hash = await wallet.sendTransaction({ to: RECIPIENT, value: 1_000n });
-    await reader.waitForTransactionReceipt({ hash });
-    await hashspan.flush();
+    const receipt = await reader.waitForTransactionReceipt({ hash });
+    expect(receipt.status).toBe('success');
 
-    expect(methods).toContain('eth_sendTransaction');
     const send = tracing.spanNamed('send 31337');
     const confirm = tracing.spanNamed('confirm 31337');
     expect(send.attributes).toMatchObject({
       'blockchain.tx.hash': hash,
-      'blockchain.tx.from': account.toLowerCase(),
-      'blockchain.tx.to': RECIPIENT,
+      'blockchain.tx.from': serviceKey.address.toLowerCase(),
     });
     // The send span covers the service's queue.
-    expect(toMs(send.endTime) - toMs(send.startTime)).toBeGreaterThanOrEqual(SERVICE_DELAY_MS - 5);
+    const sendMs = send.duration[0] * 1000 + send.duration[1] / 1e6;
+    expect(sendMs).toBeGreaterThanOrEqual(QUEUE_MS - 5);
     expect(confirm.links[0]?.context.spanId).toBe(send.spanContext().spanId);
     expect(confirm.attributes['blockchain.tx.status']).toBe('success');
+    // hashspan asks the provider for nothing it does not answer.
+    expect(methods.filter((method) => method !== 'eth_chainId')).toEqual(['eth_sendTransaction']);
   });
 
   it('confirms through watch() on a public client when the provider answers no reads', async () => {
-    const hashspan = withHashspan();
     const { provider } = serviceProvider();
+    const hashspan = withHashspan();
     const wallet = createWalletClient({
-      account,
+      account: serviceKey.address,
       chain: anvil,
       transport: custom(provider),
     }).extend(hashspan);
@@ -114,22 +130,20 @@ describe('a wallet service EIP-1193 provider through custom()', () => {
     expect(confirm.attributes['blockchain.tx.status']).toBe('success');
   });
 
-  it('records a send the service refuses and rethrows its error', async () => {
-    const hashspan = withHashspan();
-    const { provider } = serviceProvider({ reject: 'policy denied' });
+  it('ends the send span with the error when the service refuses, and rethrows it unchanged', async () => {
+    const { provider } = serviceProvider({ deny: true });
     const wallet = createWalletClient({
-      account,
+      account: serviceKey.address,
       chain: anvil,
       transport: custom(provider),
-    }).extend(hashspan);
+    }).extend(withHashspan());
 
-    await expect(wallet.sendTransaction({ to: RECIPIENT, value: 1n })).rejects.toThrow(
-      'policy denied',
-    );
-    await hashspan.flush();
+    const error = await wallet.sendTransaction({ to: RECIPIENT, value: 1n }).catch((e) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(String(error.message)).toContain('denied by policy');
 
     const send = tracing.spanNamed('send 31337');
     expect(send.status.code).toBe(SpanStatusCode.ERROR);
-    expect(tracing.spans().filter((span) => span.name.startsWith('confirm '))).toHaveLength(0);
+    expect(tracing.spans().map((span) => span.name)).toEqual(['send 31337']);
   });
 });
