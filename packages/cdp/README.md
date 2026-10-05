@@ -1,12 +1,13 @@
 # @hashspan/cdp
 
-Trace the transactions your AI agents send with [Coinbase CDP](https://docs.cdp.coinbase.com) server accounts, and
-the user operations of CDP smart accounts, using OpenTelemetry.
+Trace the transactions your AI agents, or any of your services, send with
+[Coinbase CDP](https://docs.cdp.coinbase.com) server accounts, and the user operations of CDP smart accounts, using
+OpenTelemetry.
 
 CDP signs and broadcasts transactions through its API, so no RPC client of yours sees them. This adapter wraps a
-`CdpClient` so that each transaction becomes a `send {chainId}` span inside your agent's trace, and, with a reader,
-a linked `confirm {chainId}` span with status, gas, fees and revert reason, like
-[`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.12.0/packages/viem).
+`CdpClient` so that each transaction becomes a `send {chainId}` span inside the active trace, such as your agent's
+tool call, a request or a job, and, with a reader, a linked `confirm {chainId}` span with status, gas, fees and
+revert reason, like [`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.12.0/packages/viem).
 
 ## Install
 

@@ -3,7 +3,8 @@
 **Trace your AI agents' on-chain transactions with OpenTelemetry.**
 
 hashspan turns every transaction an agent sends into spans, keyed by the transaction hash, inside the agent's
-own OpenTelemetry trace.
+own OpenTelemetry trace. It works the same for any service that sends transactions: payment and payout workers,
+wallet backends, bots.
 
 [![CI](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml/badge.svg)](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml)
 [![npm @hashspan/core](https://img.shields.io/npm/v/@hashspan/core?label=%40hashspan%2Fcore)](https://www.npmjs.com/package/@hashspan/core)
@@ -27,7 +28,9 @@ decoded custom error.</sub>
 ## Why
 
 - **No new dashboard.** It's a library that emits standard OpenTelemetry spans. Your existing backend is the UI.
-- **Agent-aware.** Transaction spans nest under your framework's agent/tool spans and carry `gen_ai.agent.id`.
+- **Agent-aware, not agent-only.** Transaction spans nest under your framework's agent/tool spans and carry
+  `gen_ai.agent.id`; without an agent, they nest under whatever span is active, such as an HTTP request or a queue
+  job ([not an agent?](#not-an-agent)).
 - **Real cost.** Fees include the L1 data fee on OP-stack chains such as Base.
 - **Metrics too.** Send and confirmation latency and fees are also recorded as histograms, and `traceTransport()` can
   add a span per JSON-RPC request ([semantic conventions](docs/semconv.md)).
@@ -126,6 +129,21 @@ npx tsx agent.ts          # prints nothing on success: the trace is in Jaeger
 `flush()` matters in any process that exits after its last transaction
 ([shutting down](packages/viem/README.md#shutting-down)). See [`@hashspan/viem`](packages/viem) for details and
 [`@hashspan/core`](packages/core) to instrument other send paths.
+
+## Not an agent?
+
+hashspan does not need an agent. In any service that sends transactions, such as a payment or payout worker, a
+wallet backend or a bot, the [quick start](#quick-start) works as it is: replace the `pay_vendor` span with the span
+your request handler or job already has, and leave out the `agent` option; the service name tells your services
+apart.
+
+- **A wallet service sends for you:** [wallet services](docs/integrations.md#wallet-services) lists which services
+  give a send and a confirm span, and which only a confirm span.
+- **A worker that does not wait for receipts:**
+  [background confirmation](packages/viem/README.md#background-confirmation).
+- **Latency and fees across many transactions:** the send, confirmation and fee
+  [histograms](docs/semconv.md#metrics).
+- **A short-lived job:** call `flush()` before it exits ([shutting down](packages/viem/README.md#shutting-down)).
 
 ## Try it
 

@@ -19,6 +19,7 @@
     "coinbase",
     "cdp",
     "evm",
+    "transactions",
     "ai-agents",
     "observability"
   ],

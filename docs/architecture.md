@@ -2,8 +2,8 @@
 
 ```mermaid
 flowchart LR
-  subgraph App["Agent application"]
-    Tool["execute_tool span<br/>(AI SDK, Mastra, ...)"]
+  subgraph App["Application (agent or service)"]
+    Tool["execute_tool or request span<br/>(AI SDK, Mastra, HTTP, jobs)"]
     Viem["viem client"]
     CDP["CDP SDK<br/>(server and smart accounts)"]
     X402["x402 client<br/>(@x402/fetch, axios, mcp)"]
@@ -47,8 +47,8 @@ Design decisions: [docs/adr](adr/). Attribute schema: [docs/semconv.md](semconv.
 
 ## JSON-RPC requests hashspan adds
 
-Agents often run against rate-limited endpoints. These are the requests the adapters make in addition to the
-traced calls, per case; the integration tests named here count them against the same calls without hashspan, so a
+Agents and services often run against rate-limited endpoints. These are the requests the adapters make in addition to
+the traced calls, per case; the integration tests named here count them against the same calls without hashspan, so a
 change that adds requests fails them. How often a wait polls depends on when blocks arrive, so polling is counted by
 method, not by number.
 
