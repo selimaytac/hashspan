@@ -47,6 +47,7 @@ import {
   USER_OP_HASH,
 } from './mock-bundler.js';
 import { FROM, HASH, type MockOptions, mockTransport, TO } from './mock-transport.js';
+import { viemHasAction } from './viem-version.js';
 
 let tracing: HostileTracing;
 const meters = recordingMeterProvider();
@@ -231,6 +232,55 @@ const SEND_TRANSACTION = { to: TO, value: 1n, data: '0xa9059cbb', nonce: 1, chai
 const WRITE_CONTRACT = { address: TO, abi: erc20, functionName: 'transfer', args: [TO, 1n] };
 const WAIT = { hash: HASH, chain: base, onReplaced: () => {}, timeout: WAIT_MS };
 const CALLS = { calls: [{ to: TO, value: 1n }], chain: base };
+// sendTransactionSync and writeContractSync came with viem 2.38.0.
+const SYNC = viemHasAction('sendTransactionSync') && viemHasAction('writeContractSync');
+
+/** Rows for the sync actions, which send and return the receipt in one call; none on a viem without them. */
+const syncRows = (): Row[] =>
+  SYNC
+    ? [
+        ...argumentRows(
+          'sendTransactionSync',
+          { ...SEND_TRANSACTION, timeout: WAIT_MS },
+          onWallet('sendTransactionSync'),
+          {},
+          Object.keys(SEND_TRANSACTION),
+        ),
+        ...argumentRows(
+          'writeContractSync',
+          { ...WRITE_CONTRACT, timeout: WAIT_MS },
+          onWallet('writeContractSync'),
+          {},
+          Object.keys(WRITE_CONTRACT),
+        ),
+        ...answerRows(
+          'node receipt of sendTransactionSync',
+          ['status', 'blockNumber', 'gasUsed', 'effectiveGasPrice', 'transactionHash'],
+          (value, field, hashspan) =>
+            onWallet('sendTransactionSync', { receipt: { [field]: value } })(
+              { to: TO, value: 1n, timeout: WAIT_MS },
+              hashspan,
+            ),
+        ),
+        {
+          name: 'sendTransactionSync rejected with',
+          values: hostileErrors,
+          scenario: (value, hashspan) => {
+            const { client, mock } = wallet(hashspan, {}, (t) =>
+              overriding(t, {
+                eth_sendTransaction: () => {
+                  throw value;
+                },
+              }),
+            );
+            return {
+              call: () => (client as AnyClient).sendTransactionSync({ to: TO, value: 1n }),
+              requests: () => mock.requests,
+            };
+          },
+        },
+      ]
+    : [];
 
 const ROWS: Row[] = [
   // The caller's arguments.
@@ -252,6 +302,7 @@ const ROWS: Row[] = [
       onWallet('sendCalls')({ ...CALLS, chain: { ...base, id: value } }, hashspan),
   },
   ...argumentRows('writeContract', WRITE_CONTRACT, onWallet('writeContract')),
+  ...syncRows(),
   ...argumentRows('waitForTransactionReceipt', WAIT, onReader('waitForTransactionReceipt')),
   // Gas fields are left valid: they are not telemetry's, and without them viem asks the bundler for an estimate.
   ...argumentRows(
@@ -473,6 +524,7 @@ const ROWS: Row[] = [
   ...(
     [
       'sendTransaction',
+      ...(SYNC ? (['sendTransactionSync'] as const) : []),
       'waitForTransactionReceipt',
       'sendCalls',
       'waitForCallsStatus',
@@ -488,6 +540,8 @@ const ROWS: Row[] = [
       scenario: (_value, hashspan) => {
         if (action === 'sendTransaction')
           return onWallet('sendTransaction')({ to: TO, value: 1n }, hashspan);
+        if (action === 'sendTransactionSync')
+          return onWallet('sendTransactionSync')({ to: TO, value: 1n }, hashspan);
         if (action === 'waitForTransactionReceipt')
           return onReader('waitForTransactionReceipt')(WAIT, hashspan);
         if (action === 'sendCalls') return onWallet('sendCalls')(CALLS, hashspan);

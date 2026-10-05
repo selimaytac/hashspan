@@ -10,12 +10,14 @@ export interface BackgroundConfirmOptions {
 }
 
 /**
- * Actions this adapter traces: those of a wallet client, two of a bundler client (`createBundlerClient`), and the
+ * Actions this adapter traces: those of a wallet client (with the sync forms of viem 2.38.0), two of a bundler client (`createBundlerClient`), and the
  * EIP-5792 call batch actions of a wallet client.
  */
 export type TracedAction =
   | 'sendTransaction'
   | 'writeContract'
+  | 'sendTransactionSync'
+  | 'writeContractSync'
   | 'waitForTransactionReceipt'
   | 'sendUserOperation'
   | 'waitForUserOperationReceipt'

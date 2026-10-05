@@ -286,6 +286,7 @@ const wallet = createWalletClient({
 |---|---|---|
 | `sendTransaction` | `send` | chain id, from, to, value, nonce (when the call passes one), function selector, hash, and the EIP-7702 authorizations of a type 4 transaction (count, delegated addresses, chain ids; never signatures) |
 | `writeContract` | `send` | as above, plus the function name, and the call arguments with `recordFunctionArguments: true` |
+| `sendTransactionSync`, `writeContractSync` | `send` and `confirm` | as `sendTransaction` or `writeContract` and `waitForTransactionReceipt`; both spans cover the call, since viem returns the hash only with the receipt |
 | `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack) and total fee from the sealed receipt ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)), revert reason, replacement |
 | `sendUserOperation` | `send` | chain id, smart account, EntryPoint, number of calls, user operation hash; see [Smart accounts](#smart-accounts-erc-4337) |
 | `waitForUserOperationReceipt` | `confirm` | success, gas used, cost, nonce, paymaster, revert reason, bundle transaction hash and block |
@@ -293,7 +294,7 @@ const wallet = createWalletClient({
 | `waitForCallsStatus` | `confirm` | outcome, status code, atomicity, transaction hashes, highest block |
 | `sendCallsSync` | `send` and `confirm` | as `sendCalls` and `waitForCallsStatus` |
 
-While `sendTransaction`, `writeContract`, `sendUserOperation` or `sendCalls` runs, its send span is the active span, so spans that your RPC or HTTP
+While `sendTransaction`, `writeContract` (or their sync forms), `sendUserOperation` or `sendCalls` runs, its send span is the active span, so spans that your RPC or HTTP
 instrumentation creates for the request nest under it; the code after the call stays in your own context.
 
 Failed sends, reverted receipts and receipt timeouts set error status; the original error is always rethrown
@@ -317,8 +318,11 @@ When a framework extends the client you pass in, check whether confirm spans app
 ## Known limits
 
 - Not traced: `deployContract` ([#36](https://github.com/selimaytac/hashspan/issues/36)), `sendRawTransaction`
-  ([#33](https://github.com/selimaytac/hashspan/issues/33)), and `sendTransactionSync`, `writeContractSync` and
-  `sendRawTransactionSync`, which send and wait in one call ([#370](https://github.com/selimaytac/hashspan/issues/370)).
+  ([#33](https://github.com/selimaytac/hashspan/issues/33)) and `sendRawTransactionSync`, which start from a signed
+  transaction.
+- `sendTransactionSync` and `writeContractSync` (viem 2.38.0) send and wait in one call: their send span ends when
+  the receipt arrives, and a wait that times out inside the call is recorded as a failed send without a hash and no
+  confirm span.
 - Only actions called as methods of an extended client are traced: a library that calls viem's actions as functions
   or creates its own client bypasses the extension
   ([libraries that take a viem client](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/integrations.md#libraries-that-take-a-viem-client)),

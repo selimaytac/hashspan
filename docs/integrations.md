@@ -156,7 +156,17 @@ privacy settings, not hashspan's: see the
   whose children are `send` and `confirm`. Without Mastra observability, the send and confirm spans start traces of
   their own. CI runs both setups against Anvil with a scripted model, from `@mastra/core` 1.74.0 and
   `@mastra/otel-bridge` 1.5.13 on, in [`integrations/test/mastra.int.test.ts`](../integrations/test/mastra.int.test.ts).
-  Mastra marks the bridge as experimental.
+  Mastra marks the bridge as experimental. To set it up:
+  - Install `@mastra/core @mastra/observability @mastra/otel-bridge zod @opentelemetry/sdk-node` next to the
+    packages of the [quick start](../README.md#quick-start).
+  - Start the Node SDK before the agent runs a tool, as in the quick start, and give Mastra (from `@mastra/core`) the bridge:
+    `new Mastra({ agents, observability: new Observability({ configs: { default: { serviceName: 'my-agent',
+    bridge: new OtelBridge() } } }) })`. The tool's function sends with a client extended with `withHashspan()`.
+  - To try it without a model API key, use a scripted model like the test's: `MockLanguageModelV4` from `ai/test`
+    (install `ai` 7) with one `doGenerate` result that calls the tool and one that answers, enough for the agent's
+    `generate()`. The test file is the complete setup.
+  - Mastra's warning that no `storage` is configured and it falls back to an in-memory store is expected: tracing
+    needs no storage.
 - **LangChain JS and the OpenAI Agents SDK:** OpenInference's instrumentations
   (`@arizeai/openinference-instrumentation-langchain` 4.1.4, `@arizeai/openinference-instrumentation-openai-agents`
   0.3.2) record tool spans but do not make them active, so hashspan's spans attach to whatever span was active

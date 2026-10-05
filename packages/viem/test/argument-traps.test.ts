@@ -54,6 +54,8 @@ function walletWithStandIns(fail = false) {
   const calls: Record<string, unknown[]> = {
     sendTransaction: [],
     writeContract: [],
+    sendTransactionSync: [],
+    writeContractSync: [],
     waitForTransactionReceipt: [],
     sendUserOperation: [],
     waitForUserOperationReceipt: [],
@@ -72,6 +74,8 @@ function walletWithStandIns(fail = false) {
     .extend((() => ({
       sendTransaction: standIn('sendTransaction', HASH),
       writeContract: standIn('writeContract', HASH),
+      sendTransactionSync: standIn('sendTransactionSync', receipt),
+      writeContractSync: standIn('writeContractSync', receipt),
       waitForTransactionReceipt: standIn('waitForTransactionReceipt', receipt),
       sendUserOperation: standIn('sendUserOperation', HASH),
       waitForUserOperationReceipt: standIn('waitForUserOperationReceipt', receipt),
@@ -86,11 +90,18 @@ function walletWithStandIns(fail = false) {
 const cases: [action: string, args: (trap: object) => unknown, result: unknown][] = [
   ['sendTransaction', (trap) => trap, HASH],
   ['writeContract', (trap) => trap, HASH],
+  ['sendTransactionSync', (trap) => trap, receipt],
+  ['writeContractSync', (trap) => trap, receipt],
   ['waitForTransactionReceipt', (trap) => trap, receipt],
   ['sendUserOperation', (trap) => trap, HASH],
   ['waitForUserOperationReceipt', (trap) => trap, receipt],
   ['sendUserOperation', (trap) => ({ account: trap, calls: [trap] }), HASH],
   ['writeContract', (trap) => ({ address: TO, abi: trap, functionName: 'pay', args: [1n] }), HASH],
+  [
+    'writeContractSync',
+    (trap) => ({ address: TO, abi: trap, functionName: 'pay', args: [1n] }),
+    receipt,
+  ],
 ];
 
 describe.each(Object.entries({ ...traps, 'a revoked Proxy': revoked }))(

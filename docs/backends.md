@@ -19,6 +19,13 @@ The [local lab](../README.md#local-lab) starts Jaeger on `http://localhost:4318`
 `make demo` needs no variables. Open `http://localhost:16686`, pick the `treasury-agent` service and expand
 `withdraw_from_vault`.
 
+Without a checkout of this repository, the same Jaeger runs with one command, its UI and OTLP ports bound to
+localhost only:
+
+```sh
+docker run --rm -p 127.0.0.1:16686:16686 -p 127.0.0.1:4318:4318 jaegertracing/jaeger:2.21.0
+```
+
 ## Grafana Tempo
 
 Tested with Tempo 3.0.0 and Grafana 13.2.3, both in Docker, against hashspan 0.5.0 on 2026-10-02.

@@ -14,6 +14,7 @@ export interface MockOptions {
   receiptAt?: (call: number) => Record<string, unknown>;
   /** Transaction fields merged into the default transaction, such as its `input`; a function gets the hash asked for. */
   transaction?: Record<string, unknown> | ((hash: unknown) => Record<string, unknown>);
+  /** Fails `eth_sendTransaction` and `eth_sendRawTransactionSync` with this error. */
   sendError?: { code: number; message: string };
   /** Fails only this `eth_sendTransaction` call (the first is 1) with `sendError`. */
   sendErrorOnCall?: number;
@@ -78,6 +79,24 @@ export function mockTransport(options: MockOptions = {}) {
     ...(typeof options.transaction === 'function'
       ? options.transaction(hash)
       : options.transaction),
+  });
+  const minedReceipt = () => ({
+    transactionHash: HASH,
+    transactionIndex: '0x0',
+    blockHash: `0x${'cd'.repeat(32)}`,
+    blockNumber: '0x7b',
+    from: FROM,
+    to: TO,
+    cumulativeGasUsed: '0x5208',
+    gasUsed: '0x5208',
+    effectiveGasPrice: '0x3b9aca00',
+    contractAddress: null,
+    logs: [],
+    logsBloom: `0x${'00'.repeat(256)}`,
+    status: '0x1',
+    type: '0x2',
+    ...options.receipt,
+    ...options.receiptAt?.(++receiptCalls),
   });
   const answering = custom({
     async request({ method, params }: { method: string; params?: unknown }) {
@@ -151,26 +170,15 @@ export function mockTransport(options: MockOptions = {}) {
             sha3Uncles: `0x${'00'.repeat(32)}`,
             mixHash: `0x${'00'.repeat(32)}`,
           };
+        case 'eth_sendRawTransactionSync':
+          // EIP-7966: sends and answers with the receipt once the transaction is mined.
+          if (options.sendError) {
+            throw new RpcRequestError({ body: {}, error: options.sendError, url: 'mock' });
+          }
+          return minedReceipt();
         case 'eth_getTransactionReceipt':
           if (options.receipt === null || options.mined?.() === false) return null;
-          return {
-            transactionHash: HASH,
-            transactionIndex: '0x0',
-            blockHash: `0x${'cd'.repeat(32)}`,
-            blockNumber: '0x7b',
-            from: FROM,
-            to: TO,
-            cumulativeGasUsed: '0x5208',
-            gasUsed: '0x5208',
-            effectiveGasPrice: '0x3b9aca00',
-            contractAddress: null,
-            logs: [],
-            logsBloom: `0x${'00'.repeat(256)}`,
-            status: '0x1',
-            type: '0x2',
-            ...options.receipt,
-            ...options.receiptAt?.(++receiptCalls),
-          };
+          return minedReceipt();
         case 'wallet_sendCalls': {
           const answer = options.sendCalls ?? { id: '0xb47c4' };
           if ('error' in answer) {
