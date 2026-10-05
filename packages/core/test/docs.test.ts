@@ -19,7 +19,10 @@ function markdownFiles(dir = ''): string[] {
   return readdirSync(join(root, dir), { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      return ['node_modules', 'dist', '.git'].includes(entry.name) ? [] : markdownFiles(path);
+      // .claude holds local agent worktrees (other checkouts) and no tracked markdown.
+      return ['node_modules', 'dist', '.git', '.claude'].includes(entry.name)
+        ? []
+        : markdownFiles(path);
     }
     const skip =
       entry.name === 'CHANGELOG.md' ||
