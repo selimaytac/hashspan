@@ -154,6 +154,19 @@ trace of its own and the link is the only relation between them
 | Langfuse 4.49.0 | no | no link in the observations API (`/api/public/v2/observations`) or in its storage; see [langfuse/langfuse#12337](https://github.com/langfuse/langfuse/issues/12337) |
 | Honeycomb | yes | the link shows on the span (hashspan 0.5.0, 2026-10-02, [above](#honeycomb)) |
 
+## Common questions
+
+Where each question is answered, with the metrics on Prometheus or the spans in a trace backend:
+
+| Question | Where |
+|---|---|
+| How long do confirmations take, per chain? | The dashboard's latency panels; in PromQL, `histogram_quantile(0.95, sum by (le, blockchain_chain_id) (rate(blockchain_client_confirmation_duration_seconds_bucket[5m])))` |
+| How many transactions revert, per chain? | The dashboard's outcome panel; in PromQL, `sum by (blockchain_chain_id) (rate(blockchain_client_confirmation_duration_seconds_count{blockchain_tx_status="reverted"}[5m]))` |
+| Why did they revert, and under which tool or job? | The TraceQL queries under [Grafana Tempo](#grafana-tempo): `blockchain.tx.revert.reason` on the confirm span, the tool or job span above it |
+| Did a sampler or a process exit lose spans? | Metrics are recorded for every transaction whatever the sampler decides; compare their counts with the traces ([many transactions](../packages/viem/README.md#many-transactions)) |
+| Did a retried paid request pay twice, or pay without the task succeeding? | [Payment, request and task outcomes](../packages/x402/README.md#payment-request-and-task-outcomes) |
+| What did a transaction cost? | `blockchain.tx.fee` on the confirm span, in wei; see its row in [semantic conventions](semconv.md#attributes) for what it includes |
+
 ## Grafana dashboard for the metrics
 
 hashspan's tracker records three histograms ([metrics](semconv.md#metrics)): send duration, confirmation duration and
