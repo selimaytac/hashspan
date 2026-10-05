@@ -18,6 +18,8 @@ export type TracedAction =
   | 'writeContract'
   | 'sendTransactionSync'
   | 'writeContractSync'
+  | 'sendRawTransaction'
+  | 'sendRawTransactionSync'
   | 'waitForTransactionReceipt'
   | 'sendUserOperation'
   | 'waitForUserOperationReceipt'

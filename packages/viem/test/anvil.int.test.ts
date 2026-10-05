@@ -13,6 +13,7 @@ import {
   parseGwei,
   publicActions,
 } from 'viem';
+import { mnemonicToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
@@ -113,6 +114,53 @@ describe('on Anvil', () => {
       'blockchain.block.number': Number(receipt.blockNumber),
       'blockchain.tx.fee': (receipt.gasUsed * receipt.effectiveGasPrice).toString(),
     });
+  });
+
+  it('traces a transaction signed elsewhere and broadcast with sendRawTransaction', async () => {
+    const { wallet, reader } = clients();
+    // Anvil's first account, signing locally from its public test mnemonic: the service's own signer stands in.
+    const signer = mnemonicToAccount('test test test test test test test test test test test junk');
+    const request = await wallet.prepareTransactionRequest({
+      account: signer,
+      to: RECIPIENT,
+      value: 2_000n,
+    });
+    const serializedTransaction = await signer.signTransaction(request as never);
+
+    const hash = await wallet.sendRawTransaction({ serializedTransaction });
+    await reader.waitForTransactionReceipt({ hash });
+
+    const send = tracing.spanNamed('send 31337');
+    const confirm = tracing.spanNamed('confirm 31337');
+    expect(send.attributes).toMatchObject({
+      'blockchain.tx.hash': hash,
+      'blockchain.tx.to': RECIPIENT.toLowerCase(),
+      'blockchain.tx.value': '2000',
+    });
+    expect(send.attributes['blockchain.tx.from']).toBeUndefined();
+    expect(confirm.links[0]?.context.spanId).toBe(send.spanContext().spanId);
+    expect(confirm.attributes['blockchain.tx.status']).toBe('success');
+  });
+
+  it('records a raw send the node rejects and rethrows its error', async () => {
+    const { wallet } = clients();
+    const signer = mnemonicToAccount('test test test test test test test test test test test junk');
+    // Nonce 0 is long used on this chain: the node rejects the transaction.
+    const serializedTransaction = await signer.signTransaction({
+      chainId: anvil.id,
+      to: RECIPIENT,
+      value: 1n,
+      nonce: 0,
+      gas: 21_000n,
+      maxFeePerGas: 10_000_000_000n,
+      maxPriorityFeePerGas: 1n,
+    });
+
+    await expect(wallet.sendRawTransaction({ serializedTransaction })).rejects.toThrow(/nonce/i);
+
+    const send = tracing.spanNamed('send 31337');
+    expect(send.status.code).toBe(SpanStatusCode.ERROR);
+    expect(send.attributes['blockchain.tx.hash']).toBeUndefined();
   });
 
   it('records the function called by writeContract', async () => {

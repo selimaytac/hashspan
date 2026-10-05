@@ -2,9 +2,10 @@
 
 Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
 
-- `src/index.ts` `withHashspan()`: a `client.extend()` extension wrapping `sendTransaction`, `writeContract`, their
-  sync forms (`sendTransactionSync`, `writeContractSync`: one call that sends and returns the receipt, recorded as a
-  send and a confirm span over the call) and `waitForTransactionReceipt` (with a transaction's EIP-7702
+- `src/index.ts` `withHashspan()`: a `client.extend()` extension wrapping `sendTransaction`, `writeContract`,
+  `sendRawTransaction` (fields parsed from the signed transaction, no sender, #33), their sync forms
+  (`sendTransactionSync`, `writeContractSync`, `sendRawTransactionSync`: one call that sends and returns the receipt,
+  recorded as a send and a confirm span over the call) and `waitForTransactionReceipt` (with a transaction's EIP-7702
   authorizations), a bundler client's `sendUserOperation` and `waitForUserOperationReceipt` (ADR 0021), and a wallet
   client's `sendCalls`, `waitForCallsStatus` and `sendCallsSync` (ADR 0022); it calls the base client's actions, so
   internal viem calls are not traced twice. It only wires the modules below; the public types the modules share are
