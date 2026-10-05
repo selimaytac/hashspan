@@ -159,6 +159,15 @@ export function descriptorOf(target: object, key: string): PropertyDescriptor | 
 }
 
 /**
+ * True for a plain object: one whose prototype is `Object.prototype` or `null`. Only such arguments are shadowed: the
+ * getters of a class instance's prototype would run with the shadow as `this`, where its private fields are missing.
+ */
+export function isPlainObject(target: object): boolean {
+  const prototype: unknown = Object.getPrototypeOf(target);
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
  * `target` with `key` shadowed by `value`: an object whose prototype is `target`, so inherited properties read through,
  * that also carries `target`'s own properties as they are (data as data, accessors as accessors, so no getter runs).
  * This works for frozen objects, keeps the number of times a getter runs, and keeps the own properties for code that
