@@ -182,9 +182,7 @@ describe('CDP smart accounts against a local CDP API and Anvil', () => {
       completed.status === 'complete' ? completed.transactionHash : undefined,
     );
     expect(ok?.attributes['blockchain.user_operation.success']).toBeUndefined();
-    // Without a success flag the outcome is unknown: `_OTHER` (#366).
-    expect(ok?.status.code).toBe(SpanStatusCode.ERROR);
-    expect(ok?.attributes['error.type']).toBe('_OTHER');
+    expect(ok?.status.code).toBe(SpanStatusCode.UNSET);
     const failed = byHash(second.userOpHash);
     expect(failed?.status.code).toBe(SpanStatusCode.ERROR);
     expect(failed?.attributes['error.type']).toBe('failed');
@@ -194,8 +192,7 @@ describe('CDP smart accounts against a local CDP API and Anvil', () => {
 describe('a user operation whose reader fails while reading the bundle receipt', () => {
   // The reader is only asked for the bundle transaction's receipt, to tell whether the operation's calls succeeded
   // (ADR 0021). When it cannot be read before `confirmTimeoutMs`, the confirm span ends as without a reader: the
-  // bundle hash CDP reported, no `blockchain.user_operation.success` (issue #317), and `error.type` `_OTHER`, since
-  // the outcome is unknown (#366).
+  // bundle hash CDP reported, no `blockchain.user_operation.success`, no error (issue #317).
   let proxy: FaultProxy;
   beforeAll(async () => {
     proxy = await startFaultProxy(RPC_URL);
@@ -258,10 +255,8 @@ describe('a user operation whose reader fails while reading the bundle receipt',
     expect(flushed).toBe(true);
     expect(tracing.spanNamed('send 84532').status.code).toBe(SpanStatusCode.UNSET);
     const confirm = tracing.spanNamed('confirm 84532');
-    expect(confirm.status.code).toBe(
-      success === undefined ? SpanStatusCode.ERROR : SpanStatusCode.UNSET,
-    );
-    expect(confirm.attributes['error.type']).toBe(success === undefined ? '_OTHER' : undefined);
+    expect(confirm.status.code).toBe(SpanStatusCode.UNSET);
+    expect(confirm.attributes['error.type']).toBeUndefined();
     expect(confirm.attributes['blockchain.user_operation.success']).toBe(success);
     expect(confirm.attributes['blockchain.tx.hash']).toBe(
       result.status === 'complete' ? result.transactionHash : undefined,

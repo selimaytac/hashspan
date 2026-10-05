@@ -94,7 +94,8 @@ no span; after a timeout or failure, a retry gets a new span. The same holds for
 | Retrieving the receipt failed | confirm | error | error class name, else `_OTHER` | none |
 | User operation receipt with success | confirm | unset | none | none; `blockchain.user_operation.success` is `true` |
 | User operation receipt without success (its calls reverted) | confirm | error | `reverted` | none; `blockchain.user_operation.success` is `false` |
-| User operation receipt whose success flag is not a boolean | confirm | error | `_OTHER` | none |
+| User operation receipt without a success flag (the adapter does not know the outcome) | confirm | unset | none | none |
+| User operation receipt whose success flag is present but not a boolean | confirm | error | `_OTHER` | none |
 | User operation failed without a receipt (e.g. an SDK reports `failed`) | confirm | error | the adapter's error type, else error class name, else `_OTHER` | none |
 | Call batch status 200 (confirmed) | confirm | unset | none | none; `blockchain.call_batch.status` is `success` |
 | Call batch status 500 (reverted) | confirm | error | `reverted` | none; `blockchain.call_batch.status` is `reverted` |

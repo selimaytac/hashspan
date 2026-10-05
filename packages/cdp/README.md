@@ -101,7 +101,7 @@ The spans carry `blockchain.user_operation.*` attributes instead of a transactio
   reverts. With a `reader` for the chain, the adapter reads the bundle's receipt and records the operation's
   `UserOperationEvent`: success (a reverted operation ends with `error.type` `reverted`), gas used, cost, nonce,
   paymaster and EntryPoint. Without one, or if the bundle receipt is not found within `confirmTimeoutMs`, the confirm
-  span records the bundle transaction's hash only, and ends with `error.type` `_OTHER` since the outcome is unknown.
+  span records the bundle transaction's hash only.
 - The bundle transaction's status and fee are not recorded: they cover every operation in the bundle.
 - Without a wait, only the send span is recorded, with or without a reader. A wait names no network: it is traced
   when the operation was sent through the same client, or on a network-scoped smart account.
@@ -121,7 +121,7 @@ instrumentation creates nest under it.
 | account `swap`, `useSpendPermission` | chain id and from |
 | `execute()` of a quote from `cdp.evm.createSwapQuote` or account `quoteSwap` | chain id and from (the taker) |
 | network-scoped accounts (`useNetwork`) | as above; on Base and Ethereum they send through the account itself, elsewhere through the SDK's own viem client, and both are traced once |
-| network-scoped `waitForTransactionReceipt` | without a reader: a confirm span with status, block, gas and fees, but no revert reason, and no fees for a flashblocks preconfirmation (a receipt with a zero block hash, whose fee can be another transaction's); with a reader, the background confirmation records it from the sealed receipt |
+| network-scoped `waitForTransactionReceipt` | without a reader: a confirm span with status, block, gas and fees, but no revert reason, and no fees for a flashblocks preconfirmation (a receipt with a zero block hash, whose fee can be another transaction's). A replacement the SDK's viem client reports through `onReplaced` (same sender and nonce) is attributed to the mined transaction; for that, the adapter adds its own `onReplaced`, which calls yours, and passes `{ transactionHash }` on as `{ hash, onReplaced }`. A receipt of another hash that viem did not report ends the confirm span with `error.type` `_OTHER`. With a reader, the background confirmation records it from the sealed receipt |
 | smart account `sendUserOperation`, `cdp.evm.sendUserOperation`, `cdp.evm.prepareAndSendUserOperation` | user operation: chain id, hash, sender (the smart account) and the number of calls |
 | smart account `transfer`, `swap`, `useSpendPermission`; `execute()` of a quote for a smart account (`cdp.evm.createSwapQuote` with `smartAccount`, or smart account `quoteSwap`); `cdp.evm.createSpendPermission`, `cdp.evm.revokeSpendPermission` | user operation: chain id, hash and sender |
 | network-scoped smart accounts (`useNetwork`) | as above, each traced once |
@@ -149,8 +149,7 @@ when CDP returns the transaction of the first attempt; the confirm span is share
   `waitForTransactionReceipt` then records no revert reason, and no fees for a flashblocks preconfirmation
   ([usage](#usage), [traced](#traced)).
 - A user operation gets a confirm span only from `waitForUserOperation`; without a reader it records only the bundle
-  transaction's hash and ends with `error.type` `_OTHER`, since the operation's outcome is unknown, and the bundle
-  transaction's status and fee are never recorded ([smart accounts](#smart-accounts)).
+  transaction's hash, and the bundle transaction's status and fee are never recorded ([smart accounts](#smart-accounts)).
 - A retry with the same `idempotencyKey` records a second send span ([traced](#traced)).
 - The limits of the core apply too
   ([`@hashspan/core` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.11.0/packages/core#known-limits)).

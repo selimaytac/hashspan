@@ -254,12 +254,23 @@ describe('user operation confirm span', () => {
     expect(span.events).toEqual([]);
   });
 
-  // Missing, null, or a string instead of a boolean: the outcome cannot be read (#366).
+  it('ends a receipt without a success flag with an unknown outcome and no error (ADR 0021)', () => {
+    const tracker = createTxTracker();
+    tracker
+      .startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH })
+      .end({ transactionHash: BUNDLE_HASH });
+    const span = tracing.spanNamed(confirm);
+    expect(span.status.code).toBe(SpanStatusCode.UNSET);
+    expect(span.attributes['error.type']).toBeUndefined();
+    expect(span.attributes['blockchain.user_operation.success']).toBeUndefined();
+    expect(span.attributes['blockchain.tx.hash']).toBe(BUNDLE_HASH);
+  });
+
+  // A success flag that is present but not a boolean is malformed (#366).
   it.each([
-    ['missing', {}],
     ['null', { success: null }],
     ['"true"', { success: 'true' }],
-    ['"false"', { success: 'false' }],
+    ['1', { success: 1 }],
   ])('ends a receipt whose success flag is %s as a failure with error.type _OTHER', (_, flag) => {
     const tracker = createTxTracker();
     tracker
@@ -299,8 +310,6 @@ describe('user operation confirm span', () => {
         'blockchain.system',
         'blockchain.system.name',
         'blockchain.user_operation.hash',
-        // None of them has a success flag: the outcome is unknown (#366).
-        'error.type',
       ]);
     }
   });
@@ -545,12 +554,27 @@ describe('user operation metrics', () => {
     });
   });
 
-  // Missing, null, or a string instead of a boolean (#366).
   const { success: _success, ...withoutFlag } = receipt;
+
+  it('records a receipt without a success flag with no outcome label, as before (ADR 0021)', () => {
+    const meters = recordingMeterProvider();
+    const tracker = createTxTracker({ meterProvider: meters.provider });
+    tracker
+      .startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH })
+      .end(withoutFlag);
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)[0]?.attributes).toEqual(
+      base,
+    );
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)).toEqual([
+      { value: 123_456_789_000, attributes: base },
+    ]);
+  });
+
+  // A success flag that is present but not a boolean is malformed (#366).
   it.each([
-    ['missing', {}],
     ['null', { success: null }],
     ['"true"', { success: 'true' }],
+    ['1', { success: 1 }],
   ])(
     'records the confirmation sample of a receipt whose success flag is %s as _OTHER, without a fee',
     (_, flag) => {

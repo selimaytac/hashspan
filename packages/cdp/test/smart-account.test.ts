@@ -542,9 +542,7 @@ describe('waitForUserOperation without a reader', () => {
     });
     expect(confirm.attributes['blockchain.user_operation.success']).toBeUndefined();
     expect(confirm.attributes['blockchain.tx.status']).toBeUndefined();
-    // Without a success flag the outcome is unknown: `_OTHER` (#366).
-    expect(confirm.status.code).toBe(SpanStatusCode.ERROR);
-    expect(confirm.attributes['error.type']).toBe('_OTHER');
+    expect(confirm.status.code).toBe(SpanStatusCode.UNSET);
   });
 
   it('ends as an error on failed, without an exception event', async () => {
@@ -754,7 +752,7 @@ describe('waitForUserOperation with a reader', () => {
     const { confirm } = await run([], { receipt: null }, 50);
     const span = await confirm();
     expect(span.attributes['blockchain.tx.hash']).toBe(BUNDLE);
-    expect(span.attributes['error.type']).toBe('_OTHER');
+    expect(span.attributes['error.type']).toBeUndefined();
   });
 
   it('keeps polling through reader errors', async () => {
@@ -817,7 +815,7 @@ describe('waitForUserOperation with a reader', () => {
     // The span ended at the deadline, with what CDP reported, and the tracked work settled.
     const span = tracing.spanNamed('confirm 8453');
     expect(span.attributes['blockchain.tx.hash']).toBe(BUNDLE);
-    expect(span.attributes['error.type']).toBe('_OTHER');
+    expect(span.attributes['error.type']).toBeUndefined();
     expect(span.attributes['blockchain.user_operation.success']).toBeUndefined();
     await expect(hashspan.flush({ timeoutMs: 10 })).resolves.toBe(true);
     await expect(hashspan.flush({ timeoutMs: 10 })).resolves.toBe(true);
@@ -842,7 +840,7 @@ describe('waitForUserOperation with a reader', () => {
     await expect(hashspan.flush({ timeoutMs: 30 })).resolves.toBe(false);
     const span = tracing.spanNamed('confirm 8453');
     expect(span.attributes['blockchain.tx.hash']).toBe(BUNDLE);
-    expect(span.attributes['error.type']).toBe('_OTHER');
+    expect(span.attributes['error.type']).toBeUndefined();
     // The request cannot be cancelled, but the work flush() awaits no longer waits for it.
     await expect(hashspan.flush({ timeoutMs: 30 })).resolves.toBe(true);
   });
@@ -852,7 +850,7 @@ describe('waitForUserOperation with a reader', () => {
     await expect(hashspan.flush({ timeoutMs: 30 })).resolves.toBe(false);
     const span = tracing.spanNamed('confirm 8453');
     expect(span.attributes['blockchain.tx.hash']).toBe(BUNDLE);
-    expect(span.attributes['error.type']).toBe('_OTHER');
+    expect(span.attributes['error.type']).toBeUndefined();
     // It also stops polling the reader.
     await new Promise((resolve) => setTimeout(resolve, 30));
     const polled = calls.length;
