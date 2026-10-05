@@ -37,7 +37,7 @@ const NOT_ON_CHAIN = 'not_on_chain';
 /**
  * For a caller's wait with `confirmations` above 1: its receipt is read again once the wait resolved, for at most
  * `timeoutMs`, the wait's own timeout
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0026-receipt-after-several-confirmations.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/adr/0026-receipt-after-several-confirmations.md).
  */
 export interface RecheckOptions {
   timeoutMs: number;
@@ -129,14 +129,14 @@ export function createConfirmation({
   /**
    * Ends `handle` from the outcome of `wait`; never rejects. The tracker joins handles for one transaction into one
    * confirm span
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0007-confirmation-ownership.md) and
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/adr/0007-confirmation-ownership.md) and
    * attributes the receipt of a replacing transaction to that transaction
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0008-replaced-transactions.md). For
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/adr/0008-replaced-transactions.md). For
    * reverted receipts, the span ends after the revert reason was fetched with `client`. For a preconfirmed receipt, it
    * ends with the sealed receipt, read with `client` until `deadline` at the latest
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0024-sealed-receipt-fees.md). With
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/adr/0024-sealed-receipt-fees.md). With
    * `recheck`, the receipt of the transaction itself is read again first, and the span records what the chain holds
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0026-receipt-after-several-confirmations.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/adr/0026-receipt-after-several-confirmations.md).
    */
   const recordReceipt = async (
     chainId: number,
@@ -261,7 +261,7 @@ export function createConfirmation({
   /**
    * Records the outcome of `wait` on `waitingHandle`; never rejects. Resolves as soon as the handle has ended,
    * including when a flush that gave up ended it
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0010-flush-before-shutdown.md), so the
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.12.0/docs/adr/0010-flush-before-shutdown.md), so the
    * tracked work drains.
    */
   const recordConfirmation = (

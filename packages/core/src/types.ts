@@ -9,13 +9,13 @@ import type {
 /**
  * How wallet addresses are recorded: `raw` in lower case, `hashed` as a hash of the lower-cased address, `off` not at
  * all. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0004-privacy-defaults.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0004-privacy-defaults.md.
  */
 export type AddressMode = 'raw' | 'hashed' | 'off';
 
 /**
  * How error messages are recorded on exception events and span status. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0006-error-privacy.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0006-error-privacy.md.
  * - `off`: error type only
  * - `sanitized`: first line, addresses per address mode, other long hex data removed
  * - `raw`: full message and stack trace, as thrown
@@ -80,7 +80,7 @@ export interface TxTrackerOptions {
   /**
    * Agent identity. A field set here always wins; fields left unset are taken from the Baggage entries
    * `gen_ai.agent.id` / `gen_ai.agent.name` unless `agentFromBaggage` is false
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0011-agent-identity-precedence.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0011-agent-identity-precedence.md).
    */
   agent?: AgentIdentity | undefined;
   /**
@@ -134,7 +134,7 @@ export interface SendInput {
   authorizations?: readonly AuthorizationInput[] | undefined;
   /**
    * When the send started, for adapters that record it after the fact
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0009-telemetry-off-the-call-path.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0009-telemetry-off-the-call-path.md).
    * Omit it otherwise: with an explicit start time, the SDK measures the span by the wall clock, so pass the end time
    * to the handle too.
    */
@@ -152,14 +152,14 @@ export interface AuthorizationInput {
 /**
  * Ends a send span. Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface SendHandle {
   /**
    * The parent context with the send span set. Run the call that sends the transaction in it, e.g.
    * `await context.with(send.context, () => sendSomehow())`, so that spans of wallet, RPC or HTTP instrumentation
    * nest under the send span
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0015-send-span-as-active-context.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0015-send-span-as-active-context.md).
    * Run only that call in it: a confirm span started in it becomes a child of the send span.
    */
   readonly context: Context;
@@ -240,7 +240,7 @@ export interface ReceiptLike {
   /**
    * Hash of the mined transaction. When it differs from the awaited hash, the awaited transaction was replaced: its
    * confirm span ends as `replaced` and the receipt is recorded for this hash
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0008-replaced-transactions.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0008-replaced-transactions.md).
    */
   transactionHash?: string | undefined;
   /** Replacement reason reported by the library, when `transactionHash` differs from the awaited hash. */
@@ -251,7 +251,7 @@ export interface ReceiptLike {
  * One wait for a transaction's receipt, joined to the transaction's shared confirm span. Only the first call counts;
  * methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface ConfirmHandle {
   /** Ends the shared confirm span with the receipt, for every handle of the transaction. */
@@ -290,7 +290,7 @@ export interface ConfirmHandle {
 
 /**
  * A payment the agent authorizes and another party settles on chain, e.g. an x402 facilitator
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0013-x402-payments.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0013-x402-payments.md).
  * Values often come from a remote server: addresses, amounts and identifiers that are malformed are not recorded.
  */
 export interface PaymentInput {
@@ -348,7 +348,7 @@ export interface PaymentSettlement {
 /**
  * Ends a payment span. Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface PaymentHandle {
   /** Ends the payment span with its settlement. */
@@ -374,7 +374,7 @@ export interface PaymentHandle {
 
 /**
  * A user operation of an ERC-4337 smart account, handed to a bundler
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0021-user-operations.md). It has no
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0021-user-operations.md). It has no
  * transaction of its own: the bundler includes it in a bundle transaction that the bundler sends.
  */
 export interface UserOperationInput {
@@ -399,7 +399,7 @@ export interface UserOperationResult {
 /**
  * Ends the send span of a user operation. Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface UserOperationSendHandle {
   /**
@@ -461,7 +461,7 @@ export interface UserOperationReceiptLike {
  * One wait for a user operation's receipt, joined to the operation's shared confirm span, as for transactions
  * ({@link ConfirmHandle}). Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface UserOperationConfirmHandle {
   /** Ends the shared confirm span with the receipt, for every handle of the user operation. */
@@ -482,7 +482,7 @@ export interface UserOperationConfirmHandle {
 
 /**
  * A batch of calls handed to a wallet with EIP-5792 `wallet_sendCalls`
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0022-call-batches.md). The wallet decides
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0022-call-batches.md). The wallet decides
  * how the calls reach the chain: in one transaction, several, or a user operation.
  */
 export interface CallBatchInput {
@@ -513,7 +513,7 @@ export interface CallBatchResult {
 /**
  * Ends the send span of a call batch. Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface CallBatchSendHandle {
   /**
@@ -567,7 +567,7 @@ export interface CallBatchStatusLike {
  * One wait for a call batch's status, joined to the batch's shared confirm span, as for transactions
  * ({@link ConfirmHandle}). Only the first call counts; methods never throw.
  * Produced by the tracker only; methods may be added in minor releases
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/adr/0014-core-api-boundary.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0014-core-api-boundary.md).
  */
 export interface CallBatchConfirmHandle {
   /** Ends the shared confirm span with the status, for every handle of the batch. */

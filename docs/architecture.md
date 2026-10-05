@@ -47,8 +47,8 @@ Design decisions: [docs/adr](adr/). Attribute schema: [docs/semconv.md](semconv.
 
 ## JSON-RPC requests hashspan adds
 
-Agents and services often run against rate-limited endpoints. These are the requests the adapters make in addition to the
-traced calls, per case; the integration tests named here count them against the same calls without hashspan, so a
+Agents and services often run against rate-limited endpoints. These are the requests the adapters make in addition to
+the traced calls, per case; the integration tests named here count them against the same calls without hashspan, so a
 change that adds requests fails them. How often a wait polls depends on when blocks arrive, so polling is counted by
 method, not by number.
 
