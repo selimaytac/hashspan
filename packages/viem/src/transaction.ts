@@ -9,6 +9,7 @@ import {
   authorizationsOf,
   dataOnly,
   descriptorOf,
+  isPlainObject,
   MAX_ARGUMENTS_COPY_DEPTH,
   MAX_ARGUMENTS_COPY_VALUES,
   own,
@@ -436,7 +437,11 @@ export function addTransactionActions(
         const capture: ReplacementCapture = {};
         const chainId = knownChainId(args);
         if (chainId === null) return undefined;
-        const waitArgs = shadowing(args, 'onReplaced', capturing(capture, onReplaced?.value));
+        // Arguments that are not a plain object, such as a class instance, are passed on as they are: the wait is
+        // traced, but a replacement is not attributed.
+        const waitArgs = isPlainObject(args)
+          ? shadowing(args, 'onReplaced', capturing(capture, onReplaced?.value))
+          : args;
         return { hash, chainId, capture, waitArgs, recheck: recheckOf(args) };
       } catch (error) {
         untraced(error);
