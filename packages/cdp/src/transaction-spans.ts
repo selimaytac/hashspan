@@ -109,13 +109,13 @@ export function createTransactionSpans({
       result = await context.with(sendContextOf(handle), send);
     } catch (error) {
       const failed = handle;
-      if (failed) failSend((what, errorType) => failed.fail(what, undefined, { errorType }), error);
+      if (failed) failSend((what, errorType) => failed.fail(what, { errorType }), error);
       throw error;
     }
     try {
       const hash = own(result, 'transactionHash');
       if (typeof hash === 'string') {
-        handle?.end(hash);
+        handle?.end({ hash });
         const client = readerFor(chainId);
         if (client) viem.watch(client, { hash, chainId, timeoutMs: confirmTimeoutMs });
       } else {

@@ -467,7 +467,6 @@ const list =
 
 /** What each attribute may hold (docs/semconv.md), whatever the input was. */
 const ATTRIBUTE_CHECKS: Record<string, Check> = {
-  'blockchain.system': oneOf('evm'),
   'blockchain.system.name': oneOf('evm'),
   'blockchain.chain.id': (value) => (isChainId(value) ? undefined : 'not a positive safe integer'),
   'blockchain.operation.name': oneOf('send', 'confirm', 'payment'),
@@ -606,7 +605,6 @@ export function spanProblems(spans: readonly ReadableSpan[], modes: RecordingMod
 }
 
 const METRIC_KEYS = new Set([
-  'blockchain.system',
   'blockchain.system.name',
   'blockchain.chain.id',
   'blockchain.operation.subject',

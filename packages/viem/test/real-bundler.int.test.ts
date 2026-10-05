@@ -288,7 +288,6 @@ describe.skipIf(!RUN)('user operations through Alto on Anvil', () => {
     const confirm = tracing.spanNamed('confirm 31337');
     expect(send.status.code).toBe(SpanStatusCode.UNSET);
     expect(send.attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': 31337,
       'blockchain.operation.name': 'send',
@@ -300,7 +299,6 @@ describe.skipIf(!RUN)('user operations through Alto on Anvil', () => {
     expect(confirm.links.map((link) => link.context.spanId)).toEqual([send.spanContext().spanId]);
     expect(confirm.status.code).toBe(SpanStatusCode.UNSET);
     expect(confirm.attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': 31337,
       'blockchain.operation.name': 'confirm',

@@ -101,7 +101,8 @@ Exit criteria:
   each package README)
 - [x] Span and attribute names reviewed once as a whole, for consistent naming across transaction, user operation,
   payment and call batch spans; renames done through deprecation: `blockchain.system.name` is recorded next to
-  `blockchain.system` until 1.0 (#365), the other names are kept and the reasons documented (#364)
+  `blockchain.system` in 0.11 and 0.12 and replaces it in 1.0 (#365), the other names are kept and the reasons
+  documented (#364)
 - [x] Each adapter validated in at least one real integration, with its findings closed: every setup in
   [integrations](integrations.md) runs in CI, and each adapter sent real transactions and payments on Base Sepolia
 - [ ] A first run needs nothing beyond the docs: the [quick start](../README.md#quick-start) `agent.ts`, run as

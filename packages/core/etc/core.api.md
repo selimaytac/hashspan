@@ -94,9 +94,6 @@ export const ATTR_BLOCKCHAIN_PAYMENT_STATUS: "blockchain.payment.status";
 // @public
 export const ATTR_BLOCKCHAIN_PAYMENT_VERIFIED: "blockchain.payment.verified";
 
-// @public @deprecated
-export const ATTR_BLOCKCHAIN_SYSTEM: "blockchain.system";
-
 // @public
 export const ATTR_BLOCKCHAIN_SYSTEM_NAME: "blockchain.system.name";
 
@@ -259,9 +256,6 @@ export const BLOCKCHAIN_TX_STATUS_VALUE_REVERTED: "reverted";
 // @public
 export const BLOCKCHAIN_TX_STATUS_VALUE_SUCCESS: "success";
 
-// @public @deprecated
-export const BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT: "timeout";
-
 // @public
 export interface CallBatchConfirmHandle {
     end(status: CallBatchStatusLike, options?: EndOptions): void;
@@ -310,14 +304,8 @@ export interface CallBatchStatusLike {
 // @public
 export interface ConfirmHandle {
     end(receipt: ReceiptLike, options?: EndOptions): void;
-    // @deprecated
-    end(receipt: ReceiptLike, endTime?: TimeInput): void;
     fail(error: unknown, options?: FailOptions): void;
-    // @deprecated
-    fail(error: unknown, endTime?: TimeInput): void;
     timeout(options?: EndOptions): void;
-    // @deprecated
-    timeout(endTime?: TimeInput): void;
 }
 
 // @public
@@ -410,11 +398,7 @@ export type ReplacementReason = "repriced" | "cancelled" | "replaced";
 export interface SendHandle {
     readonly context: Context;
     end(result: SendResult, options?: EndOptions): void;
-    // @deprecated
-    end(hash: string, endTime?: TimeInput): void;
     fail(error: unknown, options?: FailOptions): void;
-    // @deprecated
-    fail(error: unknown, endTime: TimeInput | undefined, options?: FailOptions): void;
 }
 
 // @public

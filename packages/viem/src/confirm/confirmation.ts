@@ -158,8 +158,8 @@ export function createConfirmation({
       const reported = capture.replacement?.transactionReceipt;
       if (!reported) {
         if (!isReadable(error)) handle.fail(undefined, unreadable(endTimeOf()));
-        else if (isTimeout(error)) handle.timeout(endTimeOf());
-        else handle.fail(error, endTimeOf());
+        else if (isTimeout(error)) handle.timeout({ endTime: endTimeOf() });
+        else handle.fail(error, { endTime: endTimeOf() });
         return;
       }
       receipt = reported;
@@ -194,7 +194,7 @@ export function createConfirmation({
         endAt = () => resolvedAt;
         // A flush that cannot wait records the caller's receipt.
         const kept = recorded;
-        confirmation.onAbandon((underlying) => underlying.end(kept, endAt()));
+        confirmation.onAbandon((underlying) => underlying.end(kept, { endTime: endAt() }));
         const found = await within(
           recheckReceipt(client, receipt),
           recheck.timeoutMs,
@@ -216,7 +216,7 @@ export function createConfirmation({
         endAt = () => arrivedAt;
         // Its fee may be another transaction's. A flush that cannot wait records it without fees.
         const preconfirmed = { ...withoutFees(recorded), replacementReason };
-        confirmation.onAbandon((underlying) => underlying.end(preconfirmed, endAt()));
+        confirmation.onAbandon((underlying) => underlying.end(preconfirmed, { endTime: endAt() }));
         const sealed = await sealedReceipt(
           client,
           receipt,
@@ -249,13 +249,13 @@ export function createConfirmation({
             : undefined);
         // The receipt is known: a flush that cannot wait for the reason records the receipt without it.
         const mined = { ...recorded, replacementReason };
-        confirmation.onAbandon((underlying) => underlying.end(mined, endAt()));
+        confirmation.onAbandon((underlying) => underlying.end(mined, { endTime: endAt() }));
         revertReason = await revertReasonOf(minedKey, receipt, abi, client);
       }
-      handle.end({ ...recorded, revertReason, replacementReason }, endAt());
+      handle.end({ ...recorded, revertReason, replacementReason }, { endTime: endAt() });
     } catch (error) {
       diag.error(`hashspan: failed to record receipt (${errorName(error)})`);
-      handle.fail(error, endTimeOf());
+      handle.fail(error, { endTime: endTimeOf() });
     }
   };
   /**

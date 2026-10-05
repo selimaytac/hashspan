@@ -32,7 +32,9 @@ const attribute = (spanName: string, key: string): unknown =>
 
 describe('address form in raw mode', () => {
   it('records blockchain.tx.from and blockchain.tx.to in lower case', () => {
-    createTxTracker().startSend({ chainId: CHAIN_ID, from: ACCOUNT, to: RECIPIENT }).end(TX_HASH);
+    createTxTracker()
+      .startSend({ chainId: CHAIN_ID, from: ACCOUNT, to: RECIPIENT })
+      .end({ hash: TX_HASH });
     expect(attribute(`send ${CHAIN_ID}`, 'blockchain.tx.from')).toBe(ACCOUNT.toLowerCase());
     expect(attribute(`send ${CHAIN_ID}`, 'blockchain.tx.to')).toBe(RECIPIENT.toLowerCase());
   });
@@ -109,7 +111,9 @@ describe('address form in raw mode', () => {
 
   it('records addresses inside function arguments and revert reasons in lower case', () => {
     const tracker = createTxTracker({ recordFunctionArguments: true });
-    tracker.startSend({ chainId: CHAIN_ID, functionArguments: [RECIPIENT, 5n] }).end(TX_HASH);
+    tracker
+      .startSend({ chainId: CHAIN_ID, functionArguments: [RECIPIENT, 5n] })
+      .end({ hash: TX_HASH });
     tracker.startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH }).end({
       success: false,
       revertReason: `NotAllowed(${ACCOUNT})`,

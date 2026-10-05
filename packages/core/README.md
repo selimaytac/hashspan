@@ -100,9 +100,8 @@ outcome, and no fee is recorded; see the call batch rows of the
 All of these calls accept an explicit parent `Context` as a second argument. An integration that learns about a call only
 after it started can record it after the fact: pass `startTime` in the input and `endTime` in the options of the
 handle method, e.g. `send.end({ hash }, { endTime })` ([ADR 0009](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0009-telemetry-off-the-call-path.md)). Every method is safe to call: failures inside
-the instrumentation are reported through `diag` and never thrown into your code. The positional forms of earlier
-releases, `send.end(hash, endTime)` and `send.fail(error, endTime, { errorType })`, and those of the confirm handle,
-`end(receipt, endTime)`, `timeout(endTime)` and `fail(error, endTime)`, still work and are deprecated until 1.0 ([ADR 0014](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/adr/0014-core-api-boundary.md)).
+the instrumentation are reported through `diag` and never thrown into your code. 1.0 removed the positional forms of
+earlier releases, such as `send.end(hash, endTime)` ([migrating to 1.0](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.12.0/docs/migrating-to-1.0.md)).
 
 ## Options
 

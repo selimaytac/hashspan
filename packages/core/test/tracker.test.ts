@@ -47,7 +47,7 @@ describe('send span', () => {
           functionName: 'transfer',
           functionSelector: '0xa9059cbb',
         })
-        .end(HASH);
+        .end({ hash: HASH });
     });
     tool.end();
 
@@ -56,7 +56,6 @@ describe('send span', () => {
     expect(send.parentSpanContext?.spanId).toBe(tool.spanContext().spanId);
     expect(send.instrumentationScope.name).toBe('@hashspan/core');
     expect(send.attributes).toMatchObject({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'send',
@@ -91,7 +90,7 @@ describe('send span', () => {
     }
     tracker
       .startSend({ chainId: CHAIN_ID })
-      .fail(new APIError('insufficient balance'), undefined, { errorType: 'insufficient_balance' });
+      .fail(new APIError('insufficient balance'), { errorType: 'insufficient_balance' });
 
     const send = tracing.spanNamed(`send ${CHAIN_ID}`);
     expect(send.attributes['error.type']).toBe('insufficient_balance');
@@ -102,9 +101,9 @@ describe('send span', () => {
     vi.spyOn(diag, 'debug').mockImplementation(() => {});
     const tracker = createTxTracker();
     for (const errorType of ['has spaces', 'x'.repeat(65), '', 42 as unknown as string]) {
-      tracker.startSend({ chainId: CHAIN_ID }).fail(new TypeError('bad'), undefined, { errorType });
+      tracker.startSend({ chainId: CHAIN_ID }).fail(new TypeError('bad'), { errorType });
     }
-    tracker.startSend({ chainId: CHAIN_ID }).fail(new TypeError('bad'), undefined, {});
+    tracker.startSend({ chainId: CHAIN_ID }).fail(new TypeError('bad'), {});
     const types = tracing.spans().map((s) => s.attributes['error.type']);
     expect(types).toEqual(['TypeError', 'TypeError', 'TypeError', 'TypeError', 'TypeError']);
   });
@@ -112,9 +111,9 @@ describe('send span', () => {
   it('ignores repeated end/fail calls', () => {
     const tracker = createTxTracker();
     const handle = tracker.startSend({ chainId: CHAIN_ID });
-    handle.end(HASH);
+    handle.end({ hash: HASH });
     handle.fail(new Error('late'));
-    handle.end(HASH);
+    handle.end({ hash: HASH });
     expect(tracing.spans()).toHaveLength(1);
     expect(tracing.spans()[0]?.status.code).toBe(SpanStatusCode.UNSET);
   });
@@ -123,7 +122,7 @@ describe('send span', () => {
 describe('confirm span', () => {
   it('links to the send span and records receipt data and fees', () => {
     const tracker = createTxTracker();
-    tracker.startSend({ chainId: CHAIN_ID }).end(HASH);
+    tracker.startSend({ chainId: CHAIN_ID }).end({ hash: HASH });
     tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end({ ...receipt, l1Fee: 5_000n });
 
     const send = tracing.spanNamed(`send ${CHAIN_ID}`);
@@ -146,7 +145,7 @@ describe('confirm span', () => {
 
   it('is a child of the active span when something waits for the receipt', () => {
     const tracker = createTxTracker();
-    tracker.startSend({ chainId: CHAIN_ID }).end(HASH);
+    tracker.startSend({ chainId: CHAIN_ID }).end({ hash: HASH });
     const waiter = trace.getTracer('test').startSpan('wait');
     context.with(trace.setSpan(context.active(), waiter), () => {
       tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
@@ -161,7 +160,7 @@ describe('confirm span', () => {
     const tracker = createTxTracker();
     const tool = trace.getTracer('test').startSpan('execute_tool transfer');
     context.with(trace.setSpan(context.active(), tool), () => {
-      tracker.startSend({ chainId: CHAIN_ID }).end(HASH);
+      tracker.startSend({ chainId: CHAIN_ID }).end({ hash: HASH });
     });
     tool.end();
 
@@ -229,10 +228,10 @@ describe('agent identity from untrusted baggage', () => {
     context.with(inbound, () => {
       createTxTracker({ agent: { name: 'treasury-bot' } })
         .startSend({ chainId: CHAIN_ID })
-        .end(HASH);
+        .end({ hash: HASH });
       createTxTracker({ agent: { name: 'treasury-bot' }, agentFromBaggage: false })
         .startSend({ chainId: CHAIN_ID })
-        .end(HASH);
+        .end({ hash: HASH });
     });
 
     const [trusting, ignoring] = tracing.spans();
@@ -253,7 +252,7 @@ describe('agent identity', () => {
       propagation.createBaggage({ 'gen_ai.agent.id': { value: 'agent-42' } }),
     );
     context.with(ctx, () => {
-      tracker.startSend({ chainId: CHAIN_ID }).end(HASH);
+      tracker.startSend({ chainId: CHAIN_ID }).end({ hash: HASH });
       tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
     });
 
@@ -270,14 +269,16 @@ describe('privacy', () => {
   it('drops addresses in off mode', () => {
     createTxTracker({ address: 'off' })
       .startSend({ chainId: CHAIN_ID, from: FROM, to: TO })
-      .end(HASH);
+      .end({ hash: HASH });
     const send = tracing.spanNamed(`send ${CHAIN_ID}`);
     expect(send.attributes['blockchain.tx.from']).toBeUndefined();
     expect(send.attributes['blockchain.tx.to']).toBeUndefined();
   });
 
   it('hashes addresses in hashed mode', () => {
-    createTxTracker({ address: 'hashed' }).startSend({ chainId: CHAIN_ID, from: FROM }).end(HASH);
+    createTxTracker({ address: 'hashed' })
+      .startSend({ chainId: CHAIN_ID, from: FROM })
+      .end({ hash: HASH });
     const send = tracing.spanNamed(`send ${CHAIN_ID}`);
     expect(send.attributes['blockchain.tx.from']).toMatch(/^sha256:[0-9a-f]{32}$/);
   });
@@ -289,7 +290,9 @@ describe('privacy', () => {
         return { ...rest, 'blockchain.contract.function.name': 'redacted' };
       },
     });
-    tracker.startSend({ chainId: CHAIN_ID, value: 5n, functionName: 'transfer' }).end(HASH);
+    tracker
+      .startSend({ chainId: CHAIN_ID, value: 5n, functionName: 'transfer' })
+      .end({ hash: HASH });
     const send = tracing.spanNamed(`send ${CHAIN_ID}`);
     expect(send.attributes['blockchain.tx.value']).toBeUndefined();
     expect(send.attributes['blockchain.contract.function.name']).toBe('redacted');
@@ -302,7 +305,7 @@ describe('privacy', () => {
         throw new Error('boom');
       },
     });
-    tracker.startSend({ chainId: CHAIN_ID, from: FROM, to: TO, value: 5n }).end(HASH);
+    tracker.startSend({ chainId: CHAIN_ID, from: FROM, to: TO, value: 5n }).end({ hash: HASH });
 
     const send = tracing.spanNamed(`send ${CHAIN_ID}`);
     expect(send.attributes['blockchain.tx.from']).toBeUndefined();
@@ -320,7 +323,7 @@ describe('explicit parent context', () => {
     const active = trace.getTracer('test').startSpan('active');
     const explicitCtx = trace.setSpan(context.active(), explicit);
     context.with(trace.setSpan(context.active(), active), () => {
-      tracker.startSend({ chainId: CHAIN_ID }, explicitCtx).end(HASH);
+      tracker.startSend({ chainId: CHAIN_ID }, explicitCtx).end({ hash: HASH });
       tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }, explicitCtx).end(receipt);
     });
     explicit.end();
@@ -352,7 +355,7 @@ describe('never breaks the caller', () => {
   it('still ends the send span and stores the link when the redaction hook returns garbage', () => {
     vi.spyOn(diag, 'error').mockImplementation(() => {});
     const tracker = createTxTracker({ redact: () => undefined as never });
-    tracker.startSend({ chainId: CHAIN_ID, from: FROM }).end(HASH);
+    tracker.startSend({ chainId: CHAIN_ID, from: FROM }).end({ hash: HASH });
     tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
 
     const send = tracing.spanNamed(`send ${CHAIN_ID}`);
@@ -365,7 +368,7 @@ describe('never breaks the caller', () => {
     vi.spyOn(diag, 'warn').mockImplementation(() => {});
     createTxTracker({ address: 'bogus' as never })
       .startSend({ chainId: CHAIN_ID, from: FROM })
-      .end(HASH);
+      .end({ hash: HASH });
     const send = tracing.spanNamed(`send ${CHAIN_ID}`);
     expect(send.attributes['blockchain.tx.from']).toBeUndefined();
     expect(send.attributes['blockchain.tx.hash']).toBe(HASH);
@@ -381,7 +384,7 @@ describe('never breaks the caller', () => {
       },
     });
     expect(() => {
-      tracker.startSend({ chainId: CHAIN_ID }).end(HASH);
+      tracker.startSend({ chainId: CHAIN_ID }).end({ hash: HASH });
       tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(receipt);
     }).not.toThrow();
     expect(diagError).toHaveBeenCalled();
@@ -397,7 +400,7 @@ describe('never breaks the caller', () => {
       tracerProvider: { getTracer: () => ({ ...trace.getTracer('test'), startSpan: () => span }) },
     });
     expect(() => {
-      tracker.startSend({ chainId: CHAIN_ID }).end(HASH);
+      tracker.startSend({ chainId: CHAIN_ID }).end({ hash: HASH });
       tracker.startSend({ chainId: CHAIN_ID }).fail(new Error('send failed'));
       tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).timeout();
     }).not.toThrow();
@@ -738,8 +741,8 @@ describe('replaced transactions', () => {
     const tracker = createTxTracker();
     const tool = trace.getTracer('test').startSpan('execute_tool pay');
     context.with(trace.setSpan(context.active(), tool), () => {
-      tracker.startSend({ chainId: CHAIN_ID }).end(HASH);
-      tracker.startSend({ chainId: CHAIN_ID }).end(MINED);
+      tracker.startSend({ chainId: CHAIN_ID }).end({ hash: HASH });
+      tracker.startSend({ chainId: CHAIN_ID }).end({ hash: MINED });
       tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end(replacedReceipt);
     });
     tool.end();
@@ -922,7 +925,7 @@ describe('explicit start and end times', () => {
   it('records a send span with the given start and end times', () => {
     createTxTracker()
       .startSend({ chainId: CHAIN_ID, startTime: at(100) })
-      .end(HASH, at(350));
+      .end({ hash: HASH }, { endTime: at(350) });
     const send = tracing.spanNamed(`send ${CHAIN_ID}`);
     expect(ms(send.startTime)).toBe(at(100).getTime());
     expect(ms(send.endTime)).toBe(at(350).getTime());
@@ -931,7 +934,7 @@ describe('explicit start and end times', () => {
   it('records a failed send with the given end time', () => {
     createTxTracker()
       .startSend({ chainId: CHAIN_ID, startTime: at(100) })
-      .fail(new Error('rejected'), at(200));
+      .fail(new Error('rejected'), { endTime: at(200) });
     expect(ms(tracing.spanNamed(`send ${CHAIN_ID}`).endTime)).toBe(at(200).getTime());
   });
 
@@ -939,8 +942,8 @@ describe('explicit start and end times', () => {
     const tracker = createTxTracker();
     const first = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH, startTime: at(100) });
     const second = tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH, startTime: at(900) });
-    first.timeout(at(500));
-    second.timeout(at(700));
+    first.timeout({ endTime: at(500) });
+    second.timeout({ endTime: at(700) });
     const confirm = tracing.spanNamed(`confirm ${CHAIN_ID}`);
     expect(ms(confirm.startTime)).toBe(at(100).getTime());
     expect(ms(confirm.endTime)).toBe(at(700).getTime());
@@ -949,7 +952,7 @@ describe('explicit start and end times', () => {
   it('starts a replacing transaction span at the explicit start of the replaced one', () => {
     createTxTracker()
       .startConfirm({ chainId: CHAIN_ID, hash: HASH, startTime: at(100) })
-      .end({ ...receipt, transactionHash: `0x${'cd'.repeat(32)}` }, at(400));
+      .end({ ...receipt, transactionHash: `0x${'cd'.repeat(32)}` }, { endTime: at(400) });
     for (const span of tracing.spans()) {
       expect(ms(span.startTime)).toBe(at(100).getTime());
       expect(ms(span.endTime)).toBe(at(400).getTime());

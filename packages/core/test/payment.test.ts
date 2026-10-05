@@ -42,7 +42,6 @@ describe('payment span', () => {
     expect(span.kind).toBe(SpanKind.CLIENT);
     expect(span.parentSpanContext?.spanId).toBe(tool.spanContext().spanId);
     expect(span.attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'payment',
@@ -435,7 +434,6 @@ describe('payment privacy', () => {
         hash: 'not a hash',
       });
     expect(tracing.spanNamed(PAYMENT_SPAN).attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'payment',
@@ -463,7 +461,6 @@ describe('payment privacy', () => {
       .startPayment(payment)
       .end({ status: 'settled', hash: HASH, verified: false });
     expect(tracing.spanNamed(PAYMENT_SPAN).attributes).toEqual({
-      'blockchain.system': 'evm',
       'blockchain.system.name': 'evm',
       'blockchain.chain.id': CHAIN_ID,
       'blockchain.operation.name': 'payment',

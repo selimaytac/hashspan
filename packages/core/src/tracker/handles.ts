@@ -56,7 +56,7 @@ export function errorType(error: unknown): string {
   }
 }
 
-/** A finite number, an `HrTime` pair or a `Date`: what the deprecated positional `endTime` argument takes. */
+/** A finite number, an `HrTime` pair or a `Date`: what `endTime` takes. */
 function isTimeInput(value: unknown): value is TimeInput {
   if (typeof value === 'number') return Number.isFinite(value);
   if (Array.isArray(value)) {
@@ -72,23 +72,21 @@ export interface HandleOptions {
 }
 
 /**
- * Reads the options of a handle method called as `(what, options?)` or, deprecated, as `(what, endTime?, options?)`
- * (ADR 0014). A positional end time wins over `options.endTime`. Never throws: an argument of neither form, or an
- * end time that is not one, is ignored.
+ * Reads the options of a handle method called as `(what, options?)` (ADR 0014). Never throws: an argument that is
+ * not an options object, such as the positional end time that 1.0 removed, or an end time that is not one, is
+ * ignored.
  */
-export function handleOptions(second: unknown, third?: unknown): HandleOptions {
+export function handleOptions(given: unknown): HandleOptions {
   try {
-    const positional = isTimeInput(second) ? second : undefined;
-    const given = positional !== undefined || second === undefined ? third : (second as unknown);
     if (
       given !== undefined &&
       (typeof given !== 'object' || given === null || isTimeInput(given))
     ) {
-      diag.debug('hashspan: ignoring a handle argument that is neither options nor an end time');
-      return positional !== undefined ? { endTime: positional } : {};
+      diag.debug('hashspan: ignoring a handle argument that is not an options object');
+      return {};
     }
     const options = given as FailOptions | undefined;
-    const endTime: unknown = positional ?? options?.endTime;
+    const endTime: unknown = options?.endTime;
     if (endTime !== undefined && !isTimeInput(endTime)) {
       diag.debug('hashspan: ignoring an end time that is not a TimeInput');
     }
