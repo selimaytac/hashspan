@@ -76,6 +76,10 @@ afterEach(async () => {
   await tracing.teardown();
 });
 
+/** One send span per sync call: viem's internal send and wait are not traced again (`spanNamed` finds the first). */
+const expectOneSend = () =>
+  expect(tracing.spans().filter((s) => s.name === 'send 31337')).toHaveLength(1);
+
 const accounts = { 'a JSON-RPC account': UNLOCKED as Address, 'a local account': signer };
 const gas = 200_000n;
 
@@ -100,6 +104,7 @@ describe.skipIf(!SYNC).each(Object.entries(accounts))('sync actions of %s', (_, 
     // What the caller gets is the node's receipt, as without tracing.
     expect(receipt.status).toBe('success');
     expect(receipt).toEqual(await reader.getTransactionReceipt({ hash: receipt.transactionHash }));
+    expectOneSend();
     const send = tracing.spanNamed('send 31337');
     const confirm = tracing.spanNamed('confirm 31337');
     expect(send.attributes['blockchain.tx.hash']).toBe(receipt.transactionHash);
@@ -125,6 +130,7 @@ describe.skipIf(!SYNC).each(Object.entries(accounts))('sync actions of %s', (_, 
     await hashspan.flush();
 
     expect(receipt.status).toBe('reverted');
+    expectOneSend();
     expect(tracing.spanNamed('send 31337').attributes).toMatchObject({
       'blockchain.tx.hash': receipt.transactionHash,
       'blockchain.contract.function.name': 'withdraw',
@@ -149,6 +155,7 @@ describe.skipIf(!SYNC).each(Object.entries(accounts))('sync actions of %s', (_, 
       await hashspan.flush();
 
       expect(error).toBeInstanceOf(Error);
+      expectOneSend();
       expect(tracing.spanNamed('send 31337').status.code).toBe(SpanStatusCode.UNSET);
       expect(tracing.spanNamed('confirm 31337').attributes['blockchain.tx.status']).toBe(
         'reverted',

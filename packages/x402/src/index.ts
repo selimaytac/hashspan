@@ -15,7 +15,9 @@ import { decodeEventLog, decodeFunctionData, parseAbi } from 'viem';
 
 /**
  * Options of {@link withHashspan}: those of `@hashspan/viem`'s `withHashspan()` except `confirm`, and the reader to
- * confirm settlements with.
+ * confirm settlements with. They are read once, from the object's own enumerable properties; options it inherits
+ * through a prototype, such as the getters of a class instance, are ignored
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.11.0/docs/adr/0025-untrusted-input.md).
  */
 export interface WithHashspanX402Options extends Omit<ViemOptions, 'confirm'> {
   /**

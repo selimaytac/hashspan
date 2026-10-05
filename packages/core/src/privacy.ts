@@ -82,6 +82,42 @@ const MAX_MESSAGE_LENGTH = 256;
  * anchored to a word boundary, so a URL right after other text (`rpc_https://...`) is found too.
  */
 const URL_IN_TEXT = /[A-Za-z][A-Za-z0-9+.-]{0,31}:\/\/[^\s"'<>()[\]{}]+/g;
+/**
+ * Most characters of an error message's first line that the URL and hex passes scan: well above the recorded
+ * `MAX_MESSAGE_LENGTH`, so that a long single-line message costs a bounded amount of work.
+ */
+const MAX_SCANNED_LENGTH = 4096;
+
+/**
+ * `line` cut to `MAX_SCANNED_LENGTH` characters. A hex value that the cut splits (also between its `0` and `x`) keeps up
+ * to `MAX_HEX_LENGTH` + 1 more digits: a short one stays whole, and a long one stays longer than any hex kept, so the
+ * passes record it as they would without the cut.
+ */
+function scanBound(line: string): string {
+  if (line.length <= MAX_SCANNED_LENGTH) return line;
+  // The `0x` prefix and one digit past the longest hex kept.
+  const most = Math.min(line.length, MAX_SCANNED_LENGTH + MAX_HEX_LENGTH + 3);
+  let end = MAX_SCANNED_LENGTH;
+  while (end < most && (HEX_DIGIT.test(line.charAt(end)) || startsHex(line, end))) end++;
+  return line.slice(0, end);
+}
+
+const HEX_DIGIT = /^[0-9a-fA-F]$/;
+
+/** True when `line` has the `x` of a `0x` prefix at `index`. */
+function startsHex(line: string, index: number): boolean {
+  return line.charAt(index - 1) === '0' && /^[xX]$/.test(line.charAt(index));
+}
+/** A character that ends a URL in `URL_IN_TEXT`. */
+const URL_END = /^[\s"'<>()[\]{}]$/;
+
+/**
+ * True when `scheme://` text has a `/` after the scheme, so its authority is complete. A URL that the scan bound cut
+ * before that point may end inside its user info, so it is recorded as `<url>` rather than by its origin.
+ */
+function hasPath(url: string): boolean {
+  return url.indexOf('/', url.indexOf('://') + 3) !== -1;
+}
 
 /**
  * Rewrites every address in `text` with the address mode (`<address>` when it records none). In `off` and `hashed`
@@ -100,8 +136,14 @@ export function formatAddressesIn(text: string, formatAddress: AddressFormatter)
  * free text is kept, so the redaction hook still runs on the result.
  */
 export function sanitizeErrorMessage(message: string, formatAddress: AddressFormatter): string {
-  const firstLine = (message.split('\n', 1)[0]?.trim() ?? '').replace(URL_IN_TEXT, (url) =>
-    hidesUserInfo(url) ? '<url>' : (originOf(url) ?? '<url>'),
+  const line = message.split('\n', 1)[0]?.trim() ?? '';
+  const scanned = scanBound(line);
+  // The cut split a URL if the text after it goes on with characters a URL takes.
+  const split = scanned.length < line.length && !URL_END.test(line.charAt(scanned.length));
+  const firstLine = scanned.replace(URL_IN_TEXT, (url: string, offset: number) =>
+    hidesUserInfo(url) || (split && offset + url.length === scanned.length && !hasPath(url))
+      ? '<url>'
+      : (originOf(url) ?? '<url>'),
   );
   const sanitized = formatAddressesIn(firstLine, formatAddress).replace(HEX, (hex) =>
     hex.length > MAX_HEX_LENGTH ? '<hex>' : hex,

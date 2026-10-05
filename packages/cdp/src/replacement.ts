@@ -37,20 +37,32 @@ export function sameHex(a: unknown, b: unknown): boolean {
   return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 }
 
+/** Most objects of a prototype chain that {@link descriptorOf} reads; a longer chain is not read. */
+const MAX_PROTOTYPE_STEPS = 64;
+
 /**
  * The property descriptor `key` resolves to on `target`, own or inherited, so that it can be told apart from an
- * accessor without running one.
+ * accessor without running one. Throws for a chain longer than `MAX_PROTOTYPE_STEPS`, as for options that cannot be
+ * read.
  */
 export function descriptorOf(target: object, key: string): PropertyDescriptor | undefined {
-  for (
-    let object: object | null = target;
-    object !== null;
-    object = Object.getPrototypeOf(object)
-  ) {
+  let object: object | null = target;
+  for (let step = 0; object !== null; step++) {
+    if (step === MAX_PROTOTYPE_STEPS) throw new RangeError('prototype chain too long');
     const descriptor = Object.getOwnPropertyDescriptor(object, key);
     if (descriptor) return descriptor;
+    object = Object.getPrototypeOf(object);
   }
   return undefined;
+}
+
+/**
+ * True for a plain object: one whose prototype is `Object.prototype` or `null`. Only such options are shadowed: the
+ * getters of a class instance's prototype would run with the shadow as `this`, where its private fields are missing.
+ */
+export function isPlainObject(target: object): boolean {
+  const prototype: unknown = Object.getPrototypeOf(target);
+  return prototype === Object.prototype || prototype === null;
 }
 
 /** An object that reads like `target` with `key` set to `value`; `target` is left unchanged. */

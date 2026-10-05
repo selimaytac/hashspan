@@ -157,4 +157,52 @@ describe("a network-scoped account's wait without a reader", () => {
     expect(getter).not.toHaveBeenCalled();
     expect(confirmOf(HASH)).toBeUndefined();
   });
+
+  it('passes the call on untraced, with the same options, when their prototype chain is too long to read', async () => {
+    const seen: unknown[] = [];
+    const { wait, flush } = await scopedAccount(async (options) => {
+      seen.push(options);
+      return minedReceipt;
+    });
+    // Each prototype is a new object with the same trap; the chain ends after 10,000 of them.
+    let steps = 0;
+    const handler: ProxyHandler<object> = {
+      getPrototypeOf: () => (++steps < 10_000 ? new Proxy({}, handler) : null),
+    };
+    const options = new Proxy({ hash: HASH }, handler);
+
+    await expect(wait(options)).resolves.toBe(minedReceipt);
+    await expect(flush()).resolves.toBe(true);
+
+    expect(seen[0]).toBe(options);
+    expect(steps).toBeLessThanOrEqual(64);
+    expect(confirmOf(HASH)).toBeUndefined();
+  });
+
+  it('traces a wait with class options and passes them on as they are, as without hashspan', async () => {
+    class WaitOptions {
+      readonly hash = HASH;
+      #timeout = 5_000;
+      get timeout(): number {
+        return this.#timeout;
+      }
+    }
+    const receipt = { ...minedReceipt, transactionHash: HASH };
+    const seen: unknown[] = [];
+    // Reads the timeout as the SDK passes it on to viem.
+    const sdkWait: Wait = async (options) => {
+      seen.push(options);
+      expect((options as WaitOptions).timeout).toBe(5_000);
+      return receipt;
+    };
+    const { wait, flush } = await scopedAccount(sdkWait);
+    const options = new WaitOptions();
+
+    await expect(wait(options)).resolves.toBe(receipt);
+    await expect(sdkWait(options)).resolves.toBe(receipt);
+    await expect(flush()).resolves.toBe(true);
+
+    expect(seen[0]).toBe(options);
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.status']).toBe('success');
+  });
 });

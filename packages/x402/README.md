@@ -66,7 +66,9 @@ another token, add it with `client.setSpendControls({ allowedAssets: [{ network,
 confirmation is not started gets no `verified`), `tracker`, `reader` (a viem public client, or a function returning
 one for a chain id) and `confirmTimeoutMs` (default 120 000 ms). Without a reader, only payment spans are recorded.
 Give it the same `tracker` as `@hashspan/viem` or `@hashspan/cdp` to share one tracker between adapters; with
-`tracker`, the core options are not used.
+`tracker`, the core options are not used. Options are read once, from the object's own enumerable properties: options
+it inherits through a prototype, such as the getters of a class instance, are ignored
+([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@0.11.0/docs/adr/0025-untrusted-input.md)).
 
 The settlement and its transaction hash come from the server you pay. With a reader, the payment span records
 `blockchain.payment.verified`: `true` when the reported transaction's receipt carries your payment, `false` when it

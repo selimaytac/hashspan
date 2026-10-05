@@ -30,7 +30,12 @@ export type {
   WatchOptions,
 } from './types.js';
 
-/** Options of {@link withHashspan}: the tracker options of `createTxTracker()`, and those of this adapter. */
+/**
+ * Options of {@link withHashspan}: the tracker options of `createTxTracker()`, and those of this adapter. They are read
+ * once, from the object's own enumerable properties; options it inherits through a prototype, such as the getters of a
+ * class instance, are ignored
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@0.11.0/docs/adr/0025-untrusted-input.md).
+ */
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
    * Tracker from `createTxTracker()` to report to, to share one between adapters. Defaults to one tracker per
