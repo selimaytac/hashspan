@@ -254,13 +254,20 @@ describe('user operation confirm span', () => {
     expect(span.events).toEqual([]);
   });
 
-  it('records a receipt without a success flag as an unknown outcome', () => {
+  // Missing, null, or a string instead of a boolean: the outcome cannot be read (#366).
+  it.each([
+    ['missing', {}],
+    ['null', { success: null }],
+    ['"true"', { success: 'true' }],
+    ['"false"', { success: 'false' }],
+  ])('ends a receipt whose success flag is %s as a failure with error.type _OTHER', (_, flag) => {
     const tracker = createTxTracker();
     tracker
       .startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH })
-      .end({ transactionHash: BUNDLE_HASH, success: 'false' as unknown as boolean });
+      .end({ transactionHash: BUNDLE_HASH, ...flag } as never);
     const span = tracing.spanNamed(confirm);
-    expect(span.status.code).toBe(SpanStatusCode.UNSET);
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.attributes['error.type']).toBe('_OTHER');
     expect(span.attributes['blockchain.user_operation.success']).toBeUndefined();
     expect(span.attributes['blockchain.tx.hash']).toBe(BUNDLE_HASH);
   });
@@ -292,6 +299,8 @@ describe('user operation confirm span', () => {
         'blockchain.system',
         'blockchain.system.name',
         'blockchain.user_operation.hash',
+        // None of them has a success flag: the outcome is unknown (#366).
+        'error.type',
       ]);
     }
   });
@@ -523,17 +532,39 @@ describe('user operation metrics', () => {
     ]);
   });
 
-  it('records no fee without the operation cost, and no success flag when it is unknown', () => {
+  it('records no fee without the operation cost', () => {
     const meters = recordingMeterProvider();
     const tracker = createTxTracker({ meterProvider: meters.provider });
     tracker
       .startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH })
-      .end({ transactionHash: BUNDLE_HASH });
+      .end({ transactionHash: BUNDLE_HASH, success: true });
     expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)).toEqual([]);
-    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)[0]?.attributes).toEqual(
-      base,
-    );
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)[0]?.attributes).toEqual({
+      ...base,
+      'blockchain.user_operation.success': true,
+    });
   });
+
+  // Missing, null, or a string instead of a boolean (#366).
+  const { success: _success, ...withoutFlag } = receipt;
+  it.each([
+    ['missing', {}],
+    ['null', { success: null }],
+    ['"true"', { success: 'true' }],
+  ])(
+    'records the confirmation sample of a receipt whose success flag is %s as _OTHER, without a fee',
+    (_, flag) => {
+      const meters = recordingMeterProvider();
+      const tracker = createTxTracker({ meterProvider: meters.provider });
+      tracker
+        .startUserOperationConfirm({ chainId: CHAIN_ID, userOpHash: USER_OP_HASH })
+        .end({ ...withoutFlag, ...flag } as never);
+      expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)).toEqual([]);
+      expect(
+        meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)[0]?.attributes,
+      ).toEqual({ ...base, 'error.type': '_OTHER' });
+    },
+  );
 });
 
 describe('user operation safety', () => {

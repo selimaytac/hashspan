@@ -30,6 +30,7 @@ import {
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
   BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION,
   BLOCKCHAIN_TX_STATUS_VALUE_REVERTED,
+  ERROR_TYPE_VALUE_OTHER,
 } from '../attributes.js';
 import type { ConfirmRegistry, SharedConfirm } from '../confirm-registry.js';
 import type { LinkStore } from '../link-store.js';
@@ -239,12 +240,17 @@ export function createUserOperationSpans({
             const attributes = userOperationReceiptAttributes(receipt ?? {});
             span.setAttributes(redact(attributes));
             const success = attributes[ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS];
+            // A receipt without a boolean success flag says nothing about the operation's outcome: `_OTHER`, no fee
+            // sample, as for a transaction receipt with an unknown status.
+            if (typeof success !== 'boolean') {
+              recordConfirmation(endTime, {
+                [ATTR_ERROR_TYPE]: markError(span, ERROR_TYPE_VALUE_OTHER),
+              });
+              return;
+            }
             if (success === false) markError(span, BLOCKCHAIN_TX_STATUS_VALUE_REVERTED);
             // The outcome from chain data is the operation's success flag, not the bundle's status (ADR 0020).
-            const outcome: Attributes =
-              typeof success === 'boolean'
-                ? { [ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS]: success }
-                : {};
+            const outcome: Attributes = { [ATTR_BLOCKCHAIN_USER_OPERATION_SUCCESS]: success };
             recordConfirmation(endTime, outcome);
             const cost = attributes[ATTR_BLOCKCHAIN_USER_OPERATION_GAS_COST];
             if (typeof cost === 'string') {

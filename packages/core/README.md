@@ -188,8 +188,6 @@ These hold for every adapter; each adapter's README lists its own.
   [#287](https://github.com/selimaytac/hashspan/issues/287)).
 - A confirm span is not revised after it ended: a reorganisation that removes its block leaves its status and block
   number ([chain reorganisations](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/semconv.md#spans)).
-- A user operation receipt whose `success` is not a boolean ends without an outcome, on the span and on the
-  confirmation sample ([#366](https://github.com/selimaytac/hashspan/issues/366)).
 - Values from outside are bounded: longer ones are cut or dropped, and past `maxTrackedTransactions` or `linkTtlMs` a
   confirm span has no link to its send
   ([bounds](https://github.com/selimaytac/hashspan/blob/@hashspan/core@0.11.0/docs/semconv.md#bounds)).

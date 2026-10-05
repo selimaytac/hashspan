@@ -101,7 +101,7 @@ The spans carry `blockchain.user_operation.*` attributes instead of a transactio
   reverts. With a `reader` for the chain, the adapter reads the bundle's receipt and records the operation's
   `UserOperationEvent`: success (a reverted operation ends with `error.type` `reverted`), gas used, cost, nonce,
   paymaster and EntryPoint. Without one, or if the bundle receipt is not found within `confirmTimeoutMs`, the confirm
-  span records the bundle transaction's hash only.
+  span records the bundle transaction's hash only, and ends with `error.type` `_OTHER` since the outcome is unknown.
 - The bundle transaction's status and fee are not recorded: they cover every operation in the bundle.
 - Without a wait, only the send span is recorded, with or without a reader. A wait names no network: it is traced
   when the operation was sent through the same client, or on a network-scoped smart account.
@@ -149,7 +149,8 @@ when CDP returns the transaction of the first attempt; the confirm span is share
   `waitForTransactionReceipt` then records no revert reason, and no fees for a flashblocks preconfirmation
   ([usage](#usage), [traced](#traced)).
 - A user operation gets a confirm span only from `waitForUserOperation`; without a reader it records only the bundle
-  transaction's hash, and the bundle transaction's status and fee are never recorded ([smart accounts](#smart-accounts)).
+  transaction's hash and ends with `error.type` `_OTHER`, since the operation's outcome is unknown, and the bundle
+  transaction's status and fee are never recorded ([smart accounts](#smart-accounts)).
 - A retry with the same `idempotencyKey` records a second send span ([traced](#traced)).
 - The limits of the core apply too
   ([`@hashspan/core` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@0.11.0/packages/core#known-limits)).
