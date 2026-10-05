@@ -1,4 +1,12 @@
-import type { Attributes, Histogram, MeterProvider, MetricOptions } from '@opentelemetry/api';
+import {
+  type Attributes,
+  DiagLogLevel,
+  diag,
+  type Histogram,
+  type MeterProvider,
+  type MetricOptions,
+  metrics,
+} from '@opentelemetry/api';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createTxTracker,
@@ -277,5 +285,59 @@ describe('metrics', () => {
     tracker.startSend({ chainId: 1, startTime: now - 2_000 }).end({ hash: HASH }, { endTime: now });
     const [recorded] = meters.recorded(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION);
     expect(recorded?.value).toBeCloseTo(2, 3);
+  });
+});
+
+describe('metrics through the global meter provider', () => {
+  afterEach(() => {
+    metrics.disable();
+    diag.disable();
+  });
+
+  it('are recorded from the first transaction after a meter provider is registered late', () => {
+    const debug: string[] = [];
+    diag.setLogger(
+      {
+        debug: (message: string) => debug.push(message),
+        verbose: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+      },
+      DiagLogLevel.DEBUG,
+    );
+    const tracker = createTxTracker();
+
+    // Before an SDK registers a meter provider: the global one is the no-op provider.
+    tracker.startSend({ chainId: 1 }).end({ hash: HASH });
+    tracker.startSend({ chainId: 1 }).end({ hash: OTHER_HASH });
+    const meters = recordingMeterProvider();
+    metrics.setGlobalMeterProvider(meters.provider);
+    tracker.startSend({ chainId: 2 }).end({ hash: HASH });
+    tracker.startConfirm({ chainId: 2, hash: HASH }).end(receipt);
+
+    expect(
+      meters
+        .recorded(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION)
+        .map(({ attributes }) => attributes['blockchain.chain.id']),
+    ).toEqual([2]);
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)).toHaveLength(1);
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)).toHaveLength(1);
+    // One debug line, however many transactions came before.
+    expect(debug.filter((message) => message.includes('meter provider'))).toHaveLength(1);
+  });
+
+  it('keeps the histograms of the first registered provider', () => {
+    const first = recordingMeterProvider();
+    metrics.setGlobalMeterProvider(first.provider);
+    const tracker = createTxTracker();
+    tracker.startSend({ chainId: 1 }).end({ hash: HASH });
+    metrics.disable();
+    const second = recordingMeterProvider();
+    metrics.setGlobalMeterProvider(second.provider);
+    tracker.startSend({ chainId: 1 }).end({ hash: OTHER_HASH });
+
+    expect(first.recorded(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION)).toHaveLength(2);
+    expect(second.recorded(METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION)).toHaveLength(0);
   });
 });
