@@ -371,7 +371,9 @@ describe.skipIf(!RUN)('user operations through Alto on Anvil', () => {
     }
     const send = tracing.spanNamed('send 31337');
     expect(send.status.code).toBe(SpanStatusCode.ERROR);
-    expect(send.attributes['error.type']).toBe('UserOperationExecutionError');
+    // The bundler error viem classified, under its UserOperationExecutionError.
+    expect(send.attributes['error.type']).toBe(((error as Error).cause as Error).name);
+    expect(send.attributes['error.type']).not.toBe('UserOperationExecutionError');
     expect(send.attributes['blockchain.user_operation.hash']).toBeUndefined();
     expect(tracing.spans().filter((span) => span.name === 'confirm 31337')).toEqual([]);
   });

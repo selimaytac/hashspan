@@ -86,6 +86,18 @@ export const expectEnding = (
   }).toEqual({ status: ending.status, errorType: ending.errorType, outcome: ending.outcome });
 
 /** The transport faults of issue #290, on `method`. */
+/**
+ * `error.type` of a send that fails on each transport fault of `faultsOn`: the error viem classified the failure as,
+ * under the `TransactionExecutionError` (or `ContractFunctionExecutionError`) it throws (hashspan #407).
+ */
+export const SEND_ERROR_TYPES: Record<string, string> = {
+  'a request that never answers': 'TimeoutError',
+  'HTTP 429': 'HttpRequestError',
+  'a connection reset mid-response': 'HttpRequestError',
+  'JSON-RPC -32005 (limit exceeded)': 'LimitExceededRpcError',
+  'JSON-RPC -32603 (internal error)': 'InternalRpcError',
+};
+
 export const faultsOn = (method: string): Record<string, Faults> => ({
   'a request that never answers': { [method]: { kind: 'hang' } },
   'HTTP 429': { [method]: { kind: 'http', status: 429 } },

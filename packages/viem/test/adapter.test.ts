@@ -56,9 +56,13 @@ describe('sendTransaction', () => {
 
     const error = await wallet.sendTransaction({ to: TO, value: 1n }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(Error);
+    expect((error as Error).name).toBe('TransactionExecutionError');
     const send = tracing.spanNamed('send 8453');
     expect(send.status.code).toBe(SpanStatusCode.ERROR);
-    expect(send.attributes['error.type']).toBe((error as Error).name);
+    // error.type is the error viem classified under its wrapper; the exception event keeps the thrown class.
+    expect(send.attributes['error.type']).toBe(((error as Error).cause as Error).name);
+    expect(send.attributes['error.type']).not.toBe('TransactionExecutionError');
+    expect(send.events[0]?.attributes?.['exception.type']).toBe('TransactionExecutionError');
   });
 
   it('keeps addresses and calldata out of failed send spans in off mode', async () => {

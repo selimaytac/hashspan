@@ -19,6 +19,7 @@ import {
   NO_OUTCOME,
   type Outcome,
   recordingMeterProvider,
+  SEND_ERROR_TYPES,
   settle,
   succeeded,
   TIMEOUT,
@@ -149,7 +150,8 @@ describe.skipIf(!viemHasAction('waitForCallsStatus'))("a wallet's call batch met
   > = {
     'wallet_sendCalls fails': {
       faults: { wallet_sendCalls: 'fails' },
-      send: failed('TransactionExecutionError'),
+      // The wallet's JSON-RPC error, under viem's TransactionExecutionError.
+      send: failed('InternalRpcError'),
     },
     'wallet_getCallsStatus fails': {
       faults: { wallet_getCallsStatus: 'fails' },
@@ -240,10 +242,10 @@ describe.skipIf(!viemAtLeast('2.45.2'))("viem's fallback through plain transacti
     return { sent, meters, flushed: await hashspan.flush({ timeoutMs: 10_000 }) };
   };
 
-  // A failed raw send reaches the caller wrapped by viem; the batch's send span records it.
+  // A failed raw send reaches the caller wrapped by viem; the batch's send span records the error under the wrapper.
   it.each(Object.entries(faultsOn('eth_sendRawTransaction')))(
     'sending: %s',
-    async (_fault, faults) => {
+    async (fault, faults) => {
       const untraced = await run(false, faults, 'send');
       const [traced, rejections] = await collectingRejections(() => run(true, faults, 'send'));
 
@@ -251,7 +253,7 @@ describe.skipIf(!viemAtLeast('2.45.2'))("viem's fallback through plain transacti
       expect(rejections).toEqual([]);
       expect(traced.flushed).toBe(true);
       expect(spansNamed('send ')).toHaveLength(1);
-      expectEnding(spansNamed('send ')[0], failed('TransactionExecutionError'), BATCH_STATUS);
+      expectEnding(spansNamed('send ')[0], failed(SEND_ERROR_TYPES[fault] as string), BATCH_STATUS);
       expect(spansNamed('confirm ')).toHaveLength(0);
       expect(traced.meters.recorded('blockchain.client.send.duration')).toHaveLength(1);
     },

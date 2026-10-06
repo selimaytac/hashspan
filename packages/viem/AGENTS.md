@@ -14,6 +14,7 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
     in that call and passed to the modules' factories; confirm deduplication lives in the tracker (ADR 0007).
   - One module per send path, each adding its traced actions for one client: `src/transaction.ts`,
     `src/user-operation.ts`, `src/call-batch.ts`; `src/send.ts` traces a send (also once a late chain id is known),
+    `src/send-error.ts` gives a failed send's `error.type` (the error viem classified, under its wrappers),
     `src/arguments.ts` reads call arguments from own data properties only.
   - `src/confirm/` is the confirmation work every EVM path needs (ADR 0001 amendment), and imports nothing from the
     extension: `confirmation.ts` (receipt, sealed receipt, revert reason, background limit), `watch.ts`,
