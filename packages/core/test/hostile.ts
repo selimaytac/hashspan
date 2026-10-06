@@ -19,6 +19,7 @@ import {
 } from '@opentelemetry/sdk-trace-base';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { metricViolations } from './conformance.js';
 
 /** An address whose 40 hex characters must never appear in `off` or `hashed` address mode. */
 export const ADDRESS = '0x2222222222222222222222222222222222222222';
@@ -638,7 +639,8 @@ export function metricProblems(samples: readonly MetricSample[]): string[] {
         problems.push(`${name} ${key}=${String(value).slice(0, 40)}: ${problem}`);
     }
   }
-  return problems;
+  // And nothing outside the semantic conventions: metric names, label keys and closed label values.
+  return [...problems, ...metricViolations(samples)];
 }
 
 /** The outcome of a call: what it returned or threw, comparable between an untraced and a traced run. */
