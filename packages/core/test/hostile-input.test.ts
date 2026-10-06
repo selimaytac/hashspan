@@ -63,7 +63,8 @@ const SEND = {
   authorizations: [{ address: ADDRESS, chainId: 1 }],
   feeAsset: ADDRESS,
 };
-const CONFIRM = { chainId: CHAIN_ID, hash: HASH };
+const CONFIRM_WITHOUT_COUNT = { chainId: CHAIN_ID, hash: HASH };
+const CONFIRM = { chainId: CHAIN_ID, hash: HASH, confirmations: 3 };
 const RECEIPT = {
   status: 'success',
   blockNumber: 10n,
@@ -761,6 +762,18 @@ describe('getters of the caller', () => {
           .startSend({ ...SEND, functionArguments: [argument.value] })
           .end({ hash: HASH });
         return argument.reads();
+      },
+    ],
+    [
+      'the confirmations of a wait',
+      () => {
+        const input = countingGetters({ confirmations: 3 });
+        Object.assign(input.value, CONFIRM_WITHOUT_COUNT);
+        createTxTracker()
+          .startConfirm(input.value as never)
+          .end(RECEIPT as never);
+        expect(spanAttribute('blockchain.tx.wait.confirmations')).toBeUndefined();
+        return input.reads();
       },
     ],
     [

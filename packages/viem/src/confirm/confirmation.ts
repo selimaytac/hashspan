@@ -450,7 +450,8 @@ export function createConfirmation({
     onReceipt?: (receipt: TransactionReceipt | undefined) => void,
   ): boolean => {
     if (atLimit()) return false;
-    const handle = tracker.startConfirm({ chainId, hash });
+    // The poll below passes viem no count: it waits for one confirmation.
+    const handle = tracker.startConfirm({ chainId, hash, confirmations: 1 });
     const capture: ReplacementCapture = {};
     const waitMs = durationOr(timeoutMs, DEFAULT_BACKGROUND_TIMEOUT_MS);
     const background = backgroundClientOf(client);

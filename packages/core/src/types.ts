@@ -210,6 +210,13 @@ export interface ConfirmInput {
   hash: string;
   /** When the wait started, for adapters that record it after the fact; see {@link SendInput.startTime}. */
   startTime?: TimeInput | undefined;
+  /**
+   * How many confirmations this wait asks for, as its library applies them (viem waits for 1 when given none), for a
+   * wait that takes a count. Recorded as `blockchain.tx.wait.confirmations` when this wait ends the shared confirm
+   * span: with the receipt it got, or as the last wait to time out or fail. Only a positive safe integer is recorded;
+   * omit it for a wait that takes no count. Read from an own data property only.
+   */
+  confirmations?: number | undefined;
 }
 
 /** Why a transaction was replaced by another one with the same sender and nonce, as its library reported it. */

@@ -114,6 +114,8 @@ describe.skipIf(!SYNC).each(Object.entries(accounts))('sync actions of %s', (_, 
       'blockchain.block.number': Number(receipt.blockNumber),
       'blockchain.tx.fee': (receipt.gasUsed * receipt.effectiveGasPrice).toString(),
     });
+    // A sync action takes no count (#414).
+    expect(confirm.attributes).not.toHaveProperty('blockchain.tx.wait.confirmations');
     expect(confirm.links[0]?.context.spanId).toBe(send.spanContext().spanId);
   });
 
@@ -141,6 +143,7 @@ describe.skipIf(!SYNC).each(Object.entries(accounts))('sync actions of %s', (_, 
     expect(confirm.attributes['blockchain.tx.revert.reason']).toBe(
       `Blocked(${RECIPIENT.toLowerCase()})`,
     );
+    expect(confirm.attributes).not.toHaveProperty('blockchain.tx.wait.confirmations');
   });
 
   // throwOnReceiptRevert came with viem 2.38.2.

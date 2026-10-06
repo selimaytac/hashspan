@@ -190,7 +190,7 @@ const ROWS: Row[] = [
   ),
   ...argumentRows(
     'scoped account waitForTransactionReceipt',
-    { hash: HASH },
+    { hash: HASH, confirmations: 3 },
     on(async (evm, args) => {
       const scoped = await (await evm.getOrCreateAccount({ name: 'a' })).useNetwork('base');
       return scoped.waitForTransactionReceipt(args);

@@ -67,7 +67,9 @@ try {
 
 `startConfirm` can be called by every part of your code that waits for the receipt: calls for the same transaction
 share one confirm span. A receipt from any of them ends it; a timeout or failure ends it once every caller gave up.
-End every handle you start, since an open handle keeps the shared span open.
+End every handle you start, since an open handle keeps the shared span open. A wait that takes a number of
+confirmations passes it as `confirmations`; the span records it as `blockchain.tx.wait.confirmations` from the wait
+that ended it.
 
 `send.fail(error, { errorType })` records a library's machine-readable error code as `error.type` instead
 of the error's class name, if it is a short identifier (`[A-Za-z0-9_.-]`, at most 64 characters); `exception.type`

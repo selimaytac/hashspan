@@ -49,6 +49,32 @@ export function describeTransaction(transaction: unknown): Omit<SendInput, 'chai
   };
 }
 
+/**
+ * The confirmations a network-scoped wait asks for, as the SDK's viem client applies them, for
+ * `blockchain.tx.wait.confirmations`: the SDK passes the options to viem unchanged, and viem defaults to 1 and waits
+ * for one block unless the count is above 1. A positive safe integer as given; 1 when the options have no
+ * `confirmations`, or `undefined`, `0`, a negative number or `NaN` as an own data property; undefined, recording
+ * nothing, for any other value, and for one behind an accessor or inherited, which is never read. The same rule as
+ * `@hashspan/viem`'s wait. Never throws.
+ */
+function confirmationsOf(options: unknown): number | undefined {
+  try {
+    if (options === null || typeof options !== 'object') return undefined;
+    const descriptor = Object.getOwnPropertyDescriptor(options, 'confirmations');
+    if (descriptor === undefined)
+      return descriptorOf(options, 'confirmations') === undefined ? 1 : undefined;
+    if (!('value' in descriptor)) return undefined;
+    const value: unknown = descriptor.value;
+    if (value === undefined) return 1;
+    if (typeof value !== 'number') return undefined;
+    if (Number.isNaN(value) || value <= 0) return 1;
+    return Number.isSafeInteger(value) ? value : undefined;
+  } catch {
+    // A Proxy whose traps throw, or a prototype chain too long to read: nothing is recorded.
+    return undefined;
+  }
+}
+
 /** What the transaction spans need from the `withHashspan()` call. */
 export interface TransactionSpansDependencies {
   tracker: TxTracker;
@@ -75,6 +101,14 @@ export interface TransactionSpans {
     options: unknown,
     wait: (options: unknown) => Promise<unknown>,
   ): Promise<unknown>;
+}
+
+/** A network-scoped wait that is traced: its hash, the options it is made with, and its confirmations. */
+interface TracedWait {
+  hash: string;
+  waitOptions: unknown;
+  capture: ReplacementCapture;
+  confirmations: number | undefined;
 }
 
 export function createTransactionSpans({
@@ -137,7 +171,7 @@ export function createTransactionSpans({
     options: unknown,
     wait: (options: unknown) => Promise<unknown>,
   ): Promise<unknown> => {
-    let traced: { hash: string; waitOptions: unknown; capture: ReplacementCapture } | undefined;
+    let traced: TracedWait | undefined;
     try {
       traced = withReplacementCapture(chainId, options);
     } catch (error) {
@@ -146,10 +180,10 @@ export function createTransactionSpans({
       );
     }
     if (!traced) return wait(options);
-    const { hash, waitOptions, capture } = traced;
+    const { hash, waitOptions, capture, confirmations } = traced;
     let handle: ReturnType<TxTracker['startConfirm']> | undefined;
     try {
-      handle = tracker.startConfirm({ chainId, hash });
+      handle = tracker.startConfirm({ chainId, hash, confirmations });
     } catch (error) {
       diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
     }
@@ -167,29 +201,34 @@ export function createTransactionSpans({
    * `{ transactionHash }` it would call viem with the hash alone, so that form is passed on as `{ hash, onReplaced }`,
    * the same viem call.
    */
-  const withReplacementCapture = (
-    chainId: number,
-    options: unknown,
-  ): { hash: string; waitOptions: unknown; capture: ReplacementCapture } | undefined => {
+  const withReplacementCapture = (chainId: number, options: unknown): TracedWait | undefined => {
     const given = stringOrUndefined(own(options, 'hash'));
     const hash = given ?? own(options, 'transactionHash');
     if (typeof hash !== 'string' || readerFor(chainId)) return undefined;
     const capture: ReplacementCapture = {};
     if (given === undefined) {
-      return { hash, waitOptions: { hash, onReplaced: capturing(capture, undefined) }, capture };
+      // The SDK calls viem with the hash alone: one confirmation.
+      return {
+        hash,
+        waitOptions: { hash, onReplaced: capturing(capture, undefined) },
+        capture,
+        confirmations: 1,
+      };
     }
     // viem reads the callback through the prototype chain as well.
     const onReplaced = descriptorOf(options as object, 'onReplaced');
     if (onReplaced !== undefined && !('value' in onReplaced)) return undefined;
+    const confirmations = confirmationsOf(options);
     // Options that are not a plain object, such as a class instance, are passed on as they are: the wait is traced,
     // but a replacement is not attributed.
-    if (!isPlainObject(options as object)) return { hash, waitOptions: options, capture };
+    if (!isPlainObject(options as object))
+      return { hash, waitOptions: options, capture, confirmations };
     const waitOptions = shadowing(
       options as object,
       'onReplaced',
       capturing(capture, onReplaced?.value),
     );
-    return { hash, waitOptions, capture };
+    return { hash, waitOptions, capture, confirmations };
   };
 
   /**

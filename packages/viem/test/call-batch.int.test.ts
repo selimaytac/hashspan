@@ -119,6 +119,8 @@ describe.skipIf(!RUNS)('call batches on Anvil', () => {
         'blockchain.call_batch.transaction_hashes': hashes,
       });
       expect(batch?.attributes).not.toHaveProperty('blockchain.tx.fee');
+      // A call batch's wait takes no count (#414).
+      expect(batch?.attributes).not.toHaveProperty('blockchain.tx.wait.confirmations');
       // Each transaction has its own confirm span with its fee, linked to the batch's send span.
       const transactions = confirms().filter(
         (s) => s.attributes['blockchain.tx.hash'] !== undefined,
@@ -128,6 +130,8 @@ describe.skipIf(!RUNS)('call batches on Anvil', () => {
       );
       for (const span of transactions) {
         expect(span.attributes['blockchain.tx.fee']).toBeDefined();
+        // Confirmed in the background, which waits for one confirmation.
+        expect(span.attributes['blockchain.tx.wait.confirmations']).toBe(1);
         expect(span.links[0]?.context.spanId).toBe(send?.spanContext().spanId);
       }
     },

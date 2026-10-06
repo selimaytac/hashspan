@@ -474,6 +474,8 @@ const ATTRIBUTE_CHECKS: Record<string, Check> = {
   'blockchain.tx.hash': matches(TX_HASH, 'a 32-byte hash'),
   'blockchain.tx.replacement.hash': matches(TX_HASH, 'a 32-byte hash'),
   'blockchain.tx.replacement.reason': oneOf('repriced', 'cancelled', 'replaced'),
+  'blockchain.tx.wait.confirmations': (value) =>
+    isChainId(value) ? undefined : 'not a positive safe integer',
   'blockchain.tx.status': oneOf('success', 'reverted', 'replaced'),
   'blockchain.tx.from': address,
   'blockchain.tx.to': address,

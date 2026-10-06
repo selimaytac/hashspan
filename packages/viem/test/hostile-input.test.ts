@@ -29,6 +29,7 @@ import {
   hostileErrors,
   hostileValues,
   long,
+  OUT_OF_RANGE,
   outcomeOf,
   recordingMeterProvider,
   revokedProxy,
@@ -385,6 +386,19 @@ const ROWS: Row[] = [
       )
     : []),
   ...argumentRows('waitForTransactionReceipt', WAIT, onReader('waitForTransactionReceipt')),
+  // The count of a wait (#414), with numbers and bigints only: viem converts any other value to a number inside its
+  // poll, where a symbol or a throwing Proxy rejects unhandled, untraced as well. A getter is tried by the row itself.
+  ...argumentRows(
+    'waitForTransactionReceipt',
+    { ...WAIT, confirmations: 1 },
+    onReader('waitForTransactionReceipt'),
+    {},
+    ['confirmations'],
+    false,
+  ).map((row) => ({
+    ...row,
+    values: () => OUT_OF_RANGE.map(([l, v]): [string, unknown] => [l, v]),
+  })),
   // Gas fields are left valid: they are not telemetry's, and without them viem asks the bundler for an estimate.
   ...argumentRows(
     'sendUserOperation',

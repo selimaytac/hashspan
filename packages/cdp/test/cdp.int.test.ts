@@ -19,6 +19,16 @@ const { instance, rpcUrl: RPC_URL } = await startAnvil({
   chainId: 84532,
 });
 
+/** Untraced client for chain control and checks, without viem's block number cache. */
+const control = createPublicClient({
+  chain: baseSepolia,
+  transport: http(RPC_URL),
+  cacheTime: 0,
+  pollingInterval: 50,
+});
+const rpc = (method: string, params: unknown[] = []): Promise<unknown> =>
+  control.request({ method: method as never, params: params as never });
+
 let api: Awaited<ReturnType<typeof startMockCdpApi>>;
 let tracing: TestTracing;
 /** Every URL requested through fetch, which the SDK uses for its analytics. */
@@ -89,6 +99,8 @@ describe('the CDP SDK against a local CDP API and Anvil', () => {
     expect(confirm.attributes).toMatchObject({
       'blockchain.tx.status': 'success',
       'blockchain.tx.gas.used': 21_000,
+      // Confirmed in the background through the reader, which waits for one confirmation (#414).
+      'blockchain.tx.wait.confirmations': 1,
     });
   });
 
@@ -135,6 +147,54 @@ describe('the CDP SDK against a local CDP API and Anvil', () => {
       'blockchain.tx.gas.used': 21_000,
     });
     expect(api.requests).toContain('POST /rpc/v1/base-sepolia/mock-token');
+    expect(confirm.attributes['blockchain.tx.wait.confirmations']).toBe(1);
+  });
+
+  it("records a network-scoped wait's confirmations, which the SDK passes to viem", async () => {
+    const { cdp, hashspan } = await client({ reader: false });
+    const account = await cdp.evm.createAccount();
+    const scoped = await account.useNetwork('base-sepolia');
+    const { transactionHash } = await scoped.sendTransaction({
+      transaction: { to: RECIPIENT, value: 5n },
+    });
+    await control.waitForTransactionReceipt({ hash: transactionHash });
+    // Only this test mines from here on: the receipt's block is the head (depth 1).
+    await rpc('evm_setAutomine', [false]);
+    try {
+      let resolved = false;
+      const wait = scoped
+        .waitForTransactionReceipt({ hash: transactionHash, confirmations: 3 })
+        .then((receipt) => {
+          resolved = true;
+          return receipt;
+        });
+      // The SDK's viem client checks at once: a wait that dropped the count resolves here, at depth 1.
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      expect(resolved).toBe(false);
+      await rpc('anvil_mine', ['0x2']);
+      const receipt = await wait;
+      expect((await control.getBlockNumber()) - receipt.blockNumber + 1n).toBe(3n);
+    } finally {
+      await rpc('evm_setAutomine', [true]);
+    }
+    await hashspan.flush();
+    expect(tracing.spanNamed('confirm 84532').attributes['blockchain.tx.wait.confirmations']).toBe(
+      3,
+    );
+  }, 30_000);
+
+  it('records 1 for the transactionHash form of a network-scoped wait', async () => {
+    const { cdp, hashspan } = await client({ reader: false });
+    const account = await cdp.evm.createAccount();
+    const scoped = await account.useNetwork('base-sepolia');
+    const { transactionHash } = await scoped.sendTransaction({
+      transaction: { to: RECIPIENT, value: 6n },
+    });
+    await scoped.waitForTransactionReceipt({ transactionHash });
+    await hashspan.flush();
+    expect(tracing.spanNamed('confirm 84532').attributes['blockchain.tx.wait.confirmations']).toBe(
+      1,
+    );
   });
 
   it("records the CDP API's error type on a failed send and rethrows the SDK's error", async () => {

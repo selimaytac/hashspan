@@ -81,7 +81,10 @@ from those of transactions and user operations. Transactions an account sends it
 its parent is determined by the first wait. A receipt from any wait ends it; a timeout or failure ends it only when
 it is the last wait still running, with that wait's outcome. After a receipt, further waits within the link TTL add
 no span; after a timeout or failure, a retry gets a new span. The same holds for each user operation and call batch. See
-[ADR 0007](adr/0007-confirmation-ownership.md).
+[ADR 0007](adr/0007-confirmation-ownership.md). `blockchain.tx.wait.confirmations` is that of the wait which ended the
+span: the one whose receipt ended it, or the last to time out or fail. With background confirmation on, the
+background wait (`1`) usually gets the receipt first, so a caller's wait with `confirmations: 12` for the same
+transaction is not recorded, as it adds no span of its own.
 
 ### Span status
 
@@ -178,6 +181,7 @@ with or without hashspan.
 | `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available, also of a reverted user operation: the `Error(string)` message, `Panic(0x..)`, `ErrorName(arg, ...)` for custom errors with a known ABI, else the 4-byte error selector. See [ADR 0005](adr/0005-revert-reason-replay.md) |
 | `blockchain.tx.replacement.hash` | string | confirm | on | on a `replaced` confirm span: hash of the mined transaction that replaced it |
 | `blockchain.tx.replacement.reason` | string | confirm | on | on a `replaced` confirm span: `repriced` \| `cancelled` \| `replaced`, as reported by the instrumented library; omitted when it reported none |
+| `blockchain.tx.wait.confirmations` | int | confirm | on | on a transaction's confirm span: the confirmations (blocks, counting the receipt's own) that the wait which ended the span asked for, as the library applies them: a viem wait's or a CDP network-scoped wait's `confirmations` when it is a positive safe integer; `1` when it is omitted, `0`, negative or `NaN`, as viem then waits for one, and for background confirmation and `watch()`; not recorded for any other value, nor when the wait took no count (sync actions, user operations, call batches). A count of blocks is not finality: on a rollup it counts the sequencer's blocks, and block times differ by chain, so read it with `blockchain.chain.id`. Span only, never a metric attribute (see one confirm span per transaction for which wait ends the span) |
 | `blockchain.user_operation.hash` | string | send, confirm | on | `0x`-prefixed user operation hash (`userOpHash`), which identifies the operation with the chain id |
 | `blockchain.user_operation.sender` | string | send, confirm | raw | address of the smart account, subject to address mode |
 | `blockchain.user_operation.entry_point` | string | send, confirm | raw | address of the EntryPoint contract, subject to address mode |
