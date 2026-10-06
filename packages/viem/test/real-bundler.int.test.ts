@@ -371,8 +371,13 @@ describe.skipIf(!RUN)('user operations through Alto on Anvil', () => {
     }
     const send = tracing.spanNamed('send 31337');
     expect(send.status.code).toBe(SpanStatusCode.ERROR);
-    // The bundler error viem classified, under its UserOperationExecutionError.
-    expect(send.attributes['error.type']).toBe(((error as Error).cause as Error).name);
+    // The bundler error viem classified, under its UserOperationExecutionError. viem before 2.21.58 decodes the revert
+    // of a call with data but no ABI, under a ContractFunctionExecutionError, into a ContractFunctionRevertedError.
+    expect(send.attributes['error.type']).toBe(
+      viemAtLeast('2.21.58')
+        ? ((error as Error).cause as Error).name
+        : 'ContractFunctionRevertedError',
+    );
     expect(send.attributes['error.type']).not.toBe('UserOperationExecutionError');
     expect(send.attributes['blockchain.user_operation.hash']).toBeUndefined();
     expect(tracing.spans().filter((span) => span.name === 'confirm 31337')).toEqual([]);
