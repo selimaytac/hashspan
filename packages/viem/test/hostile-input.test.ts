@@ -49,7 +49,7 @@ import {
   USER_OP_HASH,
 } from './mock-bundler.js';
 import { FROM, HASH, type MockOptions, mockTransport, TO } from './mock-transport.js';
-import { viemHasAction } from './viem-version.js';
+import { viemAtLeast, viemHasAction } from './viem-version.js';
 
 let tracing: HostileTracing;
 const meters = recordingMeterProvider();
@@ -275,6 +275,24 @@ const PENDING = {
 const SUBMITTED_HASH = `0x${'5b'.repeat(32)}`;
 /** Following a multisig operation (#402) with a short timeout, which spreads its polls over a short time. */
 const FOLLOW = { followMultisigOperations: { timeoutMs: WAIT_MS } } as const;
+/** Values that cannot be turned into a string, which viem throws for out of a timer before the releases named below. */
+const UNSTRINGIFIABLE = new Set(['a symbol', 'an object with Object.prototype keys']);
+/** Values a timer cannot take as its delay, which viem before 2.39.0 throws for out of its poll. */
+const NOT_A_TIMER_DELAY = new Set([
+  'a throwing Proxy',
+  'a throwing Proxy around an array',
+  'a revoked Proxy',
+  'a revoked Proxy around an array',
+  'an object with Object.prototype keys',
+  'a sparse array of length 2**32 - 1',
+  'a dense array of 100 000 items',
+  '-1n',
+  '2n ** 256n',
+  '1n where a number is expected',
+  'a symbol',
+]);
+/** Values whole arguments of a wait are rejected for before viem polls: it cannot read them or their fields. */
+const REJECTED_AT_ONCE = /Proxy|throwing getters|^(null|undefined)$/;
 // sendRawTransactionSync came with viem 2.38.0.
 const RAW_SYNC = viemHasAction('sendRawTransactionSync');
 // sendTransactionSync and writeContractSync came with viem 2.38.0.
@@ -385,7 +403,20 @@ const ROWS: Row[] = [
         Object.keys(RAW),
       )
     : []),
-  ...argumentRows('waitForTransactionReceipt', WAIT, onReader('waitForTransactionReceipt')),
+  ...argumentRows('waitForTransactionReceipt', WAIT, onReader('waitForTransactionReceipt')).map(
+    (row): Row => {
+      // viem before 2.21.34 leaves its timeout's timer running after the wait settles, and then puts the hash into the
+      // message of its timeout error inside the timer, traced or not: for a hash that cannot be turned into a string,
+      // that throws out of the timer.
+      if (row.name === 'waitForTransactionReceipt hash' && !viemAtLeast('2.21.34'))
+        return { ...row, values: () => values().filter(([label]) => !UNSTRINGIFIABLE.has(label)) };
+      // Without a hash, viem before 2.33.0 reads the transaction first and retries that read for about 13 s, longer
+      // than the table waits for a call, traced or not: there, only the values viem rejects before it polls.
+      if (row.name === 'waitForTransactionReceipt arguments' && !viemAtLeast('2.33.0'))
+        return { ...row, values: () => values().filter(([label]) => REJECTED_AT_ONCE.test(label)) };
+      return row;
+    },
+  ),
   // The count of a wait (#414), with numbers and bigints only: viem converts any other value to a number inside its
   // poll, where a symbol or a throwing Proxy rejects unhandled, untraced as well. A getter is tried by the row itself.
   ...argumentRows(
@@ -412,7 +443,18 @@ const ROWS: Row[] = [
     'waitForUserOperationReceipt',
     { hash: USER_OP_HASH, timeout: WAIT_MS },
     onBundler('waitForUserOperationReceipt'),
-  ),
+  ).map((row): Row => {
+    if (viemAtLeast('2.39.0')) return row;
+    // viem before 2.39.0, traced or not, throws out of its own callbacks for two kinds of value. It leaves its timeout's
+    // timer running after the wait settles, and then puts the hash into the message of its timeout error inside the
+    // timer, which throws for a hash that cannot be turned into a string. And it starts that timer after its first
+    // poll: for a timeout a timer cannot take, the call fails, and the poll then reaches a variable never set.
+    if (row.name === 'waitForUserOperationReceipt hash')
+      return { ...row, values: () => values().filter(([label]) => !UNSTRINGIFIABLE.has(label)) };
+    if (row.name === 'waitForUserOperationReceipt timeout')
+      return { ...row, values: () => values().filter(([label]) => !NOT_A_TIMER_DELAY.has(label)) };
+    return row;
+  }),
   ...argumentRows('sendCalls', CALLS, onWallet('sendCalls')),
   ...argumentRows(
     'waitForCallsStatus',

@@ -212,8 +212,11 @@ describe('user operations on Anvil', () => {
         /^UserOperation reverted during simulation with reason: 0x08c379a0/,
       );
     }
-    // The span records the error viem classified the bundler's answer as, under its wrapper.
-    expect(tracing.spanNamed('send 31337').attributes['error.type']).toBe('ExecutionRevertedError');
+    // The span records the error viem classified the bundler's answer as, under its wrapper: viem before 2.21.58
+    // decodes the revert of a call with data but no ABI into a ContractFunctionRevertedError.
+    expect(tracing.spanNamed('send 31337').attributes['error.type']).toBe(
+      viemAtLeast('2.21.58') ? 'ExecutionRevertedError' : 'ContractFunctionRevertedError',
+    );
     tracing.exporter.reset();
     // ... so the sender gives the limits.
     const hash = await client.sendUserOperation({

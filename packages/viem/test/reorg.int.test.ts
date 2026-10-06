@@ -9,6 +9,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { withHashspan } from '../src/index.js';
 import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemAtLeast } from './viem-version.js';
 
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 
@@ -313,8 +314,13 @@ describe('a transaction dropped by a reorganisation and not included again', () 
 
     await rpc('evm_setAutomine', [false]);
     const hash = await wallet.sendTransaction({ to: RECIPIENT, value: 1n });
-    // The background confirmation polls the pending transaction; hold its requests while the chain changes.
-    await vi.waitFor(() => expect(gated.receiptRequests()).toBeGreaterThan(1), { timeout: 5_000 });
+    // The background confirmation polls the pending transaction; hold its requests while the chain changes. From viem
+    // 2.33.0 on, the wait reads the receipt before it watches blocks and again on the first block; before, only on
+    // the first block, and then not until another block.
+    const polled = viemAtLeast('2.33.0') ? 1 : 0;
+    await vi.waitFor(() => expect(gated.receiptRequests()).toBeGreaterThan(polled), {
+      timeout: 5_000,
+    });
     await gated.close();
     const requestsBefore = gated.receiptRequests();
     await rpc('evm_mine');
