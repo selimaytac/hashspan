@@ -430,9 +430,10 @@ const ROWS: Row[] = [
       )(WAIT, hashspan),
   ),
   // A Tempo receipt (type 0x76) names the token its fee was paid in; telemetry reads it from no other type (ADR 0028).
+  // In the `feePayer` row, which telemetry does not read, the fee token is recorded, so rule 6 checks it.
   ...answerRows(
     'node receipt of a Tempo transaction',
-    ['type', 'feeToken'],
+    ['type', 'feeToken', 'feePayer'],
     (value, field, hashspan) =>
       onReader('waitForTransactionReceipt', {
         receipt: { type: '0x76', feeToken: ADDRESS, [field]: value },
