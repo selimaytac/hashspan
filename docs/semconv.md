@@ -144,7 +144,10 @@ after its method (`_OTHER` for a name that is not a method), following the OpenT
 `blockchain.chain.id`; on failure, `error.type` and, for a JSON-RPC error, `rpc.response.status_code`. Parameters,
 results, the URL path and error messages are not recorded; the host is recorded as it is, and these spans do not
 pass through the redaction hook. Its parent is the active span, such as a `send` span
-([ADR 0019](adr/0019-json-rpc-spans.md)).
+([ADR 0019](adr/0019-json-rpc-spans.md)). A request is one span however often viem's transport retries it (its
+`retryCount`): the attempts run inside that span, and HTTP spans of each attempt, if traced, nest under it. viem
+sends `eth_sendRawTransaction` without retries, so a broadcast that gets an HTTP 429 or 503 fails after one attempt,
+with or without hashspan.
 
 ## Attributes
 
