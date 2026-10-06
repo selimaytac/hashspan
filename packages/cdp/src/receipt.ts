@@ -7,7 +7,7 @@ import { own } from './own.js';
 /**
  * Whether `value` is a preconfirmation: a flashblocks node (such as Base's) returns a receipt before its block is
  * sealed, with a zero or null block hash, and its `l1Fee` can be that of another transaction
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@1.0.0/docs/adr/0024-sealed-receipt-fees.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@1.1.0/docs/adr/0024-sealed-receipt-fees.md).
  */
 function isPreconfirmed(value: object): boolean {
   const blockHash = own(value, 'blockHash');

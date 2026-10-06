@@ -7,7 +7,7 @@ OpenTelemetry.
 CDP signs and broadcasts transactions through its API, so no RPC client of yours sees them. This adapter wraps a
 `CdpClient` so that each transaction becomes a `send {chainId}` span inside the active trace, such as your agent's
 tool call, a request or a job, and, with a reader, a linked `confirm {chainId}` span with status, gas, fees and
-revert reason, like [`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@1.0.0/packages/viem).
+revert reason, like [`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@1.1.0/packages/viem).
 
 ## Install
 
@@ -48,7 +48,7 @@ network-scoped account, which records a confirm span from the receipt it returns
 from such a wait, and ends what is left as `timeout` if it cannot wait longer (a user operation CDP already reported
 `complete` ends with what is known). Call it before a short-lived process exits.
 
-`withHashspan(cdp, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@1.0.0/packages/core#options)
+`withHashspan(cdp, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@1.1.0/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` and `maxBackgroundConfirmations` as in
 `@hashspan/viem` (the limit applies to confirmations through the reader), `tracker`, `reader`, and `confirmTimeoutMs`
 (default 120 000 ms; for a user operation CDP reported complete, it also bounds the poll for its bundle receipt). With
@@ -56,7 +56,7 @@ from such a wait, and ends what is left as `timeout` if it cannot wait longer (a
 per client: a second call returns the first handle, ignores its options and logs a `diag` warning. Options are read
 from the object's own enumerable properties: options it inherits through a prototype, such as the getters of a class
 instance, are ignored
-([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@1.0.0/docs/adr/0025-untrusted-input.md)).
+([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@1.1.0/docs/adr/0025-untrusted-input.md)).
 
 ### With `@hashspan/viem`
 
@@ -97,7 +97,7 @@ await smartAccount.waitForUserOperation({ userOpHash }); // confirm span
 ```
 
 The spans carry `blockchain.user_operation.*` attributes instead of a transaction's sender, nonce and fee
-([semantic conventions](https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@1.0.0/docs/semconv.md)):
+([semantic conventions](https://github.com/selimaytac/hashspan/blob/@hashspan/cdp@1.1.0/docs/semconv.md)):
 
 - CDP reports `complete` with the bundle transaction's hash, or `failed` without a reason, which ends the confirm
   span as an error with `error.type` `failed`. A wait that gives up (the SDK's `TimeoutError`) ends it as `timeout`.
@@ -146,7 +146,7 @@ when CDP returns the transaction of the first attempt; the confirm span is share
   `signTransaction`, which does not broadcast.
 - Accounts turned into viem accounts with `toAccount()` are sent through your viem client: extend it with
   `@hashspan/viem`, whose own limits then apply
-  ([`@hashspan/viem` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@1.0.0/packages/viem#known-limits)).
+  ([`@hashspan/viem` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@1.1.0/packages/viem#known-limits)).
 - Networks without a chain id in `CDP_NETWORK_CHAIN_IDS`, and network-scoped accounts created from an RPC URL, are
   passed through untraced, as are accounts that do not come from the factories listed under [traced](#traced).
 - Without a `reader`, only send spans are recorded, except for the SDK's waits; a network-scoped
@@ -157,7 +157,7 @@ when CDP returns the transaction of the first attempt; the confirm span is share
   transaction's hash, and the bundle transaction's status and fee are never recorded ([smart accounts](#smart-accounts)).
 - A retry with the same `idempotencyKey` records a second send span ([traced](#traced)).
 - The limits of the core apply too
-  ([`@hashspan/core` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@1.0.0/packages/core#known-limits)).
+  ([`@hashspan/core` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@1.1.0/packages/core#known-limits)).
 
 ## The SDK's own telemetry
 

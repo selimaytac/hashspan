@@ -1,5 +1,38 @@
 # @hashspan/cdp
 
+## 1.1.0
+
+### Minor Changes
+
+- [#426](https://github.com/selimaytac/hashspan/pull/426) [`b90ddee`](https://github.com/selimaytac/hashspan/commit/b90ddee1e7d3e1bd82c8a9067068abf170989988) Thanks [@selimaytac](https://github.com/selimaytac)! - Record how many confirmations a wait asked for as `blockchain.tx.wait.confirmations` (int) on a transaction's
+  confirm span, from the wait that ended the span: the one whose receipt ended it, or the last to time out or fail. It
+  is a span attribute only, never a metric attribute. `ConfirmInput` takes it as `confirmations`, recorded only when it
+  is a positive safe integer and read from an own data property, and `ATTR_BLOCKCHAIN_TX_WAIT_CONFIRMATIONS` names the
+  attribute. A tracker from an older core ignores the field, and the attribute is then absent.
+  
+  `@hashspan/viem` passes the count as viem applies it: `confirmations` of `waitForTransactionReceipt` when it is a
+  positive safe integer, 1 when it is omitted, `0`, negative or `NaN`, and nothing for any other value or one behind an
+  accessor. Background confirmation and `watch()` record 1, so with background confirmation on, the background wait
+  usually ends the span first and records 1. Sync actions, user operations and call batches record nothing.
+  `@hashspan/cdp` records the same for a network-scoped `waitForTransactionReceipt` without a reader, and 1 for its
+  `{ transactionHash }` form; with a reader, and for `@hashspan/x402` settlements, the confirmation through `watch()`
+  records 1. No request is added.
+
+### Patch Changes
+
+- [#416](https://github.com/selimaytac/hashspan/pull/416) [`e35f878`](https://github.com/selimaytac/hashspan/commit/e35f878cdf9b0854c4a5967d66a79099e9ff13ef) Thanks [@selimaytac](https://github.com/selimaytac)! - Record the OP Stack operator fee (Isthmus and later) as `blockchain.tx.operator_fee`, in wei as a decimal string, on
+  the confirm span. `ReceiptLike` takes it as `operatorFee`, and `ATTR_BLOCKCHAIN_TX_OPERATOR_FEE` names the attribute.
+  `blockchain.tx.fee` and the `blockchain.client.fee` histogram keep their meaning and do not include it.
+  
+  `@hashspan/viem` reads it only for a sealed receipt that carries `operatorFeeScalar` or `operatorFeeConstant`, which
+  a node adds when the chain charges the fee: one `eth_call` to the GasPriceOracle's `getOperatorFee(gasUsed)` at the
+  receipt's block, off the caller's path, through the client that read the receipt. Receipts without the fields cost no
+  request. A failed or malformed answer records the receipt without the operator fee. `@hashspan/cdp` and
+  `@hashspan/x402` record it when they confirm through a reader.
+- Updated dependencies [[`18be633`](https://github.com/selimaytac/hashspan/commit/18be633c4989e95085651e032f929e09822a1160), [`e35f878`](https://github.com/selimaytac/hashspan/commit/e35f878cdf9b0854c4a5967d66a79099e9ff13ef), [`a3ae29f`](https://github.com/selimaytac/hashspan/commit/a3ae29f17f65a7a482f90cb70f5b095c9a1a4157), [`c80718f`](https://github.com/selimaytac/hashspan/commit/c80718f637c10a927aa065c054cbfff753f93d7f), [`2023e4c`](https://github.com/selimaytac/hashspan/commit/2023e4cde298de0a17a43871ad1995df654d5481), [`b90ddee`](https://github.com/selimaytac/hashspan/commit/b90ddee1e7d3e1bd82c8a9067068abf170989988), [`6dae470`](https://github.com/selimaytac/hashspan/commit/6dae4706512cf9fcf9682ea77afb239eb5b3adf9)]:
+  - @hashspan/core@1.1.0
+  - @hashspan/viem@1.1.0
+
 ## 1.0.0
 
 ### Major Changes

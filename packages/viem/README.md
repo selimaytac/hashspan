@@ -3,7 +3,7 @@
 Trace the transactions your AI agents, or any of your services, send with [viem](https://viem.sh), using
 OpenTelemetry.
 
-A viem client extension that reports to [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@1.0.0/packages/core): each transaction becomes a
+A viem client extension that reports to [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@1.1.0/packages/core): each transaction becomes a
 `send {chainId}` span inside the active trace, such as your agent's tool call, a request or a job, and each receipt
 wait a linked `confirm {chainId}` span with status, gas and fees.
 
@@ -35,7 +35,7 @@ await reader.waitForTransactionReceipt({ hash }); // confirm span, linked to the
 Reuse the same `withHashspan()` result for every client of one agent: the clients then share one tracker, so
 confirmations are linked to their sends even when they happen on a different client.
 
-`withHashspan(options)` accepts all [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@1.0.0/packages/core#options) (address mode, error messages,
+`withHashspan(options)` accepts all [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@1.1.0/packages/core#options) (address mode, error messages,
 agent identity, redaction hook) plus:
 
 | Option | Default | Description |
@@ -48,7 +48,7 @@ agent identity, redaction hook) plus:
 
 Options are read once, from the object's own enumerable properties: options it inherits through a prototype, such as
 the getters of a class instance, are ignored
-([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0025-untrusted-input.md)).
+([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0025-untrusted-input.md)).
 
 ## Transactions sent elsewhere
 
@@ -97,7 +97,7 @@ hashspan.watch(reader, { hash }); // linked to the send span
 The confirm span's parent is the span active when `watch()` is called. Without one, it is the send span's parent when
 the same tracker sent the transaction; otherwise, as for a hash sent by another tracker or by something untraced, the
 confirm span is in a trace of its own, with no send span and no link
-([confirm span parent](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/semconv.md#spans)).
+([confirm span parent](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/semconv.md#spans)).
 
 ## Shutting down
 
@@ -182,7 +182,7 @@ transaction's. hashspan therefore records fees from the sealed receipt:
   `effective_gas_price`, `l1_fee` and `fee`, since a fee without its L1 part would look valid and be too low.
 - Your `waitForTransactionReceipt` still returns what the node returned, and `watch()`'s `onReceipt` gets the receipt
   viem resolved with.
-- See [ADR 0024](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0024-sealed-receipt-fees.md).
+- See [ADR 0024](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0024-sealed-receipt-fees.md).
 
 ## OP Stack operator fee
 
@@ -204,14 +204,14 @@ the token in `blockchain.tx.fee_asset` (under the address mode), while the fee s
 `writeContract` and their sync forms, and Tempo's `feeToken` only from a receipt whose type is `0x76`; it imports no
 chain module and makes no request for either. A transaction sent with `sendRawTransaction`, or sent elsewhere and
 confirmed with `watch()`, records no Celo fee currency, since only the transaction names it
-([ADR 0028](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0028-fee-asset.md)).
+([ADR 0028](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0028-fee-asset.md)).
 
 ## Tempo transactions
 
 - **Sponsored fees.** A Tempo receipt (type `0x76`) names the account that paid the fee in `feePayer`. When it is a
   valid address other than the receipt's `from`, the fee sample carries `blockchain.fee.payer` `sponsor`, so it is
   not counted as the sender's fee; no address is recorded on the sample or the span
-  ([ADR 0020](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0020-metrics.md)).
+  ([ADR 0020](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0020-metrics.md)).
 - **Pending receipts.** A Tempo multisig relay (`Relay.multisig` of `viem/tempo`) answers a sync send whose approvals
   are below quorum with a receipt whose `status` is `pending` (or none, without viem's Tempo formatter) and whose hash
   is the multisig operation's. The send span ends when the call returns, as usual. A pending receipt is no outcome: it
@@ -227,7 +227,7 @@ confirmed with `watch()`, records no Celo fee currency, since only the transacti
   keeps the operation's hash; otherwise the span ends as `timeout`. The follow counts towards
   `maxBackgroundConfirmations` and `flush()` ends it; when the limit is reached, or is `0`, nothing is followed and
   the span ends without an outcome, as without the option
-  ([ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0018-background-confirmation-limit.md)).
+  ([ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0018-background-confirmation-limit.md)).
   With the option, your own `waitForTransactionReceipt` of the operation's hash records the submitted transaction's
   receipt the same way.
 
@@ -254,7 +254,7 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
 - Background confirmation and `watch()` wait for one confirmation and record `blockchain.tx.wait.confirmations` `1`.
   The span records the count of the wait that ended it, and the background wait usually gets the receipt first: your
   own wait with `confirmations: 12` for the same transaction then adds nothing to it
-  ([one confirm span per transaction](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/semconv.md#spans)).
+  ([one confirm span per transaction](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/semconv.md#spans)).
 - A pending confirmation keeps the Node.js process alive until the receipt arrives or `timeoutMs` (default
   120 000 ms) passes; the span then ends as an error with `error.type` `timeout`.
 - viem's `waitForTransactionReceipt` fails on the first failed request of its poll (a rate limit, a JSON-RPC error,
@@ -266,7 +266,7 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
 - At most `maxBackgroundConfirmations` (default 256) background confirmations, including those of `watch()`, poll at
   once. A transaction sent while that many are polling gets no background confirm span, and a `diag` warning is
   logged; `0` turns background confirmation off. Your own waits are not counted. See
-  [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0018-background-confirmation-limit.md).
+  [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0018-background-confirmation-limit.md).
 - In serverless runtimes that freeze after the response, background confirmations may not complete.
 
 ## Many transactions
@@ -279,16 +279,16 @@ In a worker or a bot that sends many transactions, these limits decide what is r
   are not counted.
 - **Requests to your provider.** Each background confirmation polls for its receipt through the sending client, at
   the client's `pollingInterval`
-  ([JSON-RPC requests hashspan adds](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/architecture.md#json-rpc-requests-hashspan-adds)).
+  ([JSON-RPC requests hashspan adds](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/architecture.md#json-rpc-requests-hashspan-adds)).
 - **Links to the send.** The tracker keeps a send for `linkTtlMs` after it ended, and at most
-  `maxTrackedTransactions` sends ([core options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@1.0.0/packages/core#options)). A confirmation that starts later, or
+  `maxTrackedTransactions` sends ([core options](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@1.1.0/packages/core#options)). A confirmation that starts later, or
   after that many newer sends, has no link, and without an active span starts a trace of its own. Background
   confirmation starts at the send and is not affected; a wait or a `watch()` you start later is, so raise both when
   you confirm in batches long after sending.
-- **Sampling.** The send, confirmation and fee [metrics](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/semconv.md#metrics) record every transaction
+- **Sampling.** The send, confirmation and fee [metrics](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/semconv.md#metrics) record every transaction
   whatever the sampler decides, so their percentiles stay complete while you sample traces. With a parent-based
   sampler, a send and its confirm span are kept or dropped together
-  ([troubleshooting](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/troubleshooting.md#a-send-span-but-no-confirm-span)).
+  ([troubleshooting](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/troubleshooting.md#a-send-span-but-no-confirm-span)).
 
 ## Smart accounts (ERC-4337)
 
@@ -320,7 +320,7 @@ await bundler.waitForUserOperationReceipt({ hash }); // confirm span, linked to 
   `error.type` `reverted` and its decoded revert reason, even though the bundle transaction succeeded. The bundle
   transaction's status and fee are not recorded: they cover every operation in the bundle. The fee histogram records
   the operation's cost
-  ([ADR 0021](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0021-user-operations.md)).
+  ([ADR 0021](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0021-user-operations.md)).
 - The chain id is the bundler client's, which `createBundlerClient` takes from its `client`; without one, the spans
   are recorded once the bundler answered `eth_chainId`, as for [clients without a chain](#clients-without-a-chain).
 - Only these two bundler actions are traced; viem calls the others from inside them. Background confirmation and
@@ -361,7 +361,7 @@ await wallet.waitForCallsStatus({ id }); // confirm span, linked to the send spa
   `sendCallsSync` calls the two actions directly, so the batch is sent and waited for untraced, with its result
   unchanged. `getCallsStatus` is not traced: polling it yourself records
   nothing, as with `getTransactionReceipt`. Background confirmation and `watch()` do not cover batches.
-- See [ADR 0022](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0022-call-batches.md).
+- See [ADR 0022](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0022-call-batches.md).
 
 ## JSON-RPC requests
 
@@ -389,7 +389,7 @@ const wallet = createWalletClient({
   or the error's class name, never the message.
 - `methods` chooses which methods get a span (default: all); the example leaves out receipt polling.
   `tracerProvider` replaces the global tracer provider.
-- See [ADR 0019](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0019-json-rpc-spans.md).
+- See [ADR 0019](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0019-json-rpc-spans.md).
 
 ## Traced actions
 
@@ -446,7 +446,7 @@ to the token). Applied after it, they are not traced; their results and requests
 - Only actions called as methods of an extended client are traced as such: a library that calls viem's actions as
   functions bypasses the extension for that action, and one that creates its own client bypasses it entirely. A
   function is recorded only through the client actions viem calls inside it, with less detail
-  ([libraries that take a viem client](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/integrations.md#libraries-that-take-a-viem-client)),
+  ([libraries that take a viem client](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/integrations.md#libraries-that-take-a-viem-client)),
   and an extension applied after `withHashspan()` can hide the traced actions ([apply it last](#apply-it-last)).
 - A transaction sent by a wallet API or a wallet provider that creates its own client gets a confirm span through
   `watch()`, and a send span only when you record the call that sends with the same tracker
@@ -487,7 +487,7 @@ to the token). Applied after it, they are not traced; their results and requests
 - On a client without a chain, a call is not traced when its `eth_chainId` request fails or has not answered 30 s
   after the call ended ([clients without a chain](#clients-without-a-chain)).
 - The limits of the core apply too
-  ([`@hashspan/core` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@1.0.0/packages/core#known-limits)).
+  ([`@hashspan/core` known limits](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@1.1.0/packages/core#known-limits)).
 
 ## License
 
