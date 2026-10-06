@@ -399,12 +399,13 @@ describe('dashboards/', () => {
     expect(spanAttributes).toEqual([]);
   });
 
-  it('leave out the fees someone else paid on every fee query', () => {
+  it('leave out the fees someone else paid, and those paid in a token, on every fee query', () => {
     const fee = promql.filter(({ text }) => text.includes('blockchain_client_fee_'));
     expect(fee.length).toBeGreaterThan(0);
     for (const { text } of fee) {
       const selectors = [...text.matchAll(/blockchain_client_fee_[a-z]+\{([^}]*)\}/g)];
       expect(selectors.every((m) => m[1]?.includes('blockchain_fee_payer=""'))).toBe(true);
+      expect(selectors.every((m) => m[1]?.includes('blockchain_fee_denomination=""'))).toBe(true);
     }
   });
 

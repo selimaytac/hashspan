@@ -229,8 +229,23 @@ function answerRows(
   );
 }
 
-const SEND_TRANSACTION = { to: TO, value: 1n, data: '0xa9059cbb', nonce: 1, chain: base };
-const WRITE_CONTRACT = { address: TO, abi: erc20, functionName: 'transfer', args: [TO, 1n] };
+// With a Celo fee currency, which telemetry reads from the call (ADR 0028): the shared address, so that rule 6 checks
+// it stays hidden where the address mode hides it.
+const SEND_TRANSACTION = {
+  to: TO,
+  value: 1n,
+  data: '0xa9059cbb',
+  nonce: 1,
+  chain: base,
+  feeCurrency: ADDRESS,
+};
+const WRITE_CONTRACT = {
+  address: TO,
+  abi: erc20,
+  functionName: 'transfer',
+  args: [TO, 1n],
+  feeCurrency: ADDRESS,
+};
 const WAIT = { hash: HASH, chain: base, onReplaced: () => {}, timeout: WAIT_MS };
 const CALLS = { calls: [{ to: TO, value: 1n }], chain: base };
 // A transaction viem parses; the mock node never checks a signature.
@@ -413,6 +428,15 @@ const ROWS: Row[] = [
           ? { receiptAt: (call) => (call === 1 ? { blockHash: value } : {}) }
           : { receipt: { [field]: value } },
       )(WAIT, hashspan),
+  ),
+  // A Tempo receipt (type 0x76) names the token its fee was paid in; telemetry reads it from no other type (ADR 0028).
+  ...answerRows(
+    'node receipt of a Tempo transaction',
+    ['type', 'feeToken'],
+    (value, field, hashspan) =>
+      onReader('waitForTransactionReceipt', {
+        receipt: { type: '0x76', feeToken: ADDRESS, [field]: value },
+      })(WAIT, hashspan),
   ),
   {
     name: 'node answer to eth_chainId',

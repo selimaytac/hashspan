@@ -193,6 +193,17 @@ include it. A receipt without the fields, as on Base and OP Mainnet while their 
 request. If the call fails, answers with something other than one `uint256`, or takes longer than 10 s, the receipt
 is recorded without it. The span keeps the time the receipt arrived as its end time.
 
+## Fees paid in a token
+
+On Celo, a transaction with a `feeCurrency` pays gas in that token, and on Tempo every transaction (type `0x76`) pays
+in a fee token. The fee attributes are recorded as the receipt gives them, never converted, and the confirm span names
+the token in `blockchain.tx.fee_asset` (under the address mode), while the fee sample carries
+`blockchain.fee.denomination` `token`. The adapter reads Celo's `feeCurrency` from the arguments of `sendTransaction`,
+`writeContract` and their sync forms, and Tempo's `feeToken` only from a receipt whose type is `0x76`; it imports no
+chain module and makes no request for either. A transaction sent with `sendRawTransaction`, or sent elsewhere and
+confirmed with `watch()`, records no Celo fee currency, since only the transaction names it
+([ADR 0028](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0028-fee-asset.md)).
+
 ## Background confirmation
 
 Some agent frameworks wait for receipts through their own client, or never wait at all. With
@@ -418,6 +429,8 @@ When a framework extends the client you pass in, check whether confirm spans app
   the transaction's own outcome is not recorded ([#355](https://github.com/selimaytac/hashspan/issues/355)).
 - A preconfirmed receipt whose sealed receipt does not come in time is recorded without fees
   ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)).
+- A Celo transaction sent with `sendRawTransaction`, or confirmed with `watch()` without a traced send, records its fee
+  in its fee currency without `blockchain.tx.fee_asset` ([fees paid in a token](#fees-paid-in-a-token)).
 - Revert reasons are best effort: a provider without historical state cannot replay the transaction, and earlier
   transactions in the same block can change the result ([revert reasons](#revert-reasons)).
 - On a client without a chain, a call is not traced when its `eth_chainId` request fails or has not answered 30 s

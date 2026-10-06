@@ -21,7 +21,8 @@ Both dashboards have the same variables:
   method and filter by service only.
 
 The fee panels leave out fees that someone other than the sender paid (`blockchain_fee_payer=""`, see
-`blockchain.fee.payer`). No panel filters on `blockchain.system.name`.
+`blockchain.fee.payer`) and fees paid in a token, which are not in wei (`blockchain_fee_denomination=""`, see
+`blockchain.fee.denomination`). No panel filters on `blockchain.system.name`.
 
 ## Use them
 

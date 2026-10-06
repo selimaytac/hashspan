@@ -15,12 +15,14 @@ import {
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_ARGUMENTS,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME,
   ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR,
+  ATTR_BLOCKCHAIN_FEE_DENOMINATION,
   ATTR_BLOCKCHAIN_FEE_PAYER,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_ADDRESSES,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_CHAIN_IDS,
   ATTR_BLOCKCHAIN_TX_AUTHORIZATION_COUNT,
   ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE,
   ATTR_BLOCKCHAIN_TX_FEE,
+  ATTR_BLOCKCHAIN_TX_FEE_ASSET,
   ATTR_BLOCKCHAIN_TX_FROM,
   ATTR_BLOCKCHAIN_TX_GAS_USED,
   ATTR_BLOCKCHAIN_TX_HASH,
@@ -34,6 +36,7 @@ import {
   ATTR_BLOCKCHAIN_TX_TO,
   ATTR_BLOCKCHAIN_TX_VALUE,
   ATTR_ERROR_TYPE,
+  BLOCKCHAIN_FEE_DENOMINATION_VALUE_TOKEN,
   BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
@@ -83,6 +86,7 @@ import {
   integer,
   isAddress,
   isTxHash,
+  lowerCaseAddress,
   ownValue,
   smallInteger,
   uint256,
@@ -152,7 +156,7 @@ export function createTransactionSpans({
   txMetrics,
   formatAddress,
   getTracer,
-  recording: { redact, markError, finisher, setAddress, baseAttributes },
+  recording: { redact, markError, finisher, setAddress, setRemoteAddress, baseAttributes },
 }: TransactionDependencies): TransactionSpans {
   /**
    * Records an EIP-7702 authorization list: its length, and for each well-formed entry (an address and a non-negative
@@ -218,6 +222,8 @@ export function createTransactionSpans({
     );
     const finish = finisher(span);
     const startMs = toEpochMs(input.startTime);
+    // Kept for the confirm span as a validated, lower-case string, never the caller's value (ADR 0028).
+    const feeAsset = lowerCaseAddress(input.feeAsset);
     const recordSend = (endTime: TimeInput | undefined, errorType?: string): void =>
       txMetrics.sendDuration(
         secondsSince(startMs, endTime),
@@ -239,7 +245,11 @@ export function createTransactionSpans({
               diag.debug('hashspan: ending a send span without a valid transaction hash');
               return;
             }
-            links.set(input.chainId, hash, { spanContext: span.spanContext(), parent });
+            links.set(input.chainId, hash, {
+              spanContext: span.spanContext(),
+              parent,
+              ...(feeAsset !== undefined ? { feeAsset } : {}),
+            });
             span.setAttributes(redact({ [ATTR_BLOCKCHAIN_TX_HASH]: hash }));
             recordSend(endTime);
           },
@@ -263,9 +273,10 @@ export function createTransactionSpans({
 
   /**
    * Attributes of a receipt. Its quantities come from a node: one that is not a non-negative integer is not recorded,
-   * and the fee only when every part of it is known (ADR 0025 rule 3).
+   * and the fee only when every part of it is known (ADR 0025 rule 3). `feeAsset` is the validated address of the
+   * token the fee was paid in, recorded with the gas price (ADR 0028).
    */
-  const receiptAttributes = (receipt: ReceiptLike): Attributes => {
+  const receiptAttributes = (receipt: ReceiptLike, feeAsset: string | undefined): Attributes => {
     const block = smallInteger(receipt.blockNumber);
     const gasUsed = smallInteger(receipt.gasUsed);
     // Both are required: a receipt without them cannot be read, and records nothing.
@@ -291,6 +302,7 @@ export function createTransactionSpans({
     const gasPrice = integer(givenGasPrice);
     if (gasPrice !== undefined) {
       attributes[ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE] = gasPrice.toString();
+      setRemoteAddress(attributes, ATTR_BLOCKCHAIN_TX_FEE_ASSET, feeAsset);
       // A fee without its L1 part, or without the gas used, would be a wrong value, not a bounded one.
       const fee =
         givenL1Fee === undefined || l1Fee !== undefined
@@ -315,6 +327,8 @@ export function createTransactionSpans({
   ): ConfirmSpan => {
     const sent = links.get(input.chainId, input.hash);
     const feePayer = replacing ? replacing.feePayer : sent?.feePayer;
+    // Never inherited from a replaced transaction: a replacement may name another fee currency (ADR 0028).
+    const sentFeeAsset = sent?.feeAsset;
     const active = context.active();
     const parent =
       replacing?.parent ?? parentCtx ?? (trace.getSpan(active) ? active : (sent?.parent ?? active));
@@ -364,7 +378,9 @@ export function createTransactionSpans({
         finish(
           'record receipt',
           () => {
-            const attributes = receiptAttributes(receipt);
+            // The receipt's own asset wins over the send's (ADR 0028).
+            const feeAsset = lowerCaseAddress(ownValue(receipt, 'feeAsset')) ?? sentFeeAsset;
+            const attributes = receiptAttributes(receipt, feeAsset);
             span.setAttributes(redact(attributes));
             const recorded = attributes[ATTR_BLOCKCHAIN_TX_STATUS];
             // A receipt without a known status says nothing about the transaction's outcome: `_OTHER`, no fee sample.
@@ -383,10 +399,17 @@ export function createTransactionSpans({
             if (typeof fee === 'string')
               txMetrics.fee(
                 BigInt(fee),
-                metricAttributes(
-                  input.chainId,
-                  feePayer ? { ...status, [ATTR_BLOCKCHAIN_FEE_PAYER]: feePayer } : status,
-                ),
+                metricAttributes(input.chainId, {
+                  ...status,
+                  ...(feePayer ? { [ATTR_BLOCKCHAIN_FEE_PAYER]: feePayer } : {}),
+                  // From the validated value, before the address mode: samples are marked in `off` mode too. A
+                  // constant, never the address.
+                  ...(feeAsset !== undefined
+                    ? {
+                        [ATTR_BLOCKCHAIN_FEE_DENOMINATION]: BLOCKCHAIN_FEE_DENOMINATION_VALUE_TOKEN,
+                      }
+                    : {}),
+                }),
               );
           },
           endTime,

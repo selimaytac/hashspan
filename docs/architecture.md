@@ -54,7 +54,7 @@ method, not by number.
 
 | Case | Requests added | Option that changes them |
 |---|---|---|
-| A send and its wait, on a client with a chain (viem; also a raw send, whose fields are parsed locally) | none | |
+| A send and its wait, on a client with a chain (viem; also a raw send, whose fields are parsed locally, and a fee paid in a token, whose asset comes from the call or the receipt) | none | |
 | A send on a client without a chain (viem) | one `eth_chainId` per send | give the client a chain |
 | Background confirmation and `watch()` (viem; cdp and x402 confirm through `watch()`) | the receipt polling of one `waitForTransactionReceipt` per transaction | `confirm`, `maxBackgroundConfirmations`, `timeoutMs` |
 | A reverted transaction (viem, cdp) | one `eth_getTransactionByHash` and one `eth_call` to replay it; one more `eth_call` when the contract was created in the same block ([ADR 0005](adr/0005-revert-reason-replay.md)) | `decodeRevertReason: false` |

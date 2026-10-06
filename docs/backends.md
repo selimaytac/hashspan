@@ -165,7 +165,7 @@ Where each question is answered, with the metrics on Prometheus or the spans in 
 | Why did they revert, and under which tool or job? | The TraceQL queries under [Grafana Tempo](#grafana-tempo): `blockchain.tx.revert.reason` on the confirm span, the tool or job span above it |
 | Did a sampler or a process exit lose spans? | Metrics are recorded for every transaction whatever the sampler decides; compare their counts with the traces ([many transactions](../packages/viem/README.md#many-transactions)) |
 | Did a retried paid request pay twice, or pay without the task succeeding? | [Payment, request and task outcomes](../packages/x402/README.md#payment-request-and-task-outcomes) |
-| What did a transaction cost? | `blockchain.tx.fee` on the confirm span, in wei; see its row in [semantic conventions](semconv.md#attributes) for what it includes |
+| What did a transaction cost? | `blockchain.tx.fee` on the confirm span, in wei, or in the token `blockchain.tx.fee_asset` names; see its row in [semantic conventions](semconv.md#attributes) for what it includes |
 
 ## Grafana dashboard for the metrics
 
@@ -174,8 +174,8 @@ fee. [`dashboards/metrics.json`](../dashboards/metrics.json) is a ready Grafana 
 data source: confirmation and send latency percentiles per chain, fees per chain and per service (median, total,
 average) and their distribution, and the outcomes of sends and of the confirmations of transactions, user operations
 and call batches, each with its own outcome attribute ([metrics](semconv.md#metrics)), with service and chain id
-filters. The fee panels show the fees the senders paid: samples with `blockchain.fee.payer` (a payment's facilitator,
-a paymaster) are left out. [`dashboards/traces.json`](../dashboards/traces.json) lists the spans behind them in
+filters. The fee panels show the fees the senders paid in the native currency: samples with `blockchain.fee.payer`
+(a payment's facilitator, a paymaster) or `blockchain.fee.denomination` (a fee paid in a token) are left out. [`dashboards/traces.json`](../dashboards/traces.json) lists the spans behind them in
 [Grafana Tempo](#grafana-tempo); [dashboards/](../dashboards/README.md) describes both files and their variables.
 
 ![The hashspan dashboard in Grafana after a few runs of the example agent](images/grafana-dashboard.png)

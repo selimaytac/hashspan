@@ -34,6 +34,11 @@ export function isAddress(value: unknown): value is string {
   return typeof value === 'string' && ADDRESS.test(value);
 }
 
+/** `value` lower-cased if it is a 20-byte `0x` hex address, as the link store keeps a fee asset; else undefined. */
+export function lowerCaseAddress(value: unknown): string | undefined {
+  return isAddress(value) ? value.toLowerCase() : undefined;
+}
+
 /**
  * A non-negative integer of at most 256 bits, from a bigint, a safe integer, or a decimal or `0x` hex string, as
  * bundlers return them; undefined for anything else.

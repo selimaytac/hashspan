@@ -1,6 +1,6 @@
 # 0028. The asset a fee was paid in
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-06
 
 ## Context

@@ -135,7 +135,8 @@ Attribute definitions:
 
 With an OpenTelemetry metrics SDK set up (or `meterProvider`), the tracker records three histograms:
 `blockchain.client.send.duration` and `blockchain.client.confirmation.duration` in seconds, and
-`blockchain.client.fee` in wei. Their attributes are the system, the chain and the outcome (and, on samples of user
+`blockchain.client.fee` in the chain's fee unit (wei of the native currency, unless a sample carries
+`blockchain.fee.denomination` `token`). Their attributes are the system, the chain and the outcome (and, on samples of user
 operations, `blockchain.operation.subject`), never an address, hash or agent identity; an `error.type` that is
 neither an error class name ending in `Error` nor a lower-case code of letters and underscores is recorded as
 `_OTHER`.
@@ -188,9 +189,10 @@ These hold for every adapter; each adapter's README lists its own.
   `eth_call`, and an adapter without a client to read it with, such as `@hashspan/cdp` without a `reader`, records
   none ([attributes](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0/docs/semconv.md#attributes)).
 - On chains that charge gas in a token (Celo fee currencies, Tempo), `blockchain.tx.fee` and the fee histogram are in
-  that token's unit, and no attribute names it yet
-  ([fee fields](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0/docs/semconv.md#attributes),
-  [#401](https://github.com/selimaytac/hashspan/issues/401)).
+  that token's unit and are not converted. The confirm span names the token in `blockchain.tx.fee_asset`, and fee
+  samples carry `blockchain.fee.denomination` `token`, only when the adapter passes the asset (`feeAsset` of the send
+  or the receipt): a transaction whose asset it does not know is recorded as paid in the native currency
+  ([fee fields](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0/docs/semconv.md#attributes)).
 - A confirm span is not revised after it ended: a reorganisation that removes its block leaves its status and block
   number ([chain reorganisations](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0/docs/semconv.md#spans)).
 - Values from outside are bounded: longer ones are cut or dropped, and past `maxTrackedTransactions` or `linkTtlMs` a

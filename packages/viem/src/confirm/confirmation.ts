@@ -1,12 +1,13 @@
 // Confirming a transaction through a client: the receipt, a sealed receipt after a preconfirmation, the receipt of a
 // wait for several confirmations read again, the revert reason, and background confirmation within its limit.
-import type { ConfirmHandle, TxTracker } from '@hashspan/core';
+import type { ConfirmHandle, ReceiptLike, TxTracker } from '@hashspan/core';
 import { diag, type TimeInput } from '@opentelemetry/api';
 import { type Abi, type TransactionReceipt, WaitForTransactionReceiptTimeoutError } from 'viem';
 import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
 import { fetchRevertReason } from '../revert-reason.js';
 import { errorName } from '../safe-tracker.js';
 import type { ViemClientLike } from '../types.js';
+import { feeCurrencyOf } from './fee-asset.js';
 import { chargesOperatorFee, fetchOperatorFee } from './operator-fee.js';
 import type { PendingConfirmation } from './pending.js';
 import {
@@ -216,7 +217,16 @@ export function createConfirmation({
         handle.fail(undefined, unreadable(endTimeOf()));
         return;
       }
-      let recorded = toReceiptLike(receipt);
+      // A replacing transaction pays its fee in what it names itself, never in what the replaced one named
+      // (ADR 0028): a Celo fee currency is on the transaction viem reports, not on its receipt.
+      const replacingAsset = reported ? feeCurrencyOf(replacement.transaction) : undefined;
+      const normalise = (from: ViemReceipt): ReceiptLike => {
+        const like = toReceiptLike(from);
+        return like.feeAsset === undefined && replacingAsset !== undefined
+          ? { ...like, feeAsset: replacingAsset }
+          : like;
+      };
+      let recorded = normalise(receipt);
       let endAt = endTimeOf;
       // A replacement keeps its own path (docs/adr/0008-replaced-transactions.md), and a preconfirmation the sealed
       // receipt's below: neither is read again.
@@ -239,7 +249,7 @@ export function createConfirmation({
         }
         if (found?.kind === 'moved') {
           receipt = found.receipt;
-          recorded = toReceiptLike(found.receipt);
+          recorded = normalise(found.receipt);
         }
       }
       if (isPreconfirmed(receipt)) {
@@ -256,7 +266,7 @@ export function createConfirmation({
         );
         if (sealed) {
           receipt = sealed;
-          recorded = toReceiptLike(sealed);
+          recorded = normalise(sealed);
         } else {
           diag.warn(
             'hashspan: no sealed receipt for a preconfirmed transaction; recording it without fees',
