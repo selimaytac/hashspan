@@ -170,16 +170,17 @@ Where each question is answered, with the metrics on Prometheus or the spans in 
 ## Grafana dashboard for the metrics
 
 hashspan's tracker records three histograms ([metrics](semconv.md#metrics)): send duration, confirmation duration and
-fee. [`docker/grafana/dashboards/hashspan.json`](../docker/grafana/dashboards/hashspan.json) is a ready Grafana
-dashboard for them, on a Prometheus data source: confirmation and send latency percentiles per chain, fees per chain
-and their distribution, send failures by `error.type`, and confirmation outcomes of transactions, user operations and
-call batches, each with its own outcome attribute ([metrics](semconv.md#metrics)), with a chain id filter. The fee
-panels show the fees the senders paid: samples with `blockchain.fee.payer` (a payment's facilitator, a paymaster) are
-left out.
+fee. [`dashboards/metrics.json`](../dashboards/metrics.json) is a ready Grafana dashboard for them, on a Prometheus
+data source: confirmation and send latency percentiles per chain, fees per chain and per service (median, total,
+average) and their distribution, and the outcomes of sends and of the confirmations of transactions, user operations
+and call batches, each with its own outcome attribute ([metrics](semconv.md#metrics)), with service and chain id
+filters. The fee panels show the fees the senders paid: samples with `blockchain.fee.payer` (a payment's facilitator,
+a paymaster) are left out. [`dashboards/traces.json`](../dashboards/traces.json) lists the spans behind them in
+[Grafana Tempo](#grafana-tempo); [dashboards/](../dashboards/README.md) describes both files and their variables.
 
 ![The hashspan dashboard in Grafana after a few runs of the example agent](images/grafana-dashboard.png)
 
-In the local lab, `make lab-metrics` starts Prometheus (with its OTLP receiver) and Grafana with the dashboard
+In the local lab, `make lab-metrics` starts Prometheus (with its OTLP receiver) and Grafana with `metrics.json`
 provisioned; `make demo` then sends the example agent's metrics to Prometheus, and the dashboard is on
 `http://localhost:3000`. Tested with Prometheus 3.15.0 and Grafana 13.2.3. To use the dashboard elsewhere, send the
 metrics over OTLP to a Prometheus-compatible backend and import the file:
@@ -187,12 +188,12 @@ metrics over OTLP to a Prometheus-compatible backend and import the file:
 - Prometheus needs `--web.enable-otlp-receiver` and turns `blockchain.client.send.duration` (unit `s`) into
   `blockchain_client_send_duration_seconds` and attributes into labels such as `blockchain_chain_id` and
   `error_type`, as in [`docker/prometheus.yml`](../docker/prometheus.yml).
-- The counts for the selected range (sends, failures, outcomes, the fee distribution) are the rise of each counter
-  within the range, without the extrapolation of `increase()`, which turns a short run into fractional or inflated
-  counts. They are exact when each process is a series of its own that starts at zero: give each run its own
-  `service.instance.id`, as the example agent does, and, for a process that exports only once before it exits, let
-  Prometheus add a zero sample at each series' start (`--enable-feature=created-timestamp-zero-ingestion`, enabled in
-  the lab). A long-running process restarted under the same `service.instance.id` resets its counters, and the counts
-  then miss the sends before the restart.
-- The dashboard's data source is the one with uid `hashspan-prometheus`; pick yours when you import it.
+- The counts for the selected range (sends, failures, outcomes, fees, the fee distribution) are the rise of each
+  counter within the range, without the extrapolation of `increase()`, which turns a short run into fractional or
+  inflated counts. They are exact when each process is a series of its own that starts at zero: give each run its
+  own `service.instance.id`, as the example agent does, and, for a process that exports only once before it exits,
+  let Prometheus add a zero sample at each series' start (`--enable-feature=created-timestamp-zero-ingestion`,
+  enabled in the lab). A long-running process restarted under the same `service.instance.id` resets its counters,
+  and the counts then miss the sends before the restart.
+- The dashboard's data source is a variable at its top: pick your Prometheus data source there.
 

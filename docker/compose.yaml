@@ -1,8 +1,10 @@
 # Local lab: Jaeger (trace UI + OTLP receiver). Anvil runs as a project-local binary (make anvil).
-# The `metrics` profile adds Prometheus (OTLP metrics receiver) and Grafana with the hashspan dashboard.
+# The `metrics` profile adds Prometheus (OTLP metrics receiver) and Grafana with dashboards/metrics.json.
 # Images are pinned by digest; Dependabot updates tag and digest together. All ports bind to 127.0.0.1 only.
 # Managed via the Makefile (make lab-up / lab-metrics / lab-pause / lab-nuke).
-name: hashspan-lab
+# Before 1.1 the project was named hashspan-lab: make lab-nuke removes its containers and volumes too, and
+# `docker compose -f docker/compose.yaml -p hashspan-lab --profile metrics down -v` removes only those.
+name: hashspan-dev
 
 services:
   jaeger:
@@ -44,10 +46,11 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
       GF_NEWS_NEWS_FEED_ENABLED: "false"
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/hashspan.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/metrics.json
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      # metrics.json only: traces.json needs Tempo, which this stack does not run.
+      - ../dashboards/metrics.json:/var/lib/grafana/dashboards/metrics.json:ro
     ports:
       - "127.0.0.1:3000:3000"
     depends_on: [prometheus]

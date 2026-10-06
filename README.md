@@ -175,7 +175,7 @@ Everything runs locally and can be removed with one command:
 
 ```sh
 make lab-up      # Jaeger UI on http://localhost:16686, OTLP on :4317/:4318
-make lab-metrics # also Prometheus and Grafana with the hashspan dashboard on http://localhost:3000
+make lab-metrics # also Prometheus and Grafana with dashboards/metrics.json on http://localhost:3000
 make anvil       # local EVM chain on :8545 (project-local binary)
 make demo        # run the example agent against a fresh local chain
 make lab-pause   # stop, keep state

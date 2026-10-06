@@ -1,0 +1,265 @@
+{
+  "uid": "hashspan-traces",
+  "title": "hashspan: transaction and payment spans",
+  "description": "hashspan's spans in Grafana Tempo: confirm spans with their outcome and fees, x402 payments, and failed or slow JSON-RPC requests. Needs a Tempo data source; the service and chain lists come from the Prometheus data source of metrics.json.",
+  "tags": ["hashspan"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Metrics",
+        "type": "datasource",
+        "query": "prometheus"
+      },
+      {
+        "name": "traces",
+        "label": "Traces",
+        "type": "datasource",
+        "query": "tempo"
+      },
+      {
+        "name": "job",
+        "label": "Service",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(blockchain_client_send_duration_seconds_count, job)",
+          "refId": "job"
+        },
+        "definition": "label_values(blockchain_client_send_duration_seconds_count, job)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2
+      },
+      {
+        "name": "chain",
+        "label": "Chain id",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(blockchain_client_send_duration_seconds_count{job=~\"$job\"}, blockchain_chain_id)",
+          "refId": "chain"
+        },
+        "definition": "label_values(blockchain_client_send_duration_seconds_count{job=~\"$job\"}, blockchain_chain_id)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "About",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "The tables query Tempo (TraceQL); the Service and Chain id lists come from hashspan's metrics in Prometheus. Service matches `service.name`, which is Prometheus' `job` when `service.namespace` is not set. The chain filter matches the span name (`confirm 8453`, `payment 8453`); JSON-RPC spans are named after their method, so their tables filter by service only. Payments have no metrics: their tables come from `payment` spans alone and stay empty without @hashspan/x402."
+      }
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "Confirm spans",
+      "description": "Outcome, fee and revert reason of each confirm span. A replaced transaction ends as replaced, and the mined one has a confirm span of its own.",
+      "datasource": {
+        "type": "tempo",
+        "uid": "${traces}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "${traces}"
+          },
+          "refId": "A",
+          "queryType": "traceql",
+          "tableType": "spans",
+          "limit": 50,
+          "query": "{resource.service.name =~ \"${job:regex}\" && span.blockchain.operation.name = \"confirm\" && name =~ \"confirm (${chain:regex})\"} | select(span.blockchain.tx.status, span.error.type, span.blockchain.tx.fee, span.blockchain.tx.revert.reason)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Fees of confirm spans (wei)",
+      "description": "blockchain.tx.fee is the total fee in wei; blockchain.tx.l1_fee is its L1 data fee part on OP-stack chains, recorded on the span only. Fees come from the sealed receipt.",
+      "datasource": {
+        "type": "tempo",
+        "uid": "${traces}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "${traces}"
+          },
+          "refId": "A",
+          "queryType": "traceql",
+          "tableType": "spans",
+          "limit": 50,
+          "query": "{resource.service.name =~ \"${job:regex}\" && span.blockchain.operation.name = \"confirm\" && name =~ \"confirm (${chain:regex})\" && span.blockchain.tx.fee != nil} | select(resource.service.name, span.blockchain.tx.fee, span.blockchain.tx.l1_fee, span.blockchain.tx.effective_gas_price, span.blockchain.tx.gas.used)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Payments",
+      "description": "x402 payments of @hashspan/x402. blockchain.payment.verified is set when the settlement receipt was checked, and absent when no check was possible.",
+      "datasource": {
+        "type": "tempo",
+        "uid": "${traces}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "${traces}"
+          },
+          "refId": "A",
+          "queryType": "traceql",
+          "tableType": "spans",
+          "limit": 50,
+          "query": "{resource.service.name =~ \"${job:regex}\" && span.blockchain.operation.name = \"payment\" && name =~ \"payment (${chain:regex})\"} | select(resource.service.name, span.blockchain.payment.status, span.blockchain.payment.verified, span.blockchain.payment.amount, span.blockchain.payment.settled_amount, span.x402.scheme, span.error.type)"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Payments not verified or failed",
+      "description": "Payments whose settlement did not carry them, or that failed. Empty while every payment succeeds.",
+      "datasource": {
+        "type": "tempo",
+        "uid": "${traces}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "${traces}"
+          },
+          "refId": "A",
+          "queryType": "traceql",
+          "tableType": "spans",
+          "limit": 50,
+          "query": "{resource.service.name =~ \"${job:regex}\" && span.blockchain.operation.name = \"payment\" && name =~ \"payment (${chain:regex})\" && (span.blockchain.payment.verified = false || status = error)} | select(resource.service.name, span.blockchain.payment.status, span.blockchain.payment.verified, span.error.type)"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Failed JSON-RPC requests",
+      "description": "JSON-RPC spans of traceTransport() that failed, without the eth_call answered with code 3 (execution reverted) that replays a reverted transaction to decode its reason. Empty while no request fails.",
+      "datasource": {
+        "type": "tempo",
+        "uid": "${traces}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "${traces}"
+          },
+          "refId": "A",
+          "queryType": "traceql",
+          "tableType": "spans",
+          "limit": 50,
+          "query": "{resource.service.name =~ \"${job:regex}\" && span.rpc.system.name = \"jsonrpc\" && status = error && (span.rpc.method != \"eth_call\" || span.rpc.response.status_code != \"3\")} | select(resource.service.name, span.rpc.method, span.error.type, span.rpc.response.status_code)"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Slow JSON-RPC requests (over 2 s)",
+      "description": "JSON-RPC spans of traceTransport() that took more than 2 seconds.",
+      "datasource": {
+        "type": "tempo",
+        "uid": "${traces}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "${traces}"
+          },
+          "refId": "A",
+          "queryType": "traceql",
+          "tableType": "spans",
+          "limit": 50,
+          "query": "{resource.service.name =~ \"${job:regex}\" && span.rpc.system.name = \"jsonrpc\" && duration > 2s} | select(resource.service.name, span.rpc.method)"
+        }
+      ]
+    }
+  ]
+}
