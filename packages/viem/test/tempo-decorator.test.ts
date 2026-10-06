@@ -21,10 +21,15 @@ afterEach(async () => {
 const TOKEN = '0x20c0000000000000000000000000000000000001';
 
 // `viem/tempo` came with viem 2.43.0: imported only on a viem that has it, so the floor of the peer range still loads.
+// Not a literal in the import: the bundler resolves a literal specifier as it loads the module, which would fail on a
+// viem without it before the skip applies.
+const TEMPO = 'viem/tempo';
 describe.skipIf(!viemAtLeast('2.43.0'))('the Tempo extension and withHashspan()', () => {
   /** Runs `token.transfer` on a client extended in `order`, and returns its result and the requests it made. */
   async function transfer(order: 'plain' | 'hashspan first' | 'tempo first') {
-    const { tempoActions } = await import('viem/tempo');
+    const { tempoActions } = (await import(
+      /* @vite-ignore */ TEMPO
+    )) as typeof import('viem/tempo');
     const hashspan = withHashspan();
     const mock = mockTransport({ chainIdHex: `0x${base.id.toString(16)}`, retryCount: 0 });
     const client = createWalletClient({ account: FROM, chain: base, transport: mock.transport });

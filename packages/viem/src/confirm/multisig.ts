@@ -9,12 +9,14 @@ import { ownField } from './operator-fee.js';
 const HASH = /^0x[0-9a-fA-F]{64}$/;
 
 /**
- * Whether `receipt` is a pending receipt of a Tempo transaction: no block number, and either the status `pending` and
- * type `tempo` that viem's Tempo formatter gives it, or no status and the raw type `0x76`, as viem's own formatter
- * leaves it. Any other receipt is not (fails closed).
+ * Whether `receipt` is a pending receipt of a Tempo transaction: a 32-byte `transactionHash`, no block number, and
+ * either the status `pending` and type `tempo` that viem's Tempo formatter gives it, or no status and the raw type
+ * `0x76`, as viem's own formatter leaves it. Any other receipt is not (fails closed).
  */
 export function isPendingReceipt(receipt: unknown): boolean {
   if (receipt === null || typeof receipt !== 'object') return false;
+  const hash = ownField(receipt, 'transactionHash');
+  if (typeof hash !== 'string' || !HASH.test(hash)) return false;
   const blockNumber = ownField(receipt, 'blockNumber');
   if (blockNumber !== null && blockNumber !== undefined) return false;
   const status = ownField(receipt, 'status');

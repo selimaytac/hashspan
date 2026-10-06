@@ -261,6 +261,18 @@ const RAW = {
     maxPriorityFeePerGas: 1n,
   }),
 };
+/** A Tempo multisig relay's answer to a sync send below quorum, as viem passes it on without its Tempo formatter. */
+const PENDING = {
+  status: 'pending',
+  type: '0x76',
+  blockNumber: null,
+  gasUsed: null,
+  effectiveGasPrice: null,
+  transactionHash: HASH,
+};
+/** The transaction a multisig relay submits for the operation, whose receipt names the operation. */
+const SUBMITTED_HASH = `0x${'5b'.repeat(32)}`;
+const PENDING_CONFIRM = { confirm: { mode: 'background', timeoutMs: WAIT_MS } } as const;
 // sendRawTransactionSync came with viem 2.38.0.
 const RAW_SYNC = viemHasAction('sendRawTransactionSync');
 // sendTransactionSync and writeContractSync came with viem 2.38.0.
@@ -293,6 +305,31 @@ const syncRows = (): Row[] =>
               hashspan,
             ),
         ),
+        // A Tempo multisig relay's pending receipt (#402), whose confirm span then waits for the receipt of the
+        // transaction submitted for the operation; a short timeout spreads its polls over a short time.
+        ...answerRows(
+          'node pending receipt of sendTransactionSync',
+          ['status', 'type', 'blockNumber', 'transactionHash'],
+          (value, field, hashspan) =>
+            onWallet('sendTransactionSync', {
+              receiptAt: (call) => (call === 1 ? { ...PENDING, [field]: value } : {}),
+            })({ to: TO, value: 1n, timeout: WAIT_MS }, hashspan),
+        ).map((row) => ({ ...row, options: () => PENDING_CONFIRM })),
+        ...answerRows(
+          'node receipt of a submitted multisig operation',
+          ['multisig', 'multisig.hash'],
+          (value, field, hashspan) =>
+            onWallet('sendTransactionSync', {
+              receiptAt: (call) =>
+                call === 1
+                  ? PENDING
+                  : {
+                      transactionHash: SUBMITTED_HASH,
+                      type: '0x76',
+                      multisig: field === 'multisig' ? value : { hash: value },
+                    },
+            })({ to: TO, value: 1n, timeout: WAIT_MS }, hashspan),
+        ).map((row) => ({ ...row, options: () => PENDING_CONFIRM })),
         {
           name: 'sendTransactionSync rejected with',
           values: hostileErrors,
