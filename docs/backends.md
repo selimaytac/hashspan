@@ -182,8 +182,9 @@ a paymaster) are left out. [`dashboards/traces.json`](../dashboards/traces.json)
 
 In the local lab, `make lab-metrics` starts Prometheus (with its OTLP receiver) and Grafana with `metrics.json`
 provisioned; `make demo` then sends the example agent's metrics to Prometheus, and the dashboard is on
-`http://localhost:3000`. Tested with Prometheus 3.15.0 and Grafana 13.2.3. To use the dashboard elsewhere, send the
-metrics over OTLP to a Prometheus-compatible backend and import the file:
+`http://localhost:3000`. Tested with Prometheus 3.15.0 and Grafana 13.2.3. For a ready stack that shows the dashboards
+with data from many scenarios, see [hashspan-lab](https://github.com/selimaytac/hashspan-lab). To use the dashboard
+elsewhere, send the metrics over OTLP to a Prometheus-compatible backend and import the file:
 
 - Prometheus needs `--web.enable-otlp-receiver` and turns `blockchain.client.send.duration` (unit `s`) into
   `blockchain_client_send_duration_seconds` and attributes into labels such as `blockchain_chain_id` and

@@ -66,6 +66,9 @@ pnpm test:integration   # integration tests against Anvil
 
 Tests import the packages from source, so no build is needed first. To see traces in a UI, run `make lab-up`
 (Jaeger on http://localhost:16686) and `make demo`; `make lab-nuke` removes everything again.
+To run your own agent, or a branch's example, against the full stack with dashboards of
+[hashspan-lab](https://github.com/selimaytac/hashspan-lab#use-the-lab-with-your-own-agent), start the lab there and
+set the environment variables that `pnpm lab connect` prints.
 
 ## Before you open a pull request
 
