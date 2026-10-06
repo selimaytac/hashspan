@@ -364,3 +364,108 @@ describe('Tempo: the fee token of a 0x76 receipt', () => {
     expect(confirmOf()?.attributes['blockchain.tx.fee_asset']).toBe(FEE_TOKEN.toLowerCase());
   });
 });
+
+describe('Tempo: a fee another account paid, from the feePayer of a 0x76 receipt', () => {
+  const FEE_TOKEN = '0x20C0000000000000000000000000000000000001';
+  const SPONSOR = '0x3333333333333333333333333333333333333333';
+  const payers = (meters: ReturnType<typeof recordingMeterProvider>) =>
+    meters
+      .samples()
+      .filter(({ name }) => name === 'blockchain.client.fee')
+      .map(({ attributes }) => attributes['blockchain.fee.payer']);
+
+  /** The fee payer of each receipt the reader waits for, one wait per entry. */
+  async function feePayersOf(receipts: Record<string, unknown>[]) {
+    const meters = recordingMeterProvider();
+    const hashspan = withHashspan({ tracker: createTxTracker({ meterProvider: meters.provider }) });
+    for (const [index, fields] of receipts.entries()) {
+      const hash = `0x${(index + 1).toString(16).padStart(2, '0').repeat(32)}` as const;
+      const mock = mockTransport({
+        chainIdHex: CHAIN_ID_HEX,
+        retryCount: 0,
+        receipt: { transactionHash: hash, type: '0x76', feeToken: FEE_TOKEN, ...fields },
+      });
+      const reader = createPublicClient({
+        chain: celo,
+        transport: mock.transport,
+        pollingInterval: 10,
+      }).extend(hashspan);
+      await reader.waitForTransactionReceipt({ hash });
+    }
+    await hashspan.flush();
+    return payers(meters);
+  }
+
+  it('marks the fee sample `sponsor` when the fee payer is not the sender, with no request more', async () => {
+    const node = { receipt: { type: '0x76', feeToken: FEE_TOKEN, feePayer: SPONSOR } };
+    const meters = recordingMeterProvider();
+    const hashspan = withHashspan({ tracker: createTxTracker({ meterProvider: meters.provider }) });
+    const mock = mockTransport({ chainIdHex: CHAIN_ID_HEX, retryCount: 0, ...node });
+    await createPublicClient({ chain: celo, transport: mock.transport, pollingInterval: 10 })
+      .extend(hashspan)
+      .waitForTransactionReceipt({ hash: HASH });
+    await hashspan.flush();
+    expect(payers(meters)).toEqual(['sponsor']);
+    // No address of the payer on the span.
+    expect(JSON.stringify(confirmOf()?.attributes)).not.toContain(SPONSOR.slice(2));
+    const plain = mockTransport({ chainIdHex: CHAIN_ID_HEX, retryCount: 0, ...node });
+    await createPublicClient({ chain: celo, transport: plain.transport }).waitForTransactionReceipt(
+      { hash: HASH },
+    );
+    expect(mock.calls).toEqual(plain.calls);
+  });
+
+  it('leaves the sample unmarked when the sender paid, or when the receipt cannot say', async () => {
+    expect(
+      await feePayersOf([
+        // As Tempo mainnet answers for a fee the sender paid: the fee payer is the sender.
+        { feePayer: FROM },
+        // The same address in another letter case.
+        { from: FROM.toUpperCase().replace('0X', '0x'), feePayer: FROM },
+        {},
+        { feePayer: null },
+        { feePayer: 'not an address' },
+        { feePayer: `${SPONSOR}00` },
+        { from: null, feePayer: SPONSOR },
+        { from: 'sender', feePayer: SPONSOR },
+        // Only a Tempo receipt names a fee payer: read from no other type.
+        { type: '0x2', feePayer: SPONSOR },
+        { type: undefined, feePayer: SPONSOR },
+      ]),
+    ).toEqual(Array(10).fill(undefined));
+  });
+
+  it('does not read a fee payer behind an accessor', async () => {
+    const read = vi.fn(() => SPONSOR);
+    const meters = recordingMeterProvider();
+    const hashspan = withHashspan({ tracker: createTxTracker({ meterProvider: meters.provider }) });
+    const transport = mockTransport({ chainIdHex: CHAIN_ID_HEX, retryCount: 0 }).transport;
+    const reader = createPublicClient({
+      chain: {
+        ...celo,
+        formatters: {
+          transactionReceipt: {
+            format: (receipt: Record<string, unknown>) => {
+              const formatted = {
+                ...receipt,
+                status: 'success',
+                blockNumber: 123n,
+                gasUsed: 21_000n,
+                effectiveGasPrice: 1n,
+                type: '0x76',
+              };
+              Object.defineProperty(formatted, 'feePayer', { get: read, enumerable: true });
+              return formatted;
+            },
+          },
+        },
+      } as never,
+      transport,
+      pollingInterval: 10,
+    }).extend(hashspan);
+    await reader.waitForTransactionReceipt({ hash: HASH });
+    await hashspan.flush();
+    expect(read).not.toHaveBeenCalled();
+    expect(payers(meters)).toEqual([undefined]);
+  });
+});

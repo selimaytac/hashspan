@@ -29,3 +29,16 @@ export function feeTokenOf(receipt: unknown): string | undefined {
   if (ownField(receipt, 'type') !== TEMPO_TRANSACTION_TYPE) return undefined;
   return feeAssetOf(ownField(receipt, 'feeToken'));
 }
+
+/**
+ * Whether a Tempo receipt (raw type `0x76` only, never by chain id) names a fee payer other than its sender: both
+ * `feePayer` and `from` are own data properties holding 20-byte hex addresses, compared without letter case.
+ * Undefined for any other receipt, also when the receipt cannot say (fails closed).
+ */
+export function sponsoredOf(receipt: unknown): true | undefined {
+  if (receipt === null || typeof receipt !== 'object') return undefined;
+  if (ownField(receipt, 'type') !== TEMPO_TRANSACTION_TYPE) return undefined;
+  const payer = feeAssetOf(ownField(receipt, 'feePayer'));
+  const sender = feeAssetOf(ownField(receipt, 'from'));
+  return payer !== undefined && sender !== undefined && payer !== sender ? true : undefined;
+}

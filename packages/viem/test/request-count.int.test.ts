@@ -9,7 +9,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { withHashspan } from '../src/index.js';
 import { freePort } from './free-port.js';
 import { setupTracing, type TestTracing } from './tracing.js';
-import { viemAtLeast } from './viem-version.js';
+import { viemAtLeast, viemHasAction } from './viem-version.js';
 
 const PORT = await freePort();
 const RPC_URL = `http://127.0.0.1:${PORT}`;
@@ -65,14 +65,18 @@ const FEE_TOKEN = '0x20C0000000000000000000000000000000000001';
 /** A Celo fee currency, as a sending call passes it. */
 const FEE_CURRENCY = '0x765DE816845861e75A25fCA122bb6898B8B1282a';
 
+/** An account other than the sender that paid a Tempo transaction's fee. */
+const FEE_PAYER = '0x3333333333333333333333333333333333333333';
+
 /** How the counting transport makes Anvil's answers look like another chain's. */
-type Shape = 'operatorFee' | 'tempo' | undefined;
+type Shape = 'operatorFee' | 'tempo' | 'sponsored' | 'pending' | undefined;
 
 /**
  * A transport to Anvil that counts the requests per method. With `operatorFee`, receipts carry the fields of an OP
  * Stack chain that charges an operator fee, as a node after Isthmus adds them; with `tempo`, they are of type `0x76`
- * and name a fee token, as a Tempo node's are. A Celo `feeCurrency` is taken out of a sent transaction, which Anvil
- * does not know.
+ * and name a fee token, as a Tempo node's are, and with `sponsored` also a fee payer other than the sender. With
+ * `pending`, the answer to `eth_sendRawTransactionSync` is a pending receipt, as a Tempo multisig relay gives below
+ * quorum (#402). A Celo `feeCurrency` is taken out of a sent transaction, which Anvil does not know.
  */
 function counting(shape: Shape = undefined): {
   transport: ReturnType<typeof custom>;
@@ -91,10 +95,25 @@ function counting(shape: Shape = undefined): {
             })
           : params;
       const result = await upstream.request({ method, params: sent } as never);
+      if (shape === 'pending' && method === 'eth_sendRawTransactionSync' && result) {
+        return {
+          ...(result as object),
+          status: 'pending',
+          type: '0x76',
+          blockHash: null,
+          blockNumber: null,
+          gasUsed: null,
+          cumulativeGasUsed: null,
+          effectiveGasPrice: null,
+          transactionIndex: null,
+        };
+      }
       if (method !== 'eth_getTransactionReceipt' || !result) return result;
       if (shape === 'operatorFee')
         return { ...(result as object), operatorFeeScalar: '0x3e8', operatorFeeConstant: '0x0' };
       if (shape === 'tempo') return { ...(result as object), type: '0x76', feeToken: FEE_TOKEN };
+      if (shape === 'sponsored')
+        return { ...(result as object), type: '0x76', feeToken: FEE_TOKEN, feePayer: FEE_PAYER };
       return result;
     },
   });
@@ -317,6 +336,51 @@ describe('JSON-RPC requests the viem adapter adds', () => {
     const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
     expect(confirm?.attributes['blockchain.tx.fee_asset']).toBe(FEE_TOKEN.toLowerCase());
   });
+
+  it('none for a fee another account paid, read from the feePayer of a receipt of type 0x76', async () => {
+    expect(await extraRequests(sendAndWait, { shape: 'sponsored' })).toEqual({});
+  });
+
+  // sendRawTransactionSync came with viem 2.38.0.
+  describe.skipIf(!viemHasAction('sendRawTransactionSync'))(
+    'a sync send that returns a pending receipt',
+    () => {
+      /** Signs a transfer with Anvil's first account and sends it with `sendRawTransactionSync`. */
+      const rawSyncSend = async ({ wallet }: Clients) => {
+        const signer = mnemonicToAccount(
+          'test test test test test test test test test test test junk',
+        );
+        const request = await wallet.prepareTransactionRequest({
+          account: signer,
+          chain: anvil,
+          to: RECIPIENT,
+          value: 1n,
+          gas: 100_000n,
+        });
+        const serializedTransaction = await signer.signTransaction(request as never);
+        return wallet.sendRawTransactionSync({ serializedTransaction });
+      };
+
+      it('none by default: the confirm span ends without an outcome', async () => {
+        expect(await extraRequests(rawSyncSend, { shape: 'pending', polling: true })).toEqual({});
+        const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
+        expect(confirm?.attributes).not.toHaveProperty('error.type');
+        expect(confirm?.attributes).not.toHaveProperty('blockchain.tx.status');
+      });
+
+      it('receipt requests only, at most 60, with followMultisigOperations', async () => {
+        const extra = await extraRequests(rawSyncSend, {
+          shape: 'pending',
+          polling: true,
+          hashspan: { followMultisigOperations: { timeoutMs: 3_000 } },
+        });
+        // Anvil has the receipt at the first poll.
+        expect(extra).toEqual({ eth_getTransactionReceipt: 1 });
+        const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
+        expect(confirm?.attributes['blockchain.tx.status']).toBe('success');
+      });
+    },
+  );
 
   it('none for a reverted transaction with decodeRevertReason off', async () => {
     const revert = (clients: Clients) => sendAndWait(clients, REVERTER);

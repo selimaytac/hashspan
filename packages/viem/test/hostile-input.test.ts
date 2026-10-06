@@ -261,6 +261,19 @@ const RAW = {
     maxPriorityFeePerGas: 1n,
   }),
 };
+/** A Tempo multisig relay's answer to a sync send below quorum, as viem passes it on without its Tempo formatter. */
+const PENDING = {
+  status: 'pending',
+  type: '0x76',
+  blockNumber: null,
+  gasUsed: null,
+  effectiveGasPrice: null,
+  transactionHash: HASH,
+};
+/** The transaction a multisig relay submits for the operation, whose receipt names the operation. */
+const SUBMITTED_HASH = `0x${'5b'.repeat(32)}`;
+/** Following a multisig operation (#402) with a short timeout, which spreads its polls over a short time. */
+const FOLLOW = { followMultisigOperations: { timeoutMs: WAIT_MS } } as const;
 // sendRawTransactionSync came with viem 2.38.0.
 const RAW_SYNC = viemHasAction('sendRawTransactionSync');
 // sendTransactionSync and writeContractSync came with viem 2.38.0.
@@ -293,6 +306,33 @@ const syncRows = (): Row[] =>
               hashspan,
             ),
         ),
+        // A Tempo multisig relay's pending receipt (#402): no outcome by default; with followMultisigOperations, the
+        // confirm span then waits for the receipt of the transaction submitted for the operation.
+        ...[false, true].flatMap((follow) =>
+          answerRows(
+            `node pending receipt of sendTransactionSync${follow ? ', followed,' : ''}`,
+            ['status', 'type', 'blockNumber', 'transactionHash'],
+            (value, field, hashspan) =>
+              onWallet('sendTransactionSync', {
+                receiptAt: (call) => (call === 1 ? { ...PENDING, [field]: value } : {}),
+              })({ to: TO, value: 1n, timeout: WAIT_MS }, hashspan),
+          ).map((row) => (follow ? { ...row, options: () => FOLLOW } : row)),
+        ),
+        ...answerRows(
+          'node receipt of a submitted multisig operation',
+          ['multisig', 'multisig.hash'],
+          (value, field, hashspan) =>
+            onWallet('sendTransactionSync', {
+              receiptAt: (call) =>
+                call === 1
+                  ? PENDING
+                  : {
+                      transactionHash: SUBMITTED_HASH,
+                      type: '0x76',
+                      multisig: field === 'multisig' ? value : { hash: value },
+                    },
+            })({ to: TO, value: 1n, timeout: WAIT_MS }, hashspan),
+        ).map((row) => ({ ...row, options: () => FOLLOW })),
         {
           name: 'sendTransactionSync rejected with',
           values: hostileErrors,
@@ -429,8 +469,9 @@ const ROWS: Row[] = [
           : { receipt: { [field]: value } },
       )(WAIT, hashspan),
   ),
-  // A Tempo receipt (type 0x76) names the token its fee was paid in; telemetry reads it from no other type (ADR 0028).
-  // In the `feePayer` row, which telemetry does not read, the fee token is recorded, so rule 6 checks it.
+  // A Tempo receipt (type 0x76) names the token its fee was paid in (ADR 0028) and the account that paid it, compared
+  // with the sender to mark a sponsored fee sample (ADR 0020); telemetry reads neither from any other type. In the
+  // `feePayer` row the fee token is recorded too, so rule 6 checks it, and rule 5 the payer's closed set.
   ...answerRows(
     'node receipt of a Tempo transaction',
     ['type', 'feeToken', 'feePayer'],
@@ -648,7 +689,14 @@ const ROWS: Row[] = [
   ),
 
   // withHashspan() options the adapter reads itself.
-  ...(['maxBackgroundConfirmations', 'decodeRevertReason', 'confirm'] as const).map(
+  ...(
+    [
+      'maxBackgroundConfirmations',
+      'decodeRevertReason',
+      'confirm',
+      'followMultisigOperations',
+    ] as const
+  ).map(
     (key): Row => ({
       name: `options.${key}`,
       options: (value) => ({ [key]: value }),

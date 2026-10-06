@@ -217,8 +217,13 @@ export type ReplacementReason = 'repriced' | 'cancelled' | 'replaced';
 
 /** Library-agnostic view of a transaction receipt. Adapters normalise their client's receipt into this. */
 export interface ReceiptLike {
-  /** `reverted` ends the confirm span with an error status and `error.type` `reverted`. */
-  status: 'success' | 'reverted';
+  /**
+   * `reverted` ends the confirm span with an error status and `error.type` `reverted`. `pending`, for a receipt of a
+   * transaction that is not on chain yet (a Tempo multisig relay's answer below quorum), is no outcome: it withdraws
+   * this wait as a timeout does, and the span ends without an outcome, error or metric sample only when no other wait
+   * of the transaction is running; the other fields are then not read.
+   */
+  status: 'success' | 'reverted' | 'pending';
   /** Block the transaction was included in. */
   blockNumber: bigint | number;
   /** Gas the transaction used. */
@@ -238,6 +243,12 @@ export interface ReceiptLike {
    * when `effectiveGasPrice` is; it wins over the send's `feeAsset`. Dropped unless it is a 20-byte hex address.
    */
   feeAsset?: string | undefined;
+  /**
+   * `true` when an account other than the transaction's sender paid its fee, as a Tempo receipt's `feePayer` shows:
+   * the fee sample then carries `blockchain.fee.payer` `sponsor`, unless the transaction is a payment's settlement,
+   * which stays `facilitator`. Any other value is read as false. Adapters set it from validated addresses.
+   */
+  sponsored?: boolean | undefined;
   /**
    * Decoded revert reason, recorded as `blockchain.tx.revert.reason` with addresses per the address mode, e.g.
    * `Error(string)`'s message, `Panic(0x11)` or `InsufficientBalance(1, 2)`.

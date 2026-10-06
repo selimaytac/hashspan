@@ -236,7 +236,7 @@
       "id": 12,
       "type": "stat",
       "title": "Fees paid in range",
-      "description": "Sum of blockchain.client.fee per chain in the selected time range, in gwei of the chain's native token: the fees the senders paid, without those of a facilitator or paymaster (blockchain.fee.payer). Counted per run without extrapolation: each run of the example agent is a series of its own (service.instance.id) that starts at zero.",
+      "description": "Sum of blockchain.client.fee per chain in the selected time range, in gwei of the chain's native token: the fees the senders paid, without those of a facilitator, paymaster or sponsor (blockchain.fee.payer). Counted per run without extrapolation: each run of the example agent is a series of its own (service.instance.id) that starts at zero.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -278,7 +278,7 @@
       "id": 13,
       "type": "stat",
       "title": "Average fee in range",
-      "description": "Average blockchain.client.fee per transaction and chain in the selected time range, in gwei; fees paid by a facilitator or paymaster (blockchain.fee.payer) are left out.",
+      "description": "Average blockchain.client.fee per transaction and chain in the selected time range, in gwei; fees paid by a facilitator, paymaster or sponsor (blockchain.fee.payer) are left out.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -736,7 +736,7 @@
       "id": 16,
       "type": "bargauge",
       "title": "Fees per service in range",
-      "description": "Sum of blockchain.client.fee per service (job) and chain in the selected time range, in gwei; fees paid by a facilitator or paymaster (blockchain.fee.payer) are left out. Counted per run without extrapolation: each run of the example agent is a series of its own (service.instance.id) that starts at zero.",
+      "description": "Sum of blockchain.client.fee per service (job) and chain in the selected time range, in gwei; fees paid by a facilitator, paymaster or sponsor (blockchain.fee.payer) are left out. Counted per run without extrapolation: each run of the example agent is a series of its own (service.instance.id) that starts at zero.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -789,7 +789,7 @@
       "id": 17,
       "type": "bargauge",
       "title": "Average fee per service in range",
-      "description": "Average blockchain.client.fee per transaction, per service (job) and chain in the selected time range, in gwei; fees paid by a facilitator or paymaster (blockchain.fee.payer) are left out.",
+      "description": "Average blockchain.client.fee per transaction, per service (job) and chain in the selected time range, in gwei; fees paid by a facilitator, paymaster or sponsor (blockchain.fee.payer) are left out.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -842,7 +842,7 @@
       "id": 18,
       "type": "timeseries",
       "title": "Average fee per chain",
-      "description": "Average blockchain.client.fee per transaction over time, in gwei; fees paid by a facilitator or paymaster (blockchain.fee.payer) are left out.",
+      "description": "Average blockchain.client.fee per transaction over time, in gwei; fees paid by a facilitator, paymaster or sponsor (blockchain.fee.payer) are left out.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"

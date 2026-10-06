@@ -516,7 +516,7 @@ const ATTRIBUTE_CHECKS: Record<string, Check> = {
   'blockchain.call_batch.sender': address,
   'blockchain.call_batch.call_count': count,
   'blockchain.call_batch.status': oneOf('success', 'reverted', 'partially_reverted'),
-  'blockchain.fee.payer': oneOf('facilitator', 'paymaster'),
+  'blockchain.fee.payer': oneOf('facilitator', 'paymaster', 'sponsor'),
   'blockchain.fee.denomination': oneOf('token'),
   'blockchain.call_batch.status_code': count,
   'blockchain.call_batch.atomic': boolean,

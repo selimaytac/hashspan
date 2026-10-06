@@ -63,9 +63,20 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0018-background-confirmation-limit.md.
    */
   maxBackgroundConfirmations?: number | undefined;
+  /**
+   * Follow a Tempo multisig operation to the transaction submitted for it. A sync send through a multisig relay whose
+   * approvals are below quorum returns a pending receipt; without this option its confirm span ends without an
+   * outcome and no request is made. With it, the adapter polls for the submitted transaction's receipt off the
+   * caller's path, at most 60 `eth_getTransactionReceipt` requests spread over `timeoutMs` (default 120 000 ms), as
+   * one of the background confirmations, and records it on the confirm span. `true` uses the default timeout. Off by
+   * default; any other value leaves it off. See
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/packages/viem/README.md#tempo-transactions.
+   */
+  followMultisigOperations?: boolean | { timeoutMs?: number | undefined } | undefined;
 }
 
 const DEFAULT_MAX_BACKGROUND_CONFIRMATIONS = 256;
+const DEFAULT_FOLLOW_MULTISIG_TIMEOUT_MS = 120_000;
 const DEFAULT_REVERT_REASON_TIMEOUT_MS = 10_000;
 
 /** Client extension returned by {@link withHashspan}: the traced actions present on the client. */
@@ -96,6 +107,20 @@ function revertReasonTimeoutOf(option: unknown): number {
     return durationOr(own(option, 'timeoutMs'), DEFAULT_REVERT_REASON_TIMEOUT_MS);
   } catch {
     return DEFAULT_REVERT_REASON_TIMEOUT_MS;
+  }
+}
+
+/**
+ * The `followMultisigOperations` option: its timeout when it is `true` or an object, else undefined (off). Read from an
+ * own data property and never throwing; a `timeoutMs` that is not a duration gets the default.
+ */
+function followMultisigOf(option: unknown): { timeoutMs: number } | undefined {
+  if (option === true) return { timeoutMs: DEFAULT_FOLLOW_MULTISIG_TIMEOUT_MS };
+  if (option === null || typeof option !== 'object') return undefined;
+  try {
+    return { timeoutMs: durationOr(own(option, 'timeoutMs'), DEFAULT_FOLLOW_MULTISIG_TIMEOUT_MS) };
+  } catch {
+    return { timeoutMs: DEFAULT_FOLLOW_MULTISIG_TIMEOUT_MS };
   }
 }
 
@@ -138,6 +163,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     confirm,
     decodeRevertReason: decodeRevertReasonOption = true,
     maxBackgroundConfirmations: maxBackgroundOption,
+    followMultisigOperations,
     ...trackerOptions
   } = optionsOf(options) as WithHashspanOptions;
   const maxBackgroundConfirmations =
@@ -147,17 +173,19 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   // Guarded so that no tracker, including a user-provided one, can throw into the instrumented call.
   const decodeRevertReason = decodeRevertReasonOption !== false;
   const revertReasonTimeoutMs = revertReasonTimeoutOf(decodeRevertReasonOption);
+  const followMultisig = followMultisigOf(followMultisigOperations);
   const tracker = guardTracker(providedTracker ?? createTxTracker(trackerOptions));
   /** ABIs of recent `writeContract` calls, to decode custom errors. */
   const abis = new Recent<Abi>();
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
   const revertReasons = new Recent<Promise<string | undefined>>();
   const { track, flush, settleOnce } = createPending();
-  const { recordConfirmation, confirmThrough } = createConfirmation({
+  const { recordConfirmation, confirmThrough, confirmPending } = createConfirmation({
     tracker,
     decodeRevertReason,
     revertReasonTimeoutMs,
     maxBackgroundConfirmations,
+    followMultisig: followMultisig !== undefined,
     abis,
     revertReasons,
     track,
@@ -194,7 +222,17 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         waitForTransactionReceipt,
       },
       actions,
-      { tracker, confirm, abis, track, recordConfirmation, confirmThrough, sending },
+      {
+        tracker,
+        confirm,
+        abis,
+        track,
+        recordConfirmation,
+        confirmThrough,
+        confirmPending,
+        followMultisig,
+        sending,
+      },
     );
     addUserOperationActions(client, { sendUserOperation, waitForUserOperationReceipt }, actions, {
       tracker,

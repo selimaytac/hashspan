@@ -37,6 +37,7 @@ import {
   ATTR_BLOCKCHAIN_TX_VALUE,
   ATTR_ERROR_TYPE,
   BLOCKCHAIN_FEE_DENOMINATION_VALUE_TOKEN,
+  BLOCKCHAIN_FEE_PAYER_VALUE_SPONSOR,
   BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
@@ -121,6 +122,8 @@ export interface ConfirmSpan extends SharedConfirm {
   replaced(hash: string, reason: ReplacementReason | undefined, endTime?: TimeInput): void;
   /** Ends as a failure without any receipt data, for a receipt that cannot be attributed. */
   unattributable(endTime?: TimeInput): void;
+  /** Ends without an outcome, an error or a metric sample, after a pending receipt. */
+  pending(endTime?: TimeInput): void;
 }
 
 interface ConfirmOrigin {
@@ -146,6 +149,15 @@ export interface TransactionDependencies {
 export interface TransactionSpans {
   startSend(input: SendInput, parentCtx?: Context): SendHandle;
   startConfirm(input: ConfirmInput, parentCtx?: Context): ConfirmHandle;
+}
+
+/** Whether `receipt` is a pending receipt, read from an own data property; false when it cannot be read. */
+function isPending(receipt: unknown): boolean {
+  try {
+    return ownValue(receipt, 'status') === 'pending';
+  } catch {
+    return false;
+  }
 }
 
 /** Creates the send and confirm spans of transactions for one tracker. */
@@ -396,12 +408,18 @@ export function createTransactionSpans({
             const status = { [ATTR_BLOCKCHAIN_TX_STATUS]: recorded };
             recordConfirmation(endTime, status);
             const fee = attributes[ATTR_BLOCKCHAIN_TX_FEE];
+            // A payment's settlement stays the facilitator's; otherwise the receipt says whether another account paid.
+            const payer =
+              feePayer ??
+              (ownValue(receipt, 'sponsored') === true
+                ? BLOCKCHAIN_FEE_PAYER_VALUE_SPONSOR
+                : undefined);
             if (typeof fee === 'string')
               txMetrics.fee(
                 BigInt(fee),
                 metricAttributes(input.chainId, {
                   ...status,
-                  ...(feePayer ? { [ATTR_BLOCKCHAIN_FEE_PAYER]: feePayer } : {}),
+                  ...(payer ? { [ATTR_BLOCKCHAIN_FEE_PAYER]: payer } : {}),
                   // From the validated value, before the address mode: samples are marked in `off` mode too. A
                   // constant, never the address.
                   ...(feeAsset !== undefined
@@ -454,6 +472,8 @@ export function createTransactionSpans({
           },
           endTime,
         ),
+      // A pending receipt says nothing about the transaction's outcome, and no one gave up waiting either.
+      pending: (endTime) => finish('record pending receipt', () => {}, endTime),
       unattributable: (endTime) =>
         finish(
           'record unattributable receipt',
@@ -553,6 +573,12 @@ export function createTransactionSpans({
     return {
       end: (receipt: ReceiptLike, second?: EndOptions): void => {
         const { endTime } = handleOptions(second);
+        // A pending receipt is no outcome: it withdraws this wait, as a timeout does, and as a pending call batch
+        // does (ADR 0007, ADR 0016).
+        if (isPending(receipt)) {
+          claim.withdraw(() => shared.pending(endTime));
+          return;
+        }
         if (!claim.receive()) return;
         try {
           endWithReceipt(chainId, hash, shared, receipt, endTime);

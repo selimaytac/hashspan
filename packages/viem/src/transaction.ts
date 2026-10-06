@@ -24,6 +24,7 @@ import {
 import { feeAssetOf } from './confirm/fee-asset.js';
 import {
   capturing,
+  isPendingReceipt,
   type ReplacementCapture,
   type ViemReceipt,
   type ViemReplacement,
@@ -119,6 +120,9 @@ export interface TransactionDependencies {
   track(work: Promise<void>): void;
   recordConfirmation: Confirmation['recordConfirmation'];
   confirmThrough: Confirmation['confirmThrough'];
+  confirmPending: Confirmation['confirmPending'];
+  /** With `followMultisigOperations`: how long a multisig operation is followed after a pending receipt. */
+  followMultisig: { timeoutMs: number } | undefined;
   sending: SendTracing;
 }
 
@@ -142,6 +146,8 @@ export function addTransactionActions(
     track,
     recordConfirmation,
     confirmThrough,
+    confirmPending,
+    followMultisig,
     sending: { knownChainId, queryChainId, traceSend, untraced },
   }: TransactionDependencies,
 ): void {
@@ -306,7 +312,10 @@ export function addTransactionActions(
    * Records a sync action, which sends a transaction and waits for its receipt in one call (viem 2.38.0): the send
    * span covers the call and ends with the hash of the receipt, as viem returns the hash only with the receipt, and a
    * confirm span with the same start and end records the receipt. A rejection that carries the receipt of a reverted
-   * transaction (`throwOnReceiptRevert`) is recorded as that receipt; nothing else of the call's result is read.
+   * transaction (`throwOnReceiptRevert`) is recorded as that receipt; nothing else of the call's result is read. A
+   * pending receipt, which a Tempo multisig relay returns for an operation below quorum, is no outcome: the confirm
+   * span ends without one, or with `followMultisigOperations` waits for the submitted transaction off the caller's
+   * path (#402).
    */
   const syncSend = (
     args: SendArgs,
@@ -324,7 +333,16 @@ export function addTransactionActions(
         const hash = own(receipt, 'transactionHash');
         if (typeof hash !== 'string') return false;
         handle.end({ hash }, { endTime });
-        confirmReceipt(parent, chainId, hash, receipt, abi, callStart, endTime);
+        if (followMultisig && isPendingReceipt(receipt)) {
+          if (abi) abis.set(confirmKey(chainId, hash), abi);
+          confirmPending(client, chainId, hash, followMultisig.timeoutMs, {
+            parent,
+            startTime: callStart,
+            returnedAt: endTime,
+          });
+        } else {
+          confirmReceipt(parent, chainId, hash, receipt, abi, callStart, endTime);
+        }
         return true;
       };
       return {

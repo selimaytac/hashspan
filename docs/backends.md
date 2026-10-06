@@ -175,7 +175,7 @@ data source: confirmation and send latency percentiles per chain, fees per chain
 average) and their distribution, and the outcomes of sends and of the confirmations of transactions, user operations
 and call batches, each with its own outcome attribute ([metrics](semconv.md#metrics)), with service and chain id
 filters. The fee panels show the fees the senders paid in the native currency: samples with `blockchain.fee.payer`
-(a payment's facilitator, a paymaster) or `blockchain.fee.denomination` (a fee paid in a token) are left out. [`dashboards/traces.json`](../dashboards/traces.json) lists the spans behind them in
+(a payment's facilitator, a paymaster, a sponsor) or `blockchain.fee.denomination` (a fee paid in a token) are left out. [`dashboards/traces.json`](../dashboards/traces.json) lists the spans behind them in
 [Grafana Tempo](#grafana-tempo); [dashboards/](../dashboards/README.md) describes both files and their variables.
 
 ![The hashspan dashboard in Grafana after a few runs of the example agent](images/grafana-dashboard.png)

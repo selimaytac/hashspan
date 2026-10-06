@@ -12,7 +12,8 @@ import {
 } from 'viem/actions';
 import { formatRevertData } from '../revert-reason.js';
 import { errorName } from '../safe-tracker.js';
-import { feeTokenOf } from './fee-asset.js';
+import { feeTokenOf, sponsoredOf, TEMPO_TRANSACTION_TYPE } from './fee-asset.js';
+import { ownField } from './operator-fee.js';
 import { delay } from './timing.js';
 
 /** What viem passes to `onReplaced`. */
@@ -75,6 +76,7 @@ export function withoutFees(receipt: ReceiptLike): ReceiptLike {
     l1Fee: undefined,
     operatorFee: undefined,
     feeAsset: undefined,
+    sponsored: undefined,
   };
 }
 
@@ -299,6 +301,29 @@ export async function recheckReceipt(client: unknown, receipt: ViemReceipt): Pro
   }
 }
 
+/** A 32-byte hash, as a pending receipt carries it. */
+const PENDING_HASH = /^0x[0-9a-fA-F]{64}$/;
+
+/**
+ * Whether `receipt` is a pending receipt of a Tempo transaction (#402), such as a multisig relay's answer to a sync
+ * send below quorum: a 32-byte `transactionHash`, no block number, and
+ * either the status `pending` and type `tempo` that viem's Tempo formatter gives it, or no status and the raw type
+ * `0x76`, as viem's own formatter leaves it. Any other receipt is not (fails closed).
+ */
+export function isPendingReceipt(receipt: unknown): boolean {
+  if (receipt === null || typeof receipt !== 'object') return false;
+  const hash = ownField(receipt, 'transactionHash');
+  if (typeof hash !== 'string' || !PENDING_HASH.test(hash)) return false;
+  const blockNumber = ownField(receipt, 'blockNumber');
+  if (blockNumber !== null && blockNumber !== undefined) return false;
+  const status = ownField(receipt, 'status');
+  const type = ownField(receipt, 'type');
+  return (
+    (status === 'pending' && (type === 'tempo' || type === TEMPO_TRANSACTION_TYPE)) ||
+    ((status === undefined || status === null) && type === TEMPO_TRANSACTION_TYPE)
+  );
+}
+
 /** A `0x` hex quantity of at most 256 bits, as a node encodes `l1Fee`. */
 const HEX_QUANTITY = /^0x[0-9a-fA-F]{1,64}$/;
 
@@ -306,17 +331,18 @@ const HEX_QUANTITY = /^0x[0-9a-fA-F]{1,64}$/;
  * Normalises a viem receipt; `l1Fee` is a bigint with the OP-stack formatter, else a raw hex string. An `l1Fee` that
  * is not a hex quantity is passed on as given: the core then records neither it nor the total fee, and the rest of
  * the receipt as usual (ADR 0025 rule 3). A Tempo receipt (type `0x76`) names the token its fee was paid in
- * (ADR 0028).
+ * (ADR 0028) and the account that paid it (ADR 0020); a pending one is no outcome (#402).
  */
 export function toReceiptLike(receipt: ViemReceipt): ReceiptLike {
   const { l1Fee } = receipt;
   return {
-    status: receipt.status,
+    status: isPendingReceipt(receipt) ? 'pending' : receipt.status,
     blockNumber: receipt.blockNumber,
     gasUsed: receipt.gasUsed,
     effectiveGasPrice: receipt.effectiveGasPrice,
     l1Fee: typeof l1Fee === 'string' && HEX_QUANTITY.test(l1Fee) ? BigInt(l1Fee) : (l1Fee as never),
     feeAsset: feeTokenOf(receipt),
+    sponsored: sponsoredOf(receipt),
     transactionHash: receipt.transactionHash,
   };
 }
