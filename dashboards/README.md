@@ -37,6 +37,7 @@ What Prometheus needs to receive the metrics, and how the counts in a range are 
 
 The dashboards query only metric and attribute names of [docs/semconv.md](../docs/semconv.md) that hashspan 1.0
 already records, which 1.x keeps ([ADR 0027](../docs/adr/0027-what-1-0-freezes.md)), so they work with every 1.x
-release. CI runs `make lab-check` after `make demo`: it runs every PromQL query of these files against the lab's
-Prometheus and fails when one errors or, outside the panels that only show failures, returns nothing. The TraceQL
-queries are not checked in CI, since the lab has no Tempo.
+release. The [Dashboards workflow](../.github/workflows/dashboards.yml) runs `make lab-check` after `make demo`, on
+changes to the dashboards, the lab, the conventions or the instrumentation, and weekly: it runs every PromQL query of
+these files against the lab's Prometheus and fails when one errors or, outside the panels that only show failures,
+returns nothing. The TraceQL queries are not checked there, since the lab has no Tempo.
