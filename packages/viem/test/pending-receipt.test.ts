@@ -1,8 +1,9 @@
 // A sync send that returns a pending receipt (#402): a Tempo multisig relay answers `eth_sendRawTransactionSync` for an
 // approval below quorum with `status: 'pending'` and the multisig operation's hash, and answers receipt lookups of
 // that hash with nothing until the transaction is submitted, then with the transaction's receipt, which names the
-// operation under `multisig`. The confirm span keeps waiting off the caller's path, within the confirmation timeout
-// and the background limit, with a fixed bound on the receipt requests it adds.
+// operation under `multisig`. By default the confirm span ends without an outcome and no request is added; with
+// `followMultisigOperations`, it waits for the submitted transaction off the caller's path, within the option's
+// timeout and the background limit, with a fixed bound on the receipt requests it adds.
 import { context, trace } from '@opentelemetry/api';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { createWalletClient, custom, formatTransactionReceipt, publicActions } from 'viem';
@@ -160,27 +161,72 @@ function wallets(
 const send = (client: ReturnType<typeof wallets>['traced']) =>
   client.sendTransactionSync({ to: TO, value: 1n, ...PREPARED });
 
-/** A short confirmation timeout, so that the polls, spread over it, come quickly. */
-const SHORT = { confirm: { mode: 'background', timeoutMs: 300 } } as const;
+/** Following with a short timeout, so that the polls, spread over it, come quickly. */
+const FOLLOW = { followMultisigOperations: { timeoutMs: 300 } } as const;
 
 const toMs = (t: [number, number] | undefined) => (t ? t[0] * 1e3 + t[1] / 1e6 : Number.NaN);
 const confirmSpans = (): ReadableSpan[] =>
   tracing.spans().filter((s) => s.name === `confirm ${CHAIN_ID}`);
 const sendSpan = () => tracing.spanNamed(`send ${CHAIN_ID}`);
 
+/** Checks a confirm span that ended without an outcome when the call returned. */
+function expectWithdrawn(confirm: ReadableSpan | undefined) {
+  expect(confirm?.attributes['blockchain.tx.hash']).toBe(OPERATION);
+  expect(confirm?.attributes).not.toHaveProperty('error.type');
+  expect(confirm?.attributes).not.toHaveProperty('blockchain.tx.status');
+  expect(toMs(confirm?.startTime)).toBe(toMs(sendSpan().startTime));
+  expect(toMs(confirm?.endTime)).toBe(toMs(sendSpan().endTime));
+}
+
 // sendTransactionSync came with viem 2.38.0.
-describe.skipIf(!viemHasAction('sendTransactionSync'))(
-  'a sync send that returns a pending receipt',
+const SYNC = viemHasAction('sendTransactionSync');
+
+describe.skipIf(!SYNC)('a sync send that returns a pending receipt, by default', () => {
+  for (const [form, chain] of [
+    ["with viem's Tempo receipt formatter", tempoLike],
+    ["with viem's own receipt formatter", base],
+  ] as const) {
+    it(`ends the confirm span without an outcome when the call returns, with no request, ${form}`, async () => {
+      const { hashspan, traced, plain, node, plainNode } = wallets(
+        { receiptAt: () => submittedReceipt() },
+        {},
+        chain,
+      );
+      const result = await send(traced);
+      expect(result).toEqual(await send(plain));
+      await hashspan.flush();
+
+      expect(sendSpan().attributes['blockchain.tx.hash']).toBe(OPERATION);
+      const [confirm, ...more] = confirmSpans();
+      expect(more).toEqual([]);
+      expectWithdrawn(confirm);
+      // Exactly the requests of the call without hashspan.
+      expect(node.calls).toEqual(plainNode.calls);
+      expect(node.receiptCalls()).toBe(0);
+    });
+  }
+
+  it("does not follow the operation in a caller's wait either: a receipt of another hash is not recorded", async () => {
+    const { hashspan, traced } = wallets({ receiptAt: () => submittedReceipt() });
+    await send(traced);
+    await traced.waitForTransactionReceipt({ hash: OPERATION });
+    await hashspan.flush();
+    expect(confirmSpans().map((s) => s.attributes['error.type'])).toEqual([undefined, '_OTHER']);
+  });
+});
+
+describe.skipIf(!SYNC)(
+  'a sync send that returns a pending receipt, with followMultisigOperations',
   () => {
     for (const [form, chain] of [
       ["with viem's Tempo receipt formatter", tempoLike],
       ["with viem's own receipt formatter", base],
     ] as const) {
-      it(`keeps waiting for the submitted transaction's receipt off the caller's path, ${form}`, async () => {
+      it(`waits for the submitted transaction's receipt off the caller's path, ${form}`, async () => {
         let submitted = false;
         const { hashspan, traced, plain, node } = wallets(
           { receiptAt: () => (submitted ? submittedReceipt() : null) },
-          SHORT,
+          FOLLOW,
           chain,
         );
         const tool = trace.getTracer('test').startSpan('execute_tool approve');
@@ -216,7 +262,7 @@ describe.skipIf(!viemHasAction('sendTransactionSync'))(
     it('ends the confirm span as `timeout` when the transaction is not submitted within the timeout', async () => {
       const { hashspan, traced, node } = wallets(
         {},
-        { confirm: { mode: 'background', timeoutMs: 50 } },
+        { followMultisigOperations: { timeoutMs: 50 } },
       );
       await send(traced);
       await hashspan.flush();
@@ -229,10 +275,7 @@ describe.skipIf(!viemHasAction('sendTransactionSync'))(
     });
 
     it('adds at most a fixed number of receipt requests, however short the polling interval', async () => {
-      const { hashspan, traced, node, plainNode, plain } = wallets(
-        {},
-        { confirm: { mode: 'background', timeoutMs: 300 } },
-      );
+      const { hashspan, traced, node, plainNode, plain } = wallets({}, FOLLOW);
       await send(traced);
       await send(plain);
       await hashspan.flush();
@@ -243,8 +286,21 @@ describe.skipIf(!viemHasAction('sendTransactionSync'))(
       expect(node.calls.filter((m) => m !== 'eth_getTransactionReceipt')).toEqual(plainNode.calls);
     });
 
+    it('follows for 120 s with `true`, an empty object or a timeout that is not one, polling every 2 s at most', async () => {
+      for (const followMultisigOperations of [true, {}, { timeoutMs: 'soon' }]) {
+        tracing.exporter.reset();
+        const { hashspan, traced, node } = wallets({}, { followMultisigOperations } as never);
+        await send(traced);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        // The first poll comes after 120 000 / 60 ms.
+        expect(node.receiptCalls()).toBe(0);
+        expect(await hashspan.flush({ timeoutMs: 10 })).toBe(false);
+        expect(confirmSpans()[0]?.attributes['error.type']).toBe('timeout');
+      }
+    });
+
     it('is ended as `timeout` by a flush that cannot wait, and polls no more after it', async () => {
-      const { hashspan, traced, node } = wallets();
+      const { hashspan, traced, node } = wallets({}, FOLLOW);
       await send(traced);
       expect(await hashspan.flush({ timeoutMs: 20 })).toBe(false);
 
@@ -255,7 +311,10 @@ describe.skipIf(!viemHasAction('sendTransactionSync'))(
     });
 
     it('counts towards maxBackgroundConfirmations', async () => {
-      const { hashspan, traced } = wallets({}, { maxBackgroundConfirmations: 1 });
+      const { hashspan, traced } = wallets(
+        {},
+        { followMultisigOperations: true, maxBackgroundConfirmations: 1 },
+      );
       await send(traced);
       const onReceipt = vi.fn();
       hashspan.watch(traced, { hash: `0x${'77'.repeat(32)}`, onReceipt });
@@ -263,19 +322,25 @@ describe.skipIf(!viemHasAction('sendTransactionSync'))(
       await hashspan.flush({ timeoutMs: 20 });
     });
 
-    it('ends the confirm span as `timeout` when the call returns, with no request, when background confirmation is off', async () => {
-      const { hashspan, traced, plain, node, plainNode } = wallets(
-        { receiptAt: () => submittedReceipt() },
-        { maxBackgroundConfirmations: 0 },
-      );
-      await send(traced);
-      await send(plain);
-      await hashspan.flush();
+    it('follows nothing over the background limit: the span ends without an outcome when the call returns', async () => {
+      for (const maxBackgroundConfirmations of [0, 1]) {
+        tracing.exporter.reset();
+        // With a limit of 1, a watch of a transaction that is never mined takes the only slot first.
+        const { hashspan, traced, plain, node, plainNode } = wallets(
+          { receiptAt: () => (maxBackgroundConfirmations === 0 ? submittedReceipt() : null) },
+          { followMultisigOperations: true, maxBackgroundConfirmations },
+        );
+        if (maxBackgroundConfirmations === 1)
+          hashspan.watch(traced, { hash: `0x${'77'.repeat(32)}`, timeoutMs: 60_000 });
+        await send(traced);
+        await send(plain);
+        await hashspan.flush({ timeoutMs: 50 });
 
-      const [confirm] = confirmSpans();
-      expect(confirm?.attributes['error.type']).toBe('timeout');
-      expect(toMs(confirm?.endTime)).toBe(toMs(sendSpan().endTime));
-      expect(node.calls).toEqual(plainNode.calls);
+        expectWithdrawn(
+          confirmSpans().find((s) => s.attributes['blockchain.tx.hash'] === OPERATION),
+        );
+        if (maxBackgroundConfirmations === 0) expect(node.calls).toEqual(plainNode.calls);
+      }
     });
 
     it('records nothing of a receipt that names another transaction and another operation, or none, as for any wait', async () => {
@@ -287,7 +352,7 @@ describe.skipIf(!viemHasAction('sendTransactionSync'))(
         tracing.exporter.reset();
         const { hashspan, traced } = wallets(
           { receiptAt: () => submittedReceipt({ multisig }) },
-          SHORT,
+          FOLLOW,
         );
         await send(traced);
         await hashspan.flush();
@@ -302,7 +367,7 @@ describe.skipIf(!viemHasAction('sendTransactionSync'))(
       let submitted = false;
       const { hashspan, traced } = wallets(
         { receiptAt: () => (submitted ? submittedReceipt() : null) },
-        SHORT,
+        FOLLOW,
       );
       await send(traced);
       submitted = true;
@@ -317,3 +382,32 @@ describe.skipIf(!viemHasAction('sendTransactionSync'))(
     });
   },
 );
+
+describe.skipIf(!SYNC)('the followMultisigOperations option', () => {
+  it('is off for any value but `true` or an object, and never throws', async () => {
+    for (const followMultisigOperations of [false, 'yes', 1, null, undefined, () => true]) {
+      tracing.exporter.reset();
+      const { hashspan, traced, node, plainNode, plain } = wallets(
+        { receiptAt: () => submittedReceipt() },
+        { followMultisigOperations } as never,
+      );
+      await send(traced);
+      await send(plain);
+      await hashspan.flush();
+      expectWithdrawn(confirmSpans()[0]);
+      expect(node.calls).toEqual(plainNode.calls);
+    }
+  });
+
+  it('follows with the default timeout when the timeout cannot be read', async () => {
+    const trap = () => {
+      throw new Error('trap');
+    };
+    const throwing = new Proxy({}, { get: trap, getOwnPropertyDescriptor: trap });
+    const { hashspan, traced, node } = wallets({}, { followMultisigOperations: throwing } as never);
+    await expect(send(traced)).resolves.toBeDefined();
+    expect(await hashspan.flush({ timeoutMs: 10 })).toBe(false);
+    expect(confirmSpans()[0]?.attributes['error.type']).toBe('timeout');
+    expect(node.receiptCalls()).toBe(0);
+  });
+});

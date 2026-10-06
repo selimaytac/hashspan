@@ -71,6 +71,9 @@ export interface WithHashspanOptions extends TxTrackerOptions {
     decodeRevertReason?: boolean | {
         timeoutMs?: number | undefined;
     } | undefined;
+    followMultisigOperations?: boolean | {
+        timeoutMs?: number | undefined;
+    } | undefined;
     maxBackgroundConfirmations?: number | undefined;
     tracker?: TxTracker | undefined;
 }

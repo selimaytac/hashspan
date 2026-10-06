@@ -272,7 +272,8 @@ const PENDING = {
 };
 /** The transaction a multisig relay submits for the operation, whose receipt names the operation. */
 const SUBMITTED_HASH = `0x${'5b'.repeat(32)}`;
-const PENDING_CONFIRM = { confirm: { mode: 'background', timeoutMs: WAIT_MS } } as const;
+/** Following a multisig operation (#402) with a short timeout, which spreads its polls over a short time. */
+const FOLLOW = { followMultisigOperations: { timeoutMs: WAIT_MS } } as const;
 // sendRawTransactionSync came with viem 2.38.0.
 const RAW_SYNC = viemHasAction('sendRawTransactionSync');
 // sendTransactionSync and writeContractSync came with viem 2.38.0.
@@ -305,16 +306,18 @@ const syncRows = (): Row[] =>
               hashspan,
             ),
         ),
-        // A Tempo multisig relay's pending receipt (#402), whose confirm span then waits for the receipt of the
-        // transaction submitted for the operation; a short timeout spreads its polls over a short time.
-        ...answerRows(
-          'node pending receipt of sendTransactionSync',
-          ['status', 'type', 'blockNumber', 'transactionHash'],
-          (value, field, hashspan) =>
-            onWallet('sendTransactionSync', {
-              receiptAt: (call) => (call === 1 ? { ...PENDING, [field]: value } : {}),
-            })({ to: TO, value: 1n, timeout: WAIT_MS }, hashspan),
-        ).map((row) => ({ ...row, options: () => PENDING_CONFIRM })),
+        // A Tempo multisig relay's pending receipt (#402): no outcome by default; with followMultisigOperations, the
+        // confirm span then waits for the receipt of the transaction submitted for the operation.
+        ...[false, true].flatMap((follow) =>
+          answerRows(
+            `node pending receipt of sendTransactionSync${follow ? ', followed,' : ''}`,
+            ['status', 'type', 'blockNumber', 'transactionHash'],
+            (value, field, hashspan) =>
+              onWallet('sendTransactionSync', {
+                receiptAt: (call) => (call === 1 ? { ...PENDING, [field]: value } : {}),
+              })({ to: TO, value: 1n, timeout: WAIT_MS }, hashspan),
+          ).map((row) => (follow ? { ...row, options: () => FOLLOW } : row)),
+        ),
         ...answerRows(
           'node receipt of a submitted multisig operation',
           ['multisig', 'multisig.hash'],
@@ -329,7 +332,7 @@ const syncRows = (): Row[] =>
                       multisig: field === 'multisig' ? value : { hash: value },
                     },
             })({ to: TO, value: 1n, timeout: WAIT_MS }, hashspan),
-        ).map((row) => ({ ...row, options: () => PENDING_CONFIRM })),
+        ).map((row) => ({ ...row, options: () => FOLLOW })),
         {
           name: 'sendTransactionSync rejected with',
           values: hostileErrors,
@@ -686,7 +689,14 @@ const ROWS: Row[] = [
   ),
 
   // withHashspan() options the adapter reads itself.
-  ...(['maxBackgroundConfirmations', 'decodeRevertReason', 'confirm'] as const).map(
+  ...(
+    [
+      'maxBackgroundConfirmations',
+      'decodeRevertReason',
+      'confirm',
+      'followMultisigOperations',
+    ] as const
+  ).map(
     (key): Row => ({
       name: `options.${key}`,
       options: (value) => ({ [key]: value }),

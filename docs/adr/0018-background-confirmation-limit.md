@@ -32,3 +32,19 @@ and the provider's rate limits then also slow down the agent's own calls.
   warning says so. Raising the limit, shortening `timeoutMs`, or waiting for receipts in the agent removes the gap.
 - The CDP and x402 adapters use the default limit of the `withHashspan()` they create internally.
 - Adding the option is a minor change; changing the default later is a behaviour change noted in the changelog.
+
+## Amendment (2026-10-06, proposed): following a multisig operation
+
+A sync send through a Tempo multisig relay whose approvals are below quorum returns a pending receipt with the
+operation's hash (#402). By default that receipt withdraws the wait, as a pending call batch does: the confirm span
+ends without an outcome and nothing is polled. With the new `followMultisigOperations` option of `withHashspan()`,
+the adapter keeps polling for the receipt of the transaction submitted for the operation, off the caller's path.
+
+- The follow is a background confirmation: it takes a slot of `maxBackgroundConfirmations` from the call's return
+  until it ends, as `confirm: { mode: 'background' }` and `watch()` do.
+- When the limit is reached, or is `0`, the follow is not started, as this ADR decides. The sync call itself is the
+  caller's own wait, which is never counted and always traced: its confirm span ends when the call returns, without
+  an outcome, as without the option. A `diag` warning is logged as for other confirmations over the limit.
+- It polls for at most the option's `timeoutMs` (default 120 000 ms) and at most 60 receipt requests, spread over
+  that time and never more often than the client's polling interval, then ends as `timeout` (ADR 0016).
+- `flush()` ends it as `timeout` and stops its polling; its timers are unref'd, so it does not keep the process alive.

@@ -44,6 +44,7 @@ agent identity, redaction hook) plus:
 | `confirm` | none | `{ mode: 'background', timeoutMs? }` confirms every sent transaction without an explicit wait |
 | `decodeRevertReason` | `true` | Replay reverted transactions to record their revert reason; `{ timeoutMs }` bounds the replay (default 10 000 ms) |
 | `maxBackgroundConfirmations` | `256` | Most background confirmations (background mode and `watch()`) polling at once; see [Background confirmation](#background-confirmation) |
+| `followMultisigOperations` | off | `true` or `{ timeoutMs? }` (default 120 000 ms): after a pending receipt of a Tempo multisig operation, wait for the transaction submitted for it; see [Tempo transactions](#tempo-transactions) |
 
 Options are read once, from the object's own enumerable properties: options it inherits through a prototype, such as
 the getters of a class instance, are ignored
@@ -212,14 +213,22 @@ confirmed with `watch()`, records no Celo fee currency, since only the transacti
   ([ADR 0020](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0020-metrics.md)).
 - **Pending receipts.** A Tempo multisig relay (`Relay.multisig` of `viem/tempo`) answers a sync send whose approvals
   are below quorum with a receipt whose `status` is `pending` (or none, without viem's Tempo formatter) and whose hash
-  is the multisig operation's. The send span ends when the call returns, as usual. The confirm span is not ended by
-  that receipt: off your call's path, the adapter asks for the operation's receipt again, spread over a background
-  confirmation's `timeoutMs` (default 120 000 ms), at most 60 times and never more often than the client's polling
-  interval. When the relay has submitted the transaction, its receipt names the operation under `multisig` and is
-  recorded on the span; otherwise the span ends as `timeout`. This wait counts towards `maxBackgroundConfirmations`,
-  and `flush()` ends it; when the limit is reached, or is `0`, the span ends as `timeout` when the call returns.
-  Your own `waitForTransactionReceipt` of the operation's hash records the submitted transaction's receipt the same
-  way.
+  is the multisig operation's. The send span ends when the call returns, as usual. A pending receipt is no outcome: it
+  withdraws the wait, as a timeout does and as a pending call batch does, so the confirm span ends without an outcome,
+  error or metric sample when no other wait of the hash is running, and no request is made. A wait that resolves
+  with one does the same.
+- **Following a multisig operation.** With `followMultisigOperations`, the confirm span of such a sync send keeps
+  waiting off your call's path: the adapter asks for the operation's receipt with `eth_getTransactionReceipt`, spread
+  over the option's `timeoutMs` (default 120 000 ms), at most 60 times and never more often than the client's polling
+  interval. Through a remote relay (`withRelay(http(), http(relayUrl))`), each poll that finds nothing costs 3 JSON-RPC
+  requests: the receipt from the default node, `multisig_getOperation` and the receipt from the relay. When the relay
+  has submitted the transaction, its receipt names the operation under `multisig` and is recorded on the span, which
+  keeps the operation's hash; otherwise the span ends as `timeout`. The follow counts towards
+  `maxBackgroundConfirmations` and `flush()` ends it; when the limit is reached, or is `0`, nothing is followed and
+  the span ends without an outcome, as without the option
+  ([ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0018-background-confirmation-limit.md)).
+  With the option, your own `waitForTransactionReceipt` of the operation's hash records the submitted transaction's
+  receipt the same way.
 
 ## Background confirmation
 
@@ -383,7 +392,7 @@ const wallet = createWalletClient({
 |---|---|---|
 | `sendTransaction` | `send` | chain id, from, to, value, nonce (when the call passes one), function selector, hash, and the EIP-7702 authorizations of a type 4 transaction (count, delegated addresses, chain ids; never signatures) |
 | `writeContract` | `send` | as above, plus the function name, and the call arguments with `recordFunctionArguments: true` |
-| `sendTransactionSync`, `writeContractSync` | `send` and `confirm` | as `sendTransaction` or `writeContract` and `waitForTransactionReceipt`; both spans cover the call, since viem returns the hash only with the receipt, except after a pending receipt ([Tempo transactions](#tempo-transactions)) |
+| `sendTransactionSync`, `writeContractSync` | `send` and `confirm` | as `sendTransaction` or `writeContract` and `waitForTransactionReceipt`; both spans cover the call, since viem returns the hash only with the receipt; a pending receipt is no outcome ([Tempo transactions](#tempo-transactions)) |
 | `sendRawTransaction` | `send` | on a wallet or a public client, from the signed transaction: chain id (the client's when it has none), to, value, nonce, function selector, hash and EIP-7702 authorizations; no sender, which only the signature gives. A transaction that viem cannot parse, or longer than 128 KiB, records the chain id and hash only |
 | `sendRawTransactionSync` | `send` and `confirm` | as `sendRawTransaction` and `waitForTransactionReceipt`, over the call like the other sync forms |
 | `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack) and total fee from the sealed receipt ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)), the OP Stack operator fee ([below](#op-stack-operator-fee)), the token a fee was paid in ([fees paid in a token](#fees-paid-in-a-token)), revert reason, replacement |
@@ -449,8 +458,10 @@ to the token). Applied after it, they are not traced; their results and requests
 - A wait that resolves with the receipt of another transaction that viem did not report as a replacement, as after a
   mixed-up RPC response, ends the confirm span with `error.type` `_OTHER` and records none of that receipt's data;
   the transaction's own outcome is not recorded ([#355](https://github.com/selimaytac/hashspan/issues/355)).
-- The send and confirm spans of a Tempo multisig transaction sent with a sync form below quorum carry the multisig
-  operation's hash, not the hash of the transaction the relay submits later ([Tempo transactions](#tempo-transactions)).
+- A Tempo multisig transaction sent with a sync form below quorum gets a confirm span without an outcome, unless
+  `followMultisigOperations` is on; its send and confirm spans carry the multisig operation's hash, not the hash of
+  the transaction the relay submits later, and a follow costs up to 60 polls, 3 requests each through a remote relay
+  ([Tempo transactions](#tempo-transactions)).
 - A Tempo transaction (type `0x76`) with a `calls` list has no top-level `to`: its send span records no recipient.
 - A preconfirmed receipt whose sealed receipt does not come in time is recorded without fees
   ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)).

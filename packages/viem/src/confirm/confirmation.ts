@@ -12,12 +12,13 @@ import { fetchRevertReason } from '../revert-reason.js';
 import { errorName } from '../safe-tracker.js';
 import type { ViemClientLike } from '../types.js';
 import { feeCurrencyOf } from './fee-asset.js';
-import { isPendingReceipt, isSubmittedFor } from './multisig.js';
+import { isSubmittedFor } from './multisig.js';
 import { chargesOperatorFee, fetchOperatorFee } from './operator-fee.js';
 import type { PendingConfirmation } from './pending.js';
 import {
   capturing,
   hasBlockHash,
+  isPendingReceipt,
   isPreconfirmed,
   isReadable,
   isReceiptLag,
@@ -43,10 +44,13 @@ const OPERATOR_FEE_TIMEOUT_MS = 10_000;
 /** `error.type` of a confirm span whose transaction a chain reorganisation removed during a wait (ADR 0026). */
 const NOT_ON_CHAIN = 'not_on_chain';
 /**
- * Most receipt requests the wait after a pending receipt of a sync send makes, however long its timeout and however
- * short the client's polling interval: its polls are spread over the timeout (#402).
+ * Most receipt requests the follow of a multisig operation (`followMultisigOperations`) makes after a pending receipt
+ * of a sync send, however long its timeout and however short the client's polling interval: its polls are spread over
+ * the timeout (#402).
  */
 export const MAX_PENDING_RECEIPT_REQUESTS = 60;
+/** What core records for a pending receipt: no outcome; its other fields are not read. */
+const PENDING_RECEIPT: ReceiptLike = { status: 'pending', blockNumber: 0, gasUsed: 0 };
 
 /**
  * For a caller's wait with `confirmations` above 1: its receipt is read again once the wait resolved, for at most
@@ -64,6 +68,8 @@ export interface ConfirmationOptions {
   decodeRevertReason: boolean;
   revertReasonTimeoutMs: number;
   maxBackgroundConfirmations: number;
+  /** Whether a multisig operation is followed to the transaction submitted for it (`followMultisigOperations`). */
+  followMultisig: boolean;
   /** ABIs of recent `writeContract` calls, to decode custom errors. */
   abis: Recent<Abi>;
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
@@ -100,10 +106,12 @@ export interface Confirmation {
     onReceipt?: (receipt: TransactionReceipt | undefined) => void,
   ): boolean;
   /**
-   * After a sync send through `client` returned a pending receipt for `hash` at `returnedAt`: opens its confirm span
-   * in `parent` at `startTime`, the call's start, and polls for the receipt off the caller's path, for at most
-   * `timeoutMs` and {@link MAX_PENDING_RECEIPT_REQUESTS} requests, as one of the background confirmations. When
-   * `maxBackgroundConfirmations` are already polling, the span ends at once as `timeout`, at `returnedAt`.
+   * With `followMultisigOperations`, after a sync send through `client` returned a pending receipt for the multisig
+   * operation `hash` at `returnedAt`: opens its confirm span in `parent` at `startTime`, the call's start, and polls
+   * for the submitted transaction's receipt off the caller's path, for at most `timeoutMs` and
+   * {@link MAX_PENDING_RECEIPT_REQUESTS} requests, as one of the background confirmations. When
+   * `maxBackgroundConfirmations` are already polling, nothing is followed: the span ends at `returnedAt` without an
+   * outcome, as without the option.
    */
   confirmPending(
     client: ViemClientLike,
@@ -119,6 +127,7 @@ export function createConfirmation({
   decodeRevertReason,
   revertReasonTimeoutMs,
   maxBackgroundConfirmations,
+  followMultisig,
   abis,
   revertReasons,
   track,
@@ -221,15 +230,24 @@ export function createConfirmation({
       receipt = reported;
     }
     try {
+      // A pending receipt is no outcome: it withdraws this wait (#402). Nothing is read for it, sealed or replayed.
+      if (isPendingReceipt(receipt)) {
+        handle.end(PENDING_RECEIPT, { endTime: endTimeOf() });
+        return;
+      }
       const { replacement } = capture;
       const reported =
         replacement !== undefined &&
         sameHex(replacement.transactionReceipt.transactionHash, receipt.transactionHash);
       const replacementReason = reported ? replacement.reason : undefined;
-      // The receipt of the transaction a Tempo multisig relay submitted for the awaited operation names the operation
-      // under `multisig`: it is recorded for the awaited hash, not as a replacement (#402).
+      // With `followMultisigOperations`, the receipt of the transaction a Tempo multisig relay submitted for the
+      // awaited operation, which names the operation under `multisig`, is recorded for the awaited hash, not as a
+      // replacement (#402).
       const submitted =
-        !reported && !sameHex(receipt.transactionHash, hash) && isSubmittedFor(receipt, hash);
+        followMultisig &&
+        !reported &&
+        !sameHex(receipt.transactionHash, hash) &&
+        isSubmittedFor(receipt, hash);
       // A receipt of another hash belongs to this transaction only as a replacement viem reported, which it matches on
       // sender and nonce (docs/adr/0008-replaced-transactions.md). Otherwise the endpoint answered with an unrelated
       // transaction's receipt: none of its data is recorded, and the span ends as a failure.
@@ -484,9 +502,9 @@ export function createConfirmation({
     { parent, startTime, returnedAt },
   ) => {
     const handle = context.with(parent, () => tracker.startConfirm({ chainId, hash, startTime }));
-    // The caller waited and got no outcome: the observer gave up (docs/adr/0016).
+    // The call is the caller's own wait, recorded as without the option; only the follow is over the limit (ADR 0018).
     if (atLimit()) {
-      handle.timeout({ endTime: returnedAt });
+      handle.end(PENDING_RECEIPT, { endTime: returnedAt });
       return;
     }
     const release = occupy();
