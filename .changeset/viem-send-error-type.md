@@ -1,5 +1,5 @@
 ---
-'@hashspan/viem': patch
+'@hashspan/viem': minor
 ---
 
 A failed send now records, as `error.type` on the send span and on `blockchain.client.send.duration`, the error viem
