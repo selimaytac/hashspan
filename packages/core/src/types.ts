@@ -217,8 +217,13 @@ export type ReplacementReason = 'repriced' | 'cancelled' | 'replaced';
 
 /** Library-agnostic view of a transaction receipt. Adapters normalise their client's receipt into this. */
 export interface ReceiptLike {
-  /** `reverted` ends the confirm span with an error status and `error.type` `reverted`. */
-  status: 'success' | 'reverted';
+  /**
+   * `reverted` ends the confirm span with an error status and `error.type` `reverted`. `pending`, for a receipt of a
+   * transaction that is not on chain yet (a Tempo multisig relay's answer below quorum), is no outcome: it withdraws
+   * this wait as a timeout does, and the span ends without an outcome, error or metric sample only when no other wait
+   * of the transaction is running; the other fields are then not read.
+   */
+  status: 'success' | 'reverted' | 'pending';
   /** Block the transaction was included in. */
   blockNumber: bigint | number;
   /** Gas the transaction used. */

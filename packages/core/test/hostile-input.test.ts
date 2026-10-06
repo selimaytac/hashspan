@@ -716,7 +716,8 @@ describe('bounds', () => {
 // --- Rule 3: a value that fails validation is not recorded as another ---------------------------------------------
 
 describe('values that fail validation', () => {
-  it.each(['0x5', 'pending', undefined, 1])(
+  // `pending` is no outcome and ends the span without `_OTHER` (test/pending-receipt.test.ts); other letter case is not it.
+  it.each(['0x5', 'Pending', undefined, 1])(
     'records no transaction status for a receipt status of %s',
     (status) => {
       createTxTracker()

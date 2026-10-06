@@ -405,7 +405,7 @@ export interface ReceiptLike {
     replacementReason?: ReplacementReason | undefined;
     revertReason?: string | undefined;
     sponsored?: boolean | undefined;
-    status: "success" | "reverted";
+    status: "success" | "reverted" | "pending";
     transactionHash?: string | undefined;
 }
 
