@@ -44,10 +44,11 @@ jobs:
       - run: ./scripts/install-anvil.sh
       # Alto and the EntryPoint artifacts for the real-bundler test, pinned by scripts/bundler/package-lock.json.
       - run: ./scripts/install-bundler.sh
-      # Within the range in package.json (^2), so a new major is a deliberate change rather than a failing job.
+      # Within the ranges in package.json (^2), so a new major is a deliberate change rather than a failing job. In every
+      # workspace package, so that the typecheck sees one viem: the other packages pass viem values to the adapter.
       - name: Update viem to the newest release in range
         if: matrix.end == 'newest'
-        run: pnpm --filter @hashspan/viem update viem
+        run: pnpm --recursive update viem
       - name: Install the oldest viem of the peer range
         if: matrix.end == 'oldest'
         run: | # zizmor: ignore[adhoc-packages] installs the floor of the peer range on purpose; not committed
