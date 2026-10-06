@@ -68,7 +68,7 @@ export function isPreconfirmed(receipt: ViemReceipt): boolean {
 
 /** `receipt` without the fields that make up its fee, for a preconfirmed receipt whose sealed one never came. */
 export function withoutFees(receipt: ReceiptLike): ReceiptLike {
-  return { ...receipt, effectiveGasPrice: undefined, l1Fee: undefined };
+  return { ...receipt, effectiveGasPrice: undefined, l1Fee: undefined, operatorFee: undefined };
 }
 
 /**

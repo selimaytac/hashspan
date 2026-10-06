@@ -26,6 +26,7 @@ import {
   ATTR_BLOCKCHAIN_TX_HASH,
   ATTR_BLOCKCHAIN_TX_L1_FEE,
   ATTR_BLOCKCHAIN_TX_NONCE,
+  ATTR_BLOCKCHAIN_TX_OPERATOR_FEE,
   ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH,
   ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON,
   ATTR_BLOCKCHAIN_TX_REVERT_REASON,
@@ -281,6 +282,11 @@ export function createTransactionSpans({
     const givenL1Fee: unknown = receipt.l1Fee ?? undefined;
     const l1Fee = integer(givenL1Fee);
     if (l1Fee !== undefined) attributes[ATTR_BLOCKCHAIN_TX_L1_FEE] = l1Fee.toString();
+    // Recorded on its own: blockchain.tx.fee and the fee histogram keep their meaning without it (ADR 0027).
+    const operatorFee = integer(receipt.operatorFee ?? undefined);
+    if (operatorFee !== undefined) {
+      attributes[ATTR_BLOCKCHAIN_TX_OPERATOR_FEE] = operatorFee.toString();
+    }
     const givenGasPrice: unknown = receipt.effectiveGasPrice;
     const gasPrice = integer(givenGasPrice);
     if (gasPrice !== undefined) {

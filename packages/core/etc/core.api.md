@@ -128,6 +128,9 @@ export const ATTR_BLOCKCHAIN_TX_L1_FEE: "blockchain.tx.l1_fee";
 export const ATTR_BLOCKCHAIN_TX_NONCE: "blockchain.tx.nonce";
 
 // @public
+export const ATTR_BLOCKCHAIN_TX_OPERATOR_FEE: "blockchain.tx.operator_fee";
+
+// @public
 export const ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH: "blockchain.tx.replacement.hash";
 
 // @public
@@ -385,6 +388,7 @@ export interface ReceiptLike {
     effectiveGasPrice?: bigint | undefined;
     gasUsed: bigint | number;
     l1Fee?: bigint | null | undefined;
+    operatorFee?: bigint | null | undefined;
     replacementReason?: ReplacementReason | undefined;
     revertReason?: string | undefined;
     status: "success" | "reverted";

@@ -122,7 +122,7 @@ earlier releases, such as `send.end(hash, endTime)` ([migrating to 1.0](https://
 ## What is recorded
 
 Chain id, transaction hash, sender/recipient (per `address` mode), value, nonce, function name and selector, and,
-on confirmation, status, block number, gas used, effective gas price, L1 fee, total fee and revert reason. For user operations: their hash,
+on confirmation, status, block number, gas used, effective gas price, L1 fee, total fee, OP Stack operator fee and revert reason. For user operations: their hash,
 smart account, EntryPoint, number of calls, success, gas used, cost, nonce and paymaster. For payments: payer,
 recipient, asset, amount, settled amount, status and whether the settlement was verified, and for x402 the scheme and
 resource. For a replaced transaction: the replacing hash and the reason. For call batches: the batch id, sender, number of
@@ -183,9 +183,10 @@ These hold for every adapter; each adapter's README lists its own.
 
 - EVM chains only: chain ids are EIP-155 numbers and hashes 32-byte hex
   ([roadmap candidates](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0/docs/roadmap.md#candidates)).
-- `blockchain.tx.fee` and the fee histogram leave out the OP Stack operator fee, so on a chain that charges one the
-  fee is too low ([attributes](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0/docs/semconv.md#attributes),
-  [#287](https://github.com/selimaytac/hashspan/issues/287)).
+- `blockchain.tx.fee` and the fee histogram leave out the OP Stack operator fee. It is recorded apart, as
+  `blockchain.tx.operator_fee`, when the adapter passes the receipt's `operatorFee`: `@hashspan/viem` reads it with one
+  `eth_call`, and an adapter without a client to read it with, such as `@hashspan/cdp` without a `reader`, records
+  none ([attributes](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0/docs/semconv.md#attributes)).
 - On chains that charge gas in a token (Celo fee currencies, Tempo), `blockchain.tx.fee` and the fee histogram are in
   that token's unit, and no attribute names it yet
   ([fee fields](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0/docs/semconv.md#attributes),

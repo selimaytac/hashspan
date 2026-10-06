@@ -34,7 +34,7 @@ decoded custom error.</sub>
   `gen_ai.agent.id`; without an agent, they nest under whatever span is active, such as an HTTP request or a queue
   job ([not an agent?](#not-an-agent)).
 - **Real cost.** Fees include the L1 data fee on OP-stack chains such as Base; the OP Stack operator fee (Isthmus and
-  later) is not included yet ([#287](https://github.com/selimaytac/hashspan/issues/287)).
+  later) is recorded apart, on chains that charge one ([semantic conventions](docs/semconv.md#attributes)).
 - **Metrics too.** Send and confirmation latency and fees are also recorded as histograms, and `traceTransport()` can
   add a span per JSON-RPC request ([semantic conventions](docs/semconv.md)).
 - **Small footprint.** `@hashspan/core` has one peer dependency, `@opentelemetry/api`; `@hashspan/viem` adds `viem`,

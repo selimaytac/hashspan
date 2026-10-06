@@ -398,6 +398,8 @@ const ROWS: Row[] = [
       'gasUsed',
       'effectiveGasPrice',
       'l1Fee',
+      'operatorFeeScalar',
+      'operatorFeeConstant',
       'transactionHash',
       'blockHash',
       'logs',
@@ -423,6 +425,15 @@ const ROWS: Row[] = [
         requests: () => mock.requests,
       };
     },
+  },
+  {
+    // A receipt that charges an OP Stack operator fee, whose GasPriceOracle call answers with the value.
+    name: 'node answer to getOperatorFee',
+    scenario: (value, hashspan) =>
+      onReader('waitForTransactionReceipt', {
+        receipt: { operatorFeeScalar: '0x3e8' },
+        operatorFee: () => value,
+      })(WAIT, hashspan),
   },
   {
     name: 'node revert data',

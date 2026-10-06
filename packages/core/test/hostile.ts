@@ -482,6 +482,7 @@ const ATTRIBUTE_CHECKS: Record<string, Check> = {
   'blockchain.tx.gas.used': count,
   'blockchain.tx.effective_gas_price': matches(DECIMAL, 'a decimal amount'),
   'blockchain.tx.l1_fee': matches(DECIMAL, 'a decimal amount'),
+  'blockchain.tx.operator_fee': matches(DECIMAL, 'a decimal amount'),
   'blockchain.tx.fee': matches(DECIMAL, 'a decimal amount'),
   'blockchain.tx.revert.reason': bounded(BOUNDS.revertReason),
   'blockchain.tx.authorization.count': count,

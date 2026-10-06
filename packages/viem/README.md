@@ -112,7 +112,8 @@ await provider.shutdown();
 
 `flush()` resolves `true` when all pending work finished and `false` on timeout; it never rejects, and it keeps the
 process alive while it waits. On timeout, confirm spans still waiting are ended and exported: with the receipt if
-only the revert reason was still pending, without fees if only the sealed receipt was, otherwise as an error with
+only the revert reason or the OP Stack operator fee was still pending (without them), without fees if only the
+sealed receipt was, otherwise as an error with
 `error.type` `timeout`. Background
 confirmations keep polling until their own `timeoutMs`, so short-lived processes should keep that short. The timeout also ends the spans of
 your own `waitForTransactionReceipt` calls that are still waiting, and a receipt they return later is not recorded:
@@ -180,6 +181,17 @@ transaction's. hashspan therefore records fees from the sealed receipt:
 - Your `waitForTransactionReceipt` still returns what the node returned, and `watch()`'s `onReceipt` gets the receipt
   viem resolved with.
 - See [ADR 0024](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0024-sealed-receipt-fees.md).
+
+## OP Stack operator fee
+
+OP Stack chains after the Isthmus upgrade can charge an operator fee on top of the execution and L1 fees. A node adds
+`operatorFeeScalar` and `operatorFeeConstant` to the receipt when the chain charges one; viem passes them on
+unformatted. Only for such a receipt, and only from the sealed receipt, the adapter makes one `eth_call`, off your
+call's path, to the GasPriceOracle's `getOperatorFee(gasUsed)` at the receipt's block, through the client that read
+the receipt, and records the result as `blockchain.tx.operator_fee`. `blockchain.tx.fee` and the fee histogram do not
+include it. A receipt without the fields, as on Base and OP Mainnet while their operator fee is zero, costs no
+request. If the call fails, answers with something other than one `uint256`, or takes longer than 10 s, the receipt
+is recorded without it. The span keeps the time the receipt arrived as its end time.
 
 ## Background confirmation
 
@@ -346,7 +358,7 @@ const wallet = createWalletClient({
 | `sendTransactionSync`, `writeContractSync` | `send` and `confirm` | as `sendTransaction` or `writeContract` and `waitForTransactionReceipt`; both spans cover the call, since viem returns the hash only with the receipt |
 | `sendRawTransaction` | `send` | on a wallet or a public client, from the signed transaction: chain id (the client's when it has none), to, value, nonce, function selector, hash and EIP-7702 authorizations; no sender, which only the signature gives. A transaction that viem cannot parse, or longer than 128 KiB, records the chain id and hash only |
 | `sendRawTransactionSync` | `send` and `confirm` | as `sendRawTransaction` and `waitForTransactionReceipt`, over the call like the other sync forms |
-| `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack) and total fee from the sealed receipt ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)), revert reason, replacement |
+| `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack) and total fee from the sealed receipt ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)), the OP Stack operator fee ([below](#op-stack-operator-fee)), revert reason, replacement |
 | `sendUserOperation` | `send` | chain id, smart account, EntryPoint, number of calls, user operation hash; see [Smart accounts](#smart-accounts-erc-4337) |
 | `waitForUserOperationReceipt` | `confirm` | success, gas used, cost, nonce, paymaster, revert reason, bundle transaction hash and block |
 | `sendCalls` | `send` | chain id, account, number of calls, batch id; see [Call batches](#call-batches-eip-5792) |

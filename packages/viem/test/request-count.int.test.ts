@@ -16,6 +16,13 @@ const RPC_URL = `http://127.0.0.1:${PORT}`;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 /** Runtime bytecode that always reverts without data: PUSH1 0 PUSH1 0 REVERT. */
 const REVERTER = '0x00000000000000000000000000000000000000aa' as const;
+/** The OP Stack GasPriceOracle predeploy, which Anvil does not have: a stand-in is set there. */
+const GAS_PRICE_ORACLE = '0x420000000000000000000000000000000000000F' as const;
+/**
+ * Runtime bytecode of the stand-in `getOperatorFee(uint256 gasUsed)`: returns `3 × gasUsed`, whatever the selector.
+ * PUSH1 4 CALLDATALOAD PUSH1 3 MUL PUSH1 0 MSTORE PUSH1 32 PUSH1 0 RETURN.
+ */
+const OPERATOR_FEE_ORACLE = '0x60043560030260005260206000f3';
 
 const instance = Instance.anvil({
   binary: new URL('../../../.tools/bin/anvil', import.meta.url).pathname,
@@ -35,6 +42,11 @@ beforeAll(async () => {
     method: 'anvil_setCode' as never,
     params: [REVERTER, '0x60006000fd'] as never,
   });
+  // Before any transaction, so that the call at a receipt's block finds the code.
+  await createPublicClient({ chain: anvil, transport: http(RPC_URL) }).request({
+    method: 'anvil_setCode' as never,
+    params: [GAS_PRICE_ORACLE, OPERATOR_FEE_ORACLE] as never,
+  });
 });
 afterAll(async () => {
   await instance.stop();
@@ -48,14 +60,20 @@ afterEach(async () => {
 
 type Counts = Record<string, number>;
 
-/** A transport to Anvil that counts the requests per method. */
-function counting(): { transport: ReturnType<typeof custom>; counts: Counts } {
+/**
+ * A transport to Anvil that counts the requests per method. With `operatorFee`, receipts carry the fields of an OP
+ * Stack chain that charges an operator fee, as a node after Isthmus adds them.
+ */
+function counting(operatorFee = false): { transport: ReturnType<typeof custom>; counts: Counts } {
   const counts: Counts = {};
   const upstream = http(RPC_URL)({ chain: anvil });
   const transport = custom({
     async request({ method, params }: { method: string; params?: unknown }) {
       counts[method] = (counts[method] ?? 0) + 1;
-      return upstream.request({ method, params } as never);
+      const result = await upstream.request({ method, params } as never);
+      return operatorFee && method === 'eth_getTransactionReceipt' && result
+        ? { ...(result as object), operatorFeeScalar: '0x3e8', operatorFeeConstant: '0x0' }
+        : result;
     },
   });
   return { transport, counts };
@@ -93,10 +111,11 @@ async function extraRequests(
     hashspan?: Parameters<typeof withHashspan>[0];
     chain?: boolean;
     polling?: boolean;
+    operatorFee?: boolean;
   } = {},
 ): Promise<Counts> {
   const run = async (traced: boolean) => {
-    const { transport, counts } = counting();
+    const { transport, counts } = counting(options.operatorFee);
     const hashspan = withHashspan(options.hashspan);
     const wallet = createWalletClient({
       account,
@@ -175,6 +194,9 @@ describe('JSON-RPC requests the viem adapter adds', () => {
   // Polling methods are left out of these exact counts (see POLLING); every other method is counted exactly.
   it('none to a send and its wait on a client with a chain', async () => {
     expect(await extraRequests(sendAndWait)).toEqual({});
+    // Its receipt carries no operator fee fields: no operator fee is read or recorded.
+    const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
+    expect(confirm?.attributes).not.toHaveProperty('blockchain.tx.operator_fee');
   });
 
   it('none to a raw send and its wait on a client with a chain', async () => {
@@ -232,6 +254,19 @@ describe('JSON-RPC requests the viem adapter adds', () => {
       });
     },
   );
+
+  it('one eth_call for a receipt that charges an OP Stack operator fee', async () => {
+    expect(await extraRequests(sendAndWait, { operatorFee: true })).toEqual({ eth_call: 1 });
+    const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
+    // The stand-in oracle returns 3 × gasUsed; the fee keeps its meaning.
+    expect(confirm?.attributes['blockchain.tx.operator_fee']).toBe(String(3 * 21_000));
+    expect(confirm?.attributes['blockchain.tx.fee']).toBe(
+      String(
+        BigInt(confirm?.attributes['blockchain.tx.gas.used'] as number) *
+          BigInt(confirm?.attributes['blockchain.tx.effective_gas_price'] as string),
+      ),
+    );
+  });
 
   it('none for a reverted transaction with decodeRevertReason off', async () => {
     const revert = (clients: Clients) => sendAndWait(clients, REVERTER);

@@ -19,7 +19,7 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
   - `src/confirm/` is the confirmation work every EVM path needs (ADR 0001 amendment), and imports nothing from the
     extension: `confirmation.ts` (receipt, sealed receipt, revert reason, background limit), `watch.ts`,
     `pending.ts` (`track()`, `flush()`, ending a handle once), `receipt.ts` (normalising receipts, classifying
-    rejections), `timing.ts`, `recent.ts`.
+    rejections), `operator-fee.ts` (the OP Stack operator fee of a receipt that charges one), `timing.ts`, `recent.ts`.
   - Background confirmation must never delay or fail the user's call, and nothing the telemetry needs is awaited
     before the call it traces (ADR 0009).
   - Work that outlives a traced call must be passed to `track()`, so `flush()` can await it (ADR 0010).

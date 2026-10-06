@@ -39,6 +39,11 @@ export const ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE = 'blockchain.tx.effective_g
 export const ATTR_BLOCKCHAIN_TX_L1_FEE = 'blockchain.tx.l1_fee' as const;
 /** Fee of the transaction, in wei: gas used times the effective gas price, plus the L1 fee. */
 export const ATTR_BLOCKCHAIN_TX_FEE = 'blockchain.tx.fee' as const;
+/**
+ * OP Stack operator fee of the transaction (Isthmus and later), in wei, as a decimal string; recorded apart from
+ * `blockchain.tx.fee`, which does not include it.
+ */
+export const ATTR_BLOCKCHAIN_TX_OPERATOR_FEE = 'blockchain.tx.operator_fee' as const;
 /** Decoded revert reason of a reverted transaction or user operation, when available. */
 export const ATTR_BLOCKCHAIN_TX_REVERT_REASON = 'blockchain.tx.revert.reason' as const;
 /** On a `replaced` confirm span: hash of the mined transaction that replaced it. */
