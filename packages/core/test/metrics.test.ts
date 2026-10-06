@@ -8,7 +8,7 @@ import {
   metrics,
 } from '@opentelemetry/api';
 import { AlwaysOffSampler, BasicTracerProvider } from '@opentelemetry/sdk-trace-base';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createTxTracker,
   METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION,
@@ -136,6 +136,23 @@ describe('metrics', () => {
       .map(({ attributes }) => attributes['blockchain.tx.status'] ?? attributes['error.type']);
     // The replacing transaction's receipt is recorded on its own confirm span too.
     expect(outcomes).toEqual(['reverted', 'RangeError', 'replaced', 'success']);
+  });
+
+  it('measures a replacing transaction from the start of the replaced one, by the same clock', () => {
+    const meters = recordingMeterProvider();
+    const tracker = createTxTracker({ meterProvider: meters.provider });
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    try {
+      const confirm = tracker.startConfirm({ chainId: 1, hash: HASH });
+      now.mockReturnValue(5_000);
+      confirm.end({ ...receipt, transactionHash: OTHER_HASH });
+    } finally {
+      now.mockRestore();
+    }
+
+    expect(
+      meters.recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION).map(({ value }) => value),
+    ).toEqual([4, 4]);
   });
 
   it("records an adapter's error type of a confirmation, without an exception event when there is no error", () => {

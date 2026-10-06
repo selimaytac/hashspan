@@ -3,8 +3,11 @@ import {
   diag,
   INVALID_SPAN_CONTEXT,
   propagation,
+  type Span,
   SpanKind,
   SpanStatusCode,
+  type Tracer,
+  type TracerProvider,
   trace,
 } from '@opentelemetry/api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -767,8 +770,7 @@ describe('replaced transactions', () => {
     });
     expect(mined?.attributes['blockchain.tx.replacement.reason']).toBeUndefined();
     expect(mined?.parentSpanContext?.spanId).toBe(tool.spanContext().spanId);
-    const toMs = (t: [number, number] | undefined) => (t ? t[0] * 1e3 + t[1] / 1e6 : Number.NaN);
-    expect(Math.abs(toMs(mined?.startTime) - toMs(original?.startTime))).toBeLessThanOrEqual(1);
+    expect(mined?.startTime).toEqual(original?.startTime);
     const sendOf = (hash: string) =>
       tracing
         .spans()
@@ -777,6 +779,132 @@ describe('replaced transactions', () => {
     expect(mined?.links.map((l) => l.context.spanId).sort()).toEqual(
       [original?.spanContext().spanId, sendOf(HASH), sendOf(MINED)].sort(),
     );
+  });
+
+  it('starts the mined transaction exactly when the replaced one started', () => {
+    // A wall clock that turns a millisecond after every read, as it can between the SDK's read and a later one.
+    vi.useFakeTimers({ toFake: ['Date'], now: 1_700_000_000_000 });
+    try {
+      const read = Date.now.bind(Date);
+      vi.spyOn(Date, 'now').mockImplementation(() => {
+        const now = read();
+        vi.setSystemTime(now + 1);
+        return now;
+      });
+      for (let round = 0; round < 20; round++) {
+        const awaited = `0x${round.toString(16).padStart(64, '0')}`;
+        const mined = `0x${(round + 1000).toString(16).padStart(64, '0')}`;
+        createTxTracker()
+          .startConfirm({ chainId: CHAIN_ID, hash: awaited })
+          .end({ ...receipt, transactionHash: mined });
+        expect(confirmOf(mined)[0]?.startTime).toEqual(confirmOf(awaited)[0]?.startTime);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /** A tracer provider whose spans delegate to the SDK's; `define` gives them a `startTime`, if any. */
+  const wrappingProvider = (define?: (span: object) => void): TracerProvider => ({
+    getTracer: (...args) => {
+      const tracer = trace.getTracerProvider().getTracer(...args);
+      return {
+        startSpan: (name, options, ctx) => {
+          const real = tracer.startSpan(name, options, ctx) as unknown as Record<
+            string,
+            (...args: unknown[]) => unknown
+          >;
+          const wrapped: Record<string, unknown> = {};
+          for (const method of [
+            'spanContext',
+            'setAttribute',
+            'setAttributes',
+            'addEvent',
+            'addLink',
+            'addLinks',
+            'setStatus',
+            'updateName',
+            'end',
+            'isRecording',
+            'recordException',
+          ]) {
+            wrapped[method] = (...args: unknown[]) => {
+              const result = real[method]?.(...args);
+              return result === real ? wrapped : result;
+            };
+          }
+          define?.(wrapped);
+          return wrapped as unknown as Span;
+        },
+        startActiveSpan: tracer.startActiveSpan.bind(tracer),
+      } as Tracer;
+    },
+  });
+  const msOf = (t: [number, number] | undefined) => (t ? t[0] * 1e3 + t[1] / 1e6 : Number.NaN);
+
+  it("takes the start time a span records as an own data property, never the caller's array", () => {
+    const startTime: [number, number] = [1_700_000_000, 123_456_789];
+    createTxTracker({
+      tracerProvider: wrappingProvider((span) => Object.assign(span, { startTime })),
+    })
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end(replacedReceipt);
+    startTime[1] = 0;
+    expect(confirmOf(MINED)[0]?.startTime).toEqual([1_700_000_000, 123_456_789]);
+  });
+
+  let getterCalls = 0;
+  const throwing = () => {
+    getterCalls++;
+    throw new Error('getter ran');
+  };
+
+  it.each<[string, ((span: object) => void) | undefined]>([
+    ['no start time', undefined],
+    [
+      'a start time behind a getter that throws',
+      (span) => Object.defineProperty(span, 'startTime', { get: throwing }),
+    ],
+    ['a start time of one number', (span) => Object.assign(span, { startTime: [1] })],
+    ['a start time of three numbers', (span) => Object.assign(span, { startTime: [1, 2, 3] })],
+    ['a negative start time', (span) => Object.assign(span, { startTime: [-1, 0] })],
+    ['a NaN start time', (span) => Object.assign(span, { startTime: [Number.NaN, 0] })],
+    ['an infinite start time', (span) => Object.assign(span, { startTime: [0, Infinity] })],
+    ['a start time of strings', (span) => Object.assign(span, { startTime: ['1', '0'] })],
+    ['a start time that is a number', (span) => Object.assign(span, { startTime: 1 })],
+    [
+      'an array-like start time',
+      (span) => Object.assign(span, { startTime: { 0: 1, 1: 0, length: 2 } }),
+    ],
+    [
+      'a start time with an element behind a getter',
+      (span) => {
+        const startTime = [1, 0];
+        Object.defineProperty(startTime, 0, { get: throwing });
+        Object.assign(span, { startTime });
+      },
+    ],
+  ])('falls back to the wall clock for spans with %s', (_, define) => {
+    getterCalls = 0;
+    const errors = vi.spyOn(diag, 'error');
+    const before = Date.now();
+    expect(() =>
+      createTxTracker({ tracerProvider: wrappingProvider(define) })
+        .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+        .end(replacedReceipt),
+    ).not.toThrow();
+    const after = Date.now();
+    const [original] = confirmOf(HASH);
+    const [mined] = confirmOf(MINED);
+    expect(original?.attributes['blockchain.tx.status']).toBe('replaced');
+    expect(mined?.attributes['blockchain.tx.status']).toBe('success');
+    // A start taken from the wall clock: whole milliseconds, within the call.
+    const start = msOf(mined?.startTime);
+    expect(Number.isInteger(start)).toBe(true);
+    expect(start).toBeGreaterThanOrEqual(before);
+    expect(start).toBeLessThanOrEqual(after);
+    expect(errors).not.toHaveBeenCalled();
+    expect(getterCalls).toBe(0);
   });
 
   it('marks a reverted replacing transaction as an error on its own span only', () => {

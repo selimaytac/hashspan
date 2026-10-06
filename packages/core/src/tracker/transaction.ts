@@ -4,7 +4,9 @@ import {
   type Context,
   context,
   diag,
+  type HrTime,
   type Link,
+  type Span,
   SpanKind,
   type TimeInput,
   type Tracer,
@@ -129,6 +131,8 @@ export interface ConfirmSpan extends SharedConfirm {
 interface ConfirmOrigin {
   parent: Context;
   startTime: TimeInput;
+  /** Milliseconds since the epoch the confirmation duration is measured from. */
+  startMs: number;
   links: Link[];
   /** Who pays the fee when it is not the sender; the replacing transaction's fee is paid by the same party. */
   feePayer: SentTransaction['feePayer'];
@@ -149,6 +153,24 @@ export interface TransactionDependencies {
 export interface TransactionSpans {
   startSend(input: SendInput, parentCtx?: Context): SendHandle;
   startConfirm(input: ConfirmInput, parentCtx?: Context): ConfirmHandle;
+}
+
+/**
+ * The start time an SDK span recorded: an own data property `startTime` holding an `HrTime` (sdk-trace-base `Span`).
+ * No getter runs; undefined for other spans, such as a no-op tracer's, and when it cannot be read.
+ */
+function recordedStartTime(span: Span): HrTime | undefined {
+  try {
+    const time = ownValue(span, 'startTime');
+    if (!Array.isArray(time) || ownValue(time, 'length') !== 2) return undefined;
+    const seconds = ownValue(time, '0');
+    const nanos = ownValue(time, '1');
+    const valid = (n: unknown): n is number =>
+      typeof n === 'number' && Number.isFinite(n) && n >= 0;
+    return valid(seconds) && valid(nanos) ? [seconds, nanos] : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Whether `receipt` is a pending receipt, read from an own data property; false when it cannot be read. */
@@ -369,7 +391,9 @@ export function createTransactionSpans({
       parent,
     );
     const finish = finisher(span);
-    const startMs = toEpochMs(explicitStart);
+    // A replacing transaction is measured from the replaced one's start, by the clock that measured it.
+    const startMs =
+      input.startTime === undefined && replacing ? replacing.startMs : toEpochMs(explicitStart);
     const recordConfirmation = (endTime: TimeInput | undefined, outcome: Attributes): void =>
       txMetrics.confirmationDuration(
         secondsSince(startMs, endTime),
@@ -377,7 +401,9 @@ export function createTransactionSpans({
       );
     const origin: ConfirmOrigin = {
       parent,
-      startTime: explicitStart ?? new Date(),
+      // The span's own start when the SDK exposes it, so that a replacing span starts at the same instant.
+      startTime: explicitStart ?? recordedStartTime(span) ?? new Date(),
+      startMs,
       links: [{ context: span.spanContext() }, ...(sent ? [{ context: sent.spanContext }] : [])],
       feePayer,
     };
