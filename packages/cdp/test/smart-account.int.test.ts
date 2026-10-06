@@ -126,6 +126,8 @@ describe('CDP smart accounts against a local CDP API and Anvil', () => {
     });
     expect(confirm.attributes['blockchain.user_operation.gas.cost']).toMatch(/^\d+$/);
     expect(confirm.attributes['blockchain.tx.fee']).toBeUndefined();
+    // A user operation's wait takes no count (#414).
+    expect(confirm.attributes).not.toHaveProperty('blockchain.tx.wait.confirmations');
     expect(await reader.getBalance({ address: RECIPIENT })).toBeGreaterThanOrEqual(3n);
   });
 

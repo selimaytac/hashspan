@@ -250,6 +250,10 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
 - Polling adds RPC requests to your provider (one receipt request per polling interval until the receipt arrives).
   It polls independently of your own `waitForTransactionReceipt` calls, so your `timeout`, `confirmations` and other
   options always apply to your wait; while both run, receipt requests are made for each.
+- Background confirmation and `watch()` wait for one confirmation and record `blockchain.tx.wait.confirmations` `1`.
+  The span records the count of the wait that ended it, and the background wait usually gets the receipt first: your
+  own wait with `confirmations: 12` for the same transaction then adds nothing to it
+  ([one confirm span per transaction](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/semconv.md#spans)).
 - A pending confirmation keeps the Node.js process alive until the receipt arrives or `timeoutMs` (default
   120 000 ms) passes; the span then ends as an error with `error.type` `timeout`.
 - viem's `waitForTransactionReceipt` fails on the first failed request of its poll (a rate limit, a JSON-RPC error,
@@ -392,10 +396,10 @@ const wallet = createWalletClient({
 |---|---|---|
 | `sendTransaction` | `send` | chain id, from, to, value, nonce (when the call passes one), function selector, hash, and the EIP-7702 authorizations of a type 4 transaction (count, delegated addresses, chain ids; never signatures) |
 | `writeContract` | `send` | as above, plus the function name, and the call arguments with `recordFunctionArguments: true` |
-| `sendTransactionSync`, `writeContractSync` | `send` and `confirm` | as `sendTransaction` or `writeContract` and `waitForTransactionReceipt`; both spans cover the call, since viem returns the hash only with the receipt; a pending receipt is no outcome ([Tempo transactions](#tempo-transactions)) |
+| `sendTransactionSync`, `writeContractSync` | `send` and `confirm` | as `sendTransaction` or `writeContract` and `waitForTransactionReceipt`; both spans cover the call, since viem returns the hash only with the receipt; a pending receipt is no outcome ([Tempo transactions](#tempo-transactions)); no `blockchain.tx.wait.confirmations`, as the call takes no count |
 | `sendRawTransaction` | `send` | on a wallet or a public client, from the signed transaction: chain id (the client's when it has none), to, value, nonce, function selector, hash and EIP-7702 authorizations; no sender, which only the signature gives. A transaction that viem cannot parse, or longer than 128 KiB, records the chain id and hash only |
 | `sendRawTransactionSync` | `send` and `confirm` | as `sendRawTransaction` and `waitForTransactionReceipt`, over the call like the other sync forms |
-| `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack) and total fee from the sealed receipt ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)), the OP Stack operator fee ([below](#op-stack-operator-fee)), the token a fee was paid in ([fees paid in a token](#fees-paid-in-a-token)), revert reason, replacement |
+| `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack) and total fee from the sealed receipt ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)), the OP Stack operator fee ([below](#op-stack-operator-fee)), the token a fee was paid in ([fees paid in a token](#fees-paid-in-a-token)), revert reason, replacement, and the confirmations the wait asked for (`blockchain.tx.wait.confirmations`): your `confirmations` when it is a positive safe integer, `1` when it is omitted, `0`, negative or `NaN`, as viem then waits for one, and nothing for any other value |
 | `sendUserOperation` | `send` | chain id, smart account, EntryPoint, number of calls, user operation hash; see [Smart accounts](#smart-accounts-erc-4337) |
 | `waitForUserOperationReceipt` | `confirm` | success, gas used, cost, nonce, paymaster, revert reason, bundle transaction hash and block |
 | `sendCalls` | `send` | chain id, account, number of calls, batch id; see [Call batches](#call-batches-eip-5792) |
@@ -469,6 +473,10 @@ to the token). Applied after it, they are not traced; their results and requests
   in its fee currency without `blockchain.tx.fee_asset` ([fees paid in a token](#fees-paid-in-a-token)).
 - Revert reasons are best effort: a provider without historical state cannot replay the transaction, and earlier
   transactions in the same block can change the result ([revert reasons](#revert-reasons)).
+- With viem older than 2.57.0, concurrent waits on one hash with different counts share viem's first poll, so the
+  recorded count may be the other wait's: a wait of 1 that joins a wait of 5 on the same client resolves with it at
+  depth 5 and records `blockchain.tx.wait.confirmations` `1`
+  ([wevm/viem#5142](https://github.com/wevm/viem/pull/5142)).
 - On a client without a chain, a call is not traced when its `eth_chainId` request fails or has not answered 30 s
   after the call ended ([clients without a chain](#clients-without-a-chain)).
 - The limits of the core apply too

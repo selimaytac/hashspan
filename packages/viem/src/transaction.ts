@@ -90,6 +90,30 @@ function recheckOf(args: unknown): RecheckOptions | undefined {
   return { timeoutMs: durationOr(own(args, 'timeout'), VIEM_WAIT_TIMEOUT_MS) };
 }
 
+/**
+ * The confirmations a wait asks for, as viem applies them (`confirmations = 1`, and it waits for one block unless the
+ * count is above 1), for `blockchain.tx.wait.confirmations`: a positive safe integer as given; 1 when the wait has no
+ * `confirmations`, or `undefined`, `0`, a negative number or `NaN` as an own data property; undefined, recording
+ * nothing, for any other value, and for one behind an accessor or inherited, which is never read. Never throws.
+ */
+function confirmationsOf(args: unknown): number | undefined {
+  try {
+    if (args === null || typeof args !== 'object') return undefined;
+    const descriptor = Object.getOwnPropertyDescriptor(args, 'confirmations');
+    if (descriptor === undefined)
+      return descriptorOf(args, 'confirmations') === undefined ? 1 : undefined;
+    if (!('value' in descriptor)) return undefined;
+    const value: unknown = descriptor.value;
+    if (value === undefined) return 1;
+    if (typeof value !== 'number') return undefined;
+    if (Number.isNaN(value) || value <= 0) return 1;
+    return Number.isSafeInteger(value) ? value : undefined;
+  } catch {
+    // A Proxy whose traps throw, or a prototype chain too long to read: nothing is recorded.
+    return undefined;
+  }
+}
+
 /** Most `cause` links followed to find the receipt in the rejection of a sync action. */
 const MAX_CAUSE_DEPTH = 8;
 
@@ -464,7 +488,14 @@ export function addTransactionActions(
         const waitArgs = isPlainObject(args)
           ? shadowing(args, 'onReplaced', capturing(capture, onReplaced?.value))
           : args;
-        return { hash, chainId, capture, waitArgs, recheck: recheckOf(args) };
+        return {
+          hash,
+          chainId,
+          capture,
+          waitArgs,
+          recheck: recheckOf(args),
+          confirmations: confirmationsOf(args),
+        };
       } catch (error) {
         untraced(error);
         return undefined;
@@ -474,11 +505,11 @@ export function addTransactionActions(
     actions.waitForTransactionReceipt = async (args: WaitArgs) => {
       const prepared = prepareWait(args);
       if (!prepared) return waitForTransactionReceipt(args);
-      const { hash, chainId, capture, waitArgs, recheck } = prepared;
+      const { hash, chainId, capture, waitArgs, recheck, confirmations } = prepared;
       let handle: ConfirmHandle | undefined;
       if (chainId !== undefined) {
         try {
-          handle = tracker.startConfirm({ chainId, hash });
+          handle = tracker.startConfirm({ chainId, hash, confirmations });
         } catch (error) {
           diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
         }
@@ -508,7 +539,8 @@ export function addTransactionActions(
             late.ctx,
             wait,
             () => late.chainId,
-            (id) => tracker.startConfirm({ chainId: id, hash, startTime: late.startTime }),
+            (id) =>
+              tracker.startConfirm({ chainId: id, hash, startTime: late.startTime, confirmations }),
             (lateHandle, id, endTimeOf) =>
               recordConfirmation(
                 id,

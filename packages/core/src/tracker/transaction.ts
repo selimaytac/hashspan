@@ -37,6 +37,7 @@ import {
   ATTR_BLOCKCHAIN_TX_STATUS,
   ATTR_BLOCKCHAIN_TX_TO,
   ATTR_BLOCKCHAIN_TX_VALUE,
+  ATTR_BLOCKCHAIN_TX_WAIT_CONFIRMATIONS,
   ATTR_ERROR_TYPE,
   BLOCKCHAIN_FEE_DENOMINATION_VALUE_TOKEN,
   BLOCKCHAIN_FEE_PAYER_VALUE_SPONSOR,
@@ -126,6 +127,11 @@ export interface ConfirmSpan extends SharedConfirm {
   unattributable(endTime?: TimeInput): void;
   /** Ends without an outcome, an error or a metric sample, after a pending receipt. */
   pending(endTime?: TimeInput): void;
+  /**
+   * Records the confirmations the wait that ends the span asked for, before it ends it; nothing for undefined. Span
+   * only: never a metric attribute (ADR 0020, ADR 0025 rule 5).
+   */
+  waited(confirmations: number | undefined): void;
 }
 
 interface ConfirmOrigin {
@@ -153,6 +159,12 @@ export interface TransactionDependencies {
 export interface TransactionSpans {
   startSend(input: SendInput, parentCtx?: Context): SendHandle;
   startConfirm(input: ConfirmInput, parentCtx?: Context): ConfirmHandle;
+}
+
+/** The confirmations a wait asked for (`ConfirmInput.confirmations`): a positive safe integer, else undefined. */
+function waitConfirmations(input: ConfirmInput): number | undefined {
+  const value = ownValue(input, 'confirmations');
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
 
 /**
@@ -498,6 +510,15 @@ export function createTransactionSpans({
           },
           endTime,
         ),
+      waited: (confirmations) => {
+        if (confirmations === undefined) return;
+        safely(
+          'record wait confirmations',
+          () =>
+            span.setAttributes(redact({ [ATTR_BLOCKCHAIN_TX_WAIT_CONFIRMATIONS]: confirmations })),
+          undefined,
+        );
+      },
       // A pending receipt says nothing about the transaction's outcome, and no one gave up waiting either.
       pending: (endTime) => finish('record pending receipt', () => {}, endTime),
       unattributable: (endTime) =>
@@ -522,6 +543,7 @@ export function createTransactionSpans({
     receipt: ReceiptLike,
     original: ConfirmOrigin,
     endTime: TimeInput | undefined,
+    waitedFor: number | undefined,
   ): void => {
     const current = confirmations.get(chainId, hash);
     if (current === 'settled' || current?.ended) return;
@@ -530,6 +552,8 @@ export function createTransactionSpans({
     confirm.ended = true;
     confirmations.settle(chainId, hash, confirm);
     const { replacementReason: _reason, ...mined } = receipt;
+    // The same wait's receipt ends this span too.
+    confirm.waited(waitedFor);
     confirm.receipt(mined, endTime);
   };
 
@@ -543,6 +567,7 @@ export function createTransactionSpans({
     shared: ConfirmSpan,
     receipt: ReceiptLike,
     endTime: TimeInput | undefined,
+    waitedFor: number | undefined,
   ): void => {
     // A receipt without a readable block number and gas used cannot be recorded: it ends the span as a failure and
     // releases the key for a later wait, as one with an invalid hash does (#311).
@@ -577,7 +602,7 @@ export function createTransactionSpans({
     shared.replaced(mined, receipt.replacementReason, endTime);
     safely(
       'record replacing transaction',
-      () => recordReplacing(chainId, mined, receipt, shared.origin, endTime),
+      () => recordReplacing(chainId, mined, receipt, shared.origin, endTime, waitedFor),
       undefined,
     );
   };
@@ -593,21 +618,30 @@ export function createTransactionSpans({
       diag.debug('hashspan: not confirming a transaction without a valid hash');
       return NOOP_CONFIRM;
     }
+    // This wait's own count, read before the span is joined: recorded only if this wait ends the span (ADR 0007).
+    const waitedFor = safely('read wait confirmations', () => waitConfirmations(input), undefined);
     const claim = joinConfirm(confirmations, chainId, hash, () => openConfirm(input, parentCtx));
     if (!claim) return NOOP_CONFIRM;
     const { shared } = claim;
+    const endedBy =
+      (end: () => void): (() => void) =>
+      () => {
+        shared.waited(waitedFor);
+        end();
+      };
     return {
       end: (receipt: ReceiptLike, second?: EndOptions): void => {
         const { endTime } = handleOptions(second);
         // A pending receipt is no outcome: it withdraws this wait, as a timeout does, and as a pending call batch
         // does (ADR 0007, ADR 0016).
         if (isPending(receipt)) {
-          claim.withdraw(() => shared.pending(endTime));
+          claim.withdraw(endedBy(() => shared.pending(endTime)));
           return;
         }
         if (!claim.receive()) return;
+        shared.waited(waitedFor);
         try {
-          endWithReceipt(chainId, hash, shared, receipt, endTime);
+          endWithReceipt(chainId, hash, shared, receipt, endTime, waitedFor);
         } catch {
           // A receipt that cannot be read still ends the span, as `_OTHER`, and releases the key for a later wait
           // (ADR 0025 rule 1). Neither call does anything if the span already ended or the key was settled.
@@ -622,11 +656,11 @@ export function createTransactionSpans({
       },
       timeout: (second?: EndOptions): void => {
         const { endTime } = handleOptions(second);
-        claim.withdraw(() => shared.timeout(endTime));
+        claim.withdraw(endedBy(() => shared.timeout(endTime)));
       },
       fail: (error: unknown, second?: FailOptions): void => {
         const read = handleOptions(second);
-        claim.withdraw(() => shared.fail(error, read));
+        claim.withdraw(endedBy(() => shared.fail(error, read)));
       },
     };
   };

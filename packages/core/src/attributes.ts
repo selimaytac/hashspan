@@ -59,6 +59,12 @@ export const ATTR_BLOCKCHAIN_TX_REVERT_REASON = 'blockchain.tx.revert.reason' as
 export const ATTR_BLOCKCHAIN_TX_REPLACEMENT_HASH = 'blockchain.tx.replacement.hash' as const;
 /** On a `replaced` confirm span: why the transaction was replaced, as the library reported it. */
 export const ATTR_BLOCKCHAIN_TX_REPLACEMENT_REASON = 'blockchain.tx.replacement.reason' as const;
+/**
+ * On a transaction's confirm span: the number of confirmations (blocks, counting the receipt's own) the wait that
+ * ended the span asked for, as the instrumented library applies it; absent when that wait took no count. Block counts
+ * are not finality and depend on the chain, so the value is read with `blockchain.chain.id`. Never a metric attribute.
+ */
+export const ATTR_BLOCKCHAIN_TX_WAIT_CONFIRMATIONS = 'blockchain.tx.wait.confirmations' as const;
 /** Block the transaction was included in. */
 export const ATTR_BLOCKCHAIN_BLOCK_NUMBER = 'blockchain.block.number' as const;
 /** Name of the called contract function, when an ABI is known. */

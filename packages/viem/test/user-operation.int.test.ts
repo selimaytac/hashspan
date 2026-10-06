@@ -187,6 +187,9 @@ describe('user operations on Anvil', () => {
     expect(bundle?.attributes['blockchain.tx.fee']).toBeDefined();
     expect(bundle?.attributes['blockchain.user_operation.hash']).toBeUndefined();
     expect(bundle?.links).toEqual([]);
+    // A user operation's wait takes no count (#414); the bundle transaction's own wait waits for viem's default, 1.
+    expect(confirm?.attributes).not.toHaveProperty('blockchain.tx.wait.confirmations');
+    expect(bundle?.attributes['blockchain.tx.wait.confirmations']).toBe(1);
   });
 
   it('records a reverted operation in a bundle transaction that succeeded', async () => {

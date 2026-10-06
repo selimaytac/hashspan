@@ -155,6 +155,9 @@ export const ATTR_BLOCKCHAIN_TX_TO: "blockchain.tx.to";
 export const ATTR_BLOCKCHAIN_TX_VALUE: "blockchain.tx.value";
 
 // @public
+export const ATTR_BLOCKCHAIN_TX_WAIT_CONFIRMATIONS: "blockchain.tx.wait.confirmations";
+
+// @public
 export const ATTR_BLOCKCHAIN_USER_OPERATION_CALL_COUNT: "blockchain.user_operation.call_count";
 
 // @public
@@ -326,6 +329,7 @@ export interface ConfirmHandle {
 // @public
 export interface ConfirmInput {
     chainId: number;
+    confirmations?: number | undefined;
     hash: string;
     startTime?: TimeInput | undefined;
 }
