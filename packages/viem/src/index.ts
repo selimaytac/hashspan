@@ -153,7 +153,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
   const revertReasons = new Recent<Promise<string | undefined>>();
   const { track, flush, settleOnce } = createPending();
-  const { recordConfirmation, confirmThrough } = createConfirmation({
+  const { recordConfirmation, confirmThrough, confirmPending } = createConfirmation({
     tracker,
     decodeRevertReason,
     revertReasonTimeoutMs,
@@ -194,7 +194,16 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         waitForTransactionReceipt,
       },
       actions,
-      { tracker, confirm, abis, track, recordConfirmation, confirmThrough, sending },
+      {
+        tracker,
+        confirm,
+        abis,
+        track,
+        recordConfirmation,
+        confirmThrough,
+        confirmPending,
+        sending,
+      },
     );
     addUserOperationActions(client, { sendUserOperation, waitForUserOperationReceipt }, actions, {
       tracker,

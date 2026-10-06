@@ -20,7 +20,9 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
     extension: `confirmation.ts` (receipt, sealed receipt, revert reason, background limit), `watch.ts`,
     `pending.ts` (`track()`, `flush()`, ending a handle once), `receipt.ts` (normalising receipts, classifying
     rejections), `operator-fee.ts` (the OP Stack operator fee of a receipt that charges one), `fee-asset.ts` (the
-    token a fee was paid in: Celo's `feeCurrency`, a Tempo receipt's `feeToken`), `timing.ts`, `recent.ts`.
+    token a fee was paid in: Celo's `feeCurrency`, a Tempo receipt's `feeToken`; a sponsored Tempo fee),
+    `multisig.ts` (a Tempo multisig relay's pending receipt and the receipt it names an operation in), `timing.ts`,
+    `recent.ts`.
   - Background confirmation must never delay or fail the user's call, and nothing the telemetry needs is awaited
     before the call it traces (ADR 0009).
   - Work that outlives a traced call must be passed to `track()`, so `flush()` can await it (ADR 0010).

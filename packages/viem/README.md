@@ -204,6 +204,23 @@ chain module and makes no request for either. A transaction sent with `sendRawTr
 confirmed with `watch()`, records no Celo fee currency, since only the transaction names it
 ([ADR 0028](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0028-fee-asset.md)).
 
+## Tempo transactions
+
+- **Sponsored fees.** A Tempo receipt (type `0x76`) names the account that paid the fee in `feePayer`. When it is a
+  valid address other than the receipt's `from`, the fee sample carries `blockchain.fee.payer` `sponsor`, so it is
+  not counted as the sender's fee; no address is recorded on the sample or the span
+  ([ADR 0020](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0020-metrics.md)).
+- **Pending receipts.** A Tempo multisig relay (`Relay.multisig` of `viem/tempo`) answers a sync send whose approvals
+  are below quorum with a receipt whose `status` is `pending` (or none, without viem's Tempo formatter) and whose hash
+  is the multisig operation's. The send span ends when the call returns, as usual. The confirm span is not ended by
+  that receipt: off your call's path, the adapter asks for the operation's receipt again, spread over a background
+  confirmation's `timeoutMs` (default 120 000 ms), at most 60 times and never more often than the client's polling
+  interval. When the relay has submitted the transaction, its receipt names the operation under `multisig` and is
+  recorded on the span; otherwise the span ends as `timeout`. This wait counts towards `maxBackgroundConfirmations`,
+  and `flush()` ends it; when the limit is reached, or is `0`, the span ends as `timeout` when the call returns.
+  Your own `waitForTransactionReceipt` of the operation's hash records the submitted transaction's receipt the same
+  way.
+
 ## Background confirmation
 
 Some agent frameworks wait for receipts through their own client, or never wait at all. With
@@ -401,6 +418,11 @@ walletClient.extend(withHashspan()).extend(publicActions);
 
 When a framework extends the client you pass in, check whether confirm spans appear; send spans are unaffected.
 
+Extensions that add their own actions are the other way round. The actions of Tempo's `tempoActions()` (`viem/tempo`),
+such as `token.transfer`, call viem's actions with the client they extend: they are traced only when `withHashspan()`
+was applied before `tempoActions()`, and then through the action they reach (`token.transfer` as a `sendTransaction`
+to the token). Applied after it, they are not traced; their results and requests are the same either way.
+
 ## Known limits
 
 - Not traced: `deployContract` ([#36](https://github.com/selimaytac/hashspan/issues/36)).
@@ -427,6 +449,9 @@ When a framework extends the client you pass in, check whether confirm spans app
 - A wait that resolves with the receipt of another transaction that viem did not report as a replacement, as after a
   mixed-up RPC response, ends the confirm span with `error.type` `_OTHER` and records none of that receipt's data;
   the transaction's own outcome is not recorded ([#355](https://github.com/selimaytac/hashspan/issues/355)).
+- The send and confirm spans of a Tempo multisig transaction sent with a sync form below quorum carry the multisig
+  operation's hash, not the hash of the transaction the relay submits later ([Tempo transactions](#tempo-transactions)).
+- A Tempo transaction (type `0x76`) with a `calls` list has no top-level `to`: its send span records no recipient.
 - A preconfirmed receipt whose sealed receipt does not come in time is recorded without fees
   ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)).
 - A Celo transaction sent with `sendRawTransaction`, or confirmed with `watch()` without a traced send, records its fee

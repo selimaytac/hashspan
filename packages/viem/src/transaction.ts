@@ -22,6 +22,7 @@ import {
   type RecheckOptions,
 } from './confirm/confirmation.js';
 import { feeAssetOf } from './confirm/fee-asset.js';
+import { isPendingReceipt } from './confirm/multisig.js';
 import {
   capturing,
   type ReplacementCapture,
@@ -119,6 +120,7 @@ export interface TransactionDependencies {
   track(work: Promise<void>): void;
   recordConfirmation: Confirmation['recordConfirmation'];
   confirmThrough: Confirmation['confirmThrough'];
+  confirmPending: Confirmation['confirmPending'];
   sending: SendTracing;
 }
 
@@ -142,6 +144,7 @@ export function addTransactionActions(
     track,
     recordConfirmation,
     confirmThrough,
+    confirmPending,
     sending: { knownChainId, queryChainId, traceSend, untraced },
   }: TransactionDependencies,
 ): void {
@@ -306,7 +309,9 @@ export function addTransactionActions(
    * Records a sync action, which sends a transaction and waits for its receipt in one call (viem 2.38.0): the send
    * span covers the call and ends with the hash of the receipt, as viem returns the hash only with the receipt, and a
    * confirm span with the same start and end records the receipt. A rejection that carries the receipt of a reverted
-   * transaction (`throwOnReceiptRevert`) is recorded as that receipt; nothing else of the call's result is read.
+   * transaction (`throwOnReceiptRevert`) is recorded as that receipt; nothing else of the call's result is read. A
+   * pending receipt, which a Tempo multisig relay returns for an operation below quorum, is no outcome: its confirm
+   * span keeps waiting off the caller's path (#402).
    */
   const syncSend = (
     args: SendArgs,
@@ -324,7 +329,18 @@ export function addTransactionActions(
         const hash = own(receipt, 'transactionHash');
         if (typeof hash !== 'string') return false;
         handle.end({ hash }, { endTime });
-        confirmReceipt(parent, chainId, hash, receipt, abi, callStart, endTime);
+        if (isPendingReceipt(receipt)) {
+          if (abi) abis.set(confirmKey(chainId, hash), abi);
+          confirmPending(
+            client,
+            chainId,
+            hash,
+            durationOr(confirm?.timeoutMs, DEFAULT_BACKGROUND_TIMEOUT_MS),
+            { parent, startTime: callStart, returnedAt: endTime },
+          );
+        } else {
+          confirmReceipt(parent, chainId, hash, receipt, abi, callStart, endTime);
+        }
         return true;
       };
       return {

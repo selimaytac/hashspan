@@ -65,14 +65,17 @@ const FEE_TOKEN = '0x20C0000000000000000000000000000000000001';
 /** A Celo fee currency, as a sending call passes it. */
 const FEE_CURRENCY = '0x765DE816845861e75A25fCA122bb6898B8B1282a';
 
+/** An account other than the sender that paid a Tempo transaction's fee. */
+const FEE_PAYER = '0x3333333333333333333333333333333333333333';
+
 /** How the counting transport makes Anvil's answers look like another chain's. */
-type Shape = 'operatorFee' | 'tempo' | undefined;
+type Shape = 'operatorFee' | 'tempo' | 'sponsored' | undefined;
 
 /**
  * A transport to Anvil that counts the requests per method. With `operatorFee`, receipts carry the fields of an OP
  * Stack chain that charges an operator fee, as a node after Isthmus adds them; with `tempo`, they are of type `0x76`
- * and name a fee token, as a Tempo node's are. A Celo `feeCurrency` is taken out of a sent transaction, which Anvil
- * does not know.
+ * and name a fee token, as a Tempo node's are, and with `sponsored` also a fee payer other than the sender. A Celo
+ * `feeCurrency` is taken out of a sent transaction, which Anvil does not know.
  */
 function counting(shape: Shape = undefined): {
   transport: ReturnType<typeof custom>;
@@ -95,6 +98,8 @@ function counting(shape: Shape = undefined): {
       if (shape === 'operatorFee')
         return { ...(result as object), operatorFeeScalar: '0x3e8', operatorFeeConstant: '0x0' };
       if (shape === 'tempo') return { ...(result as object), type: '0x76', feeToken: FEE_TOKEN };
+      if (shape === 'sponsored')
+        return { ...(result as object), type: '0x76', feeToken: FEE_TOKEN, feePayer: FEE_PAYER };
       return result;
     },
   });
@@ -316,6 +321,10 @@ describe('JSON-RPC requests the viem adapter adds', () => {
     expect(await extraRequests(sendAndWait, { shape: 'tempo' })).toEqual({});
     const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
     expect(confirm?.attributes['blockchain.tx.fee_asset']).toBe(FEE_TOKEN.toLowerCase());
+  });
+
+  it('none for a fee another account paid, read from the feePayer of a receipt of type 0x76', async () => {
+    expect(await extraRequests(sendAndWait, { shape: 'sponsored' })).toEqual({});
   });
 
   it('none for a reverted transaction with decodeRevertReason off', async () => {

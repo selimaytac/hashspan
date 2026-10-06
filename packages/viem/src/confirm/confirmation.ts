@@ -1,13 +1,18 @@
 // Confirming a transaction through a client: the receipt, a sealed receipt after a preconfirmation, the receipt of a
-// wait for several confirmations read again, the revert reason, and background confirmation within its limit.
+// wait for several confirmations read again, the revert reason, background confirmation within its limit, and the
+// wait that follows a pending receipt of a sync send.
 import type { ConfirmHandle, ReceiptLike, TxTracker } from '@hashspan/core';
-import { diag, type TimeInput } from '@opentelemetry/api';
+import { type Context, context, diag, type TimeInput } from '@opentelemetry/api';
 import { type Abi, type TransactionReceipt, WaitForTransactionReceiptTimeoutError } from 'viem';
-import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem/actions';
+import {
+  getTransactionReceipt as viemGetTransactionReceipt,
+  waitForTransactionReceipt as viemWaitForTransactionReceipt,
+} from 'viem/actions';
 import { fetchRevertReason } from '../revert-reason.js';
 import { errorName } from '../safe-tracker.js';
 import type { ViemClientLike } from '../types.js';
 import { feeCurrencyOf } from './fee-asset.js';
+import { isPendingReceipt, isSubmittedFor } from './multisig.js';
 import { chargesOperatorFee, fetchOperatorFee } from './operator-fee.js';
 import type { PendingConfirmation } from './pending.js';
 import {
@@ -37,6 +42,11 @@ const SEALED_RECEIPT_TIMEOUT_MS = 30_000;
 const OPERATOR_FEE_TIMEOUT_MS = 10_000;
 /** `error.type` of a confirm span whose transaction a chain reorganisation removed during a wait (ADR 0026). */
 const NOT_ON_CHAIN = 'not_on_chain';
+/**
+ * Most receipt requests the wait after a pending receipt of a sync send makes, however long its timeout and however
+ * short the client's polling interval: its polls are spread over the timeout (#402).
+ */
+export const MAX_PENDING_RECEIPT_REQUESTS = 60;
 
 /**
  * For a caller's wait with `confirmations` above 1: its receipt is read again once the wait resolved, for at most
@@ -89,6 +99,19 @@ export interface Confirmation {
     timeoutMs: number,
     onReceipt?: (receipt: TransactionReceipt | undefined) => void,
   ): boolean;
+  /**
+   * After a sync send through `client` returned a pending receipt for `hash` at `returnedAt`: opens its confirm span
+   * in `parent` at `startTime`, the call's start, and polls for the receipt off the caller's path, for at most
+   * `timeoutMs` and {@link MAX_PENDING_RECEIPT_REQUESTS} requests, as one of the background confirmations. When
+   * `maxBackgroundConfirmations` are already polling, the span ends at once as `timeout`, at `returnedAt`.
+   */
+  confirmPending(
+    client: ViemClientLike,
+    chainId: number,
+    hash: string,
+    timeoutMs: number,
+    call: { parent: Context; startTime: Date; returnedAt: Date },
+  ): void;
 }
 
 export function createConfirmation({
@@ -203,11 +226,16 @@ export function createConfirmation({
         replacement !== undefined &&
         sameHex(replacement.transactionReceipt.transactionHash, receipt.transactionHash);
       const replacementReason = reported ? replacement.reason : undefined;
+      // The receipt of the transaction a Tempo multisig relay submitted for the awaited operation names the operation
+      // under `multisig`: it is recorded for the awaited hash, not as a replacement (#402).
+      const submitted =
+        !reported && !sameHex(receipt.transactionHash, hash) && isSubmittedFor(receipt, hash);
       // A receipt of another hash belongs to this transaction only as a replacement viem reported, which it matches on
       // sender and nonce (docs/adr/0008-replaced-transactions.md). Otherwise the endpoint answered with an unrelated
       // transaction's receipt: none of its data is recorded, and the span ends as a failure.
       if (
         !reported &&
+        !submitted &&
         typeof receipt.transactionHash === 'string' &&
         !sameHex(receipt.transactionHash, hash)
       ) {
@@ -222,9 +250,10 @@ export function createConfirmation({
       const replacingAsset = reported ? feeCurrencyOf(replacement.transaction) : undefined;
       const normalise = (from: ViemReceipt): ReceiptLike => {
         const like = toReceiptLike(from);
-        return like.feeAsset === undefined && replacingAsset !== undefined
-          ? { ...like, feeAsset: replacingAsset }
-          : like;
+        const attributed = submitted ? { ...like, transactionHash: hash } : like;
+        return attributed.feeAsset === undefined && replacingAsset !== undefined
+          ? { ...attributed, feeAsset: replacingAsset }
+          : attributed;
       };
       let recorded = normalise(receipt);
       let endAt = endTimeOf;
@@ -299,6 +328,7 @@ export function createConfirmation({
         const abi =
           abis.get(minedKey) ??
           (minedKey === confirmKey(chainId, hash) ||
+          submitted ||
           (reported && sameHex(replacement.transaction.to, replacement.replacedTransaction.to))
             ? abis.get(confirmKey(chainId, hash))
             : undefined);
@@ -370,6 +400,26 @@ export function createConfirmation({
     return background;
   };
 
+  /** Whether `maxBackgroundConfirmations` are already polling; warns once until the count falls below the limit. */
+  const atLimit = (): boolean => {
+    if (backgroundCount < maxBackgroundConfirmations) return false;
+    if (!limitReported) {
+      limitReported = true;
+      diag.warn(
+        `hashspan: ${maxBackgroundConfirmations} background confirmations are already polling; not confirming more until one ends (maxBackgroundConfirmations)`,
+      );
+    }
+    return true;
+  };
+  /** Takes a slot of the background limit; the function returned gives it back. */
+  const occupy = (): (() => void) => {
+    backgroundCount++;
+    return () => {
+      backgroundCount--;
+      if (backgroundCount < maxBackgroundConfirmations) limitReported = false;
+    };
+  };
+
   /**
    * Starts a confirm span for `hash` and polls for its receipt through `client`, off the caller's path. Returns false,
    * recording nothing, when `maxBackgroundConfirmations` are already polling.
@@ -381,15 +431,7 @@ export function createConfirmation({
     timeoutMs: number,
     onReceipt?: (receipt: TransactionReceipt | undefined) => void,
   ): boolean => {
-    if (backgroundCount >= maxBackgroundConfirmations) {
-      if (!limitReported) {
-        limitReported = true;
-        diag.warn(
-          `hashspan: ${maxBackgroundConfirmations} background confirmations are already polling; not confirming more until one ends (maxBackgroundConfirmations)`,
-        );
-      }
-      return false;
-    }
+    if (atLimit()) return false;
     const handle = tracker.startConfirm({ chainId, hash });
     const capture: ReplacementCapture = {};
     const waitMs = durationOr(timeoutMs, DEFAULT_BACKGROUND_TIMEOUT_MS);
@@ -420,12 +462,8 @@ export function createConfirmation({
         }
       }
     };
-    backgroundCount++;
+    const release = occupy();
     const waited = wait();
-    const release = (): void => {
-      backgroundCount--;
-      if (backgroundCount < maxBackgroundConfirmations) limitReported = false;
-    };
     waited.then(release, release);
     track(recordConfirmation(chainId, hash, handle, waited, capture, client, undefined, deadline));
     // Not tracked: flush() waits for the confirm span, not for the caller's callback.
@@ -438,5 +476,56 @@ export function createConfirmation({
     return true;
   };
 
-  return { recordConfirmation, confirmThrough };
+  const confirmPending: Confirmation['confirmPending'] = (
+    client,
+    chainId,
+    hash,
+    timeoutMs,
+    { parent, startTime, returnedAt },
+  ) => {
+    const handle = context.with(parent, () => tracker.startConfirm({ chainId, hash, startTime }));
+    // The caller waited and got no outcome: the observer gave up (docs/adr/0016).
+    if (atLimit()) {
+      handle.timeout({ endTime: returnedAt });
+      return;
+    }
+    const release = occupy();
+    const waitMs = durationOr(timeoutMs, DEFAULT_BACKGROUND_TIMEOUT_MS);
+    const deadline = Date.now() + waitMs;
+    const polling = (client as { pollingInterval?: unknown }).pollingInterval;
+    const intervalMs = Math.max(
+      typeof polling === 'number' && polling > 0 ? polling : RECEIPT_LAG_RETRY_MS,
+      waitMs / MAX_PENDING_RECEIPT_REQUESTS,
+    );
+    let ended = false;
+    const wait = async (): Promise<ViemReceipt> => {
+      for (let requests = 0; requests < MAX_PENDING_RECEIPT_REQUESTS; requests++) {
+        const before = deadline - Date.now();
+        if (before <= 0) break;
+        await delay(Math.min(intervalMs, before));
+        const remaining = deadline - Date.now();
+        // A flush ended the span: no more requests.
+        if (ended || remaining <= 0) break;
+        // A missing receipt rejects, and a failed request too: both are polled again. Bounded by the deadline.
+        const receipt = await within(
+          viemGetTransactionReceipt(client as never, { hash: hash as `0x${string}` }),
+          remaining,
+          'read the receipt after a pending one',
+        );
+        if (receipt && !isPendingReceipt(receipt)) return receipt as ViemReceipt;
+      }
+      throw new WaitForTransactionReceiptTimeoutError({ hash: hash as `0x${string}` });
+    };
+    const waited = wait();
+    waited.then(release, release);
+    track(
+      recordConfirmation(chainId, hash, handle, waited, {}, client, undefined, deadline).finally(
+        () => {
+          ended = true;
+        },
+      ),
+    );
+  };
+
+  return { recordConfirmation, confirmThrough, confirmPending };
 }

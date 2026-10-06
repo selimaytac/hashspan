@@ -429,8 +429,9 @@ const ROWS: Row[] = [
           : { receipt: { [field]: value } },
       )(WAIT, hashspan),
   ),
-  // A Tempo receipt (type 0x76) names the token its fee was paid in; telemetry reads it from no other type (ADR 0028).
-  // In the `feePayer` row, which telemetry does not read, the fee token is recorded, so rule 6 checks it.
+  // A Tempo receipt (type 0x76) names the token its fee was paid in (ADR 0028) and the account that paid it, compared
+  // with the sender to mark a sponsored fee sample (ADR 0020); telemetry reads neither from any other type. In the
+  // `feePayer` row the fee token is recorded too, so rule 6 checks it, and rule 5 the payer's closed set.
   ...answerRows(
     'node receipt of a Tempo transaction',
     ['type', 'feeToken', 'feePayer'],
