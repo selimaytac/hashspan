@@ -13,7 +13,9 @@ const EXPECTED_EMPTY = {
   'metrics.json': ['Failures by error.type [A]', 'Failures by error.type [B]'],
 };
 const dir = new URL('../dashboards/', import.meta.url);
-const time = Math.floor(Date.now() / 1000);
+// With millisecond precision: the demo's samples are written just before it exits, so a time rounded down to the
+// second can fall before them and make every query empty. It is this host's clock, as the samples' timestamps are.
+const time = Date.now() / 1000;
 
 // The values Grafana gives the variables with every service and chain selected, and a window that covers the run.
 const substitute = (query) =>
