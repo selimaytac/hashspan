@@ -478,8 +478,9 @@ to the token). Applied after it, they are not traced; their results and requests
   recorded count may be the other wait's: a wait of 1 that joins a wait of 5 on the same client resolves with it at
   depth 5 and records `blockchain.tx.wait.confirmations` `1`
   ([wevm/viem#5142](https://github.com/wevm/viem/pull/5142)).
-- With viem older than 2.33.0, viem's `waitForTransactionReceipt` reads the transaction before its receipt, so
-  background confirmation and `watch()` send an `eth_getTransactionByHash` as well for each transaction they confirm.
+- With viem older than 2.33.0, viem's `waitForTransactionReceipt` reads the transaction before its receipt even when
+  the transaction is already mined, so background confirmation and `watch()` also send an `eth_getTransactionByHash`
+  for a transaction mined before they start.
   With viem older than 2.21.58, a user operation that the bundler refuses because its call reverts, for a call with
   `data` and no `abi`, records `error.type` `ContractFunctionRevertedError`, as viem classifies it there, where newer
   viem gives `ExecutionRevertedError`.
