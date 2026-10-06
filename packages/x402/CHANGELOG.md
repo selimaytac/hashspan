@@ -1,5 +1,30 @@
 # @hashspan/x402
 
+## 1.0.0
+
+### Major Changes
+
+- [#391](https://github.com/selimaytac/hashspan/pull/391) [`874ecc5`](https://github.com/selimaytac/hashspan/commit/874ecc558aa4f6126458a7f0bd0067123152e5b2) Thanks [@selimaytac](https://github.com/selimaytac)! - 1.0: the public API in the API reports is frozen; a breaking change to it now needs a major release (ADR 0027). The
+  semantic conventions stay `development` under their change policy. Removed, as announced:
+  
+  - The positional forms of the handle methods: `send.end(hash, endTime)`, `send.fail(error, endTime, options)`,
+    `confirm.end(receipt, endTime)`, `confirm.timeout(endTime)` and `confirm.fail(error, endTime)`. Use the options
+    forms, such as `send.end({ hash }, { endTime })`. Called from JavaScript, the old forms still never throw, but the
+    end time is ignored and a hash given as a string is not recorded.
+  - `blockchain.system` on spans and metric samples, and `ATTR_BLOCKCHAIN_SYSTEM`: use `blockchain.system.name` and
+    `ATTR_BLOCKCHAIN_SYSTEM_NAME`, recorded since 0.11 with the same value. Schema version `0.4.0-dev`.
+  - `BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT`, not recorded since 0.5: a confirm span that gave up waiting has `error.type`
+    `timeout`.
+  
+  The adapters call the options forms, so a tracker passed to them has to come from `@hashspan/core` 0.4 or later.
+  See docs/migrating-to-1.0.md.
+
+### Patch Changes
+
+- Updated dependencies [[`18a5132`](https://github.com/selimaytac/hashspan/commit/18a51322ccce5b3db00de468c379582a07a1b388), [`e55ebd6`](https://github.com/selimaytac/hashspan/commit/e55ebd65a28043f84dbaf024017aab7f28bc6ca5), [`874ecc5`](https://github.com/selimaytac/hashspan/commit/874ecc558aa4f6126458a7f0bd0067123152e5b2), [`7e026cc`](https://github.com/selimaytac/hashspan/commit/7e026cc4714edd32b0fde86f53178c8a6f8be441), [`622b52d`](https://github.com/selimaytac/hashspan/commit/622b52d5d5db9a02dc5c9bea88d04d4210b1214b), [`81bb81a`](https://github.com/selimaytac/hashspan/commit/81bb81a8452584f8d237c1ebf2bf550ffc3856a4), [`b5fcb99`](https://github.com/selimaytac/hashspan/commit/b5fcb99902c3da9ac0d0fd858642c2cf7c426283)]:
+  - @hashspan/core@1.0.0
+  - @hashspan/viem@1.0.0
+
 ## 1.0.0-rc.0
 
 ### Major Changes

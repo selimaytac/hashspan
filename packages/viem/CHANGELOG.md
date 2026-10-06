@@ -1,5 +1,55 @@
 # @hashspan/viem
 
+## 1.0.0
+
+### Major Changes
+
+- [#391](https://github.com/selimaytac/hashspan/pull/391) [`874ecc5`](https://github.com/selimaytac/hashspan/commit/874ecc558aa4f6126458a7f0bd0067123152e5b2) Thanks [@selimaytac](https://github.com/selimaytac)! - 1.0: the public API in the API reports is frozen; a breaking change to it now needs a major release (ADR 0027). The
+  semantic conventions stay `development` under their change policy. Removed, as announced:
+  
+  - The positional forms of the handle methods: `send.end(hash, endTime)`, `send.fail(error, endTime, options)`,
+    `confirm.end(receipt, endTime)`, `confirm.timeout(endTime)` and `confirm.fail(error, endTime)`. Use the options
+    forms, such as `send.end({ hash }, { endTime })`. Called from JavaScript, the old forms still never throw, but the
+    end time is ignored and a hash given as a string is not recorded.
+  - `blockchain.system` on spans and metric samples, and `ATTR_BLOCKCHAIN_SYSTEM`: use `blockchain.system.name` and
+    `ATTR_BLOCKCHAIN_SYSTEM_NAME`, recorded since 0.11 with the same value. Schema version `0.4.0-dev`.
+  - `BLOCKCHAIN_TX_STATUS_VALUE_TIMEOUT`, not recorded since 0.5: a confirm span that gave up waiting has `error.type`
+    `timeout`.
+  
+  The adapters call the options forms, so a tracker passed to them has to come from `@hashspan/core` 0.4 or later.
+  See docs/migrating-to-1.0.md.
+
+### Minor Changes
+
+- [#388](https://github.com/selimaytac/hashspan/pull/388) [`7e026cc`](https://github.com/selimaytac/hashspan/commit/7e026cc4714edd32b0fde86f53178c8a6f8be441) Thanks [@selimaytac](https://github.com/selimaytac)! - `sendRawTransaction` and `sendRawTransactionSync`, which broadcast a transaction signed elsewhere, are now traced: the
+  send span records the chain id, recipient, value, nonce, function selector and EIP-7702 authorizations parsed from the
+  signed transaction (the client's chain id when the transaction has none), and the hash, but no sender, which only the
+  signature gives. A transaction viem cannot parse, or longer than 128 KiB, records the chain id and hash only. The sync
+  form records a confirm span over the call, like the other sync actions. viem's `sendTransaction` and
+  `sendTransactionSync` functions, called with an extended client and a local account, now record their send (and the
+  sync form's confirmation), as they send through the client's `sendRawTransaction` and `sendRawTransactionSync`.
+
+### Patch Changes
+
+- [#404](https://github.com/selimaytac/hashspan/pull/404) [`e55ebd6`](https://github.com/selimaytac/hashspan/commit/e55ebd65a28043f84dbaf024017aab7f28bc6ca5) Thanks [@selimaytac](https://github.com/selimaytac)! - README: the known limit on a wait that resolves with another transaction's receipt describes the behaviour since
+  0.12.0 (the confirm span ends with `error.type` `_OTHER`), not the earlier one.
+
+- [#387](https://github.com/selimaytac/hashspan/pull/387) [`81bb81a`](https://github.com/selimaytac/hashspan/commit/81bb81a8452584f8d237c1ebf2bf550ffc3856a4) Thanks [@selimaytac](https://github.com/selimaytac)! - README and package description: hashspan also traces the transactions of services that are not agents, such as
+  payment workers, wallet backends and bots, under whatever span is active.
+  
+  A transaction sent through a wallet service's own API gets a send span too: the viem README shows how to record the
+  API call with the core's tracker and confirm it with `watch()` on the same tracker, so the confirm span links to it.
+  
+  The viem README has a "Many transactions" section: what `maxBackgroundConfirmations`, `linkTtlMs`,
+  `maxTrackedTransactions` and sampling mean for a worker or a bot that sends many transactions; metrics record every
+  transaction whatever the sampler decides.
+
+- [#393](https://github.com/selimaytac/hashspan/pull/393) [`b5fcb99`](https://github.com/selimaytac/hashspan/commit/b5fcb99902c3da9ac0d0fd858642c2cf7c426283) Thanks [@selimaytac](https://github.com/selimaytac)! - `waitForTransactionReceipt` passes arguments that are not a plain object, such as a class instance, on to viem as they
+  are: the wait is traced, but a replacement is not attributed, as in the cdp adapter. Only plain objects get the
+  replacement callback.
+- Updated dependencies [[`18a5132`](https://github.com/selimaytac/hashspan/commit/18a51322ccce5b3db00de468c379582a07a1b388), [`874ecc5`](https://github.com/selimaytac/hashspan/commit/874ecc558aa4f6126458a7f0bd0067123152e5b2), [`622b52d`](https://github.com/selimaytac/hashspan/commit/622b52d5d5db9a02dc5c9bea88d04d4210b1214b), [`81bb81a`](https://github.com/selimaytac/hashspan/commit/81bb81a8452584f8d237c1ebf2bf550ffc3856a4)]:
+  - @hashspan/core@1.0.0
+
 ## 1.0.0-rc.0
 
 ### Major Changes
