@@ -182,6 +182,9 @@ make lab-pause   # stop, keep state
 make lab-nuke    # remove containers, images, tools and build output
 ```
 
+`make demo` here is a quick check of the example agent. For the full set of scenarios on a local chain, with
+Grafana dashboards, run the [hashspan-lab](https://github.com/selimaytac/hashspan-lab) repository.
+
 ## Documentation
 
 - Website: [hashspan.dev](https://hashspan.dev)
