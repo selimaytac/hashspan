@@ -33,7 +33,7 @@ and the provider's rate limits then also slow down the agent's own calls.
 - The CDP and x402 adapters use the default limit of the `withHashspan()` they create internally.
 - Adding the option is a minor change; changing the default later is a behaviour change noted in the changelog.
 
-## Amendment (2026-10-06, proposed): following a multisig operation
+## Amendment (2026-10-06, accepted): following a multisig operation
 
 A sync send through a Tempo multisig relay whose approvals are below quorum returns a pending receipt with the
 operation's hash (#402). By default that receipt withdraws the wait, as a pending call batch does: the confirm span
