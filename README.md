@@ -12,8 +12,8 @@ workers, wallet backends, bots.
 [![npm @hashspan/viem](https://img.shields.io/npm/v/@hashspan/viem?label=%40hashspan%2Fviem)](https://www.npmjs.com/package/@hashspan/viem)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: 1.0 release candidate** (`npm install @hashspan/viem@rc`). Published with npm provenance. 1.0 freezes the
-> public API ([ADR 0027](docs/adr/0027-what-1-0-freezes.md)); span, attribute and metric names stay `development` and
+> **Status: 1.0.** Published with npm provenance. 1.0 freezes the public API
+> ([ADR 0027](docs/adr/0027-what-1-0-freezes.md)); span, attribute and metric names stay `development` and
 > can change in a minor release under their [change policy](docs/semconv.md#change-policy), so check dashboards and
 > alerts when you upgrade. See the [roadmap](docs/roadmap.md).
 

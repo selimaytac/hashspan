@@ -38,7 +38,7 @@
 
 - [x] `blockchain.payment.settled_amount`: what an x402 `upto` payment actually charged
   ([semantic conventions](semconv.md#attributes))
-- [x] `timeout` no longer recorded as `blockchain.tx.status` (see [Toward 1.0](#toward-10-a-stable-api))
+- [x] `timeout` no longer recorded as `blockchain.tx.status` (see [1.0](#10-a-stable-api))
 
 ## v0.6: Verified x402 payments
 
@@ -81,9 +81,9 @@ Tracked in the [0.9 milestone](https://github.com/selimaytac/hashspan/milestone/
   [backends](backends.md#grafana-dashboard-for-the-metrics))
 - [x] cdp 0.9.1: network names of `Object.prototype` members and the keys of wrapped objects left alone (#259)
 
-## Toward 1.0: a stable API
+## 1.0: a stable API
 
-The current focus: the work below decides when 1.0 is ready; it has no date.
+Released in 1.0.0, once every criterion below was met.
 
 - [x] Trackers and handles produced by the core only; handle methods take an options object
   ([ADR 0014](adr/0014-core-api-boundary.md))
