@@ -18,6 +18,7 @@ import type { PendingConfirmation } from './pending.js';
 import {
   capturing,
   hasBlockHash,
+  isHash,
   isPendingReceipt,
   isPreconfirmed,
   isReadable,
@@ -96,7 +97,8 @@ export interface Confirmation {
   ): Promise<void>;
   /**
    * Starts a confirm span for `hash` and polls for its receipt through `client`, off the caller's path. Returns false,
-   * recording nothing, when `maxBackgroundConfirmations` are already polling.
+   * recording nothing and polling nothing, when `hash` is not a 32-byte hash or `maxBackgroundConfirmations` are
+   * already polling.
    */
   confirmThrough(
     client: ViemClientLike,
@@ -440,7 +442,8 @@ export function createConfirmation({
 
   /**
    * Starts a confirm span for `hash` and polls for its receipt through `client`, off the caller's path. Returns false,
-   * recording nothing, when `maxBackgroundConfirmations` are already polling.
+   * recording nothing and polling nothing, when `hash` is not a 32-byte hash or `maxBackgroundConfirmations` are
+   * already polling.
    */
   const confirmThrough = (
     client: ViemClientLike,
@@ -449,6 +452,12 @@ export function createConfirmation({
     timeoutMs: number,
     onReceipt?: (receipt: TransactionReceipt | undefined) => void,
   ): boolean => {
+    // The tracker records nothing for another value (ADR 0025 rule 3): polling for it would only send requests until
+    // the timeout, in a slot of the background limit.
+    if (!isHash(hash)) {
+      diag.debug('hashspan: not confirming a transaction without a valid hash');
+      return false;
+    }
     if (atLimit()) return false;
     // The poll below passes viem no count: it waits for one confirmation.
     const handle = tracker.startConfirm({ chainId, hash, confirmations: 1 });
