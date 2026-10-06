@@ -52,7 +52,8 @@ without extra code.
 
 The provider sends with the wallet client you give it, and waits for receipts with a public client it creates
 itself, so the setup needs background confirmation. On Anvil, with the OpenTelemetry SDK started as in the
-[quick start](../README.md#quick-start):
+[quick start](../README.md#quick-start), in an ES module as there (`npm pkg set type=module`), since the file uses
+top-level await:
 
 ```ts
 import { ViemWalletProvider } from '@coinbase/agentkit';
@@ -151,9 +152,11 @@ provider with the constructor that `configureWithWallet()` ends with, around a `
 
 AgentKit reports each wallet provider's initialization and each action invocation to its analytics endpoint; this
 is AgentKit's own behaviour and independent of hashspan. In 0.10.4 the report is not awaited, so any failure, a
-request that cannot connect or a response that is not 2xx, is an unhandled rejection that ends the Node.js process,
-also after the transaction and its spans; AgentKit has no setting to turn the reports off
-([coinbase/agentkit#1531](https://github.com/coinbase/agentkit/issues/1531)).
+request that cannot connect or a response that is not 2xx, is an unhandled rejection, and Node.js ends the process
+when it happens: possibly after the transaction is sent but before `hashspan.flush()` and the SDK's shutdown run, so
+its spans are never exported. AgentKit has no setting to turn the reports off
+([coinbase/agentkit#1531](https://github.com/coinbase/agentkit/issues/1531)); running Node.js with
+`NODE_OPTIONS=--unhandled-rejections=warn` logs the rejection instead and lets the process finish.
 
 ## GOAT SDK
 
