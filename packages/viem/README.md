@@ -473,6 +473,10 @@ to the token). Applied after it, they are not traced; their results and requests
   in its fee currency without `blockchain.tx.fee_asset` ([fees paid in a token](#fees-paid-in-a-token)).
 - Revert reasons are best effort: a provider without historical state cannot replay the transaction, and earlier
   transactions in the same block can change the result ([revert reasons](#revert-reasons)).
+- With viem older than 2.57.0, concurrent waits on one hash with different counts share viem's first poll, so the
+  recorded count may be the other wait's: a wait of 1 that joins a wait of 5 on the same client resolves with it at
+  depth 5 and records `blockchain.tx.wait.confirmations` `1`
+  ([wevm/viem#5142](https://github.com/wevm/viem/pull/5142)).
 - On a client without a chain, a call is not traced when its `eth_chainId` request fails or has not answered 30 s
   after the call ended ([clients without a chain](#clients-without-a-chain)).
 - The limits of the core apply too

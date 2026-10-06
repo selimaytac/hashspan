@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { withHashspan } from '../src/index.js';
 import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemAtLeast } from './viem-version.js';
 
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 const ATTRIBUTE = 'blockchain.tx.wait.confirmations';
@@ -113,6 +114,37 @@ describe("viem's wait, as the attribute describes it", () => {
 });
 
 describe('blockchain.tx.wait.confirmations on Anvil', () => {
+  // Before viem 2.57.0 (wevm/viem#5142), concurrent waits for one hash on one client shared the first call's poll and
+  // count: waits of 5 and 2 both resolved at depth 5, and a wait of 1 joining a wait of 5 ended the span first and
+  // recorded 1 at depth 5 (the viem README, known limits).
+  it.skipIf(!viemAtLeast('2.57.0'))(
+    'records the count of the wait that ended the span, for concurrent waits of 5 and 2 on one client',
+    async () => {
+      const hash = await sent();
+      await rpc('evm_setAutomine', [false]);
+      const hashspan = withHashspan();
+      const client = reader(hashspan);
+      const depthAt: Record<number, number> = {};
+      let depth = 1;
+      const waits = [5, 2].map((confirmations) =>
+        client.waitForTransactionReceipt({ hash, confirmations }).then(() => {
+          depthAt[confirmations] = depth;
+        }),
+      );
+      while (depth < 5) {
+        await sleep(SETTLE_MS);
+        await mine();
+        depth++;
+      }
+      await Promise.all(waits);
+      await hashspan.flush();
+      // Each wait polls with its own count: the wait of 2 resolves first, and its count is the one recorded.
+      expect(depthAt).toEqual({ 2: 2, 5: 5 });
+      expect(recorded()).toEqual([2]);
+    },
+    15_000,
+  );
+
   it('records 1 for background confirmation, also when the caller waits for 3', async () => {
     const hashspan = withHashspan({ confirm: { mode: 'background' } });
     const wallet = createWalletClient({
