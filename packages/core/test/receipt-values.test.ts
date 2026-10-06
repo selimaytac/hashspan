@@ -134,6 +134,52 @@ describe('receipt values', () => {
   });
 });
 
+describe('operator fee', () => {
+  it('records the operator fee apart: blockchain.tx.fee and the fee histogram leave it out', () => {
+    const meters = recordingMeterProvider();
+    const tracker = createTxTracker({ meterProvider: meters.provider });
+    tracker
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end({ ...receipt, l1Fee: 5n, operatorFee: 700n });
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: MINED }).end({ ...receipt, l1Fee: 5n });
+    const [withFee] = confirmsOf(HASH);
+    const [without] = confirmsOf(MINED);
+    expect(withFee?.attributes['blockchain.tx.operator_fee']).toBe('700');
+    expect(withFee?.attributes['blockchain.tx.fee']).toBe('21000000000005');
+    expect(without?.attributes).not.toHaveProperty('blockchain.tx.operator_fee');
+    expect(without?.attributes['blockchain.tx.fee']).toBe('21000000000005');
+    expect(meters.recorded(METRIC_BLOCKCHAIN_CLIENT_FEE).map(({ value }) => value)).toEqual([
+      21_000_000_000_005, 21_000_000_000_005,
+    ]);
+  });
+
+  it('records the operator fee without an effective gas price, and zero as zero', () => {
+    const tracker = createTxTracker();
+    tracker
+      .startConfirm({ chainId: CHAIN_ID, hash: HASH })
+      .end({ ...receipt, effectiveGasPrice: undefined, operatorFee: 9n });
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: MINED }).end({ ...receipt, operatorFee: 0n });
+    expect(confirmsOf(HASH)[0]?.attributes['blockchain.tx.operator_fee']).toBe('9');
+    expect(confirmsOf(HASH)[0]?.attributes).not.toHaveProperty('blockchain.tx.fee');
+    expect(confirmsOf(MINED)[0]?.attributes['blockchain.tx.operator_fee']).toBe('0');
+  });
+
+  it('records a 256-bit operator fee in full, and nothing for one that is not a non-negative integer of 256 bits', () => {
+    const max = 2n ** 256n - 1n;
+    const tracker = createTxTracker();
+    tracker.startConfirm({ chainId: CHAIN_ID, hash: HASH }).end({ ...receipt, operatorFee: max });
+    expect(confirmsOf(HASH)[0]?.attributes['blockchain.tx.operator_fee']).toBe(max.toString());
+    const malformed: unknown[] = [-1n, 2n ** 256n, '0x10', '16', 1.5, Number.NaN, null, {}];
+    malformed.forEach((operatorFee, i) => {
+      const hash = `0x${String(i + 1).padStart(64, '0')}`;
+      tracker.startConfirm({ chainId: CHAIN_ID, hash }).end({ ...receipt, operatorFee } as never);
+      const [span] = confirmsOf(hash);
+      expect(span?.attributes).not.toHaveProperty('blockchain.tx.operator_fee');
+      expect(span?.attributes['blockchain.tx.fee']).toBe('21000000000000');
+    });
+  });
+});
+
 describe('receipt to hash matching', () => {
   it('ends the span as unattributable for a receipt hash that is not a string, even one that reads as a hash', () => {
     vi.spyOn(diag, 'warn').mockImplementation(() => {});

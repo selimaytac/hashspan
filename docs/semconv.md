@@ -168,7 +168,8 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
 | `blockchain.tx.effective_gas_price` | string | confirm | on | wei, decimal string; see the `fee` row for when it is omitted |
 | `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, wei; see the `fee` row for when it is omitted |
-| `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, wei; omitted if the gas price is unknown. The OP Stack operator fee (Isthmus and later) is not included. Fee attributes come from the sealed receipt, never a flashblocks preconfirmation, and are omitted if only a preconfirmation was seen (see [ADR 0024](adr/0024-sealed-receipt-fees.md)). On the confirm span of a payment's settlement, the fee is the facilitator's, which sent the transaction |
+| `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, wei; omitted if the gas price is unknown. The OP Stack operator fee (Isthmus and later) is not included: it is recorded apart as `operator_fee`. Fee attributes come from the sealed receipt, never a flashblocks preconfirmation, and are omitted if only a preconfirmation was seen (see [ADR 0024](adr/0024-sealed-receipt-fees.md)). On the confirm span of a payment's settlement, the fee is the facilitator's, which sent the transaction |
+| `blockchain.tx.operator_fee` | string | confirm | on | OP Stack operator fee (Isthmus and later), wei, decimal string; not included in `blockchain.tx.fee`. Recorded only when the receipt carries `operatorFeeScalar` or `operatorFeeConstant`, which a node adds when the chain charges the fee; the viem adapter then reads it from the GasPriceOracle's `getOperatorFee(gasUsed)` at the receipt's block, with one `eth_call`. Like the other fee attributes, it comes from the sealed receipt only, and is omitted for a deposit transaction, which pays none |
 | `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available, also of a reverted user operation: the `Error(string)` message, `Panic(0x..)`, `ErrorName(arg, ...)` for custom errors with a known ABI, else the 4-byte error selector. See [ADR 0005](adr/0005-revert-reason-replay.md) |
 | `blockchain.tx.replacement.hash` | string | confirm | on | on a `replaced` confirm span: hash of the mined transaction that replaced it |
 | `blockchain.tx.replacement.reason` | string | confirm | on | on a `replaced` confirm span: `repriced` \| `cancelled` \| `replaced`, as reported by the instrumented library; omitted when it reported none |
@@ -220,7 +221,7 @@ The fee fields follow the receipt of each chain family, as the viem adapter read
 | Family | `blockchain.tx.l1_fee` | `blockchain.tx.fee` |
 |---|---|---|
 | Ethereum and other L1s | not recorded | `gas.used × effective_gas_price` |
-| OP Stack (Base, OP Mainnet, Celo) and Scroll | the receipt's `l1Fee` | plus `l1_fee`; not the OP Stack operator fee |
+| OP Stack (Base, OP Mainnet, Celo) and Scroll | the receipt's `l1Fee` | plus `l1_fee`; the OP Stack operator fee is recorded apart, as `blockchain.tx.operator_fee` |
 | Arbitrum | not recorded: `gasUsed` already includes the L1 component (`gasUsedForL1`) | `gas.used × effective_gas_price` |
 | ZKsync | not recorded | `gas.used × effective_gas_price` |
 
@@ -255,7 +256,7 @@ its outcome, as the table lists them; never an address, a hash or the agent iden
 |---|---|---|---|---|
 | `blockchain.client.send.duration` | histogram | `s` | chain; `blockchain.operation.subject` for a user operation or call batch; `error.type` if the send failed | a send span ends with a hash or id, or fails: from the start of the sending call until then |
 | `blockchain.client.confirmation.duration` | histogram | `s` | chain; `blockchain.operation.subject` for a user operation or call batch; the outcome from chain data, `blockchain.tx.status` (for a user operation, `blockchain.user_operation.success`; for a call batch, `blockchain.call_batch.status`), else `error.type` (`timeout`, `not_on_chain`, an adapter's error type, an error class name, or `_OTHER`) | a confirm span ends: from the start of the wait until the receipt or batch status, a replacement, a timeout or a failure; not for a call batch that ended while still pending |
-| `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.operation.subject` for a user operation; `blockchain.tx.status` (for a user operation, `blockchain.user_operation.success`); `blockchain.fee.payer` when someone other than the sender paid | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number; for a user operation, a receipt with its cost: `blockchain.user_operation.gas.cost` |
+| `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.operation.subject` for a user operation; `blockchain.tx.status` (for a user operation, `blockchain.user_operation.success`); `blockchain.fee.payer` when someone other than the sender paid | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number, without the OP Stack operator fee, which no metric records; for a user operation, a receipt with its cost: `blockchain.user_operation.gas.cost` |
 
 A confirmation sample is a success when its outcome from chain data says so: `blockchain.tx.status` `success`,
 `blockchain.user_operation.success` `true` or `blockchain.call_batch.status` `success`. Count successes across

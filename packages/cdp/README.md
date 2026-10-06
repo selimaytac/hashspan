@@ -150,7 +150,8 @@ when CDP returns the transaction of the first attempt; the confirm span is share
 - Networks without a chain id in `CDP_NETWORK_CHAIN_IDS`, and network-scoped accounts created from an RPC URL, are
   passed through untraced, as are accounts that do not come from the factories listed under [traced](#traced).
 - Without a `reader`, only send spans are recorded, except for the SDK's waits; a network-scoped
-  `waitForTransactionReceipt` then records no revert reason, and no fees for a flashblocks preconfirmation
+  `waitForTransactionReceipt` then records no revert reason and no OP Stack operator fee, and no fees for a
+  flashblocks preconfirmation
   ([usage](#usage), [traced](#traced)).
 - A user operation gets a confirm span only from `waitForUserOperation`; without a reader it records only the bundle
   transaction's hash, and the bundle transaction's status and fee are never recorded ([smart accounts](#smart-accounts)).

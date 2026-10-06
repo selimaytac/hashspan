@@ -69,6 +69,7 @@ const RECEIPT = {
   gasUsed: 21_000n,
   effectiveGasPrice: 2n,
   l1Fee: 1n,
+  operatorFee: 3n,
   transactionHash: HASH,
 };
 const PAYMENT = {

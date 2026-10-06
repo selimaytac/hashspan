@@ -7,6 +7,7 @@ import { waitForTransactionReceipt as viemWaitForTransactionReceipt } from 'viem
 import { fetchRevertReason } from '../revert-reason.js';
 import { errorName } from '../safe-tracker.js';
 import type { ViemClientLike } from '../types.js';
+import { chargesOperatorFee, fetchOperatorFee } from './operator-fee.js';
 import type { PendingConfirmation } from './pending.js';
 import {
   capturing,
@@ -25,12 +26,14 @@ import {
   type ViemReceipt,
   withoutFees,
 } from './receipt.js';
-import { confirmKey, type Recent } from './recent.js';
+import { confirmKey, Recent } from './recent.js';
 import { delay, durationOr, within } from './timing.js';
 
 export const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
 /** How long telemetry waits for the sealed receipt of a preconfirmed transaction before it records it without fees. */
 const SEALED_RECEIPT_TIMEOUT_MS = 30_000;
+/** How long telemetry waits for the OP Stack operator fee of a receipt before it records the receipt without it. */
+const OPERATOR_FEE_TIMEOUT_MS = 10_000;
 /** `error.type` of a confirm span whose transaction a chain reorganisation removed during a wait (ADR 0026). */
 const NOT_ON_CHAIN = 'not_on_chain';
 
@@ -124,6 +127,35 @@ export function createConfirmation({
       revertReasons.set(key, reason);
     }
     return reason;
+  };
+
+  /** Operator fees being or already read, keyed by transaction, block and gas used, so concurrent waits read once. */
+  const operatorFees = new Recent<Promise<bigint | undefined>>();
+
+  /**
+   * The OP Stack operator fee of a sealed `receipt`, read through `client` once per transaction and block; undefined
+   * when the receipt charges none (no request then), or when the call fails, answers with no `uint256` or takes longer
+   * than `OPERATOR_FEE_TIMEOUT_MS`.
+   */
+  const operatorFeeOf = (
+    chainId: number,
+    receipt: ViemReceipt,
+    client: unknown,
+  ): Promise<bigint | undefined> | undefined => {
+    if (!chargesOperatorFee(receipt) || typeof receipt.transactionHash !== 'string')
+      return undefined;
+    const key = `${confirmKey(chainId, receipt.transactionHash)}:${receipt.blockNumber}:${receipt.gasUsed}`;
+    let fee = operatorFees.get(key);
+    if (!fee) {
+      const fetched = fetchOperatorFee(client, receipt).catch((error: unknown) => {
+        diag.debug(`hashspan: could not read the operator fee (${errorName(error)})`);
+        return undefined;
+      });
+      // Bounded, so that an unresponsive provider cannot keep the confirm span open.
+      fee = within(fetched, OPERATOR_FEE_TIMEOUT_MS, 'read the operator fee');
+      operatorFees.set(key, fee);
+    }
+    return fee;
   };
 
   /**
@@ -232,6 +264,19 @@ export function createConfirmation({
           recorded = withoutFees(recorded);
         }
       }
+      // Only from the sealed receipt, like the other fees (ADR 0024): a preconfirmation whose sealed receipt did not
+      // come is recorded without fees above, and reads none.
+      const operatorFee = isPreconfirmed(receipt)
+        ? undefined
+        : operatorFeeOf(chainId, receipt, client);
+      if (operatorFee) {
+        // The span ends when the receipt arrived, not when the operator fee was read.
+        const arrivedAt = endAt() ?? new Date();
+        endAt = () => arrivedAt;
+        // A flush that cannot wait for the operator fee records the receipt without it.
+        const known = { ...recorded, replacementReason };
+        confirmation.onAbandon((underlying) => underlying.end(known, { endTime: endAt() }));
+      }
       let revertReason: string | undefined;
       // A malformed hash is left to the tracker, which does not attribute it.
       if (
@@ -251,6 +296,12 @@ export function createConfirmation({
         const mined = { ...recorded, replacementReason };
         confirmation.onAbandon((underlying) => underlying.end(mined, { endTime: endAt() }));
         revertReason = await revertReasonOf(minedKey, receipt, abi, client);
+      }
+      if (operatorFee) {
+        // The revert reason is known: a flush that cannot wait for the operator fee records the receipt with it.
+        const withReason = { ...recorded, revertReason, replacementReason };
+        confirmation.onAbandon((underlying) => underlying.end(withReason, { endTime: endAt() }));
+        recorded = { ...recorded, operatorFee: await operatorFee };
       }
       handle.end({ ...recorded, revertReason, replacementReason }, { endTime: endAt() });
     } catch (error) {

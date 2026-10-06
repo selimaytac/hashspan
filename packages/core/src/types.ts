@@ -221,6 +221,11 @@ export interface ReceiptLike {
   /** L1 data fee in wei on OP-stack chains. */
   l1Fee?: bigint | null | undefined;
   /**
+   * OP Stack operator fee in wei (Isthmus and later), recorded as `blockchain.tx.operator_fee`; not part of
+   * `blockchain.tx.fee`.
+   */
+  operatorFee?: bigint | null | undefined;
+  /**
    * Decoded revert reason, recorded as `blockchain.tx.revert.reason` with addresses per the address mode, e.g.
    * `Error(string)`'s message, `Panic(0x11)` or `InsufficientBalance(1, 2)`.
    */

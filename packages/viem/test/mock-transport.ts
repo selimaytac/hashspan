@@ -3,6 +3,8 @@ import { custom, RpcRequestError, type Transport } from 'viem';
 export const FROM = '0x1111111111111111111111111111111111111111' as const;
 export const TO = '0x2222222222222222222222222222222222222222' as const;
 export const HASH = `0x${'ab'.repeat(32)}` as const;
+/** The OP Stack GasPriceOracle predeploy, lower-case. */
+export const GAS_PRICE_ORACLE = '0x420000000000000000000000000000000000000f';
 
 export interface MockOptions {
   chainIdHex?: string;
@@ -32,6 +34,11 @@ export interface MockOptions {
   callDelayMs?: number;
   /** Never answers `eth_call`, holding no timer or socket. */
   callHangs?: boolean;
+  /**
+   * Answers `eth_call` to the OP Stack GasPriceOracle (`getOperatorFee`), given the call's block tag; a function that
+   * throws fails the call. Without it, such a call is answered like any other `eth_call`.
+   */
+  operatorFee?: (blockTag: unknown) => unknown;
   /** While this returns false, the transaction is pending (no receipt). */
   mined?: () => boolean;
   /** Returns a new block number on every `eth_blockNumber`, so viem keeps polling. */
@@ -130,6 +137,13 @@ export function mockTransport(options: MockOptions = {}) {
         case 'eth_getTransactionByHash':
           return transaction((params as unknown[] | undefined)?.[0]);
         case 'eth_call':
+          if (
+            options.operatorFee &&
+            String((params as { to?: unknown }[] | undefined)?.[0]?.to).toLowerCase() ===
+              GAS_PRICE_ORACLE
+          ) {
+            return options.operatorFee((params as unknown[] | undefined)?.[1]);
+          }
           if (options.callHangs) return new Promise(() => {});
           if (options.callDelayMs)
             await new Promise((resolve) => setTimeout(resolve, options.callDelayMs));
