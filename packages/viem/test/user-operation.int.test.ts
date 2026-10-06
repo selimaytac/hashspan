@@ -209,9 +209,8 @@ describe('user operations on Anvil', () => {
         /^UserOperation reverted during simulation with reason: 0x08c379a0/,
       );
     }
-    expect(tracing.spanNamed('send 31337').attributes['error.type']).toBe(
-      'UserOperationExecutionError',
-    );
+    // The span records the error viem classified the bundler's answer as, under its wrapper.
+    expect(tracing.spanNamed('send 31337').attributes['error.type']).toBe('ExecutionRevertedError');
     tracing.exporter.reset();
     // ... so the sender gives the limits.
     const hash = await client.sendUserOperation({
@@ -288,7 +287,8 @@ describe('bundler faults', () => {
   };
 
   const USER_OPERATION_SUCCESS = 'blockchain.user_operation.success';
-  // viem wraps a failure before or at the send in a UserOperationExecutionError; a receipt request that fails ends
+  // viem wraps a failure before or at the send in a UserOperationExecutionError, and the send span records the
+  // bundler error under it (the stand-in's answer is one viem does not classify); a receipt request that fails ends
   // the caller's wait, which keeps polling only while the receipt is missing.
   const rows: Record<
     string,
@@ -296,11 +296,11 @@ describe('bundler faults', () => {
   > = {
     'eth_estimateUserOperationGas fails': {
       faults: { eth_estimateUserOperationGas: 'fails' },
-      send: failed('UserOperationExecutionError'),
+      send: failed('UnknownBundlerError'),
     },
     'eth_sendUserOperation fails': {
       faults: { eth_sendUserOperation: 'fails' },
-      send: failed('UserOperationExecutionError'),
+      send: failed('UnknownBundlerError'),
     },
     'eth_getUserOperationReceipt fails': {
       faults: { eth_getUserOperationReceipt: 'fails' },

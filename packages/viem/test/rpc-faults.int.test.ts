@@ -26,6 +26,7 @@ import {
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
+import { SEND_ERROR_TYPES } from './fault-checks.js';
 import { type Fault, type FaultProxy, type FaultRule, startFaultProxy } from './fault-proxy.js';
 import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
@@ -186,12 +187,17 @@ describe.each([
           chain,
         });
 
-  // A failed send records the error the caller got, by class name; viem wraps every send error in a
-  // TransactionExecutionError (ContractFunctionExecutionError for writeContract).
+  // viem wraps every send error in a TransactionExecutionError (ContractFunctionExecutionError for writeContract),
+  // which the caller gets; the span records the error viem classified under it. For writeContract, viem reads an
+  // internal error (-32603) as the function's revert.
   const wrapped =
     action === 'sendTransaction' ? 'TransactionExecutionError' : 'ContractFunctionExecutionError';
+  const classified = (fault: string): string =>
+    action === 'writeContract' && fault === 'JSON-RPC -32603 (internal error)'
+      ? 'ContractFunctionRevertedError'
+      : (SEND_ERROR_TYPES[fault] as string);
 
-  it.each(Object.entries(faultsOn('eth_sendTransaction')))('%s', async (_fault, faults) => {
+  it.each(Object.entries(faultsOn('eth_sendTransaction')))('%s', async (fault, faults) => {
     proxy.set(faults);
     const untraced = await settle(send(wallet()));
     expect(untraced).toMatchObject({ rejected: { name: wrapped } });
@@ -208,7 +214,7 @@ describe.each([
     expect(rejections).toEqual([]);
     expect(flushed).toBe(true);
     expect(spansNamed('send ').map((s) => s.name)).toEqual(['send 31337']);
-    expectEnding(spansNamed('send ')[0], failed(wrapped));
+    expectEnding(spansNamed('send ')[0], failed(classified(fault)));
     expect(meters.recorded('blockchain.client.send.duration')).toHaveLength(1);
   });
 });
@@ -240,7 +246,7 @@ describe('a chain id that changes between calls', () => {
     const sends = spansNamed('send ');
     expect(sends.map((s) => s.name)).toEqual(['send 31337', 'send 31337']);
     expectEnding(sends[0], NO_OUTCOME);
-    expectEnding(sends[1], failed('TransactionExecutionError'));
+    expectEnding(sends[1], failed('ChainMismatchError'));
   });
 
   it('records each send of a client without a chain on the chain the node named for it', async () => {

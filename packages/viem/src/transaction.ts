@@ -31,6 +31,7 @@ import { confirmKey, type Recent } from './confirm/recent.js';
 import { durationOr, isChainId, recordLate } from './confirm/timing.js';
 import { errorName } from './safe-tracker.js';
 import type { SendArgs, SendTrace, SendTracing } from './send.js';
+import { sendFailure } from './send-error.js';
 import type {
   AnyAction,
   BackgroundConfirmOptions,
@@ -179,7 +180,7 @@ export function addTransactionActions(
       return {
         context: handle.context,
         end: (hash, endTime) => handle.end({ hash }, { endTime }),
-        fail: (error, endTime) => handle.fail(error, { endTime }),
+        fail: (error, endTime) => handle.fail(error, sendFailure(error, endTime)),
       };
     },
     after: (chainId, hash) => afterSend(chainId, hash, abi),
@@ -343,7 +344,7 @@ export function addTransactionActions(
           } catch (thrown) {
             diag.error(`hashspan: failed to read the receipt (${errorName(thrown)})`);
           }
-          handle.fail(error, { endTime: at });
+          handle.fail(error, sendFailure(error, at));
         },
       };
     },

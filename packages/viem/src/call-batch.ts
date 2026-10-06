@@ -16,6 +16,7 @@ import { isCallsTimeout, isReadable, nameOf, unreadable } from './confirm/receip
 import { recordLate } from './confirm/timing.js';
 import { errorName } from './safe-tracker.js';
 import type { SendArgs, SendTracing } from './send.js';
+import { sendFailure } from './send-error.js';
 import type {
   AnyAction,
   BackgroundConfirmOptions,
@@ -118,8 +119,7 @@ export function addCallBatchActions(
                   endTime !== undefined ? { endTime } : undefined,
                 );
               },
-              fail: (error, endTime) =>
-                handle.fail(error, endTime !== undefined ? { endTime } : undefined),
+              fail: (error, endTime) => handle.fail(error, sendFailure(error, endTime)),
             };
           },
           // The transactions of viem's fallback are the account's own: always confirmed as transactions, as

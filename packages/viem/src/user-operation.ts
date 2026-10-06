@@ -13,6 +13,7 @@ import {
 import { recordLate } from './confirm/timing.js';
 import { errorName } from './safe-tracker.js';
 import type { SendTracing } from './send.js';
+import { sendFailure } from './send-error.js';
 import type { AnyAction, BaseActions, TracedAction, ViemClientLike } from './types.js';
 
 /** What the user operation actions need from the `withHashspan()` call and the extended client. */
@@ -62,8 +63,7 @@ export function addUserOperationActions(
               context: handle.context,
               end: (userOpHash, endTime) =>
                 handle.end({ userOpHash }, endTime !== undefined ? { endTime } : undefined),
-              fail: (error, endTime) =>
-                handle.fail(error, endTime !== undefined ? { endTime } : undefined),
+              fail: (error, endTime) => handle.fail(error, sendFailure(error, endTime)),
             };
           },
           after: () => {},

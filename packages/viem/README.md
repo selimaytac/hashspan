@@ -359,7 +359,10 @@ instrumentation creates for the request nest under it; the code after the call s
 
 Failed sends, reverted receipts and receipt timeouts set error status; the original error is always rethrown
 unchanged. Spans record only the error type unless `errorMessages` allows more, because viem error messages
-include the request arguments. For the actions that are not traced, see [known limits](#known-limits).
+include the request arguments. A failed send's `error.type` is the error viem classified the failure as, under the
+error it throws: for example `NonceTooLowError`, `InsufficientFundsError` or `IntrinsicGasTooLowError` under a
+`TransactionExecutionError`, or the bundler's error under a `UserOperationExecutionError`; `exception.type` stays
+the class it threw. For the actions that are not traced, see [known limits](#known-limits).
 
 ## Apply it last
 

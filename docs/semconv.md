@@ -124,7 +124,10 @@ unknown. Up to 0.4, such spans also recorded `blockchain.tx.status` `timeout`; q
 
 An adapter whose library reports a stable, machine-readable error code records it as `error.type` of a failed send,
 if it is a short identifier (`[A-Za-z0-9_.-]`, at most 64 characters); `exception.type` stays the class name. The CDP
-adapter records the CDP API's error type, e.g. `insufficient_balance`. An error class name is recorded, as `error.type`
+adapter records the CDP API's error type, e.g. `insufficient_balance`. The viem adapter records the error viem
+classified the failure as, under the error it throws: `NonceTooLowError` or `InsufficientFundsError` under a
+`TransactionExecutionError` (or `ContractFunctionExecutionError`), a bundler error under a
+`UserOperationExecutionError`; when there is none, the thrown class. An error class name is recorded, as `error.type`
 and as `exception.type`, only if it is such a short identifier too; any other name is recorded as `_OTHER`.
 
 Failures with an error object add an `exception` event following the OpenTelemetry exception conventions. By
@@ -263,7 +266,7 @@ Bucket boundaries are given as advice: 0.05 s to 300 s for durations, and one bu
 10^18 wei for fees. Fees above 2^53 wei lose precision as numbers; the span attribute keeps the exact value.
 
 On metrics, `error.type` is kept only when it is an error class name of letters ending in `Error` (such as
-`TransactionExecutionError`) or a lower-case code of letters and underscores (such as `timeout` or
+`NonceTooLowError`) or a lower-case code of letters and underscores (such as `timeout` or
 `insufficient_balance`); any other value, which could carry an identifier,
 an address or a number, is recorded as `_OTHER`. The span keeps its own `error.type`.
 

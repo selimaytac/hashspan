@@ -96,9 +96,12 @@ describe('sendUserOperation', () => {
     const error = await client.sendUserOperation({ calls, ...GAS }).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(Error);
+    expect((error as Error).name).toBe('UserOperationExecutionError');
     const send = tracing.spanNamed(`send ${CHAIN_ID}`);
     expect(send.status.code).toBe(SpanStatusCode.ERROR);
-    expect(send.attributes['error.type']).toBe((error as Error).name);
+    // error.type is the bundler error viem classified (AA21) under its wrapper.
+    expect(send.attributes['error.type']).toBe(((error as Error).cause as Error).name);
+    expect(send.attributes['error.type']).not.toBe('UserOperationExecutionError');
     expect(send.attributes['blockchain.user_operation.hash']).toBeUndefined();
   });
 
