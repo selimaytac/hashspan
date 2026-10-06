@@ -26,8 +26,8 @@ link; some backends do not keep links ([troubleshooting](troubleshooting.md#a-co
 **Replaced transactions.** A receipt is recorded on the confirm span of the transaction that was mined. When a
 wait for one hash ends with the receipt of another (a transaction with the same sender and nonce replaced it), the
 confirm span of the awaited hash ends as `replaced`, without block, gas or fee, and the receipt goes to the confirm
-span of the mined hash. If that span is created for this purpose, it has the same parent and start time as the
-replaced one and links to it and to both `send` spans when known. Dashboards counting confirmations should exclude
+span of the mined hash. If that span is created for this purpose, it has the same parent as the replaced one, starts
+when it did to the millisecond, and links to it and to both `send` spans when known. Dashboards counting confirmations should exclude
 `blockchain.tx.status = replaced`. See [ADR 0008](adr/0008-replaced-transactions.md). A replacement needs the same
 sender and nonce: where the instrumented library reports replacements (viem), a receipt of another hash that it did
 not report as one, such as an endpoint's answer for an unrelated transaction, is not recorded, and the confirm span

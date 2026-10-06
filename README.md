@@ -123,7 +123,9 @@ npx tsx agent.ts          # prints nothing on success: the trace is in Jaeger
 - **Without tsx:** `node agent.ts` runs the file on Node.js 22.18 or later, which strips the types.
 - **Start order:** hashspan gets its tracer and meter from `@opentelemetry/api` when a transaction is sent, so
   `withHashspan()` and the clients may be created before or after `sdk.start()`. Transactions sent before an SDK is
-  registered are not recorded; spans and metrics start with the first transaction after it.
+  registered are not recorded; spans and metrics start with the first transaction after it. The tracer taken then is
+  kept: a process that replaces the global tracer provider later, as a test may between runs, needs a new
+  `withHashspan()` for the new provider, or the provider passed as `tracerProvider`.
 - **See it** in Jaeger on `http://localhost:16686`: service `my-agent`, trace `pay_vendor`, with the children
   `send 31337` and `confirm 31337` (the chain id), and the confirm span [linked](docs/backends.md#span-links) to the
   send span. [Backends](docs/backends.md) lists other setups.
