@@ -1,6 +1,6 @@
 # 0028. The asset a fee was paid in
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-06
 
 ## Context
@@ -41,8 +41,9 @@ must be a 20-byte hex address, is lower-cased, and is dropped otherwise.
   to `onReplaced`, never from the replaced one, since a speed-up may name another fee currency.
 
 **Metric attribute `blockchain.fee.denomination`**, value `token`, on `blockchain.client.fee` samples whose fee was
-paid in a token: every `0x76` receipt, and every transaction with a validated fee currency. It is set from the
-validated value before the address mode, so samples are marked in `off` mode too. It is absent for the native
+paid in a token, that is, whose fee asset is known: a validated Celo fee currency, or a validated `feeToken` of a
+`0x76` receipt. A `0x76` receipt with a missing or malformed `feeToken` records no asset and no marker. It is set from
+the validated value before the address mode, so samples are marked in `off` mode too. It is absent for the native
 currency, Arc's USDC included. Like `blockchain.fee.payer` (ADR 0020), it is a closed set and a constant, never an
 address or a value read from the chain, and only the fee sample carries it. A sponsored Tempo fee can carry both.
 

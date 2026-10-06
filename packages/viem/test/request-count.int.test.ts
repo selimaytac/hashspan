@@ -60,20 +60,42 @@ afterEach(async () => {
 
 type Counts = Record<string, number>;
 
+/** A Tempo fee token, as a Tempo node names it on a receipt of type 0x76. */
+const FEE_TOKEN = '0x20C0000000000000000000000000000000000001';
+/** A Celo fee currency, as a sending call passes it. */
+const FEE_CURRENCY = '0x765DE816845861e75A25fCA122bb6898B8B1282a';
+
+/** How the counting transport makes Anvil's answers look like another chain's. */
+type Shape = 'operatorFee' | 'tempo' | undefined;
+
 /**
  * A transport to Anvil that counts the requests per method. With `operatorFee`, receipts carry the fields of an OP
- * Stack chain that charges an operator fee, as a node after Isthmus adds them.
+ * Stack chain that charges an operator fee, as a node after Isthmus adds them; with `tempo`, they are of type `0x76`
+ * and name a fee token, as a Tempo node's are. A Celo `feeCurrency` is taken out of a sent transaction, which Anvil
+ * does not know.
  */
-function counting(operatorFee = false): { transport: ReturnType<typeof custom>; counts: Counts } {
+function counting(shape: Shape = undefined): {
+  transport: ReturnType<typeof custom>;
+  counts: Counts;
+} {
   const counts: Counts = {};
   const upstream = http(RPC_URL)({ chain: anvil });
   const transport = custom({
     async request({ method, params }: { method: string; params?: unknown }) {
       counts[method] = (counts[method] ?? 0) + 1;
-      const result = await upstream.request({ method, params } as never);
-      return operatorFee && method === 'eth_getTransactionReceipt' && result
-        ? { ...(result as object), operatorFeeScalar: '0x3e8', operatorFeeConstant: '0x0' }
-        : result;
+      const sent =
+        method === 'eth_sendTransaction' && Array.isArray(params)
+          ? params.map((p) => {
+              const { feeCurrency: _, ...rest } = p as Record<string, unknown>;
+              return rest;
+            })
+          : params;
+      const result = await upstream.request({ method, params: sent } as never);
+      if (method !== 'eth_getTransactionReceipt' || !result) return result;
+      if (shape === 'operatorFee')
+        return { ...(result as object), operatorFeeScalar: '0x3e8', operatorFeeConstant: '0x0' };
+      if (shape === 'tempo') return { ...(result as object), type: '0x76', feeToken: FEE_TOKEN };
+      return result;
     },
   });
   return { transport, counts };
@@ -111,11 +133,11 @@ async function extraRequests(
     hashspan?: Parameters<typeof withHashspan>[0];
     chain?: boolean;
     polling?: boolean;
-    operatorFee?: boolean;
+    shape?: Shape;
   } = {},
 ): Promise<Counts> {
   const run = async (traced: boolean) => {
-    const { transport, counts } = counting(options.operatorFee);
+    const { transport, counts } = counting(options.shape);
     const hashspan = withHashspan(options.hashspan);
     const wallet = createWalletClient({
       account,
@@ -256,7 +278,7 @@ describe('JSON-RPC requests the viem adapter adds', () => {
   );
 
   it('one eth_call for a receipt that charges an OP Stack operator fee', async () => {
-    expect(await extraRequests(sendAndWait, { operatorFee: true })).toEqual({ eth_call: 1 });
+    expect(await extraRequests(sendAndWait, { shape: 'operatorFee' })).toEqual({ eth_call: 1 });
     const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
     // The stand-in oracle returns 3 × gasUsed; the fee keeps its meaning.
     expect(confirm?.attributes['blockchain.tx.operator_fee']).toBe(String(3 * 21_000));
@@ -266,6 +288,34 @@ describe('JSON-RPC requests the viem adapter adds', () => {
           BigInt(confirm?.attributes['blockchain.tx.effective_gas_price'] as string),
       ),
     );
+  });
+
+  it('none for a fee paid in a Celo fee currency, read from the sending call', async () => {
+    const sendInFeeCurrency = async (clients: Clients) => {
+      const hash = await clients.wallet.sendTransaction({
+        account,
+        chain: anvil,
+        to: RECIPIENT,
+        value: 1n,
+        gas: 100_000n,
+        feeCurrency: FEE_CURRENCY,
+      } as never);
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const receipt = await clients.reader.getTransactionReceipt({ hash }).catch(() => undefined);
+        if (receipt) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      return clients.reader.waitForTransactionReceipt({ hash });
+    };
+    expect(await extraRequests(sendInFeeCurrency)).toEqual({});
+    const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
+    expect(confirm?.attributes['blockchain.tx.fee_asset']).toBe(FEE_CURRENCY.toLowerCase());
+  });
+
+  it('none for a fee paid in a Tempo fee token, read from a receipt of type 0x76', async () => {
+    expect(await extraRequests(sendAndWait, { shape: 'tempo' })).toEqual({});
+    const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
+    expect(confirm?.attributes['blockchain.tx.fee_asset']).toBe(FEE_TOKEN.toLowerCase());
   });
 
   it('none for a reverted transaction with decodeRevertReason off', async () => {

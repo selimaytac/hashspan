@@ -33,17 +33,26 @@ export const ATTR_BLOCKCHAIN_TX_AUTHORIZATION_CHAIN_IDS =
 export const ATTR_BLOCKCHAIN_TX_STATUS = 'blockchain.tx.status' as const;
 /** Gas the transaction used. */
 export const ATTR_BLOCKCHAIN_TX_GAS_USED = 'blockchain.tx.gas.used' as const;
-/** Wei per gas the transaction paid, as a decimal string. */
+/** Price per gas the transaction paid, in the chain's fee unit (wei on most chains), as a decimal string. */
 export const ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE = 'blockchain.tx.effective_gas_price' as const;
-/** L1 data fee on OP-stack chains, in wei, as a decimal string. */
+/** L1 data fee on OP-stack chains, in the chain's fee unit, as a decimal string. */
 export const ATTR_BLOCKCHAIN_TX_L1_FEE = 'blockchain.tx.l1_fee' as const;
-/** Fee of the transaction, in wei: gas used times the effective gas price, plus the L1 fee. */
+/**
+ * Fee of the transaction, in the chain's fee unit (wei, or the token {@link ATTR_BLOCKCHAIN_TX_FEE_ASSET} names): gas
+ * used times the effective gas price, plus the L1 fee.
+ */
 export const ATTR_BLOCKCHAIN_TX_FEE = 'blockchain.tx.fee' as const;
 /**
  * OP Stack operator fee of the transaction (Isthmus and later), in wei, as a decimal string; recorded apart from
  * `blockchain.tx.fee`, which does not include it.
  */
 export const ATTR_BLOCKCHAIN_TX_OPERATOR_FEE = 'blockchain.tx.operator_fee' as const;
+/**
+ * Contract address of the token the fee was paid in, per the address mode, as the chain reports it (a Celo fee
+ * currency, a Tempo fee token); absent when the fee is in the chain's native currency. See
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0/docs/adr/0028-fee-asset.md.
+ */
+export const ATTR_BLOCKCHAIN_TX_FEE_ASSET = 'blockchain.tx.fee_asset' as const;
 /** Decoded revert reason of a reverted transaction or user operation, when available. */
 export const ATTR_BLOCKCHAIN_TX_REVERT_REASON = 'blockchain.tx.revert.reason' as const;
 /** On a `replaced` confirm span: hash of the mined transaction that replaced it. */
@@ -158,6 +167,14 @@ export const ATTR_BLOCKCHAIN_FEE_PAYER = 'blockchain.fee.payer' as const;
 export const BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR = 'facilitator' as const;
 /** A paymaster paid for the user operation. */
 export const BLOCKCHAIN_FEE_PAYER_VALUE_PAYMASTER = 'paymaster' as const;
+/**
+ * Metrics only: on a fee sample whose fee was paid in a token rather than the chain's native currency, `token`; a
+ * constant, never a value read from the chain. Absent for the native currency.
+ */
+export const ATTR_BLOCKCHAIN_FEE_DENOMINATION = 'blockchain.fee.denomination' as const;
+
+/** Values for {@link ATTR_BLOCKCHAIN_FEE_DENOMINATION}. */
+export const BLOCKCHAIN_FEE_DENOMINATION_VALUE_TOKEN = 'token' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_CALL_BATCH_STATUS}. */
 export const BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_SUCCESS = 'success' as const;

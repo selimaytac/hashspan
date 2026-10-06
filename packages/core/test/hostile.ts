@@ -484,6 +484,7 @@ const ATTRIBUTE_CHECKS: Record<string, Check> = {
   'blockchain.tx.l1_fee': matches(DECIMAL, 'a decimal amount'),
   'blockchain.tx.operator_fee': matches(DECIMAL, 'a decimal amount'),
   'blockchain.tx.fee': matches(DECIMAL, 'a decimal amount'),
+  'blockchain.tx.fee_asset': address,
   'blockchain.tx.revert.reason': bounded(BOUNDS.revertReason),
   'blockchain.tx.authorization.count': count,
   'blockchain.tx.authorization.addresses': list(BOUNDS.authorizations, address),
@@ -516,6 +517,7 @@ const ATTRIBUTE_CHECKS: Record<string, Check> = {
   'blockchain.call_batch.call_count': count,
   'blockchain.call_batch.status': oneOf('success', 'reverted', 'partially_reverted'),
   'blockchain.fee.payer': oneOf('facilitator', 'paymaster'),
+  'blockchain.fee.denomination': oneOf('token'),
   'blockchain.call_batch.status_code': count,
   'blockchain.call_batch.atomic': boolean,
   'blockchain.call_batch.transaction_hashes': list(
@@ -611,6 +613,7 @@ const METRIC_KEYS = new Set([
   'blockchain.chain.id',
   'blockchain.operation.subject',
   'blockchain.fee.payer',
+  'blockchain.fee.denomination',
   'blockchain.tx.status',
   'blockchain.user_operation.success',
   'blockchain.call_batch.status',

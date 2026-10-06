@@ -21,6 +21,7 @@ import {
   DEFAULT_BACKGROUND_TIMEOUT_MS,
   type RecheckOptions,
 } from './confirm/confirmation.js';
+import { feeAssetOf } from './confirm/fee-asset.js';
 import {
   capturing,
   type ReplacementCapture,
@@ -197,6 +198,8 @@ export function addTransactionActions(
     value: own(args, 'value') as SendInput['value'],
     nonce: own(args, 'nonce') as SendInput['nonce'],
     authorizations: authorizationsOf(own(args, 'authorizationList')),
+    // A Celo fee currency, which only the transaction names (ADR 0028); a raw send records none.
+    feeAsset: feeAssetOf(own(args, 'feeCurrency')),
   });
 
   /**

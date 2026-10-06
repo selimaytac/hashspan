@@ -62,6 +62,9 @@ export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_NAME: "blockchain.contract.functi
 export const ATTR_BLOCKCHAIN_CONTRACT_FUNCTION_SELECTOR: "blockchain.contract.function.selector";
 
 // @public
+export const ATTR_BLOCKCHAIN_FEE_DENOMINATION: "blockchain.fee.denomination";
+
+// @public
 export const ATTR_BLOCKCHAIN_FEE_PAYER: "blockchain.fee.payer";
 
 // @public
@@ -111,6 +114,9 @@ export const ATTR_BLOCKCHAIN_TX_EFFECTIVE_GAS_PRICE: "blockchain.tx.effective_ga
 
 // @public
 export const ATTR_BLOCKCHAIN_TX_FEE: "blockchain.tx.fee";
+
+// @public
+export const ATTR_BLOCKCHAIN_TX_FEE_ASSET: "blockchain.tx.fee_asset";
 
 // @public
 export const ATTR_BLOCKCHAIN_TX_FROM: "blockchain.tx.from";
@@ -204,6 +210,9 @@ export const BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_REVERTED: "reverted";
 
 // @public
 export const BLOCKCHAIN_CALL_BATCH_STATUS_VALUE_SUCCESS: "success";
+
+// @public
+export const BLOCKCHAIN_FEE_DENOMINATION_VALUE_TOKEN: "token";
 
 // @public
 export const BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR: "facilitator";
@@ -386,6 +395,7 @@ export type PaymentStatus = "settled" | "pending" | "failed";
 export interface ReceiptLike {
     blockNumber: bigint | number;
     effectiveGasPrice?: bigint | undefined;
+    feeAsset?: string | undefined;
     gasUsed: bigint | number;
     l1Fee?: bigint | null | undefined;
     operatorFee?: bigint | null | undefined;
@@ -409,6 +419,7 @@ export interface SendHandle {
 export interface SendInput {
     authorizations?: readonly AuthorizationInput[] | undefined;
     chainId: number;
+    feeAsset?: string | undefined;
     from?: string | undefined;
     functionArguments?: readonly unknown[] | undefined;
     functionName?: string | undefined;

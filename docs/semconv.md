@@ -166,10 +166,11 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.tx.status` | string | confirm | on | from chain data: `success` \| `reverted` \| `replaced` |
 | `blockchain.block.number` | int | confirm | on | inclusion block; for a user operation, the bundle transaction's; for a call batch, the highest among its receipts |
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
-| `blockchain.tx.effective_gas_price` | string | confirm | on | wei, decimal string; see the `fee` row for when it is omitted |
-| `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, wei; see the `fee` row for when it is omitted |
-| `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, wei; omitted if the gas price is unknown. The OP Stack operator fee (Isthmus and later) is not included: it is recorded apart as `operator_fee`. Fee attributes come from the sealed receipt, never a flashblocks preconfirmation, and are omitted if only a preconfirmation was seen (see [ADR 0024](adr/0024-sealed-receipt-fees.md)). On the confirm span of a payment's settlement, the fee is the facilitator's, which sent the transaction |
+| `blockchain.tx.effective_gas_price` | string | confirm | on | price per gas in the chain's fee unit (see the fee table below), decimal string; see the `fee` row for when it is omitted |
+| `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, in the chain's fee unit; see the `fee` row for when it is omitted |
+| `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, in the chain's fee unit: wei of the native currency, or the token `fee_asset` names (see the fee table below); omitted if the gas price is unknown. The OP Stack operator fee (Isthmus and later) is not included: it is recorded apart as `operator_fee`. Fee attributes come from the sealed receipt, never a flashblocks preconfirmation, and are omitted if only a preconfirmation was seen (see [ADR 0024](adr/0024-sealed-receipt-fees.md)). On the confirm span of a payment's settlement, the fee is the facilitator's, which sent the transaction |
 | `blockchain.tx.operator_fee` | string | confirm | on | OP Stack operator fee (Isthmus and later), wei, decimal string; not included in `blockchain.tx.fee`. Recorded only when the receipt carries `operatorFeeScalar` or `operatorFeeConstant`, which a node adds when the chain charges the fee; the viem adapter then reads it from the GasPriceOracle's `getOperatorFee(gasUsed)` at the receipt's block, with one `eth_call`. Like the other fee attributes, it comes from the sealed receipt only, and is omitted for a deposit transaction, which pays none |
+| `blockchain.tx.fee_asset` | string | confirm | raw | contract address of the token the fee was paid in, subject to address mode, as the chain reports it (a Celo fee currency, which for a 6-decimal token is its 18-decimal adapter contract; a Tempo fee token); absent when the fee is in the native currency. Recorded with the fee attributes, when `effective_gas_price` is. Taken from the receipt when it names one, else from the send: the viem adapter reads Celo's `feeCurrency` from the sending call, never from `sendRawTransaction`, and Tempo's `feeToken` only from a receipt of type `0x76`; a replacing transaction records its own, never the replaced one's ([ADR 0028](adr/0028-fee-asset.md)) |
 | `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available, also of a reverted user operation: the `Error(string)` message, `Panic(0x..)`, `ErrorName(arg, ...)` for custom errors with a known ABI, else the 4-byte error selector. See [ADR 0005](adr/0005-revert-reason-replay.md) |
 | `blockchain.tx.replacement.hash` | string | confirm | on | on a `replaced` confirm span: hash of the mined transaction that replaced it |
 | `blockchain.tx.replacement.reason` | string | confirm | on | on a `replaced` confirm span: `repriced` \| `cancelled` \| `replaced`, as reported by the instrumented library; omitted when it reported none |
@@ -191,6 +192,7 @@ pass through the redaction hook. Its parent is the active span, such as a `send`
 | `blockchain.call_batch.transaction_hashes` | string[] | confirm | on | hashes of the transactions whose receipts the wallet reported for the batch, de-duplicated, at most 64 |
 | `blockchain.operation.subject` | string | none (metrics only) | on | on [metrics](#metrics) of user operations: `user_operation`; of call batches: `call_batch`; absent on those of transactions |
 | `blockchain.fee.payer` | string | none (metrics only) | on | on `blockchain.client.fee` samples whose fee the sender of the traced transaction or operation did not pay: `facilitator` for a payment's settlement transaction, `paymaster` for a user operation a paymaster paid for; absent when the sender paid ([ADR 0020](adr/0020-metrics.md)) |
+| `blockchain.fee.denomination` | string | none (metrics only) | on | on `blockchain.client.fee` samples whose fee was paid in a token rather than the chain's native currency: `token`, a constant, never an address or a value read from the chain; set whenever `blockchain.tx.fee_asset` is known, in every address mode; absent for the native currency, Arc's USDC included ([ADR 0028](adr/0028-fee-asset.md)) |
 | `blockchain.payment.protocol` | string | payment | on | `x402` |
 | `blockchain.payment.payer` | string | payment | raw | address that pays, subject to address mode; the settlement's payer only when the payer knew none |
 | `blockchain.payment.recipient` | string | payment | raw | address that is paid, subject to address mode |
@@ -224,17 +226,17 @@ The fee fields follow the receipt of each chain family, as the viem adapter read
 | OP Stack (Base, OP Mainnet, Celo) and Scroll | the receipt's `l1Fee` | plus `l1_fee`; the OP Stack operator fee is recorded apart, as `blockchain.tx.operator_fee` |
 | Arbitrum | not recorded: `gasUsed` already includes the L1 component (`gasUsedForL1`) | `gas.used × effective_gas_price` |
 | ZKsync | not recorded | `gas.used × effective_gas_price` |
+| Celo, a transaction with a `feeCurrency` (type `0x7b`) | the receipt's `l1Fee` | plus `l1_fee`, in the fee currency, which only the transaction names: `blockchain.tx.fee_asset` is the sending call's `feeCurrency` |
+| Tempo (type `0x76`) | not recorded | `gas.used × effective_gas_price`, in attodollars (10^-18 USD), charged in the receipt's `feeToken`, recorded as `blockchain.tx.fee_asset`; viem's Tempo chain declares 6 decimals for its currency, so formatting the fee with it is off by 10^12 |
+| Arc | not recorded | `gas.used × effective_gas_price`, in its native currency, USDC with 18 decimals; no `fee_asset`, since the chain id already says what the unit is |
 
-Values are recorded as the receipt gives them, in the unit the chain charges gas in, which is not always wei of its
-native currency; no attribute names the asset yet ([#401](https://github.com/selimaytac/hashspan/issues/401)), and
-nothing is converted:
-
-- Celo, a transaction with a `feeCurrency` (type `0x7b`): the receipt's `effectiveGasPrice`, and so the fee, are in
-  that fee currency, which only the transaction names.
-- Tempo (type `0x76`): in attodollars (10^-18 USD) per gas, charged in the transaction's fee token; viem's Tempo
-  chain declares 6 decimals for its currency, so formatting the fee with it is off by 10^12.
-
-On such a chain the `blockchain.client.fee` histogram mixes these units with fees paid in the native currency.
+Values are recorded as the receipt gives them, in the chain's fee unit: the unit the chain charges gas in, which is
+not always wei of its native currency. Nothing is converted, rounded or formatted with token decimals. When the fee
+was paid in a token, the confirm span names it in `blockchain.tx.fee_asset` and the fee sample carries
+`blockchain.fee.denomination` `token`, so a dashboard can tell these samples from fees in the native currency
+([ADR 0028](adr/0028-fee-asset.md)). A Celo transaction whose fee currency the adapter does not see, one sent with
+`sendRawTransaction` or sent elsewhere and confirmed with `watch()`, records no asset and no marker: its sample counts
+as native.
 
 Agent identity is recorded with the GenAI conventions `gen_ai.agent.id` and `gen_ai.agent.name`. A field set in the
 tracker's static `agent` option always wins; fields it leaves unset are taken from OpenTelemetry Baggage entries with
@@ -256,7 +258,7 @@ its outcome, as the table lists them; never an address, a hash or the agent iden
 |---|---|---|---|---|
 | `blockchain.client.send.duration` | histogram | `s` | chain; `blockchain.operation.subject` for a user operation or call batch; `error.type` if the send failed | a send span ends with a hash or id, or fails: from the start of the sending call until then |
 | `blockchain.client.confirmation.duration` | histogram | `s` | chain; `blockchain.operation.subject` for a user operation or call batch; the outcome from chain data, `blockchain.tx.status` (for a user operation, `blockchain.user_operation.success`; for a call batch, `blockchain.call_batch.status`), else `error.type` (`timeout`, `not_on_chain`, an adapter's error type, an error class name, or `_OTHER`) | a confirm span ends: from the start of the wait until the receipt or batch status, a replacement, a timeout or a failure; not for a call batch that ended while still pending |
-| `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.operation.subject` for a user operation; `blockchain.tx.status` (for a user operation, `blockchain.user_operation.success`); `blockchain.fee.payer` when someone other than the sender paid | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number, without the OP Stack operator fee, which no metric records; for a user operation, a receipt with its cost: `blockchain.user_operation.gas.cost` |
+| `blockchain.client.fee` | histogram | `{wei}` | chain; `blockchain.operation.subject` for a user operation; `blockchain.tx.status` (for a user operation, `blockchain.user_operation.success`); `blockchain.fee.payer` when someone other than the sender paid; `blockchain.fee.denomination` when the fee was paid in a token | a receipt with an effective gas price is recorded: `blockchain.tx.fee` as a number, without the OP Stack operator fee, which no metric records; for a user operation, a receipt with its cost: `blockchain.user_operation.gas.cost` |
 
 A confirmation sample is a success when its outcome from chain data says so: `blockchain.tx.status` `success`,
 `blockchain.user_operation.success` `true` or `blockchain.call_batch.status` `success`. Count successes across

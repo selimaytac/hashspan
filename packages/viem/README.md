@@ -193,6 +193,17 @@ include it. A receipt without the fields, as on Base and OP Mainnet while their 
 request. If the call fails, answers with something other than one `uint256`, or takes longer than 10 s, the receipt
 is recorded without it. The span keeps the time the receipt arrived as its end time.
 
+## Fees paid in a token
+
+On Celo, a transaction with a `feeCurrency` pays gas in that token, and on Tempo every transaction (type `0x76`) pays
+in a fee token. The fee attributes are recorded as the receipt gives them, never converted, and the confirm span names
+the token in `blockchain.tx.fee_asset` (under the address mode), while the fee sample carries
+`blockchain.fee.denomination` `token`. The adapter reads Celo's `feeCurrency` from the arguments of `sendTransaction`,
+`writeContract` and their sync forms, and Tempo's `feeToken` only from a receipt whose type is `0x76`; it imports no
+chain module and makes no request for either. A transaction sent with `sendRawTransaction`, or sent elsewhere and
+confirmed with `watch()`, records no Celo fee currency, since only the transaction names it
+([ADR 0028](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.0.0/docs/adr/0028-fee-asset.md)).
+
 ## Background confirmation
 
 Some agent frameworks wait for receipts through their own client, or never wait at all. With
@@ -358,7 +369,7 @@ const wallet = createWalletClient({
 | `sendTransactionSync`, `writeContractSync` | `send` and `confirm` | as `sendTransaction` or `writeContract` and `waitForTransactionReceipt`; both spans cover the call, since viem returns the hash only with the receipt |
 | `sendRawTransaction` | `send` | on a wallet or a public client, from the signed transaction: chain id (the client's when it has none), to, value, nonce, function selector, hash and EIP-7702 authorizations; no sender, which only the signature gives. A transaction that viem cannot parse, or longer than 128 KiB, records the chain id and hash only |
 | `sendRawTransactionSync` | `send` and `confirm` | as `sendRawTransaction` and `waitForTransactionReceipt`, over the call like the other sync forms |
-| `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack) and total fee from the sealed receipt ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)), the OP Stack operator fee ([below](#op-stack-operator-fee)), revert reason, replacement |
+| `waitForTransactionReceipt` | `confirm` | status, block, gas used, effective gas price, L1 fee (OP-stack) and total fee from the sealed receipt ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)), the OP Stack operator fee ([below](#op-stack-operator-fee)), the token a fee was paid in ([fees paid in a token](#fees-paid-in-a-token)), revert reason, replacement |
 | `sendUserOperation` | `send` | chain id, smart account, EntryPoint, number of calls, user operation hash; see [Smart accounts](#smart-accounts-erc-4337) |
 | `waitForUserOperationReceipt` | `confirm` | success, gas used, cost, nonce, paymaster, revert reason, bundle transaction hash and block |
 | `sendCalls` | `send` | chain id, account, number of calls, batch id; see [Call batches](#call-batches-eip-5792) |
@@ -418,6 +429,8 @@ When a framework extends the client you pass in, check whether confirm spans app
   the transaction's own outcome is not recorded ([#355](https://github.com/selimaytac/hashspan/issues/355)).
 - A preconfirmed receipt whose sealed receipt does not come in time is recorded without fees
   ([preconfirmed receipts](#preconfirmed-receipts-flashblocks)).
+- A Celo transaction sent with `sendRawTransaction`, or confirmed with `watch()` without a traced send, records its fee
+  in its fee currency without `blockchain.tx.fee_asset` ([fees paid in a token](#fees-paid-in-a-token)).
 - Revert reasons are best effort: a provider without historical state cannot replay the transaction, and earlier
   transactions in the same block can change the result ([revert reasons](#revert-reasons)).
 - On a client without a chain, a call is not traced when its `eth_chainId` request fails or has not answered 30 s

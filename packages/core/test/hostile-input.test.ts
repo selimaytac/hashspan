@@ -61,6 +61,7 @@ const SEND = {
   functionSelector: '0xa9059cbb',
   functionArguments: [ADDRESS, 1n],
   authorizations: [{ address: ADDRESS, chainId: 1 }],
+  feeAsset: ADDRESS,
 };
 const CONFIRM = { chainId: CHAIN_ID, hash: HASH };
 const RECEIPT = {
@@ -70,6 +71,7 @@ const RECEIPT = {
   effectiveGasPrice: 2n,
   l1Fee: 1n,
   operatorFee: 3n,
+  feeAsset: ADDRESS,
   transactionHash: HASH,
 };
 const PAYMENT = {
@@ -186,6 +188,14 @@ const ROWS: Row[] = [
   {
     name: 'startSend input',
     run: (t, value) => t.startSend(value as never).end({ hash: HASH }),
+  },
+  {
+    // Kept in the link store for the confirm span, which records it with the receipt (ADR 0028).
+    name: 'startSend feeAsset, confirmed',
+    run: (t, value) => {
+      t.startSend({ ...SEND, feeAsset: value as never }).end({ hash: HASH });
+      t.startConfirm(CONFIRM).end({ ...RECEIPT, feeAsset: undefined } as never);
+    },
   },
   {
     name: 'startSend startTime',

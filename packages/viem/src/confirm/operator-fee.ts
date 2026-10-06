@@ -24,7 +24,7 @@ const UINT256_WORD = /^0x[0-9a-fA-F]{64}$/;
 const MAX_UINT256 = 2n ** 256n - 1n;
 
 /** `key` of `receipt` if it is an own data property; undefined otherwise, also when reading it throws. */
-function ownField(receipt: object, key: string): unknown {
+export function ownField(receipt: object, key: string): unknown {
   try {
     const descriptor = Object.getOwnPropertyDescriptor(receipt, key);
     return descriptor && 'value' in descriptor ? descriptor.value : undefined;

@@ -133,6 +133,13 @@ export interface SendInput {
    */
   authorizations?: readonly AuthorizationInput[] | undefined;
   /**
+   * Contract address of the token the transaction pays its fee in, when it is not the chain's native currency, such
+   * as a Celo `feeCurrency`. Not recorded on the send span: the confirm span of the transaction records it as
+   * `blockchain.tx.fee_asset` with the receipt's fee, per the address mode, unless the receipt names its own
+   * `feeAsset`. Dropped unless it is a 20-byte hex address.
+   */
+  feeAsset?: string | undefined;
+  /**
    * When the send started, for adapters that record it after the fact
    * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.0.0/docs/adr/0009-telemetry-off-the-call-path.md).
    * Omit it otherwise: with an explicit start time, the SDK measures the span by the wall clock, so pass the end time
@@ -216,7 +223,7 @@ export interface ReceiptLike {
   blockNumber: bigint | number;
   /** Gas the transaction used. */
   gasUsed: bigint | number;
-  /** Wei per gas actually paid. */
+  /** Price per gas actually paid, in the chain's fee unit (wei, or the token `feeAsset` names). */
   effectiveGasPrice?: bigint | undefined;
   /** L1 data fee in wei on OP-stack chains. */
   l1Fee?: bigint | null | undefined;
@@ -225,6 +232,12 @@ export interface ReceiptLike {
    * `blockchain.tx.fee`.
    */
   operatorFee?: bigint | null | undefined;
+  /**
+   * Contract address of the token the fee was paid in, as the receipt names it (a Tempo `feeToken`), or for a
+   * replacing transaction, as its own transaction names it. Recorded as `blockchain.tx.fee_asset` per the address mode
+   * when `effectiveGasPrice` is; it wins over the send's `feeAsset`. Dropped unless it is a 20-byte hex address.
+   */
+  feeAsset?: string | undefined;
   /**
    * Decoded revert reason, recorded as `blockchain.tx.revert.reason` with addresses per the address mode, e.g.
    * `Error(string)`'s message, `Panic(0x11)` or `InsufficientBalance(1, 2)`.
