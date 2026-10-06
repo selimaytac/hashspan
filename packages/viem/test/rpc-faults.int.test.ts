@@ -30,6 +30,7 @@ import { SEND_ERROR_TYPES } from './fault-checks.js';
 import { type Fault, type FaultProxy, type FaultRule, startFaultProxy } from './fault-proxy.js';
 import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
+import { viemAtLeast } from './viem-version.js';
 
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 /** viem's request timeout on the proxied transports, so a request that never answers fails fast. */
@@ -318,7 +319,11 @@ describe("the caller's waitForTransactionReceipt", () => {
     'JSON-RPC -32005 (limit exceeded)': failed('LimitExceededRpcError'),
     'JSON-RPC -32603 (internal error)': failed('InternalRpcError'),
     'a connection reset mid-response': failed('HttpRequestError'),
-    'a receipt that stays null': failed('TransactionReceiptNotFoundError'),
+    // viem before 2.57.3 took the transaction, found in a block, for its own replacement and failed the wait
+    // (wevm/viem#5161); from 2.57.3 the wait polls on until its timeout.
+    'a receipt that stays null': viemAtLeast('2.57.3')
+      ? TIMEOUT
+      : failed('TransactionReceiptNotFoundError'),
     'a malformed receipt': failed('SyntaxError'),
     'a receipt that is not an object': NOT_A_RECEIPT,
     'a malformed block, while the receipt stays null': failed('TypeError'),
@@ -409,99 +414,104 @@ describe("the caller's waitForTransactionReceipt", () => {
   });
 });
 
-describe("the caller's waitForTransactionReceipt with confirmations: 2", () => {
-  // Once the wait resolved, the confirm span reads the receipt again, and the block at its height when that receipt is
-  // missing or in another block (docs/adr/0026-receipt-after-several-confirmations.md). A failed request or an answer
-  // that cannot be read keeps the caller's receipt. The block after the transaction is mined before the wait, so viem
-  // resolves on its first receipt request and the second is the one read again.
-  const AGAIN = { after: 1 };
-  const NULL_RECEIPT_AGAIN = {
-    [RECEIPT]: { ...AGAIN, fault: { kind: 'result', result: () => null } },
-  } satisfies Faults;
-  const checkFaults = {
-    'a failed request when the receipt is read again': {
-      [RECEIPT]: { ...AGAIN, fault: { kind: 'rpc-error', code: -32603 } },
-    },
-    'a request that never answers when the receipt is read again': {
-      [RECEIPT]: { ...AGAIN, fault: { kind: 'hang' } },
-    },
-    'a malformed receipt when it is read again': {
-      [RECEIPT]: {
-        ...AGAIN,
-        fault: {
-          kind: 'result',
-          result: (receipt) => ({ ...(receipt as object), blockNumber: '0xzz' }),
+// Before viem 2.33.0, a wait for several confirmations of a transaction already that deep waits for another block,
+// untraced as well, and these rows mine none.
+describe.skipIf(!viemAtLeast('2.33.0'))(
+  "the caller's waitForTransactionReceipt with confirmations: 2",
+  () => {
+    // Once the wait resolved, the confirm span reads the receipt again, and the block at its height when that receipt is
+    // missing or in another block (docs/adr/0026-receipt-after-several-confirmations.md). A failed request or an answer
+    // that cannot be read keeps the caller's receipt. The block after the transaction is mined before the wait, so viem
+    // resolves on its first receipt request and the second is the one read again.
+    const AGAIN = { after: 1 };
+    const NULL_RECEIPT_AGAIN = {
+      [RECEIPT]: { ...AGAIN, fault: { kind: 'result', result: () => null } },
+    } satisfies Faults;
+    const checkFaults = {
+      'a failed request when the receipt is read again': {
+        [RECEIPT]: { ...AGAIN, fault: { kind: 'rpc-error', code: -32603 } },
+      },
+      'a request that never answers when the receipt is read again': {
+        [RECEIPT]: { ...AGAIN, fault: { kind: 'hang' } },
+      },
+      'a malformed receipt when it is read again': {
+        [RECEIPT]: {
+          ...AGAIN,
+          fault: {
+            kind: 'result',
+            result: (receipt) => ({ ...(receipt as object), blockNumber: '0xzz' }),
+          },
         },
       },
-    },
-    'a null receipt from a node without the block at its height': {
-      ...NULL_RECEIPT_AGAIN,
-      eth_getBlockByNumber: { kind: 'result', result: () => null },
-    },
-    "a null receipt from a node whose block at that height still has the caller's hash":
-      NULL_RECEIPT_AGAIN,
-    'a null receipt and a failed block request': {
-      ...NULL_RECEIPT_AGAIN,
-      eth_getBlockByNumber: { kind: 'rpc-error', code: -32603 },
-    },
-    'a null receipt and a block that cannot be read': {
-      ...NULL_RECEIPT_AGAIN,
-      eth_getBlockByNumber: {
-        kind: 'result',
-        result: (block) => ({ ...(block as object), hash: 'none' }),
+      'a null receipt from a node without the block at its height': {
+        ...NULL_RECEIPT_AGAIN,
+        eth_getBlockByNumber: { kind: 'result', result: () => null },
       },
-    },
-  } satisfies Record<string, Faults>;
-  /** Whether the check reads the block: only when the receipt read again is missing. */
-  const readsBlock = (faults: Faults): boolean =>
-    faults === NULL_RECEIPT_AGAIN || 'eth_getBlockByNumber' in faults;
+      "a null receipt from a node whose block at that height still has the caller's hash":
+        NULL_RECEIPT_AGAIN,
+      'a null receipt and a failed block request': {
+        ...NULL_RECEIPT_AGAIN,
+        eth_getBlockByNumber: { kind: 'rpc-error', code: -32603 },
+      },
+      'a null receipt and a block that cannot be read': {
+        ...NULL_RECEIPT_AGAIN,
+        eth_getBlockByNumber: {
+          kind: 'result',
+          result: (block) => ({ ...(block as object), hash: 'none' }),
+        },
+      },
+    } satisfies Record<string, Faults>;
+    /** Whether the check reads the block: only when the receipt read again is missing. */
+    const readsBlock = (faults: Faults): boolean =>
+      faults === NULL_RECEIPT_AGAIN || 'eth_getBlockByNumber' in faults;
 
-  const reader = () =>
-    createPublicClient({ chain: anvil, transport: proxied(), pollingInterval: 50 });
-  const wait = (
-    client: { waitForTransactionReceipt: (args: never) => Promise<unknown> },
-    hash: Hex,
-  ) =>
-    settle(
-      client.waitForTransactionReceipt({
-        hash,
-        confirmations: 2,
-        timeout: WAIT_TIMEOUT_MS,
-        retryCount: 0,
-        retryDelay: 10,
-      } as never),
-    );
+    const reader = () =>
+      createPublicClient({ chain: anvil, transport: proxied(), pollingInterval: 50 });
+    const wait = (
+      client: { waitForTransactionReceipt: (args: never) => Promise<unknown> },
+      hash: Hex,
+    ) =>
+      settle(
+        client.waitForTransactionReceipt({
+          hash,
+          confirmations: 2,
+          timeout: WAIT_TIMEOUT_MS,
+          retryCount: 0,
+          retryDelay: 10,
+        } as never),
+      );
 
-  it.each(Object.keys(checkFaults) as (keyof typeof checkFaults)[])('%s', async (fault) => {
-    const faults: Faults = checkFaults[fault];
-    const hash = await minedTransfer();
-    await control.request({ method: 'evm_mine' as never });
-    proxy.set(faults);
-    const untraced = await wait(reader(), hash);
-    expect(untraced).toMatchObject({ resolved: { transactionHash: hash } });
-
-    const [{ outcome, meters, flushed }, rejections] = await collectingRejections(async () => {
+    it.each(Object.keys(checkFaults) as (keyof typeof checkFaults)[])('%s', async (fault) => {
+      const faults: Faults = checkFaults[fault];
+      const hash = await minedTransfer();
+      await control.request({ method: 'evm_mine' as never });
       proxy.set(faults);
-      const meters = recordingMeterProvider();
-      const hashspan = withHashspan({ meterProvider: meters.provider });
-      const outcome = await wait(reader().extend(hashspan), hash);
-      return { outcome, meters, flushed: await hashspan.flush({ timeoutMs: 5_000 }) };
-    });
+      const untraced = await wait(reader(), hash);
+      expect(untraced).toMatchObject({ resolved: { transactionHash: hash } });
 
-    expect(outcome).toEqual(untraced);
-    expect(rejections).toEqual([]);
-    expect(flushed).toBe(true);
-    // The check ran: the receipt was read again, and the block when that receipt was missing.
-    expect(proxy.requests(RECEIPT)).toBe(2);
-    expect(proxy.requests('eth_getBlockByNumber') > 0).toBe(readsBlock(faults));
-    expect(spansNamed('confirm ')).toHaveLength(1);
-    expectEnding(spansNamed('confirm ')[0], SUCCESS);
-    expect(spansNamed('confirm ')[0]?.attributes['blockchain.block.number']).toBe(
-      Number((untraced as { resolved: { blockNumber: bigint } }).resolved.blockNumber),
-    );
-    expect(meters.recorded('blockchain.client.confirmation.duration')).toHaveLength(1);
-  });
-});
+      const [{ outcome, meters, flushed }, rejections] = await collectingRejections(async () => {
+        proxy.set(faults);
+        const meters = recordingMeterProvider();
+        const hashspan = withHashspan({ meterProvider: meters.provider });
+        const outcome = await wait(reader().extend(hashspan), hash);
+        return { outcome, meters, flushed: await hashspan.flush({ timeoutMs: 5_000 }) };
+      });
+
+      expect(outcome).toEqual(untraced);
+      expect(rejections).toEqual([]);
+      expect(flushed).toBe(true);
+      // The check ran: the receipt was read again, and the block when that receipt was missing.
+      expect(proxy.requests(RECEIPT)).toBe(2);
+      expect(proxy.requests('eth_getBlockByNumber') > 0).toBe(readsBlock(faults));
+      expect(spansNamed('confirm ')).toHaveLength(1);
+      expectEnding(spansNamed('confirm ')[0], SUCCESS);
+      expect(spansNamed('confirm ')[0]?.attributes['blockchain.block.number']).toBe(
+        Number((untraced as { resolved: { blockNumber: bigint } }).resolved.blockNumber),
+      );
+      expect(meters.recorded('blockchain.client.confirmation.duration')).toHaveLength(1);
+    });
+  },
+);
 
 describe.each(['background confirmation', 'watch()'] as const)('%s', (path) => {
   // Background confirmation and watch() poll through viem's wait as well. They wait again after a missing receipt or

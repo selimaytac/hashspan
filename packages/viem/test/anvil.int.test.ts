@@ -399,13 +399,26 @@ describe('on Anvil', () => {
       },
     });
     const reader = createPublicClient({ chain: anvil, transport: lagging, pollingInterval: 50 });
-    // viem alone gives up here: it finds the transaction itself in the block as a replacement.
-    await expect(reader.waitForTransactionReceipt({ hash, retryDelay: 1 })).rejects.toThrow(
-      expect.objectContaining({ name: 'TransactionReceiptNotFoundError' }),
-    );
+    // viem alone gives up here before 2.57.3: it finds the transaction itself in the block as a replacement
+    // (wevm/viem#5161).
+    if (!viemAtLeast('2.57.3')) {
+      await expect(reader.waitForTransactionReceipt({ hash, retryDelay: 1 })).rejects.toThrow(
+        expect.objectContaining({ name: 'TransactionReceiptNotFoundError' }),
+      );
+    }
 
     hidden = 6;
     hashspan.watch(reader, { hash });
+    // From viem 2.57.3 the wait reads the receipt again only on a new block, which a chain keeps producing.
+    if (viemAtLeast('2.57.3')) {
+      await vi.waitFor(
+        async () => {
+          await upstream.request({ method: 'evm_mine' } as never);
+          expect(hidden).toBe(0);
+        },
+        { timeout: 10_000, interval: 100 },
+      );
+    }
     await expect(hashspan.flush()).resolves.toBe(true);
     expect(tracing.spanNamed('confirm 31337').attributes).toMatchObject({
       'blockchain.tx.hash': hash,

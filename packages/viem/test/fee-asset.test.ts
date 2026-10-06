@@ -8,7 +8,7 @@ import { recordingMeterProvider } from '../../core/test/hostile.js';
 import { withHashspan } from '../src/index.js';
 import { FROM, HASH, type MockOptions, mockTransport, TO } from './mock-transport.js';
 import { setupTracing, type TestTracing } from './tracing.js';
-import { viemHasAction } from './viem-version.js';
+import { viemAtLeast, viemHasAction } from './viem-version.js';
 
 let tracing: TestTracing;
 beforeEach(() => {
@@ -181,8 +181,8 @@ describe("Celo: the sending call's fee currency", () => {
     await hashspan.flush();
     expect(confirmOf()?.attributes).not.toHaveProperty('blockchain.tx.fee_asset');
     expect(denominations()).toEqual([undefined]);
-    // The transaction is not read to find it.
-    expect(mock.calls).not.toContain('eth_getTransactionByHash');
+    // The transaction is not read to find it. viem before 2.33.0 reads it inside its own wait, traced or not.
+    if (viemAtLeast('2.33.0')) expect(mock.calls).not.toContain('eth_getTransactionByHash');
   });
 
   it('records none for sendRawTransaction', async () => {

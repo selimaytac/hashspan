@@ -301,8 +301,13 @@ export async function recheckReceipt(client: unknown, receipt: ViemReceipt): Pro
   }
 }
 
-/** A 32-byte hash, as a pending receipt carries it. */
-const PENDING_HASH = /^0x[0-9a-fA-F]{64}$/;
+/** A 32-byte hash: of a transaction, or of a multisig operation as a pending receipt carries it. */
+const HASH = /^0x[0-9a-fA-F]{64}$/;
+
+/** Whether `value` is a 32-byte `0x` hex hash, in any letter case. */
+export function isHash(value: unknown): value is string {
+  return typeof value === 'string' && HASH.test(value);
+}
 
 /**
  * Whether `receipt` is a pending receipt of a Tempo transaction (#402), such as a multisig relay's answer to a sync
@@ -313,7 +318,7 @@ const PENDING_HASH = /^0x[0-9a-fA-F]{64}$/;
 export function isPendingReceipt(receipt: unknown): boolean {
   if (receipt === null || typeof receipt !== 'object') return false;
   const hash = ownField(receipt, 'transactionHash');
-  if (typeof hash !== 'string' || !PENDING_HASH.test(hash)) return false;
+  if (!isHash(hash)) return false;
   const blockNumber = ownField(receipt, 'blockNumber');
   if (blockNumber !== null && blockNumber !== undefined) return false;
   const status = ownField(receipt, 'status');

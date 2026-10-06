@@ -113,6 +113,33 @@ describe('watch', () => {
     expect(debug).toHaveBeenCalledWith(expect.stringContaining('chain id'));
   });
 
+  it.each([
+    ['no hash', undefined],
+    ['a hash too short', `0x${'ab'.repeat(31)}`],
+    ['a hash that is not hex', `0x${'zz'.repeat(32)}`],
+    ['a symbol', Symbol('hash')],
+  ])(
+    'polls nothing and records nothing for %s, calling onReceipt without a receipt',
+    async (_name, hash) => {
+      vi.spyOn(diag, 'debug').mockImplementation(() => {});
+      const hashspan = withHashspan();
+      const mock = mockTransport();
+      const reader = createPublicClient({
+        chain: base,
+        transport: mock.transport,
+        pollingInterval: 10,
+      });
+      const onReceipt = vi.fn();
+
+      // Without a timeout of its own: a poll would last the background timeout, 120 s.
+      expect(() => hashspan.watch(reader, { hash, onReceipt } as never)).not.toThrow();
+      await expect(hashspan.flush({ timeoutMs: 1_000 })).resolves.toBe(true);
+      expect(onReceipt).toHaveBeenCalledExactlyOnceWith(undefined);
+      expect(mock.calls).toEqual([]);
+      expect(tracing.spans()).toHaveLength(0);
+    },
+  );
+
   it('decodes the revert reason with the ABI it is given', async () => {
     const hashspan = withHashspan();
     const reader = createPublicClient({

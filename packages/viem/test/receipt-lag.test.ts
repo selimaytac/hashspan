@@ -30,17 +30,21 @@ function laggingNode(receiptAfterCalls: number) {
 }
 
 describe('a node that returns the receipt late', () => {
-  it("makes viem's own wait fail, which the traced wait passes on unchanged", async () => {
-    const node = laggingNode(3);
-    const reader = createPublicClient({
-      chain: base,
-      transport: node.transport,
-      pollingInterval: 10,
-    }).extend(withHashspan());
-    await expect(reader.waitForTransactionReceipt({ hash: HASH, retryDelay: 1 })).rejects.toThrow(
-      expect.objectContaining({ name: 'TransactionReceiptNotFoundError' }),
-    );
-  });
+  // viem 2.57.3 no longer takes the transaction for its own replacement (wevm/viem#5161): its wait then succeeds.
+  it.skipIf(viemAtLeast('2.57.3'))(
+    "makes viem's own wait fail, which the traced wait passes on unchanged",
+    async () => {
+      const node = laggingNode(3);
+      const reader = createPublicClient({
+        chain: base,
+        transport: node.transport,
+        pollingInterval: 10,
+      }).extend(withHashspan());
+      await expect(reader.waitForTransactionReceipt({ hash: HASH, retryDelay: 1 })).rejects.toThrow(
+        expect.objectContaining({ name: 'TransactionReceiptNotFoundError' }),
+      );
+    },
+  );
 
   it('is waited for again by watch(), until the receipt arrives', async () => {
     const node = laggingNode(3);
@@ -72,31 +76,35 @@ describe('a node that returns the receipt late', () => {
     expect(confirms()[0]?.attributes['blockchain.tx.status']).toBe('success');
   });
 
-  it('records a plain success when viem reports the transaction as its own replacement', async () => {
-    // The receipt appears on the request viem makes for the "replacement" it found: the transaction itself.
-    // From viem 2.33.0, a wait asks for the receipt once before it starts polling: one request more.
-    const node = laggingNode(viemAtLeast('2.33.0') ? 2 : 1);
-    const onReplaced = vi.fn();
-    const hashspan = withHashspan();
-    const reader = createPublicClient({
-      chain: base,
-      transport: node.transport,
-      pollingInterval: 10,
-    }).extend(hashspan);
-    await reader.waitForTransactionReceipt({ hash: HASH, retryDelay: 1, onReplaced });
-    expect(onReplaced).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reason: 'repriced',
-        transaction: expect.objectContaining({ hash: HASH }),
-      }),
-    );
+  // viem 2.57.3 no longer reports the transaction as its own replacement (wevm/viem#5161).
+  it.skipIf(viemAtLeast('2.57.3'))(
+    'records a plain success when viem reports the transaction as its own replacement',
+    async () => {
+      // The receipt appears on the request viem makes for the "replacement" it found: the transaction itself.
+      // From viem 2.33.0, a wait asks for the receipt once before it starts polling: one request more.
+      const node = laggingNode(viemAtLeast('2.33.0') ? 2 : 1);
+      const onReplaced = vi.fn();
+      const hashspan = withHashspan();
+      const reader = createPublicClient({
+        chain: base,
+        transport: node.transport,
+        pollingInterval: 10,
+      }).extend(hashspan);
+      await reader.waitForTransactionReceipt({ hash: HASH, retryDelay: 1, onReplaced });
+      expect(onReplaced).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: 'repriced',
+          transaction: expect.objectContaining({ hash: HASH }),
+        }),
+      );
 
-    const [confirm] = confirms();
-    expect(confirms()).toHaveLength(1);
-    expect(confirm?.attributes['blockchain.tx.status']).toBe('success');
-    expect(confirm?.attributes['blockchain.tx.replacement.hash']).toBeUndefined();
-    expect(confirm?.attributes['blockchain.tx.replacement.reason']).toBeUndefined();
-  });
+      const [confirm] = confirms();
+      expect(confirms()).toHaveLength(1);
+      expect(confirm?.attributes['blockchain.tx.status']).toBe('success');
+      expect(confirm?.attributes['blockchain.tx.replacement.hash']).toBeUndefined();
+      expect(confirm?.attributes['blockchain.tx.replacement.reason']).toBeUndefined();
+    },
+  );
 
   it('ends as a timeout when the receipt does not arrive in time', async () => {
     const node = laggingNode(Number.POSITIVE_INFINITY);

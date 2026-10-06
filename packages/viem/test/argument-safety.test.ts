@@ -12,6 +12,8 @@ import { FROM, HASH, mockTransport, TO } from './mock-transport.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast } from './viem-version.js';
 
+/** A transaction that replaces the one waited for. */
+const REPLACEMENT = `0x${'cd'.repeat(32)}`;
 const payroll = parseAbi(['function pay((address to, uint256 amount) order)']);
 
 let tracing: TestTracing;
@@ -180,10 +182,11 @@ describe('wait options the adapter forwards', () => {
     { spreadFirst = false }: { spreadFirst?: boolean } = {},
   ) => {
     const run = async (traced: boolean) => {
-      // The receipt is that of another transaction: viem reports a replacement.
+      // The block holds another transaction of the same sender and nonce: viem reports it as a replacement.
       const mock = mockTransport({
         advanceBlocks: true,
         blockIncludesTransaction: true,
+        transaction: (hash) => (hash === undefined ? { hash: REPLACEMENT } : {}),
         mined: (() => {
           let calls = 0;
           // From viem 2.33.0, a wait asks for the receipt once before it starts polling: one request more.
