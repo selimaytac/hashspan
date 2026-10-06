@@ -48,8 +48,10 @@ before changing there.
   not one ([payout-worker](examples/payout-worker/AGENTS.md))
 - `integrations/` → private tests of the setups in docs/integrations.md with the third-party libraries they name, a
   workspace of its own ([AGENTS.md](integrations/AGENTS.md))
+- `dashboards/` → Grafana dashboards: `metrics.json` (Prometheus) and `traces.json` (Tempo), with a README; every
+  PromQL query names only metrics and labels of docs/semconv.md, and `make lab-check` runs them after `make demo`
 - `docker/`, `scripts/`, `Makefile` → local lab and release tooling; `make lab-metrics` adds Prometheus and Grafana
-  with the dashboard of `docker/grafana/`; `scripts/demo.sh` (behind `make demo`) starts a
+  with `dashboards/metrics.json`; `scripts/demo.sh` (behind `make demo`) starts a
   fresh Anvil or fails, and `scripts/publish-in-order.mjs` (behind `pnpm release`) publishes one dependency layer at
   a time (see docs/releasing.md)
 See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and the ADR index,

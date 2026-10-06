@@ -29,7 +29,7 @@ flowchart LR
 | cdp adapter | Wraps a Coinbase CDP client in place: sends of server accounts become send spans, user operations of smart accounts user operation spans (ADR 0021); confirmations through a viem reader and `@hashspan/viem`'s `watch()` | `packages/cdp` |
 | x402 adapter | Registers hooks on an `x402Client`: each payment becomes a `payment` span, as the facilitator, not the agent, sends the settling transaction; confirmations through a viem reader and `@hashspan/viem`'s `watch()`, which also check that the settlement carries the payment (`blockchain.payment.verified`, ADR 0017) | `packages/x402` |
 | examples | Runnable agent integrations | `examples/` |
-| lab | Local Jaeger (Docker) + project-local Anvil | `docker/`, `scripts/`, `Makefile` |
+| lab | Local Jaeger (Docker) + project-local Anvil; Prometheus and Grafana with the [dashboards](../dashboards/README.md) | `docker/`, `dashboards/`, `scripts/`, `Makefile` |
 
 Design decisions: [docs/adr](adr/). Attribute schema: [docs/semconv.md](semconv.md).
 

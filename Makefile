@@ -1,6 +1,6 @@
 COMPOSE := docker compose -f docker/compose.yaml
 
-.PHONY: help tools anvil demo demo-base-sepolia lab-up lab-metrics lab-pause lab-status lab-logs lab-nuke clean
+.PHONY: help tools anvil demo demo-base-sepolia lab-up lab-metrics lab-check lab-pause lab-status lab-logs lab-nuke clean
 
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -25,8 +25,11 @@ demo-base-sepolia: ## Run the example agent on Base Sepolia (needs BASE_SEPOLIA_
 lab-up: ## Start Jaeger (UI: http://localhost:16686, OTLP: localhost:4317/4318)
 	$(COMPOSE) up -d
 
-lab-metrics: ## Start Jaeger, Prometheus and Grafana with the hashspan dashboard (Grafana: http://localhost:3000)
+lab-metrics: ## Start Jaeger, Prometheus and Grafana with dashboards/metrics.json (Grafana: http://localhost:3000)
 	$(COMPOSE) --profile metrics up -d
+
+lab-check: ## Run every PromQL query of dashboards/*.json against the lab's Prometheus (after make lab-metrics and make demo)
+	node scripts/check-dashboards.mjs
 
 lab-pause: ## Stop lab containers, keep images and volumes
 	$(COMPOSE) --profile metrics stop
@@ -38,6 +41,8 @@ lab-logs: ## Follow lab logs
 	$(COMPOSE) --profile metrics logs -f
 
 lab-nuke: ## Remove lab containers, volumes, images, local tools and build output
+	@# Containers and volumes of the project's former name, hashspan-lab, from a checkout before 1.1.
+	$(COMPOSE) -p hashspan-lab --profile metrics down -v --remove-orphans
 	$(COMPOSE) --profile metrics down -v --rmi all --remove-orphans
 	$(MAKE) clean
 

@@ -330,6 +330,97 @@ describe('repository docs', () => {
   });
 });
 
+describe('dashboards/', () => {
+  type Target = { expr?: string; query?: string | { query?: string }; legendFormat?: string };
+  const files = readdirSync(join(root, 'dashboards'))
+    .filter((name) => name.endsWith('.json'))
+    .sort();
+  // Every query of the panels and variables of each dashboard, with the legend of a panel query.
+  const queries = files.flatMap((file) => {
+    const dashboard = JSON.parse(read(`dashboards/${file}`));
+    const targets: Target[] = [
+      ...dashboard.panels.flatMap((panel: { targets?: Target[] }) => panel.targets ?? []),
+      ...dashboard.templating.list,
+    ];
+    return targets.flatMap(({ expr, query, legendFormat }) => {
+      const text = expr ?? (typeof query === 'string' ? query : query?.query);
+      return text ? [{ file, text: `${text} ${legendFormat ?? ''}` }] : [];
+    });
+  });
+  const promql = queries.filter(({ text }) => !/\{\s*(span|resource|name)\b/.test(text));
+  const traceql = queries.filter((query) => !promql.includes(query));
+  const semconv = read('docs/semconv.md');
+  // Attribute names in code spans, alone or with a value (`rpc.system.name = "jsonrpc"`).
+  const attributes = new Set(
+    [...semconv.matchAll(/`([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)[`\s]/g)].map((m) => m[1] as string),
+  );
+  // Prometheus' OTLP translation: dots become underscores, and a metric in seconds gets the suffix _seconds.
+  const metrics = [
+    ...semconv.matchAll(/^\| `(blockchain\.client\.[a-z.]+)` \| histogram \| `([^`]+)` \|/gm),
+  ].map(([, name, unit]) => `${name?.replaceAll('.', '_')}${unit === 's' ? '_seconds' : ''}`);
+  const labels = new Set([...attributes].map((name) => name.replaceAll('.', '_')));
+
+  it('finds the queries it checks', () => {
+    expect(files).toEqual(['metrics.json', 'traces.json']);
+    expect(metrics).toHaveLength(3);
+    expect(promql.length).toBeGreaterThan(20);
+    expect(traceql.length).toBeGreaterThan(5);
+  });
+
+  it('query only the metrics and attributes of docs/semconv.md', () => {
+    const unknown = promql.flatMap(({ file, text }) => {
+      // Labels a query makes itself with label_replace(), and those Prometheus adds.
+      const made = [...text.matchAll(/, "([a-z_]+)", "[^"]*", "[a-z_]+", "[^"]*"\)/g)].map(
+        (m) => m[1],
+      );
+      const known = new Set([...labels, ...made, 'le', 'job', 'instance']);
+      const series = [...text.matchAll(/\b(blockchain_client_[a-z_]+?)_(bucket|sum|count)\b/g)].map(
+        (m) => m[1],
+      );
+      const used = [
+        ...[...text.matchAll(/\b([a-z_]+)\s*(?:=~|!~|!=|=)\s*"/g)].map((m) => m[1]),
+        ...[...text.matchAll(/\bby \(([^)]*)\)/g)].flatMap((m) => m[1]?.split(/,\s*/) ?? []),
+        ...[...text.matchAll(/, "[^"]*", "[^"]*", "([a-z_]+)", "[^"]*"\)/g)].map((m) => m[1]),
+        ...[...text.matchAll(/label_values\([^)]*,\s*([a-z_]+)\)/g)].map((m) => m[1]),
+        ...[...text.matchAll(/\{\{([a-z_]+)\}\}/g)].map((m) => m[1]),
+      ];
+      return [
+        ...series.filter((name) => !metrics.includes(name as string)),
+        ...used.filter((label) => !known.has(label as string)),
+      ].map((name) => `${file}: ${name}`);
+    });
+    expect(unknown).toEqual([]);
+    const spanAttributes = traceql.flatMap(({ file, text }) =>
+      [...text.matchAll(/\b(?:span|resource)\.([a-z0-9_.]+)/g)]
+        .map((m) => m[1] as string)
+        .filter((name) => name !== 'service.name' && !attributes.has(name))
+        .map((name) => `${file}: ${name}`),
+    );
+    expect(spanAttributes).toEqual([]);
+  });
+
+  it('leave out the fees someone else paid on every fee query', () => {
+    const fee = promql.filter(({ text }) => text.includes('blockchain_client_fee_'));
+    expect(fee.length).toBeGreaterThan(0);
+    for (const { text } of fee) {
+      const selectors = [...text.matchAll(/blockchain_client_fee_[a-z]+\{([^}]*)\}/g)];
+      expect(selectors.every((m) => m[1]?.includes('blockchain_fee_payer=""'))).toBe(true);
+    }
+  });
+
+  it('are each described in dashboards/README.md, and the lab provisions metrics.json', () => {
+    const readme = read('dashboards/README.md');
+    expect(files.filter((file) => !readme.includes(`(${file})`))).toEqual([]);
+    const compose = read('docker/compose.yaml');
+    expect(compose).toContain(
+      '../dashboards/metrics.json:/var/lib/grafana/dashboards/metrics.json:ro',
+    );
+    expect(compose).toContain(
+      'GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/metrics.json',
+    );
+  });
+});
+
 describe('code examples', () => {
   // Every TypeScript or JavaScript block in the docs is the `#region readme` of a file in packages/*/test/readme/,
   // which `pnpm typecheck` compiles: an example cannot stop compiling without failing CI. An example that needs a
