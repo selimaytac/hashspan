@@ -225,6 +225,53 @@ describe('metrics', () => {
     ).toBe(false);
   });
 
+  it('records a fee another account paid for the sender, such as a Tempo fee payer, as `sponsor`', () => {
+    const meters = recordingMeterProvider();
+    const tracker = createTxTracker({ meterProvider: meters.provider });
+    const fees = () =>
+      meters
+        .recorded(METRIC_BLOCKCHAIN_CLIENT_FEE)
+        .map(({ attributes }) => attributes['blockchain.fee.payer']);
+    const third = `0x${'ef'.repeat(32)}`;
+    const replacing = `0x${'12'.repeat(32)}`;
+
+    tracker.startConfirm({ chainId: 1, hash: HASH }).end({ ...receipt, sponsored: true });
+    // Only `true` marks a sample.
+    for (const sponsored of [false, 'true', 1, null]) {
+      const hash = `0x${String(fees().length + 1)
+        .padStart(2, '0')
+        .repeat(32)}`;
+      tracker.startConfirm({ chainId: 1, hash }).end({ ...receipt, sponsored } as never);
+    }
+    // A payment's settlement stays the facilitator's, also when its fee was sponsored.
+    const payment = tracker.startPayment({ chainId: 1, protocol: 'x402', amount: 1n });
+    payment.link(OTHER_HASH);
+    tracker.startConfirm({ chainId: 1, hash: OTHER_HASH }).end({ ...receipt, sponsored: true });
+    payment.end({ status: 'settled', hash: OTHER_HASH });
+    // A replacing transaction is marked from its own receipt.
+    tracker
+      .startConfirm({ chainId: 1, hash: third })
+      .end({ ...receipt, transactionHash: replacing, sponsored: true });
+
+    expect(fees()).toEqual([
+      'sponsor',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'facilitator',
+      'sponsor',
+    ]);
+    // Only the fee sample says who paid.
+    expect(
+      meters
+        .recorded(METRIC_BLOCKCHAIN_CLIENT_CONFIRMATION_DURATION)
+        .some(({ attributes }) => 'blockchain.fee.payer' in attributes),
+    ).toBe(false);
+    // And the span records no payer.
+    expect(tracing.spans().some((s) => 'blockchain.fee.payer' in s.attributes)).toBe(false);
+  });
+
   it('never records addresses, hashes or agent identity', () => {
     const meters = recordingMeterProvider();
     const tracker = createTxTracker({

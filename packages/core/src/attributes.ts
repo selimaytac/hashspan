@@ -158,8 +158,8 @@ export const BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION = 'user_operation
 export const BLOCKCHAIN_OPERATION_SUBJECT_VALUE_CALL_BATCH = 'call_batch' as const;
 /**
  * Metrics only: who paid a fee sample's fee when it was not the sender of the traced transaction or operation:
- * `facilitator` for the settlement transaction of a payment, `paymaster` for a user operation a paymaster paid for.
- * Absent when the sender paid.
+ * `facilitator` for the settlement transaction of a payment, `paymaster` for a user operation a paymaster paid for,
+ * `sponsor` for a transaction whose receipt names another account as its fee payer. Absent when the sender paid.
  */
 export const ATTR_BLOCKCHAIN_FEE_PAYER = 'blockchain.fee.payer' as const;
 
@@ -167,6 +167,8 @@ export const ATTR_BLOCKCHAIN_FEE_PAYER = 'blockchain.fee.payer' as const;
 export const BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR = 'facilitator' as const;
 /** A paymaster paid for the user operation. */
 export const BLOCKCHAIN_FEE_PAYER_VALUE_PAYMASTER = 'paymaster' as const;
+/** An account other than the sender paid the transaction's fee, such as a Tempo fee payer. */
+export const BLOCKCHAIN_FEE_PAYER_VALUE_SPONSOR = 'sponsor' as const;
 /**
  * Metrics only: on a fee sample whose fee was paid in a token rather than the chain's native currency, `token`; a
  * constant, never a value read from the chain. Absent for the native currency.

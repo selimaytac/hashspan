@@ -37,6 +37,7 @@ import {
   ATTR_BLOCKCHAIN_TX_VALUE,
   ATTR_ERROR_TYPE,
   BLOCKCHAIN_FEE_DENOMINATION_VALUE_TOKEN,
+  BLOCKCHAIN_FEE_PAYER_VALUE_SPONSOR,
   BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM,
   BLOCKCHAIN_OPERATION_NAME_VALUE_SEND,
   BLOCKCHAIN_TX_REPLACEMENT_REASON_VALUE_CANCELLED,
@@ -396,12 +397,18 @@ export function createTransactionSpans({
             const status = { [ATTR_BLOCKCHAIN_TX_STATUS]: recorded };
             recordConfirmation(endTime, status);
             const fee = attributes[ATTR_BLOCKCHAIN_TX_FEE];
+            // A payment's settlement stays the facilitator's; otherwise the receipt says whether another account paid.
+            const payer =
+              feePayer ??
+              (ownValue(receipt, 'sponsored') === true
+                ? BLOCKCHAIN_FEE_PAYER_VALUE_SPONSOR
+                : undefined);
             if (typeof fee === 'string')
               txMetrics.fee(
                 BigInt(fee),
                 metricAttributes(input.chainId, {
                   ...status,
-                  ...(feePayer ? { [ATTR_BLOCKCHAIN_FEE_PAYER]: feePayer } : {}),
+                  ...(payer ? { [ATTR_BLOCKCHAIN_FEE_PAYER]: payer } : {}),
                   // From the validated value, before the address mode: samples are marked in `off` mode too. A
                   // constant, never the address.
                   ...(feeAsset !== undefined

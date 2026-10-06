@@ -72,6 +72,7 @@ const RECEIPT = {
   l1Fee: 1n,
   operatorFee: 3n,
   feeAsset: ADDRESS,
+  sponsored: true,
   transactionHash: HASH,
 };
 const PAYMENT = {

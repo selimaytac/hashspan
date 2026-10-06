@@ -57,6 +57,15 @@ samples without it.
   replaced one's payer (ADR 0008). A settlement confirmed through another tracker, with no link to the payment, is
   recorded as paid by its sender.
 
+## Amendment (2026-10-06): a sponsored fee
+
+A Tempo transaction (type `0x76`) can have its fee paid by another account, which its receipt names as `feePayer`
+(#402). Such a fee is not the sender's either: its sample carries `blockchain.fee.payer` `sponsor`, a third value of
+the closed set. The adapter reads `feePayer` and `from` only from a `0x76` receipt's own data properties, sets the
+value only when both are 20-byte hex addresses that differ (without letter case), and passes core a boolean, so no
+address reaches the metric. A payment's settlement keeps `facilitator`, and a replacing transaction is marked from
+its own receipt.
+
 ## Amendment (2026-10-04): `blockchain.system.name`
 
 `blockchain.system` is renamed to `blockchain.system.name` (ADR 0003). Until 1.0, every sample records both, with the

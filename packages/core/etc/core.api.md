@@ -221,6 +221,9 @@ export const BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR: "facilitator";
 export const BLOCKCHAIN_FEE_PAYER_VALUE_PAYMASTER: "paymaster";
 
 // @public
+export const BLOCKCHAIN_FEE_PAYER_VALUE_SPONSOR: "sponsor";
+
+// @public
 export const BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM: "confirm";
 
 // @public
@@ -401,6 +404,7 @@ export interface ReceiptLike {
     operatorFee?: bigint | null | undefined;
     replacementReason?: ReplacementReason | undefined;
     revertReason?: string | undefined;
+    sponsored?: boolean | undefined;
     status: "success" | "reverted";
     transactionHash?: string | undefined;
 }
