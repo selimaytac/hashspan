@@ -1,5 +1,79 @@
 # @hashspan/viem
 
+## 1.1.0
+
+### Minor Changes
+
+- [#419](https://github.com/selimaytac/hashspan/pull/419) [`18be633`](https://github.com/selimaytac/hashspan/commit/18be633c4989e95085651e032f929e09822a1160) Thanks [@selimaytac](https://github.com/selimaytac)! - Name the token a fee was paid in on chains that charge gas in one. The confirm span records
+  `blockchain.tx.fee_asset`, the token's contract address under the address mode, with the receipt's fee attributes,
+  and the `blockchain.client.fee` sample carries `blockchain.fee.denomination` `token` (in every address mode). Both
+  are absent when the fee is in the native currency. Fee values are not converted. `SendInput` and `ReceiptLike` take
+  the address as `feeAsset`; the receipt's wins, and a replacing transaction never takes the replaced one's.
+  `ATTR_BLOCKCHAIN_TX_FEE_ASSET`, `ATTR_BLOCKCHAIN_FEE_DENOMINATION` and `BLOCKCHAIN_FEE_DENOMINATION_VALUE_TOKEN` name
+  them.
+  
+  `@hashspan/viem` passes Celo's `feeCurrency` from the arguments of `sendTransaction`, `writeContract` and their sync
+  forms, and Tempo's `feeToken` from a receipt of type `0x76` only, with no extra request. A transaction sent with
+  `sendRawTransaction`, or confirmed with `watch()` alone, records no Celo fee currency.
+
+- [#416](https://github.com/selimaytac/hashspan/pull/416) [`e35f878`](https://github.com/selimaytac/hashspan/commit/e35f878cdf9b0854c4a5967d66a79099e9ff13ef) Thanks [@selimaytac](https://github.com/selimaytac)! - Record the OP Stack operator fee (Isthmus and later) as `blockchain.tx.operator_fee`, in wei as a decimal string, on
+  the confirm span. `ReceiptLike` takes it as `operatorFee`, and `ATTR_BLOCKCHAIN_TX_OPERATOR_FEE` names the attribute.
+  `blockchain.tx.fee` and the `blockchain.client.fee` histogram keep their meaning and do not include it.
+  
+  `@hashspan/viem` reads it only for a sealed receipt that carries `operatorFeeScalar` or `operatorFeeConstant`, which
+  a node adds when the chain charges the fee: one `eth_call` to the GasPriceOracle's `getOperatorFee(gasUsed)` at the
+  receipt's block, off the caller's path, through the client that read the receipt. Receipts without the fields cost no
+  request. A failed or malformed answer records the receipt without the operator fee. `@hashspan/cdp` and
+  `@hashspan/x402` record it when they confirm through a reader.
+
+- [#421](https://github.com/selimaytac/hashspan/pull/421) [`c80718f`](https://github.com/selimaytac/hashspan/commit/c80718f637c10a927aa065c054cbfff753f93d7f) Thanks [@selimaytac](https://github.com/selimaytac)! - Mark fees another account paid for the sender, and treat a pending receipt as no outcome. `ReceiptLike` takes
+  `sponsored: true` for a transaction whose fee was paid by an account other than its sender, and the
+  `blockchain.client.fee` sample then carries `blockchain.fee.payer` `sponsor` (`BLOCKCHAIN_FEE_PAYER_VALUE_SPONSOR`), a
+  new value of its closed set; a payment's settlement keeps `facilitator`. No address is recorded. `ReceiptLike.status`
+  also takes `pending`: it withdraws the wait as a timeout does, and the confirm span ends without an outcome, error or
+  metric sample only when no other wait of the transaction is running.
+  
+  `@hashspan/viem` sets `sponsored` for a Tempo receipt (type `0x76`) whose `feePayer` is a valid address other than its
+  `from`. A sync send that returns a pending receipt, as a Tempo multisig relay does below quorum, no longer ends its
+  confirm span as `_OTHER`: by default the span ends without an outcome, with no request added. The new
+  `followMultisigOperations` option (`true` or `{ timeoutMs }`, off by default) instead waits for the transaction the
+  relay submits for the operation, off the caller's path, with at most 60 receipt requests within its timeout (default
+  120 000 ms), as one of the `maxBackgroundConfirmations`. The README notes that the actions of `tempoActions()` from
+  `viem/tempo` are traced only when `withHashspan()` was applied before it.
+
+- [#411](https://github.com/selimaytac/hashspan/pull/411) [`2023e4c`](https://github.com/selimaytac/hashspan/commit/2023e4cde298de0a17a43871ad1995df654d5481) Thanks [@selimaytac](https://github.com/selimaytac)! - A failed send now records, as `error.type` on the send span and on `blockchain.client.send.duration`, the error viem
+  classified the failure as, instead of the class of the error viem wraps it in. For example, a nonce already used was
+  recorded as `TransactionExecutionError` (`ContractFunctionExecutionError` for `writeContract`) and is now recorded as
+  `NonceTooLowError`; likewise `InsufficientFundsError`, `IntrinsicGasTooLowError`, `FeeCapTooLowError`, transport errors
+  such as `HttpRequestError` or `TimeoutError`, and for `sendUserOperation` the bundler error under the
+  `UserOperationExecutionError`. When viem classified nothing, the thrown class is recorded as before. `exception.type`
+  and the rethrown error are unchanged. Queries and dashboards that filter failed sends on the wrapper class need the new
+  values.
+
+- [#426](https://github.com/selimaytac/hashspan/pull/426) [`b90ddee`](https://github.com/selimaytac/hashspan/commit/b90ddee1e7d3e1bd82c8a9067068abf170989988) Thanks [@selimaytac](https://github.com/selimaytac)! - Record how many confirmations a wait asked for as `blockchain.tx.wait.confirmations` (int) on a transaction's
+  confirm span, from the wait that ended the span: the one whose receipt ended it, or the last to time out or fail. It
+  is a span attribute only, never a metric attribute. `ConfirmInput` takes it as `confirmations`, recorded only when it
+  is a positive safe integer and read from an own data property, and `ATTR_BLOCKCHAIN_TX_WAIT_CONFIRMATIONS` names the
+  attribute. A tracker from an older core ignores the field, and the attribute is then absent.
+  
+  `@hashspan/viem` passes the count as viem applies it: `confirmations` of `waitForTransactionReceipt` when it is a
+  positive safe integer, 1 when it is omitted, `0`, negative or `NaN`, and nothing for any other value or one behind an
+  accessor. Background confirmation and `watch()` record 1, so with background confirmation on, the background wait
+  usually ends the span first and records 1. Sync actions, user operations and call batches record nothing.
+  `@hashspan/cdp` records the same for a network-scoped `waitForTransactionReceipt` without a reader, and 1 for its
+  `{ transactionHash }` form; with a reader, and for `@hashspan/x402` settlements, the confirmation through `watch()`
+  records 1. No request is added.
+
+### Patch Changes
+
+- [#427](https://github.com/selimaytac/hashspan/pull/427) [`6dae470`](https://github.com/selimaytac/hashspan/commit/6dae4706512cf9fcf9682ea77afb239eb5b3adf9) Thanks [@selimaytac](https://github.com/selimaytac)! - `watch()`, and background confirmation, no longer poll for a hash that is not a 32-byte hex hash. Such a hash recorded
+  nothing already, but its poll sent requests until the timeout (120 s by default) in a slot of
+  `maxBackgroundConfirmations` and kept `flush()` waiting, and on viem older than 2.21.34 a hash that cannot be turned
+  into a string (a symbol) made viem's timeout timer throw an uncaught exception. `watch()` now calls `onReceipt` with
+  `undefined` at once. The README lists what differs on viem releases older than 2.33.0 and 2.21.58.
+- Updated dependencies [[`18be633`](https://github.com/selimaytac/hashspan/commit/18be633c4989e95085651e032f929e09822a1160), [`e35f878`](https://github.com/selimaytac/hashspan/commit/e35f878cdf9b0854c4a5967d66a79099e9ff13ef), [`a3ae29f`](https://github.com/selimaytac/hashspan/commit/a3ae29f17f65a7a482f90cb70f5b095c9a1a4157), [`c80718f`](https://github.com/selimaytac/hashspan/commit/c80718f637c10a927aa065c054cbfff753f93d7f), [`b90ddee`](https://github.com/selimaytac/hashspan/commit/b90ddee1e7d3e1bd82c8a9067068abf170989988)]:
+  - @hashspan/core@1.1.0
+
 ## 1.0.0
 
 ### Major Changes
