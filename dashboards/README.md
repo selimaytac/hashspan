@@ -10,8 +10,9 @@ Two Grafana dashboards for what hashspan records: one on the metrics, one on the
 Both dashboards have the same variables:
 
 - **Metrics** (`datasource`) and, in `traces.json`, **Traces** (`traces`): the data sources, chosen from the
-  Prometheus and Tempo data sources of your Grafana, starting on the default one. The same file therefore works in a
-  local Grafana and in Grafana Cloud (`grafanacloud-<stack>-prom`, `grafanacloud-<stack>-traces`).
+  Prometheus and Tempo data sources of your Grafana, whatever their names; with several, check the one selected. The
+  same file therefore works in a local Grafana and in Grafana Cloud (`grafanacloud-<stack>-prom`,
+  `grafanacloud-<stack>-traces`).
 - **Service** (`job`): Prometheus' `job` label, which is `service.name`, or `service.namespace/service.name` when
   the namespace is set. `traces.json` matches it against `resource.service.name`, so set no `service.namespace` to
   filter spans by service.
