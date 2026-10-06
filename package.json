@@ -46,9 +46,10 @@
     "vitest": "5.0.3"
   },
   "pnpm": {
-    "//": "tar: prool pins tar@7.2.0 but never imports it (https://github.com/wevm/prool/issues/112). Remove once prool drops or bumps it.",
+    "//": "tar: prool pins tar@7.2.0 but never imports it (https://github.com/wevm/prool/issues/112). Remove once prool drops or bumps it. shell-quote: @changesets/cli's launch-editor allows ^1.10.0, the lockfile had 1.10.0 (GHSA-pqg4-j6r4-53mv, patched in 1.11.0); remove once the lockfile resolves 1.11.0 or later without it.",
     "overrides": {
-      "tar": ">=7.5.21"
+      "tar": ">=7.5.21",
+      "launch-editor>shell-quote": "^1.11.0"
     }
   }
 }
