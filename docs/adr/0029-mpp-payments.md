@@ -85,6 +85,10 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
   the event API by feature (`typeof mppx.on === 'function'`); without it, it traces nothing and logs a `diag` warning.
   Peer dependencies: `@opentelemetry/api`, `mppx` (`~0.13.5`, widened only after the weekly range run passes), and
   `viem` (`^2.57.1`, mppx's own floor) for the `reader`, as in ADR 0012.
+- **A 0.x release line.** `@hashspan/mpp` ships as 0.x, outside the four packages ADR 0027 freezes, until mppx
+  reaches 1.0: following mppx's breaking minor lines needs a raised peer floor, a major change after 1.0. The
+  implementation pull request takes it out of the `@hashspan/*` linked group in `.changeset/config.json`, so its
+  version does not follow the 1.x packages.
 - **Observers, not wrapping.** No method is replaced. Every observer catches its own failures and logs them via
   `diag`; the `challenge.received` observer never returns a value, so it never supplies a credential.
 - **Scope of v1: Tempo `charge`, push and pull.** A challenge whose `method` is not `tempo` or whose `intent` is not
@@ -102,16 +106,21 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
     from the `reader`'s means no confirmation and no verification for that payment (#254).
   - New attributes, under `mpp.*` for MPP's own fields, as ADR 0013 does for x402: `mpp.method` (`tempo`),
     `mpp.intent` (`charge`), `mpp.mode` (`push` | `pull`, from the credential's payload type), `mpp.challenge.id`
-    (validated against a short identifier pattern and bounded, spans only) and `mpp.resource`, with the meaning,
-    modes and bound of `x402.resource` (origin by default; `paymentResource`; 512 characters). None becomes a metric
-    attribute.
+    and `mpp.resource`. None becomes a metric attribute.
+  - `mpp.challenge.id` is recorded by default, on spans only, validated against a short identifier pattern and
+    bounded in length; a value that fails is not recorded. It joins the payer's trace to the server's logs and to
+    the transfer's memo; it is server-chosen and high-cardinality, which is why it never reaches a metric.
+  - `mpp.resource` has the meaning, modes and bound of `x402.resource` (origin by default; `paymentResource`; 512
+    characters). A protocol-neutral resource attribute is left to a later record, since it would need
+    `x402.resource` recorded beside it for a minor release.
 - **Who sends the settlement: a core minor.** `PaymentInput` gains three optional fields (names proposed here,
   settled in the implementation's API report):
   - `sender: 'payer'`: the payer is the settlement transaction's `from`. The core then links the hash without the
     `facilitator` fee payer, so the fee sample carries `blockchain.fee.payer` `sponsor` when the receipt names
     another fee payer (a sponsored pull), and none when the payer paid.
   - `hash`: the settlement transaction's hash when the payer knows it at the start (push, unsponsored pull). The core
-    links it as `link(hash)` does, and when the tracker has its own send span of that hash (push through a traced
+    records it as `blockchain.tx.hash` when the span starts, so every ending keeps it, a timeout included; links it
+    as `link(hash)` does; and when the tracker has its own send span of that hash (push through a traced
     client), the payment span starts with a span link to it, visible to samplers, so the payment span and the
     payer's send and confirm spans point at each other.
   - `mpp`: MPP's details (method, intent, mode, challenge id, resource), beside `x402`.
@@ -139,7 +148,7 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
   | the same without a hash (sponsored pull) | error, `error.type` from the error, no status |
   | `payment.failed` after `challenge.received` without `credential.created` (policy, spending limit, signing, a failed push send) | error, `error.type` from the error, no hash, as a failed send; the adapter does not tell policy refusals apart |
   | `payment.failed` for a challenge no observer saw | nothing |
-  | no event: 3xx, a 4xx, a 402 after payment | error, `error.type` `timeout`, no status (ADR 0016), once the challenge's `expires` (bounded) or, without one, the client's default validity of 25 seconds, plus a grace period, has passed |
+  | no event: 3xx, a 4xx, a 402 after payment | error, `error.type` `timeout`, no status (ADR 0016), once the challenge's `expires` (bounded) or, without one, the client's default validity of 25 seconds, plus a grace period, has passed; the payer's own hash, when known, stays recorded (see below) |
   | too many payments open | the oldest ends as `timeout` |
   | `flush()` gives up | every payment still open ends as `timeout` |
 
@@ -199,22 +208,30 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
   clarification under the change policy; no name is renamed or removed. This record's pull request only makes the
   `blockchain.tx.fee` row protocol-neutral, which is already true today.
 
+## Resolved questions (2026-10-18)
+
+The choices that were open when this record was proposed, as decided above or here:
+
+- **Release line:** `@hashspan/mpp` ships as 0.x, outside ADR 0027's freeze, until mppx reaches 1.0, and leaves the
+  linked group (see *A 0.x release line*).
+- **`mpp.challenge.id`:** on by default on spans, never on metrics, validated and bounded.
+- **The resource:** `mpp.resource` for now; a protocol-neutral attribute is a later record.
+- **A timeout that knows a hash:** a push payment answered with a 4xx moved the money, so a timed-out payment keeps
+  the payer's own hash. The adapter passes it at the start as `PaymentInput.hash` (above), and the core records it as
+  `blockchain.tx.hash` when the span starts, so `timeout()` needs no new option and ends the span with the hash and
+  no `blockchain.payment.status`. That fits ADR 0016: the hash is a fact the payer holds, while the timeout stays the
+  observer's outcome and claims nothing about the transaction. It is part of the additive `hash` field (ADR 0014);
+  the sibling send span and, with a reader, the confirm span show what became of the transaction. A sponsored pull
+  has no hash before a receipt, so its timeout records none.
+- **The paid response's copy:** cancelled after the event's observers ran, only if nobody is reading it, as decided
+  above.
+- **Paid MCP tools:** the implementation pull request tests whether `mppx/mcp/client`'s `McpClient.wrap` fires these
+  events. If it does not, paid MCP tools over MPP are a known limit, stated in the README.
+
 ## Open questions
 
-- **Release line.** mppx is 0.x, and a raised peer floor after 1.0 is a major change (ADR 0027). Should
-  `@hashspan/mpp` ship as 0.x, outside the four packages ADR 0027 freezes, until mppx reaches 1.0? The `@hashspan/*`
-  linked group in `.changeset/config.json` would then need it left out, a release tooling change.
-- **`mpp.challenge.id` on by default.** It joins the payer's trace to the server's logs and memo, and it is
-  high-cardinality and server-chosen. On by default for spans (never metrics), or opt-in?
-- **A protocol-neutral resource.** `mpp.resource` mirrors `x402.resource`. A neutral `blockchain.payment.resource`
-  would need `x402.resource` recorded beside it for a minor release, a larger change for another record.
-- **A timeout that knows a hash.** A push payment answered with a 4xx moved the money. Should a timed-out payment
-  record the payer's own hash (a core option on `timeout`) so the span shows the transaction, or is the sibling send
-  span enough?
-- **Releasing the paid response's copy.** Cancel it after the event's observers ran, as decided above, or never,
-  leaving the buffering to the user, who chose to observe paid responses with hashspan?
-- **Paid MCP tools.** Whether `mppx/mcp/client`'s `McpClient.wrap` emits these events is not verified; until a test
-  shows it, paid MCP tools over MPP are a known gap.
+- **Sessions:** the status of an authorized but unsettled voucher payment (a new value such as `authorized`, or none),
+  and how a settlement links to its vouchers within a bound, for the sessions amendment.
 
 ## Consequences
 
@@ -231,14 +248,16 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
 - Known limits, stated in the package README: sessions, subscriptions, `evm`, `stripe` and x402 over mppx are not
   traced; a 3xx, a 4xx or a final 402 after payment ends as `timeout`; a sponsored pull's hash and verification rest
   on the server's `reference` and the 56-bit memo binding; auto-swap and machine-token routes get no verdict; push
-  from a JSON-RPC account (`sendCallsSync`) is linked only as far as its test shows; paid MCP tools until verified.
+  from a JSON-RPC account (`sendCallsSync`) is linked only as far as its test shows; paid MCP tools, if their test
+  shows they fire no events.
 - **Tests the implementation pull request brings, written first:**
   - *Unit* (`packages/mpp/test/`): a real mppx client against a fake paid API, offline, for every row of the outcome
     table, the correlation by `challenge.id` (payloads are copies; repeated ids; a reused credential), mode
     detection, zero-amount challenges, the hash derivation against mppx's own
     `PaymentOutcomeUnknownError.transactionHash`, a streamed paid response whose copy is released while the caller
     reads the original to the end, an observer of the user's registered after hashspan's that reads the paid
-    response's copy, string, `URL` and `Request` inputs, and an older core.
+    response's copy, string, `URL` and `Request` inputs, a timed-out push that keeps its hash, a paid MCP tool
+    through `McpClient.wrap`, and an older core.
   - *Hostile input* (`test/hostile-input.test.ts`, ADR 0025): the table applied to every observer, with hostile
     challenges (long or repeated ids, malformed amounts and addresses, 11 or more splits), credential strings,
     `Payment-Receipt` headers, error objects, response and request copies that are not platform objects, and the
@@ -257,5 +276,5 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
     Tempo mode, redirecting its URLs as `integrations/test/mastra-agent.int.test.ts` does, and asserts its spans.
 - The implementation also wires up the new package: the package table and commit scope (`mpp`) in AGENTS.md and
   CONTRIBUTING.md, an `AGENTS.md` and `CLAUDE.md` in the package, its API report, `check:packages`,
-  `smoke:packages`, `scripts/publish-in-order.mjs`, a changeset, the docs text above, and a section in
+  `smoke:packages`, `scripts/publish-in-order.mjs`, its removal from the linked group, a changeset, the docs text above, and a section in
   docs/integrations.md that supersedes the manual `watch()` setup of #438.
