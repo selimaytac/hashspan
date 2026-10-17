@@ -326,6 +326,23 @@ await bundler.waitForUserOperationReceipt({ hash }); // confirm span, linked to 
 - Only these two bundler actions are traced; viem calls the others from inside them. Background confirmation and
   `watch()` cover transactions only: a user operation gets a confirm span when you wait for its receipt.
 
+### Smart account SDKs
+
+The smart account clients of permissionless.js (`createSmartAccountClient`) and ZeroDev (`createKernelAccountClient`)
+are bundler clients with `sendTransaction`, `writeContract` and, in permissionless, `sendCalls` on top. These send a
+user operation through the client the SDK added them to, wait for its receipt and return the bundle transaction's
+hash, so `withHashspan()` applied to the finished client does not see the operation:
+
+- On such a client, `sendUserOperation` and `waitForUserOperationReceipt` are traced as above.
+- A `sendTransaction`, `writeContract` or `sendCalls` whose account (the call's, else the client's) is a smart
+  account is not traced, with a `diag` warning: it sends no transaction and no call batch, and the hash it returns is
+  the bundle's, whose status and fee belong to the bundler. Their sync forms are not traced either.
+- For user operation spans from those actions, apply `withHashspan()` before the SDK's actions:
+  `createBundlerClient(...).extend(withHashspan()).extend(smartAccountActions)` with permissionless
+  ([setup](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/integrations.md#smart-account-sdks)).
+  The returned hash is the bundle transaction's: a wait for it on a traced client records the bundle transaction,
+  not the operation.
+
 ## Call batches (EIP-5792)
 
 A wallet that supports EIP-5792 takes a batch of calls with `wallet_sendCalls` and returns a batch id; the wallet
@@ -435,7 +452,9 @@ When a framework extends the client you pass in, check whether confirm spans app
 Extensions that add their own actions are the other way round. The actions of Tempo's `tempoActions()` (`viem/tempo`),
 such as `token.transfer`, call viem's actions with the client they extend: they are traced only when `withHashspan()`
 was applied before `tempoActions()`, and then through the action they reach (`token.transfer` as a `sendTransaction`
-to the token). Applied after it, they are not traced; their results and requests are the same either way.
+to the token). Applied after it, they are not traced; their results and requests are the same either way. The same
+holds for the `sendTransaction` and `writeContract` of a smart account SDK: apply `withHashspan()` before its
+actions to trace their user operations ([smart account SDKs](#smart-account-sdks)).
 
 ## Known limits
 
@@ -455,6 +474,9 @@ to the token). Applied after it, they are not traced; their results and requests
   ([call batches](#call-batches-eip-5792)).
 - Background confirmation and `watch()` cover transactions only: a user operation or a call batch gets a confirm span
   only from your own wait ([smart accounts](#smart-accounts-erc-4337), [call batches](#call-batches-eip-5792)).
+  `watch()` on a bundle transaction's hash records the bundle transaction, not the operations in it.
+- A smart account SDK's `sendTransaction`, `writeContract` and `sendCalls` are not traced on a client extended after
+  the SDK's actions ([smart account SDKs](#smart-account-sdks)).
 - `sendCallsSync` is traced from viem 2.45.2, and call batches record no fee
   ([call batches](#call-batches-eip-5792)).
 - A transaction sent while `maxBackgroundConfirmations` confirmations are polling gets no background confirm span, and

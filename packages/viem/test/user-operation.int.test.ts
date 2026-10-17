@@ -9,26 +9,20 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
-  encodeFunctionData,
   type Hex,
   http,
+  parseEventLogs,
   RpcRequestError,
 } from 'viem';
 import {
   createBundlerClient,
   entryPoint07Abi,
   entryPoint07Address,
-  toSmartAccount,
 } from 'viem/account-abstraction';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
-import {
-  reverterCode,
-  testAccountAbi,
-  testAccountCode,
-  testEntryPointCode,
-} from './entry-point/test-entry-point.js';
+import { reverterCode } from './entry-point/test-entry-point.js';
 import {
   collectingRejections,
   type Ending,
@@ -41,15 +35,16 @@ import {
   succeeded,
   TIMEOUT,
 } from './fault-checks.js';
+import { sdkSmartAccountActions } from './sdk-smart-account.js';
 import { startAnvil } from './start-anvil.js';
 import { testBundler } from './test-bundler.js';
+import { installTestEntryPoint, testSmartAccount } from './test-smart-account.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast } from './viem-version.js';
 
 const ACCOUNT = '0x00000000000000000000000000000000000A11cE' as const;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 const REVERTER = '0x00000000000000000000000000000000000000a1' as const;
-const SIGNATURE = `0x${'11'.repeat(65)}` as const;
 /** A nonce key in the upper 192 bits: the recorded nonce is then larger than any int attribute. */
 const NONCE_KEY = 7n;
 
@@ -62,14 +57,10 @@ let tracing: TestTracing;
 let bundler: ReturnType<typeof testBundler>;
 
 beforeAll(async () => {
-  const setCode = (address: Address, code: Hex) =>
-    reader.request({ method: 'anvil_setCode' as never, params: [address, code] as never });
-  await setCode(entryPoint07Address, testEntryPointCode);
-  await setCode(ACCOUNT, testAccountCode);
-  await setCode(REVERTER, reverterCode);
+  await installTestEntryPoint(reader, ACCOUNT);
   await reader.request({
-    method: 'anvil_setBalance' as never,
-    params: [ACCOUNT, '0xde0b6b3a7640000'] as never,
+    method: 'anvil_setCode' as never,
+    params: [REVERTER, reverterCode as Hex] as never,
   });
   const [, executor] = (await createWalletClient({
     chain: anvil,
@@ -90,35 +81,7 @@ afterEach(async () => {
   await tracing.teardown();
 });
 
-const smartAccount = () =>
-  toSmartAccount({
-    client: reader,
-    entryPoint: { abi: entryPoint07Abi, address: entryPoint07Address, version: '0.7' },
-    getAddress: async () => ACCOUNT,
-    encodeCalls: async (calls) =>
-      calls.length === 1
-        ? encodeFunctionData({
-            abi: testAccountAbi,
-            functionName: 'execute',
-            args: [calls[0]?.to as Address, calls[0]?.value ?? 0n, calls[0]?.data ?? '0x'],
-          })
-        : encodeFunctionData({
-            abi: testAccountAbi,
-            functionName: 'executeBatch',
-            args: [
-              calls.map((call) => ({
-                target: call.to,
-                value: call.value ?? 0n,
-                data: call.data ?? '0x',
-              })),
-            ],
-          }),
-    getFactoryArgs: async () => ({ factory: undefined, factoryData: undefined }),
-    getStubSignature: async () => SIGNATURE,
-    signMessage: async () => SIGNATURE,
-    signTypedData: async () => SIGNATURE,
-    signUserOperation: async () => SIGNATURE,
-  });
+const smartAccount = () => testSmartAccount(reader, ACCOUNT);
 
 describe('user operations on Anvil', () => {
   it('traces an operation from the bundler to its receipt, apart from the bundle transaction', async () => {
@@ -264,6 +227,94 @@ describe('user operations on Anvil', () => {
       expect(confirm.attributes['blockchain.user_operation.success']).toBe(true);
     },
   );
+});
+
+// A smart account SDK's client (permissionless.js, ZeroDev): its sendTransaction sends a user operation through the
+// client it closed over and returns the bundle transaction's hash (#430; sdk-smart-account.ts, and
+// integrations/test/smart-account-sdks.int.test.ts with the SDKs themselves).
+describe('smart account SDK clients on Anvil', () => {
+  it('records the user operation of sendTransaction with withHashspan() before the SDK actions', async () => {
+    const account = await smartAccount();
+    const meters = recordingMeterProvider();
+    const hashspan = withHashspan({ meterProvider: meters.provider });
+    const client = createBundlerClient({
+      account,
+      client: reader,
+      transport: bundler.transport,
+      pollingInterval: 100,
+    })
+      .extend(hashspan)
+      .extend(sdkSmartAccountActions);
+    const before = await reader.getBalance({ address: RECIPIENT });
+
+    const hash = await client.sendTransaction({ to: RECIPIENT, value: 1_000n });
+    expect(await hashspan.flush()).toBe(true);
+
+    expect(await reader.getBalance({ address: RECIPIENT })).toBe(before + 1_000n);
+    const bundle = await reader.getTransactionReceipt({ hash });
+    const [event] = parseEventLogs({
+      abi: entryPoint07Abi,
+      eventName: 'UserOperationEvent',
+      logs: bundle.logs,
+    });
+    expect(tracing.spans().map((span) => span.name)).toEqual(['send 31337', 'confirm 31337']);
+    const send = tracing.spanNamed('send 31337');
+    const confirm = tracing.spanNamed('confirm 31337');
+    expect(send.attributes).toEqual({
+      'blockchain.system.name': 'evm',
+      'blockchain.chain.id': 31337,
+      'blockchain.operation.name': 'send',
+      'blockchain.user_operation.sender': ACCOUNT.toLowerCase(),
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
+      'blockchain.user_operation.call_count': 1,
+      'blockchain.user_operation.hash': event?.args.userOpHash,
+    });
+    expect(confirm.links.map((link) => link.context.spanId)).toEqual([send.spanContext().spanId]);
+    expect(confirm.attributes).toMatchObject({
+      'blockchain.user_operation.hash': event?.args.userOpHash,
+      'blockchain.user_operation.success': true,
+      'blockchain.user_operation.gas.cost': event?.args.actualGasCost.toString(),
+      'blockchain.tx.hash': hash,
+    });
+    expect(confirm.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(confirm.attributes['blockchain.tx.fee']).toBeUndefined();
+    // The fee sample is the operation's cost, not the bundle transaction's fee.
+    expect(meters.recorded('blockchain.client.fee')).toEqual([
+      {
+        value: Number(event?.args.actualGasCost),
+        attributes: expect.objectContaining({ 'blockchain.operation.subject': 'user_operation' }),
+      },
+    ]);
+  });
+
+  it('records no transaction of the bundle with withHashspan() applied last', async () => {
+    const account = await smartAccount();
+    const meters = recordingMeterProvider();
+    const hashspan = withHashspan({
+      meterProvider: meters.provider,
+      confirm: { mode: 'background' },
+    });
+    const client = createBundlerClient({
+      account,
+      client: reader,
+      transport: bundler.transport,
+      pollingInterval: 100,
+    })
+      .extend(sdkSmartAccountActions)
+      .extend(hashspan);
+    const before = await reader.getBalance({ address: RECIPIENT });
+
+    const hash = await client.sendTransaction({ to: RECIPIENT, value: 1_000n });
+    expect(await hashspan.flush()).toBe(true);
+
+    // The call is the SDK's, unchanged: the operation ran, and its bundle transaction's hash is returned.
+    expect(await reader.getBalance({ address: RECIPIENT })).toBe(before + 1_000n);
+    expect((await reader.getTransactionReceipt({ hash })).to).toBe(
+      entryPoint07Address.toLowerCase(),
+    );
+    expect(tracing.spans()).toEqual([]);
+    expect(meters.recorded('blockchain.client.fee')).toEqual([]);
+  });
 });
 
 // RPC faults on the bundler methods of a user operation (issue #317), with the checks of rpc-faults.int.test.ts
