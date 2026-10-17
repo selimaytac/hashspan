@@ -12,6 +12,8 @@ This page collects the setups that were checked; each code block is compiled in 
 |---|---|---|---|---|
 | viem wallet and public clients | `@hashspan/viem` [`withHashspan()`](../packages/viem/README.md#usage) | apply it last; one result per agent | a library that calls viem's actions as functions is not traced ([below](#libraries-that-take-a-viem-client)) | `packages/viem` tests |
 | viem bundler client (ERC-4337) | `@hashspan/viem` | a tracker from `@hashspan/core` 0.8 or later | no background confirmation or `watch()` for user operations ([smart accounts](../packages/viem/README.md#smart-accounts-erc-4337)) | `packages/viem` tests, a real bundler in CI only |
+| permissionless.js smart account client | `@hashspan/viem` | build the client with `withHashspan()` before `smartAccountActions` | applied last, only `sendUserOperation` and `waitForUserOperationReceipt` are traced ([setup](#smart-account-sdks)) | `integrations/`, with a stand-in account |
+| ZeroDev Kernel account client | `@hashspan/viem` | none | only `sendUserOperation` and `waitForUserOperationReceipt` are traced; `sendTransaction` and `writeContract` are not ([setup](#smart-account-sdks)) | `integrations/`, with a stand-in account |
 | EIP-5792 wallet (`sendCalls`) | `@hashspan/viem` | none | no fees on the batch; `getCallsStatus` is not traced ([call batches](../packages/viem/README.md#call-batches-eip-5792)) | `packages/viem` tests |
 | Transactions sent elsewhere | `@hashspan/viem` [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) | a public client; for a send span, the call recorded with the same tracker | a send span only when you record the call | `packages/viem` tests |
 | Coinbase CDP SDK | `@hashspan/cdp` | a `reader` for confirm spans | CommonJS needs Node.js 22.12 ([install](../packages/cdp/README.md#install)); see [known limits](../packages/cdp/README.md#known-limits) | `packages/cdp` tests |
@@ -42,6 +44,66 @@ When a library accepts a viem wallet client, extend the client before you hand i
   [background confirmation](../packages/viem/README.md#background-confirmation) so hashspan polls for the receipt
   itself.
 - Apply `withHashspan()` last ([why](../packages/viem/README.md#apply-it-last)).
+
+## Smart account SDKs
+
+Checked with permissionless 0.5.0 and `@zerodev/sdk` 5.5.11. Their smart account clients
+(`createSmartAccountClient`, `createKernelAccountClient`) are viem bundler clients with actions of the SDK on top:
+`sendTransaction` and `writeContract` (and permissionless's `sendCalls`) send a user operation, wait for its receipt
+and return the bundle transaction's hash. Those actions reach the bundler through the client they were added to, so
+`withHashspan()` applied to the finished client does not see the operation
+([smart account SDKs](../packages/viem/README.md#smart-account-sdks)).
+
+For user operation spans from `sendTransaction`, `writeContract` and `sendCalls`, build the client that
+`createSmartAccountClient` builds with viem's `createBundlerClient`, and apply `withHashspan()` before
+permissionless's `smartAccountActions`. On Anvil, with the OpenTelemetry SDK started as in the
+[quick start](../README.md#quick-start), where `account` is your permissionless smart account (for example from
+`toSimpleSmartAccount`) and `bundlerUrl` your bundler's:
+
+```ts
+import { withHashspan } from '@hashspan/viem';
+import { smartAccountActions } from 'permissionless';
+import { createPublicClient, http, parseEther } from 'viem';
+import { createBundlerClient } from 'viem/account-abstraction';
+import { foundry } from 'viem/chains';
+
+// Start the OpenTelemetry SDK before this, as in the quick start.
+const hashspan = withHashspan();
+const client = createPublicClient({ chain: foundry, transport: http('http://127.0.0.1:8545') }); // Anvil
+
+// The client createSmartAccountClient({ account, client, bundlerTransport }) builds, with hashspan applied before
+// permissionless's actions, so that they send through the traced user operation actions.
+const smartAccountClient = createBundlerClient({ account, client, transport: http(bundlerUrl) })
+  .extend(hashspan)
+  .extend(smartAccountActions);
+
+// A user operation send span, and its confirm span as permissionless waits for the operation's receipt.
+const hash = await smartAccountClient.sendTransaction({
+  to: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+  value: parseEther('0.001'),
+});
+// `hash` is the bundle transaction's: a wait for it on a traced client would record the bundle, not the operation.
+console.log(hash);
+
+// Before a short-lived process exits, then shut the SDK down:
+await hashspan.flush();
+```
+
+- `createBundlerClient` takes the same `paymaster`, `paymasterContext` and `userOperation` options as
+  `createSmartAccountClient`. With a custom `userOperation.prepareUserOperation`, `createSmartAccountClient` adds
+  an action of its own that calls it, which this setup does not.
+- `createSmartAccountClient(...).extend(withHashspan())` still traces `sendUserOperation` and
+  `waitForUserOperationReceipt` when you call them; its `sendTransaction`, `writeContract` and `sendCalls` are then
+  not traced, with a `diag` warning. TypeScript accepts that extension only with a cast, since viem's `extend()`
+  types expect viem's own `sendTransaction`.
+- ZeroDev's `createKernelAccountClient` builds its client the same way, and adds `sendTransaction` and
+  `writeContract` with `kernelAccountClientActions()`. Extended with `withHashspan()` (with the same cast), its
+  `sendUserOperation` and `waitForUserOperationReceipt` are traced and its `sendTransaction` and `writeContract` are
+  not. A client built by hand with `withHashspan()` before ZeroDev's actions is not tested: `createKernelAccountClient`
+  also sets ZeroDev's fee estimate and an EIP-7702 authorization step.
+- In CI, both SDKs run with a stand-in smart account on a stand-in EntryPoint, since Kernel's and SimpleAccount's
+  contracts are not available to the tests; the user operation spans themselves are also checked through a real
+  bundler ([smart accounts](../packages/viem/README.md#smart-accounts-erc-4337)).
 
 ## Coinbase AgentKit
 

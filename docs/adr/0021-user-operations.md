@@ -104,3 +104,27 @@ What the SDKs give (viem 2.57, `@coinbase/cdp-sdk` 1.57):
   with SimpleAccount smart accounts. Both are installed by `scripts/install-bundler.sh` from a lockfile of their own,
   outside the pnpm workspace, so the license check of the workspace still holds; like Anvil, they are tools the tests
   run, never a dependency of a published package. Not exercised: paymaster contracts.
+
+## Amendment (2026-10-18, proposed): smart account clients of SDKs
+
+permissionless.js (`createSmartAccountClient`, 0.4 and 0.5) and ZeroDev (`createKernelAccountClient`, 5.5) build a
+bundler client and add `sendTransaction`, `writeContract` and, in permissionless, `sendCalls` with a decorator. Each
+reaches `sendUserOperation` and `waitForUserOperationReceipt` with viem's `getAction` on the client it closed over,
+waits for the operation's receipt and returns the bundle transaction's hash (`sendCalls` returns the user operation
+hash as its id, without waiting). `withHashspan()` applied to the finished client, as "apply it last" says, saw only
+an action that returns a hash, and recorded the operation as a transaction of the smart account with the bundle's
+hash, status and fee, and `sendCalls` as a call batch (#430): what this ADR says these spans must not carry.
+
+- **A send from a smart account is not a transaction.** When the account of `sendTransaction`, `writeContract`,
+  their sync forms, `sendCalls` or `sendCallsSync` (the call's own data property `account`, else the client's) has
+  the own data property `type` `'smart'`, which viem's `toSmartAccount` sets, the action is called untraced, and a
+  `diag` warning is logged once per extended client. viem's own wallet actions reject a smart account
+  (`AccountTypeNotSupportedError`), so only an SDK's action sends from one; the call is not changed.
+- **The client's type is not read.** permissionless names its client `bundlerClient`, ZeroDev
+  `kernelAccountClient`; the account is what both share.
+- **The user operation is traced where hashspan can see it.** On the finished client, `sendUserOperation` and
+  `waitForUserOperationReceipt` stay wrapped. For the SDK's `sendTransaction`, `writeContract` and `sendCalls`, the
+  documented setup applies `withHashspan()` to the bundler client before the SDK's actions, so the decorator closes
+  over the traced client, as for Tempo's actions; its spans are those of this ADR.
+- **Not decided here:** recording a user operation from the bundle transaction's hash an SDK returns (the receipt's
+  `UserOperationEvent` for the sender), for this case and for `watch()` of a bundle hash; that is a new API.

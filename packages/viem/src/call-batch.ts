@@ -88,7 +88,7 @@ export function addCallBatchActions(
     track,
     settleOnce,
     confirmThrough,
-    sending: { knownChainId, queryChainId, traceSend, untraced },
+    sending: { knownChainId, queryChainId, traceSend, untraced, smartAccountSend },
   }: CallBatchDependencies,
 ): void {
   const { sendCalls, sendCallsSync, waitForCallsStatus } = base;
@@ -96,59 +96,63 @@ export function addCallBatchActions(
   // EIP-5792 call batches (docs/adr/0022-call-batches.md). getCallsStatus is not wrapped: waitForCallsStatus polls it.
   if (typeof sendCalls === 'function') {
     actions.sendCalls = (args: unknown) =>
-      traceSend<unknown>(
-        {
-          chainId: () => knownChainId(args as SendArgs),
-          start: (chainId, startTime) => {
-            const handle = tracker.startCallBatchSend({
-              ...callBatchInput(args, chainId),
-              ...(startTime !== undefined ? { startTime } : {}),
-            });
-            return {
-              context: handle.context,
-              end: (result, endTime) => {
-                // The result comes from the wallet: reading it must never reject a call that succeeded.
-                let id = '';
+      smartAccountSend('sendCalls', args)
+        ? sendCalls(args)
+        : traceSend<unknown>(
+            {
+              chainId: () => knownChainId(args as SendArgs),
+              start: (chainId, startTime) => {
+                const handle = tracker.startCallBatchSend({
+                  ...callBatchInput(args, chainId),
+                  ...(startTime !== undefined ? { startTime } : {}),
+                });
+                return {
+                  context: handle.context,
+                  end: (result, endTime) => {
+                    // The result comes from the wallet: reading it must never reject a call that succeeded.
+                    let id = '';
+                    try {
+                      id = callBatchIdOf(result) ?? '';
+                    } catch (error) {
+                      diag.error(
+                        `hashspan: failed to read the call batch id (${errorName(error)})`,
+                      );
+                    }
+                    handle.end(
+                      { id, transactionHashes: fallbackTransactionHashes(id) },
+                      endTime !== undefined ? { endTime } : undefined,
+                    );
+                  },
+                  fail: (error, endTime) => handle.fail(error, sendFailure(error, endTime)),
+                };
+              },
+              // The transactions of viem's fallback are the account's own: always confirmed as transactions, as
+              // watch() does, so their fees are recorded with the sealed receipt (ADR 0022, ADR 0024).
+              after: (chainId, result) => {
+                let id: string | undefined;
                 try {
-                  id = callBatchIdOf(result) ?? '';
+                  id = callBatchIdOf(result);
                 } catch (error) {
                   diag.error(`hashspan: failed to read the call batch id (${errorName(error)})`);
                 }
-                handle.end(
-                  { id, transactionHashes: fallbackTransactionHashes(id) },
-                  endTime !== undefined ? { endTime } : undefined,
-                );
+                for (const hash of (id && fallbackTransactionHashes(id)) || []) {
+                  try {
+                    confirmThrough(
+                      client,
+                      chainId,
+                      hash,
+                      confirm?.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS,
+                    );
+                  } catch (error) {
+                    diag.error(
+                      `hashspan: failed to confirm a fallback transaction (${errorName(error)})`,
+                    );
+                  }
+                }
               },
-              fail: (error, endTime) => handle.fail(error, sendFailure(error, endTime)),
-            };
-          },
-          // The transactions of viem's fallback are the account's own: always confirmed as transactions, as
-          // watch() does, so their fees are recorded with the sealed receipt (ADR 0022, ADR 0024).
-          after: (chainId, result) => {
-            let id: string | undefined;
-            try {
-              id = callBatchIdOf(result);
-            } catch (error) {
-              diag.error(`hashspan: failed to read the call batch id (${errorName(error)})`);
-            }
-            for (const hash of (id && fallbackTransactionHashes(id)) || []) {
-              try {
-                confirmThrough(
-                  client,
-                  chainId,
-                  hash,
-                  confirm?.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS,
-                );
-              } catch (error) {
-                diag.error(
-                  `hashspan: failed to confirm a fallback transaction (${errorName(error)})`,
-                );
-              }
-            }
-          },
-        },
-        () => sendCalls(args),
-      );
+            },
+            () => sendCalls(args),
+          );
   }
 
   /** What the send span of `sendCalls(args)` records, read from own data properties only. */
@@ -277,6 +281,8 @@ export function addCallBatchActions(
       waitForCallsStatus: actions.waitForCallsStatus,
     };
     actions.sendCallsSync = (args: unknown) =>
-      (viemSendCallsSync as (client: unknown, args: unknown) => Promise<unknown>)(traced, args);
+      smartAccountSend('sendCallsSync', args)
+        ? sendCallsSync(args)
+        : (viemSendCallsSync as (client: unknown, args: unknown) => Promise<unknown>)(traced, args);
   }
 }
