@@ -113,6 +113,127 @@ describe('the payer', () => {
   });
 });
 
+describe('batch-settlement payments', () => {
+  // The responses of x402's batch-settlement server (@x402/evm 2.28) for three requests on one channel: the first
+  // reports the channel's deposit (into escrow, refundable), the others charge the channel without a transaction.
+  const batchRequired = () => paymentRequired({ scheme: 'batch-settlement', amount: '1000' });
+  const channel = (charged: string) => ({ balance: '10000', chargedCumulativeAmount: charged });
+  const responses = (charge: string) => [
+    {
+      success: true,
+      transaction: RECEIPT_HASH,
+      amount: '10000',
+      network: 'eip155:84532',
+      extra: { channelState: channel(charge), chargedAmount: charge },
+    },
+    {
+      success: true,
+      transaction: '',
+      amount: '',
+      extra: { channelState: channel(charge), chargedAmount: charge },
+    },
+    {
+      success: true,
+      transaction: '',
+      amount: '',
+      extra: { channelState: channel(charge), chargedAmount: charge },
+    },
+  ];
+  const recorded = () =>
+    tracing.spans().map((s) => ({
+      name: s.name,
+      status: s.attributes['blockchain.payment.status'],
+      amount: s.attributes['blockchain.payment.amount'],
+      settled: s.attributes['blockchain.payment.settled_amount'],
+      hash: s.attributes['blockchain.tx.hash'],
+      verified: s.attributes['blockchain.payment.verified'],
+    }));
+
+  it('record the charge as the settled amount, and never the deposit as the settlement', async () => {
+    const mock = mockTransport({ chainIdHex: '0x14a34' });
+    const reader = createPublicClient({ chain: baseSepolia, transport: mock.transport });
+    const { client, pay } = capturingClient();
+    const hashspan = withHashspan(client, { reader });
+    for (const response of responses('1000')) pay(batchRequired(), response).respond();
+    expect(await hashspan.flush()).toBe(true);
+    const payment = {
+      name: 'payment 84532',
+      status: 'settled',
+      amount: '1000',
+      settled: '1000',
+      hash: undefined,
+      verified: undefined,
+    };
+    // No confirm span: the deposit's transaction is not this payment's settlement, and the reader is not asked.
+    expect(recorded()).toEqual([payment, payment, payment]);
+    expect(mock.calls).toEqual([]);
+  });
+
+  it('record a charge below the price, as with dynamic pricing', () => {
+    const reader = vi.fn(() => undefined);
+    const { client, pay } = capturingClient();
+    withHashspan(client, { reader });
+    for (const response of responses('500')) pay(batchRequired(), response).respond();
+    expect(recorded().map(({ amount, settled }) => [amount, settled])).toEqual([
+      ['1000', '500'],
+      ['1000', '500'],
+      ['1000', '500'],
+    ]);
+    expect(reader).not.toHaveBeenCalled();
+  });
+
+  it('record no settled amount without a charge, also when the response reports an amount', () => {
+    const { client, pay } = capturingClient();
+    withHashspan(client);
+    const extras: unknown[] = [
+      undefined,
+      {},
+      { chargedAmount: 1000 },
+      { chargedAmount: '1e3' },
+      { chargedAmount: '' },
+      {
+        get chargedAmount(): string {
+          throw new Error('getter ran');
+        },
+      },
+    ];
+    for (const extra of extras) {
+      pay(batchRequired(), { success: true, transaction: HASH, amount: '10000', extra }).respond();
+    }
+    expect(recorded().map(({ status, settled, hash }) => [status, settled, hash])).toEqual(
+      extras.map(() => ['settled', undefined, undefined]),
+    );
+  });
+
+  it('record a failed settlement with its reason and no transaction', () => {
+    const { client, pay } = capturingClient();
+    withHashspan(client);
+    pay(batchRequired(), {
+      success: false,
+      errorReason: 'invalid_batch_settlement_evm_voucher_signature',
+      transaction: HASH,
+      amount: '10000',
+    }).respond();
+    const [span] = tracing.spans();
+    expect(span?.attributes['blockchain.payment.status']).toBe('failed');
+    expect(span?.attributes['error.type']).toBe('invalid_batch_settlement_evm_voucher_signature');
+    expect(span?.attributes['blockchain.tx.hash']).toBeUndefined();
+    expect(span?.attributes['blockchain.payment.settled_amount']).toBeUndefined();
+  });
+
+  it('are told apart by the scheme the payer selected, not by the response', () => {
+    const { client, pay } = capturingClient();
+    withHashspan(client);
+    pay(paymentRequired(), {
+      success: true,
+      transaction: HASH,
+      amount: '10000',
+      extra: { chargedAmount: '1' },
+    }).respond();
+    expect(recorded()[0]).toMatchObject({ settled: '10000', hash: HASH });
+  });
+});
+
 describe('open payment spans', () => {
   it('end the oldest as timeout when too many are open', () => {
     const { client, pay } = capturingClient();

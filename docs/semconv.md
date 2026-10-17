@@ -159,7 +159,7 @@ with or without hashspan.
 | `blockchain.system.name` | string | send, confirm, payment | on | `evm` |
 | `blockchain.chain.id` | int | all | on | EIP-155 chain id, e.g. `8453` |
 | `blockchain.operation.name` | string | send, confirm, payment | on | `send` \| `confirm` \| `payment` |
-| `blockchain.tx.hash` | string | send, confirm, payment | on | `0x`-prefixed tx hash; on a payment span, the settling transaction's, when reported; on a user operation's confirm span, the bundle transaction's; absent on a user operation's send span |
+| `blockchain.tx.hash` | string | send, confirm, payment | on | `0x`-prefixed tx hash; on a payment span, the settling transaction's, when reported, and never for x402 `batch-settlement`, whose reported transaction is the channel's deposit ([ADR 0013](adr/0013-x402-payments.md)); on a user operation's confirm span, the bundle transaction's; absent on a user operation's send span |
 | `blockchain.tx.from` | string | send | raw | sender address, subject to address mode |
 | `blockchain.tx.to` | string | send | raw | recipient / contract address, subject to address mode |
 | `blockchain.tx.value` | string | send | on | value in wei, decimal string |
@@ -206,7 +206,7 @@ with or without hashspan.
 | `blockchain.payment.recipient` | string | payment | raw | address that is paid, subject to address mode |
 | `blockchain.payment.asset` | string | payment | raw | contract address of the token paid with, subject to address mode |
 | `blockchain.payment.amount` | string | payment | on | amount in the asset's smallest unit, decimal string; the settlement's amount only when the payer knew none |
-| `blockchain.payment.settled_amount` | string | payment | on | amount the settling party reports it settled, decimal string, e.g. less than the authorized maximum with x402 `upto`; as reported, not checked |
+| `blockchain.payment.settled_amount` | string | payment | on | amount the settling party reports it settled, decimal string, e.g. less than the authorized maximum with x402 `upto`; for x402 `batch-settlement`, the request's charge against the channel (`extra.chargedAmount`), never the deposit; as reported, not checked |
 | `blockchain.payment.verified` | boolean | payment | on | whether the settlement transaction carries this payment (its receipt and, for Permit2, its input), checked by the adapter from the payer's own data; absent when no check was possible ([ADR 0017](adr/0017-x402-payment-verification.md)) |
 | `blockchain.payment.status` | string | payment | on | `settled` \| `pending` \| `failed` |
 | `x402.scheme` | string | payment | on | x402 payment scheme, e.g. `exact` |
