@@ -134,6 +134,48 @@ describe('a smart account client extended last', () => {
     );
     expect(warnings).toHaveLength(1);
   });
+
+  it('calls the sync forms of a smart account untraced, with the same arguments', async () => {
+    const bundler = mockBundler();
+    const account = await stubAccount(bundler.transport);
+    const base = {
+      sendTransactionSync: vi.fn(async (_args: unknown) => ({ transactionHash: BUNDLE_HASH })),
+      writeContractSync: vi.fn(async (_args: unknown) => ({ transactionHash: BUNDLE_HASH })),
+      sendCalls: vi.fn(async (_args: unknown) => ({ id: USER_OP_HASH })),
+      sendCallsSync: vi.fn(async (_args: unknown) => ({ id: USER_OP_HASH, statusCode: 200 })),
+      waitForCallsStatus: vi.fn(async (_args: unknown) => ({ statusCode: 200 })),
+    };
+    const client = createBundlerClient({
+      account,
+      chain: baseSepolia,
+      transport: bundler.transport,
+    })
+      .extend(() => base)
+      .extend(withHashspan());
+    const transfer = {
+      address: RECIPIENT,
+      abi: TOKEN_ABI,
+      functionName: 'transfer',
+      args: [SENDER, 1n],
+    } as const;
+    const calls = { calls: [{ to: RECIPIENT, value: 1n }] };
+
+    // Each action may be wrapped or, like `sendCallsSync` before viem 2.45.2, not: either way the base one runs.
+    expect(client.sendTransactionSync).not.toBe(base.sendTransactionSync);
+    const sent = { to: RECIPIENT, value: 1n };
+    expect(await client.sendTransactionSync(sent)).toEqual({ transactionHash: BUNDLE_HASH });
+    expect(await client.writeContractSync(transfer)).toEqual({ transactionHash: BUNDLE_HASH });
+    expect(await client.sendCallsSync(calls)).toEqual({ id: USER_OP_HASH, statusCode: 200 });
+
+    expect(base.sendTransactionSync.mock.calls).toEqual([[sent]]);
+    expect(base.sendTransactionSync.mock.calls[0]?.[0]).toBe(sent);
+    expect(base.writeContractSync.mock.calls[0]?.[0]).toBe(transfer);
+    expect(base.sendCallsSync.mock.calls[0]?.[0]).toBe(calls);
+    // viem's own sendCallsSync, which the traced one runs, would have called sendCalls and waitForCallsStatus.
+    expect(base.sendCalls).not.toHaveBeenCalled();
+    expect(base.waitForCallsStatus).not.toHaveBeenCalled();
+    expect(tracing.spans()).toEqual([]);
+  });
 });
 
 describe('a smart account client with withHashspan() before the SDK actions', () => {

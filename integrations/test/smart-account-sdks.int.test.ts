@@ -41,8 +41,10 @@ let tracing: TestTracing;
 const offlineFetch = globalThis.fetch;
 vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
   const url = input instanceof Request ? input.url : String(input);
-  if (url.startsWith(ANVIL_URL)) return offlineFetch(url.replace(ANVIL_URL, rpcUrl), init);
-  if (!url.startsWith(bundlerUrl)) return offlineFetch(input, init);
+  // Origins compared whole: a prefix of the bundler URL's could match Anvil's own port.
+  const { origin } = new URL(url);
+  if (origin === new URL(ANVIL_URL).origin) return offlineFetch(rpcUrl, init);
+  if (origin !== new URL(bundlerUrl).origin) return offlineFetch(input, init);
   const { id, method, params } = JSON.parse(String(init?.body));
   try {
     const result = await bundler.transport({ chain: foundry }).request({ method, params });
@@ -168,6 +170,17 @@ describe('permissionless.js', () => {
     const userOpHash = await client.sendUserOperation({ calls: [{ to: RECIPIENT, value: 1n }] });
     const receipt = await client.waitForUserOperationReceipt({ hash: userOpHash });
     expectUserOperationSpans(receipt.receipt.transactionHash);
+  });
+
+  it('needs a cast in TypeScript to extend createSmartAccountClient last', () => {
+    const client = createSmartAccountClient({
+      account,
+      client: reader,
+      bundlerTransport: http(bundlerUrl),
+    });
+    // @ts-expect-error viem's extend() types expect viem's own sendTransaction (docs/integrations.md).
+    const extended = client.extend(withHashspan());
+    expect(extended).toHaveProperty('sendUserOperation');
   });
 });
 
