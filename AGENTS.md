@@ -48,6 +48,10 @@ before changing there.
   not one ([payout-worker](examples/payout-worker/AGENTS.md))
 - `integrations/` → private tests of the setups in docs/integrations.md with the third-party libraries they name, a
   workspace of its own ([AGENTS.md](integrations/AGENTS.md))
+- `skills/hashspan/SKILL.md` → the Agent Skills skill that instruments a user's project with hashspan; to add
+  hashspan to a project, follow it. It is installed without the rest of the repository, so it links by absolute URL;
+  its `ts` block is `packages/viem/test/readme/skill-instrumentation.ts`, and `examples/*/test/skill.int.test.ts`
+  apply it through `packages/viem/test/apply-skill.ts`: a change to a step changes that helper too
 - `dashboards/` → Grafana dashboards: `metrics.json` (Prometheus) and `traces.json` (Tempo), with a README; every
   PromQL query names only metrics and labels of docs/semconv.md, and `make lab-check` runs them after `make demo`
 - `docker/`, `scripts/`, `Makefile` → local lab and release tooling; `make lab-metrics` adds Prometheus and Grafana

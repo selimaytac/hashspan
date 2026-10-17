@@ -27,6 +27,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@opentelemetry/sdk-node": "^0.222.0",
     "@types/node": "^26.6.4",
     "prool": "^0.2.16",
     "tsx": "^4.23.15"

@@ -48,6 +48,8 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
 - `test/quick-start.int.test.ts` runs the README quick start's `agent.ts`, taken from README.md as it is (only the RPC
   URL changes), with tsx in a process of its own and checks the trace it exports over OTLP; a change to that block
   must keep the trace the README describes
+- `test/apply-skill.ts` applies `skills/hashspan/SKILL.md` to a copy of a project without hashspan, with the code taken
+  from the skill as it is, and runs it with tsx against an OTLP receiver; used by `examples/*/test/skill.int.test.ts`
 - `.github/workflows/viem-range.yml` runs the viem tests weekly against both ends of the viem peer range; a test that
   needs an action or a behaviour of a newer viem than the floor is gated by `test/viem-version.ts` (`viemHasAction()`,
   `viemAtLeast()`), with a comment naming the release that introduced it

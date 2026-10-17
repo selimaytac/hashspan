@@ -156,6 +156,21 @@ than EVM are not supported.
 - **An example:** [examples/payout-worker](examples/payout-worker), a worker that pays out from a queue, confirmed in
   the background, run against Anvil in CI.
 
+## With a coding agent
+
+[`skills/hashspan`](skills/hashspan/SKILL.md) is an [Agent Skills](https://agentskills.io/specification) skill: the
+steps a coding agent follows to add hashspan to a TypeScript project that sends with viem, the CDP SDK or x402
+(install, start the SDK first, extend the clients, flush before exit, see the traces). Add it to a project with an
+Agent Skills installer, or point the agent at the file:
+
+```sh
+npx skills add selimaytac/hashspan
+```
+
+CI applies the skill to minimal versions of both examples without hashspan
+([`skill.int.test.ts`](examples/payout-worker/test/skill.int.test.ts)) and checks their send and confirm spans on
+Anvil.
+
 ## Try it
 
 A runnable AI SDK agent that pays a vendor and hits a reverting vault, traced end to end. It needs no API key and

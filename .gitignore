@@ -20,3 +20,5 @@ CLAUDE.local.md
 !.vscode/extensions.json
 # Left behind by an interrupted packages/viem/test/quick-start.int.test.ts
 packages/viem/test/fixtures/quick-start-*/
+# Left behind by an interrupted examples/*/test/skill.int.test.ts
+examples/*/test/skill-run-*/
