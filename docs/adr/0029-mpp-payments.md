@@ -21,9 +21,12 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
 - **Payloads are frozen copies.** Each event gets a `structuredClone` of the challenge, and a `clone()` of the
   `Response` and of a `Request` input. The objects of two events are never identical, so one payment is identified
   only by its `challenge.id`, which the server chooses, and by the credential string. Every payload with a response
-  carries a clone: the 402 response in `challenge.received` and `credential.created`, the paid response in
-  `payment.response` (cloned only when a `payment.response` observer exists, since an unread clone of a stream buffers
-  it). A clone whose body nobody reads or cancels keeps buffering what the original reads.
+  carries a clone: the 402 response in `challenge.received` and `credential.created`, made whether or not anyone
+  observes, and the paid response in `payment.response`, cloned only when a `payment.response` observer exists, since
+  an unread clone of a stream buffers it. A clone whose body nobody reads or cancels keeps buffering what the original
+  reads. One payload object goes to every observer of an event, `'*'` included, in the order they were registered.
+  The `input` is passed on as it was given when it is a string, copied when it is a `URL` and cloned when it is a
+  `Request`.
 - **What reaches no event.**
   - A paid request answered with a status from 300 to 499 other than 402 is returned to the caller without an event.
   - A paid request answered with 402 again starts a new round (up to `maxPaymentRetries`, default 3) or is returned
@@ -46,8 +49,8 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
   - *Pull* (`type: "transaction"`): the payer signs the Tempo transaction and the server broadcasts it. The
     transaction's `from` is the payer, which also pays its fee, unless the challenge sets `feePayer: true`: then the
     server co-signs as fee payer, and the final hash is known only from the receipt. For an unsponsored transaction,
-    the hash is the `keccak256` of the signed, canonically serialized transaction, which mppx itself derives (not
-    exported); the run in #438 confirmed that it equals the receipt's `reference`.
+    the hash is the `keccak256` of the signed, canonically serialized transaction: mppx derives it so itself
+    (`transactionHash` in `tempo/client/Charge.js`, not exported) for `PaymentOutcomeUnknownError`.
   - Zero-amount challenges are answered with a signed proof (`type: "proof"`): no transaction.
 - **The receipt.** `Payment-Receipt` (base64url JSON) carries `method`, `reference` (the transaction hash for Tempo),
   `status` (always `success`; failures come back as a 402 with problem details), `timestamp` and optional
@@ -85,8 +88,9 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
 - **Observers, not wrapping.** No method is replaced. Every observer catches its own failures and logs them via
   `diag`; the `challenge.received` observer never returns a value, so it never supplies a credential.
 - **Scope of v1: Tempo `charge`, push and pull.** A challenge whose `method` is not `tempo` or whose `intent` is not
-  `charge` is passed through untraced, with a `diag` message once per method and intent. A proof credential
-  (zero amount) records nothing: no value moved.
+  `charge` is passed through untraced, with a `diag` message once per method and intent. A zero-amount challenge,
+  answered with a signed proof, is left out at `challenge.received` and records nothing, failures included: no value
+  moves.
 - **One `payment {chainId}` span per paid request, not a `send` span.** It records the protocol's view of the
   payment, as for x402; the transaction belongs to `@hashspan/viem`'s spans.
   - `challenge.received` captures the start time and the active context (for example the agent's tool span), keyed
@@ -101,22 +105,28 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
     (validated against a short identifier pattern and bounded, spans only) and `mpp.resource`, with the meaning,
     modes and bound of `x402.resource` (origin by default; `paymentResource`; 512 characters). None becomes a metric
     attribute.
-- **Who sends the settlement: a core minor.** `PaymentInput` gains an optional field saying that the payer is the
-  settlement transaction's `from` (proposed name `sender: 'payer'`; settled in the implementation's API report). With
-  it, the core:
-  - links the hash without the `facilitator` fee payer: the fee sample then carries `blockchain.fee.payer` `sponsor`
-    when the receipt names another fee payer (a sponsored pull), and none when the payer paid;
-  - starts the payment span with a span link to the tracker's own send span of that hash when one exists (push
-    through a traced client), so the payment span and the payer's send and confirm spans point at each other.
+- **Who sends the settlement: a core minor.** `PaymentInput` gains three optional fields (names proposed here,
+  settled in the implementation's API report):
+  - `sender: 'payer'`: the payer is the settlement transaction's `from`. The core then links the hash without the
+    `facilitator` fee payer, so the fee sample carries `blockchain.fee.payer` `sponsor` when the receipt names
+    another fee payer (a sponsored pull), and none when the payer paid.
+  - `hash`: the settlement transaction's hash when the payer knows it at the start (push, unsponsored pull). The core
+    links it as `link(hash)` does, and when the tracker has its own send span of that hash (push through a traced
+    client), the payment span starts with a span link to it, visible to samplers, so the payment span and the
+    payer's send and confirm spans point at each other.
+  - `mpp`: MPP's details (method, intent, mode, challenge id, resource), beside `x402`.
 
-  The `mpp` details (method, intent, mode, challenge id, resource) arrive as an optional `PaymentInput.mpp`, beside
-  `x402`. Both fields are additions (ADR 0014). The adapter detects them through a member added with them; with an
-  older core it traces no MPP payment and logs a `diag` warning once, since its spans would label the payer's fee as a
+  All three are additions (ADR 0014). The adapter detects them through a member added with them; with an older core
+  it traces no MPP payment and logs a `diag` warning once, since its spans would label the payer's fee as a
   facilitator's.
+- **One tracker for both adapters.** The link to the send span, and one confirm span per transaction, hold only when
+  the payer's viem client and `@hashspan/mpp` share a tracker (the `tracker` option). With two trackers, a push
+  payment gets two confirm spans and two fee samples for one transaction. The quick start shares one, and the
+  documentation says why.
 - **The payer's own hash wins.** For push, the hash is the credential's `payload.hash`. For an unsponsored pull, the
   adapter derives it from the signed transaction as mppx does: a `0x76` envelope, signed by the payer, without a fee
   payer marker, serialized canonically; when it cannot tell, the payment is handled as sponsored. A known hash is
-  linked with `link(hash)` at `credential.created`, recorded as `blockchain.tx.hash`, and confirmed instead of a
+  passed as `PaymentInput.hash` at `credential.created`, recorded as `blockchain.tx.hash`, and confirmed instead of a
   `reference` that differs. A sponsored pull takes its hash from the receipt's `reference`, as reported. In either
   case the `reference` is untrusted (ADR 0025): a value that is not a 32-byte hex hash is not recorded.
 - **Outcomes**, built from the paths of `Fetch.js` above:
@@ -130,7 +140,8 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
   | `payment.failed` after `challenge.received` without `credential.created` (policy, spending limit, signing, a failed push send) | error, `error.type` from the error, no hash, as a failed send; the adapter does not tell policy refusals apart |
   | `payment.failed` for a challenge no observer saw | nothing |
   | no event: 3xx, a 4xx, a 402 after payment | error, `error.type` `timeout`, no status (ADR 0016), once the challenge's `expires` (bounded) or, without one, the client's default validity of 25 seconds, plus a grace period, has passed |
-  | too many payments open, or `flush()` gives up | the oldest ends as `timeout` |
+  | too many payments open | the oldest ends as `timeout` |
+  | `flush()` gives up | every payment still open ends as `timeout` |
 
   At most 1000 payments are open per `withHashspan()` result, counting the start state of `challenge.received`, as
   for x402: the server decides how many challenges arrive. A later event for the same `challenge.id` and credential
@@ -138,8 +149,9 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
   that is open starts no second span (a hostile server repeating ids gets one span per id). The bounds are named
   constants listed in docs/semconv.md.
 - **Confirmation only with a reader.** With a `reader` for the chain, the adapter calls `watch()` for every
-  settlement or pending payment with a hash, as the x402 adapter does; a confirm span the tracker already has for
-  that hash (a traced push) is joined, not duplicated (ADR 0007). The confirm span records block, gas, the fee in
+  settlement or pending payment with a hash, as the x402 adapter does. A confirm span the tracker already has for
+  that hash (a traced push on a shared tracker) is not duplicated (ADR 0007), and `watch()` still reads the receipt
+  for the verification below; the push test shows both. The confirm span records block, gas, the fee in
   `fee_asset` (ADR 0028) and whether the fee was sponsored, and resolves a server that answered before the
   transaction was mined. Without a reader, only the payment span is recorded, with the status as the server reported
   it. `flush()` awaits the work. Reverted settlements are replayed for their reason only with
@@ -162,11 +174,17 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
   sponsored pull, the memo is: it binds the transfer to the challenge with 56 bits, which a server choosing the
   challenge ids could search for a collision with an earlier payment of the same payer, recipient and amount. That is
   a known limit.
-- **Response and request copies.** The adapter reads only the headers of a response copy and the URL of a request
-  copy, and cancels the body of every copy it receives, in every event, so no copy keeps buffering a body. These are
-  platform `Response`, `Request` and `Headers` objects that mppx created; an object that is not one (`instanceof`)
-  is not read. Reading them through their native accessors is an explicit exception to ADR 0025 rule 2, which
-  otherwise reads own data properties only, and the hostile-input rows cover it.
+- **Response and request copies.** The adapter reads only the `Payment-Receipt` header of the paid response and the
+  URL of the input (a string, a `URL` or a `Request`); it never reads a body. The copies of the 402 response and of
+  the input, which mppx makes whether or not anyone observes, are left alone. The copy of the paid response exists
+  only because the adapter registers a `payment.response` observer, and the payload is shared with the user's own
+  observers, so the adapter releases it without taking it from them: after the event's observers have run (a later
+  task), it cancels the copy's body only when nobody has started reading it, and ignores a rejected cancel. An
+  observer of the user's that waits longer than that before it starts reading the copy finds it cancelled; leaving
+  the copy uncancelled instead would buffer a long or streamed paid response for as long as the caller reads it.
+  `Response`, `Request`, `URL` and `Headers` are platform objects, recognised with `instanceof` and read through
+  their native accessors: an explicit exception to ADR 0025 rule 2, which otherwise reads own data properties only,
+  covered by the hostile-input rows.
 - **Later amendments, not v1.**
   - *Sessions:* a payment span per voucher (status for an authorized but unsettled payment to be decided), the
     deposit (`open`, `topUp`) never recorded as a settled payment (#436), and the settlement linked by
@@ -193,6 +211,8 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
 - **A timeout that knows a hash.** A push payment answered with a 4xx moved the money. Should a timed-out payment
   record the payer's own hash (a core option on `timeout`) so the span shows the transaction, or is the sibling send
   span enough?
+- **Releasing the paid response's copy.** Cancel it after the event's observers ran, as decided above, or never,
+  leaving the buffering to the user, who chose to observe paid responses with hashspan?
 - **Paid MCP tools.** Whether `mppx/mcp/client`'s `McpClient.wrap` emits these events is not verified; until a test
   shows it, paid MCP tools over MPP are a known gap.
 
@@ -201,7 +221,7 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
 - An agent's paid MPP calls on Tempo appear in its trace with what was paid, to whom, in which mode, whether it
   settled and, with a reader, the confirmation and whether the transaction carries this payment, without a send span
   the agent did not make (pull) or a second one (push).
-- New attributes and the protocol value `mpp` enter the schema, and the core gains two optional `PaymentInput`
+- New attributes and the protocol value `mpp` enter the schema, and the core gains three optional `PaymentInput`
   fields: minor changes under the change policy and ADR 0014. A payment span's settlement fee is labelled
   `facilitator` only when another party sent the transaction.
 - The adapter depends on the event API of mppx 0.13.5, its payload shapes, the credential and receipt encodings, the
@@ -212,11 +232,13 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
   traced; a 3xx, a 4xx or a final 402 after payment ends as `timeout`; a sponsored pull's hash and verification rest
   on the server's `reference` and the 56-bit memo binding; auto-swap and machine-token routes get no verdict; push
   from a JSON-RPC account (`sendCallsSync`) is linked only as far as its test shows; paid MCP tools until verified.
-- **Tests the implementation pull request (T-0023) brings, written first:**
+- **Tests the implementation pull request brings, written first:**
   - *Unit* (`packages/mpp/test/`): a real mppx client against a fake paid API, offline, for every row of the outcome
     table, the correlation by `challenge.id` (payloads are copies; repeated ids; a reused credential), mode
-    detection, the hash derivation against mppx's own `PaymentOutcomeUnknownError.transactionHash`, a streamed paid
-    response whose copy is cancelled while the caller reads the original to the end, and an older core.
+    detection, zero-amount challenges, the hash derivation against mppx's own
+    `PaymentOutcomeUnknownError.transactionHash`, a streamed paid response whose copy is released while the caller
+    reads the original to the end, an observer of the user's registered after hashspan's that reads the paid
+    response's copy, string, `URL` and `Request` inputs, and an older core.
   - *Hostile input* (`test/hostile-input.test.ts`, ADR 0025): the table applied to every observer, with hostile
     challenges (long or repeated ids, malformed amounts and addresses, 11 or more splits), credential strings,
     `Payment-Receipt` headers, error objects, response and request copies that are not platform objects, and the
@@ -224,7 +246,8 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
   - *Anvil in Tempo mode* (`packages/mpp/test/*.int.test.ts`): `start-anvil.ts` gains a network option for
     `-n tempo`, and the test mines one block before the first charge (the fresh-chain `validAfter` check). Real
     charges through an mppx server in the same process, against the Anvil that `make tools` pins (1.8.4): push
-    through a traced client (payment span linked to the send span, fee not `facilitator`), unsponsored and sponsored
+    through a traced client on a shared tracker (payment span linked to the send span, one confirm span, a verdict,
+    fee not `facilitator`) and on a separate tracker (what the documentation says it records), unsponsored and sponsored
     pull (confirm span, `sponsor` fee payer), splits, `verified` `true`, and `false` for a server that reports
     another transaction of the same payer, recipient and amount; a 4xx and a 5xx after payment; no public network.
   - *Fault proxy* (`test/rpc-faults.int.test.ts`): the reader behind the viem tests' fault proxy while a settlement is
