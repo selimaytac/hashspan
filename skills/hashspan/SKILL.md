@@ -1,6 +1,6 @@
 ---
 name: hashspan
-description: Instruments a TypeScript project with hashspan, so that every on-chain transaction or agent payment it sends becomes OpenTelemetry send and confirm spans inside the active trace, exported to Jaeger or any OTLP backend. Use when a project, an AI agent or any other service, sends EVM transactions or x402 payments through viem, the Coinbase CDP SDK or x402 and uses or wants OpenTelemetry tracing of them.
+description: Instruments a TypeScript project with hashspan, so that every on-chain transaction or agent payment it sends becomes OpenTelemetry send, payment and confirm spans inside the active trace, exported to Jaeger or any OTLP backend. Use when a project, an AI agent or any other service, sends EVM transactions or x402 payments through viem, the Coinbase CDP SDK or x402 and uses or wants OpenTelemetry tracing of them.
 license: Apache-2.0
 ---
 
@@ -120,6 +120,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
    ([console](https://github.com/selimaytac/hashspan/blob/main/docs/backends.md#console-without-a-backend)).
 2. Run the project against a local chain or a testnet, never with a key that holds real funds unless the user asks.
 3. Check that each transaction shows `send {chainId}` and `confirm {chainId}` spans under the span that was active
-   when it was sent. When one is missing, follow
+   when it was sent; an x402 payment shows `payment {chainId}` and `confirm {chainId}` instead, with no send span
+   ([x402](https://github.com/selimaytac/hashspan/blob/main/packages/x402/README.md#usage)). When one is missing, follow
    [troubleshooting](https://github.com/selimaytac/hashspan/blob/main/docs/troubleshooting.md).
 4. Run the project's typecheck and tests.

@@ -167,7 +167,7 @@ Agent Skills installer, or point the agent at the file:
 npx skills add selimaytac/hashspan
 ```
 
-CI applies the skill to copies of both examples from before hashspan
+CI applies the skill to minimal versions of both examples without hashspan
 ([`skill.int.test.ts`](examples/payout-worker/test/skill.int.test.ts)) and checks their send and confirm spans on
 Anvil.
 

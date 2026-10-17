@@ -51,5 +51,10 @@ it('gives each tool call a send and a confirm span when the agent script exits',
   for (const tool of tools) {
     const children = spans.filter((span) => span.parentSpanId === tool.spanId);
     expect(children.map((span) => span.name).sort()).toEqual(['confirm 31337', 'send 31337']);
+    // The withdrawal's confirm span ends after its revert reason is replayed: only flush() waits for it.
+    const confirm = children.find((span) => span.name === 'confirm 31337');
+    expect(confirm?.status?.code ?? 0).toBe(
+      tool.name === 'execute_tool withdraw_from_vault' ? 2 : 0,
+    );
   }
 }, 90_000);

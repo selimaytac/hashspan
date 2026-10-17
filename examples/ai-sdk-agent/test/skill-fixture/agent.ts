@@ -1,5 +1,5 @@
 // The treasury agent before hashspan: an AI SDK agent with the AI SDK's OpenTelemetry integration and no
-// OpenTelemetry SDK, whose tools send with viem and wait for the receipts. skill.int.test.ts applies
+// OpenTelemetry SDK, whose tools send with viem and wait for the receipts; the second one reverts. skill.int.test.ts applies
 // skills/hashspan/SKILL.md to a copy of this folder and runs it as a script.
 import { OpenTelemetry } from '@ai-sdk/otel';
 import { registerTelemetry, stepCountIs, ToolLoopAgent, tool } from 'ai';
@@ -21,9 +21,15 @@ const reader = createPublicClient({ chain: anvil, transport, pollingInterval: 10
 const vendor = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
 const vault = '0x00000000000000000000000000000000000000aa';
 
-/** Sends `value` to `to` and waits for the receipt. */
+// A vault that refuses every withdrawal (PUSH1 0 PUSH1 0 REVERT), so the agent's second transaction reverts.
+await reader.request({
+  method: 'anvil_setCode' as never,
+  params: [vault, '0x60006000fd'] as never,
+});
+
+/** Sends `amountEth` to `to` and waits for the receipt; explicit gas, so a reverting call is still mined. */
 async function send(to: `0x${string}`, amountEth: string) {
-  const hash = await wallet.sendTransaction({ to, value: parseEther(amountEth) });
+  const hash = await wallet.sendTransaction({ to, value: parseEther(amountEth), gas: 100_000n });
   const receipt = await reader.waitForTransactionReceipt({ hash });
   return { hash, status: receipt.status };
 }
@@ -41,7 +47,7 @@ const agent = new ToolLoopAgent({
       execute: ({ amountEth }) => send(vendor, amountEth),
     }),
     withdraw_from_vault: tool({
-      description: 'Move ETH to the treasury vault.',
+      description: 'Withdraw ETH from the treasury vault.',
       inputSchema: z.object({ amountEth: z.string() }),
       execute: ({ amountEth }) => send(vault, amountEth),
     }),
@@ -50,6 +56,6 @@ const agent = new ToolLoopAgent({
 });
 
 const { text } = await agent.generate({
-  prompt: 'Pay the vendor 0.25 ETH, then move 0.5 ETH to the vault.',
+  prompt: 'Pay the vendor 0.25 ETH, then withdraw 0.5 ETH from the vault.',
 });
 console.log(text);

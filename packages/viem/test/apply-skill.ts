@@ -151,6 +151,8 @@ export interface ReceivedSpan {
   spanId: string;
   parentSpanId?: string;
   name: string;
+  /** `2` is an error. */
+  status?: { code?: number };
 }
 
 type OtlpTraces = {
