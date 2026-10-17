@@ -153,6 +153,42 @@ describe('package READMEs', () => {
   }
 });
 
+describe('skills/', () => {
+  // Agent Skills (https://agentskills.io/specification): installers copy a skill's folder into another project,
+  // without the rest of this repository.
+  const skills = markdownFiles().filter((file) => /^skills\/[^/]+\/SKILL\.md$/.test(file));
+
+  it('finds the skills it checks', () => {
+    expect(skills).toContain('skills/hashspan/SKILL.md');
+  });
+
+  for (const file of skills) {
+    const text = read(file);
+    const frontmatter = text.match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? '';
+    const field = (key: string) => frontmatter.match(new RegExp(`^${key}: (.+)$`, 'm'))?.[1];
+
+    it(`${file} has the frontmatter of the specification`, () => {
+      const name = field('name');
+      expect(name).toBe(dirname(file).split('/')[1]);
+      expect(name).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+      expect(name?.length).toBeLessThanOrEqual(64);
+      const description = field('description') ?? '';
+      expect(description.length).toBeGreaterThan(0);
+      expect(description.length).toBeLessThanOrEqual(1024);
+      // Plain text: the frontmatter is not prose, so link or code syntax there would be read as such.
+      expect(description).not.toMatch(/[[\]`]/);
+      expect(text.split('\n').length).toBeLessThan(500);
+    });
+
+    it(`${file} links outside its folder only by absolute URL`, () => {
+      const outside = linkTargets(text).filter(
+        (target) => !/^(https?:|mailto:|#)/.test(target) && /(^|\/)\.\.(\/|$)/.test(target),
+      );
+      expect(outside).toEqual([]);
+    });
+  }
+});
+
 describe('TSDoc links', () => {
   // Doc comments ship in the packages' type declarations, where a repository path is not a link: they link to the
   // docs by absolute URL, pinned to the package's release by scripts/sync-version.mjs. `//` comments are not shipped.
