@@ -165,6 +165,12 @@ that paid them.
 
 - Your `onReplaced` callback is called unchanged, and your wait still resolves with viem's result. If your callback
   throws, the wait rejects with its error as in plain viem; the replacement is recorded anyway.
+- viem detects a replacement only after its wait has read the original transaction. A replacement sent right after
+  the original, before the wait read it, takes it out of the node's pool unseen, and viem's wait times out. hashspan
+  then looks for the replacement itself, when the original was sent through the same `withHashspan()` result with a
+  `nonce` you passed: it records it as above, without `blockchain.tx.replacement.reason`, as viem reported none. It
+  searches the last 128 blocks, with at most 13 requests after the timeout; your wait still rejects with viem's
+  `WaitForTransactionReceiptTimeoutError`, and both confirm spans end when it did.
 - `checkReplacement: false` turns off viem's detection, and with it this attribution.
 - A replaced transaction is not an error: whether a cancellation is a failure is up to your application.
 
@@ -482,6 +488,10 @@ actions to trace their user operations ([smart account SDKs](#smart-account-sdks
 - A transaction sent while `maxBackgroundConfirmations` confirmations are polling gets no background confirm span, and
   in serverless runtimes that freeze after the response, background confirmations may not complete
   ([background confirmation](#background-confirmation)).
+- A transaction replaced before viem's wait read it ends its confirm span with `error.type` `timeout` unless it was
+  sent through the same `withHashspan()` result with a `nonce` you passed and the replacement was mined in the last
+  128 blocks: a send whose nonce viem or the wallet filled in, a raw send and a transaction you `watch()` are not
+  searched ([replaced transactions](#replaced-transactions)).
 - A wait that resolves with the receipt of another transaction that viem did not report as a replacement, as after a
   mixed-up RPC response, ends the confirm span with `error.type` `_OTHER` and records none of that receipt's data;
   the transaction's own outcome is not recorded ([#355](https://github.com/selimaytac/hashspan/issues/355)).

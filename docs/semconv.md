@@ -31,7 +31,10 @@ replaced one and links to it and to both `send` spans when known. Dashboards cou
 `blockchain.tx.status = replaced`. See [ADR 0008](adr/0008-replaced-transactions.md). A replacement needs the same
 sender and nonce: where the instrumented library reports replacements (viem), a receipt of another hash that it did
 not report as one, such as an endpoint's answer for an unrelated transaction, is not recorded, and the confirm span
-ends with `error.type` `_OTHER`.
+ends with `error.type` `_OTHER`. A replacement viem missed because it took the transaction out of the pool before the
+wait read it is found by the viem adapter after the wait timed out, from the sender and nonce of its own send, and
+recorded the same way, without `blockchain.tx.replacement.reason`
+([ADR 0008 amendment](adr/0008-replaced-transactions.md#amendment-2026-10-18-proposed-a-replacement-viem-did-not-report)).
 
 **Chain reorganisations.** A confirm span records the receipt its wait ended with and is not revised afterwards: when
 a reorganisation removes the receipt's block, the span keeps its status and block number, and a later wait for the

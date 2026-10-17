@@ -35,6 +35,7 @@ import {
   withoutFees,
 } from './receipt.js';
 import { confirmKey, Recent } from './recent.js';
+import { detectsReplacement, findReplacement, type SentTransaction } from './replacement.js';
 import { delay, durationOr, within } from './timing.js';
 
 export const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
@@ -42,6 +43,8 @@ export const DEFAULT_BACKGROUND_TIMEOUT_MS = 120_000;
 const SEALED_RECEIPT_TIMEOUT_MS = 30_000;
 /** How long telemetry waits for the OP Stack operator fee of a receipt before it records the receipt without it. */
 const OPERATOR_FEE_TIMEOUT_MS = 10_000;
+/** How long telemetry looks for a replacement viem did not report, after a wait timed out, before it records the timeout. */
+const REPLACEMENT_SEARCH_TIMEOUT_MS = 10_000;
 /** `error.type` of a confirm span whose transaction a chain reorganisation removed during a wait (ADR 0026). */
 const NOT_ON_CHAIN = 'not_on_chain';
 /**
@@ -75,6 +78,8 @@ export interface ConfirmationOptions {
   abis: Recent<Abi>;
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
   revertReasons: Recent<Promise<string | undefined>>;
+  /** Sender and nonce of recent sends that passed a nonce, to find a replacement viem did not report. */
+  senders: Recent<SentTransaction>;
   track(work: Promise<void>): void;
   settleOnce(handle: ConfirmHandle): PendingConfirmation;
 }
@@ -132,6 +137,7 @@ export function createConfirmation({
   followMultisig,
   abis,
   revertReasons,
+  senders,
   track,
   settleOnce,
 }: ConfirmationOptions): Confirmation {
@@ -223,13 +229,36 @@ export function createConfirmation({
     } catch (error) {
       // viem rejects after reporting a replacement only if the caller's onReplaced threw: the transaction was mined.
       const reported = capture.replacement?.transactionReceipt;
-      if (!reported) {
-        if (!isReadable(error)) handle.fail(undefined, unreadable(endTimeOf()));
-        else if (isTimeout(error)) handle.timeout({ endTime: endTimeOf() });
-        else handle.fail(error, { endTime: endTimeOf() });
+      if (reported) receipt = reported;
+      else if (!isReadable(error)) {
+        handle.fail(undefined, unreadable(endTimeOf()));
         return;
+      } else if (!isTimeout(error)) {
+        handle.fail(error, { endTime: endTimeOf() });
+        return;
+      } else {
+        const sent = capture.detect ? senders.get(confirmKey(chainId, hash)) : undefined;
+        if (!sent) {
+          handle.timeout({ endTime: endTimeOf() });
+          return;
+        }
+        // The spans end when the wait gave up, not when the search finished; a flush that cannot wait records the
+        // timeout.
+        const timedOutAt = endTimeOf() ?? new Date();
+        endTimeOf = () => timedOutAt;
+        confirmation.onAbandon((underlying) => underlying.timeout({ endTime: timedOutAt }));
+        const found = await within(
+          findReplacement(client, hash, sent),
+          REPLACEMENT_SEARCH_TIMEOUT_MS,
+          'look for a replacement',
+        );
+        if (!found) {
+          handle.timeout({ endTime: timedOutAt });
+          return;
+        }
+        capture.replacement = found;
+        receipt = found.transactionReceipt;
       }
-      receipt = reported;
     }
     try {
       // A pending receipt is no outcome: it withdraws this wait (#402). Nothing is read for it, sealed or replayed.
@@ -461,7 +490,7 @@ export function createConfirmation({
     if (atLimit()) return false;
     // The poll below passes viem no count: it waits for one confirmation.
     const handle = tracker.startConfirm({ chainId, hash, confirmations: 1 });
-    const capture: ReplacementCapture = {};
+    const capture: ReplacementCapture = { detect: detectsReplacement(undefined, client) };
     const waitMs = durationOr(timeoutMs, DEFAULT_BACKGROUND_TIMEOUT_MS);
     const background = backgroundClientOf(client);
     const polling = (client as { pollingInterval?: unknown }).pollingInterval;

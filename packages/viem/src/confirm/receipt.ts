@@ -16,9 +16,9 @@ import { feeTokenOf, sponsoredOf, TEMPO_TRANSACTION_TYPE } from './fee-asset.js'
 import { ownField } from './operator-fee.js';
 import { delay } from './timing.js';
 
-/** What viem passes to `onReplaced`. */
+/** What viem passes to `onReplaced`; also a replacement hashspan found itself, without a reason (ADR 0008). */
 export interface ViemReplacement {
-  reason: ReplacementReason;
+  reason: ReplacementReason | undefined;
   replacedTransaction: { to?: string | null | undefined };
   transaction: { to?: string | null | undefined };
   transactionReceipt: ViemReceipt;
@@ -27,6 +27,11 @@ export interface ViemReplacement {
 /** The replacement viem reported to one wait, if any. */
 export interface ReplacementCapture {
   replacement?: ViemReplacement | undefined;
+  /**
+   * Whether, after the wait timed out, hashspan looks for a replacement viem did not report, from the sender and
+   * nonce of its own send (ADR 0008 amendment); as viem's `checkReplacement` of that wait.
+   */
+  detect?: boolean | undefined;
 }
 
 /**
