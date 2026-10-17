@@ -2,6 +2,7 @@
 // viem's wait read it: hashspan looks for it after the wait timed out (ADR 0008 amendment).
 import { SpanStatusCode } from '@opentelemetry/api';
 import { createPublicClient, createWalletClient, custom, RpcRequestError } from 'viem';
+import { mnemonicToAccount } from 'viem/accounts';
 import { base } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MAX_REPLACEMENT_BLOCKS } from '../src/confirm/replacement.js';
@@ -30,6 +31,8 @@ interface ChainOptions {
   takenBy?: string;
   /** Methods that fail, or never answer. */
   failOn?: string[];
+  /** A block whose `eth_getTransactionCount` fails, as on a node without its state. */
+  failNonceAt?: number;
   hangOn?: string[];
 }
 
@@ -43,6 +46,7 @@ function chain({
   takenBy = MINED,
   failOn = [],
   hangOn = [],
+  failNonceAt,
 }: ChainOptions = {}) {
   const requests: { method: string; params: unknown[] }[] = [];
   const minedTransaction = {
@@ -81,6 +85,7 @@ function chain({
         case 'eth_chainId':
           return '0x2105';
         case 'eth_sendTransaction':
+        case 'eth_sendRawTransaction':
           return HASH;
         case 'eth_blockNumber':
           return hex(latest);
@@ -89,6 +94,13 @@ function chain({
         case 'eth_getTransactionCount': {
           const tag = params[1];
           const at = tag === 'latest' || tag === 'pending' ? latest : Number(tag);
+          if (at === failNonceAt) {
+            throw new RpcRequestError({
+              body: {},
+              error: { code: -32000, message: 'missing trie node' },
+              url: 'mock',
+            });
+          }
           return hex(takenAt !== null && at >= takenAt ? NONCE + 1 : NONCE);
         }
         case 'eth_getBlockByNumber': {
@@ -163,7 +175,9 @@ const confirmOf = (hash: string) =>
 /** Sends HASH with `nonce`, waits for it until viem times out, and flushes. */
 async function sendAndTimeOut(
   setup: ReturnType<typeof clients>,
-  { nonce, wait = {} }: { nonce?: number | undefined; wait?: Record<string, unknown> } = { nonce: NONCE },
+  { nonce, wait = {} }: { nonce?: number | undefined; wait?: Record<string, unknown> } = {
+    nonce: NONCE,
+  },
 ) {
   const { wallet, reader, hashspan } = setup;
   const hash = await wallet.sendTransaction({ to: TO, value: 1n, nonce, gas: 21_000n });
@@ -213,6 +227,21 @@ describe('a replacement viem did not report', () => {
   it('finds it in the oldest block of the window', async () => {
     const mock = chain({ takenAt: 1_000 - MAX_REPLACEMENT_BLOCKS + 1 });
     await sendAndTimeOut(clients(mock.transport));
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.replacement.hash']).toBe(MINED);
+  });
+
+  it('is found when the node has no state for the block before the window', async () => {
+    const mock = chain({ failNonceAt: 1_000 - MAX_REPLACEMENT_BLOCKS });
+    await sendAndTimeOut(clients(mock.transport));
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.replacement.hash']).toBe(MINED);
+  });
+
+  it('is looked for by watch() of a transaction sent through the same withHashspan()', async () => {
+    const mock = chain();
+    const { hashspan, wallet, reader } = clients(mock.transport);
+    const hash = await wallet.sendTransaction({ to: TO, value: 1n, nonce: NONCE, gas: 21_000n });
+    hashspan.watch(reader, { hash, timeoutMs: 100 });
+    expect(await hashspan.flush({ timeoutMs: 5_000 })).toBe(true);
     expect(confirmOf(HASH)?.attributes['blockchain.tx.replacement.hash']).toBe(MINED);
   });
 
@@ -280,6 +309,67 @@ describe('a timeout that stays a timeout', () => {
       nonce: NONCE,
       wait: { checkReplacement: false },
     });
+    timedOut();
+    expect(mock.searched()).toHaveLength(0);
+  });
+
+  it('when the chain turns replacement detection off', async () => {
+    const mock = chain();
+    const hashspan = withHashspan();
+    const optedOut = { ...base, supportsTransactionReplacementDetection: false };
+    const wallet = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: mock.transport,
+    }).extend(hashspan);
+    const reader = createPublicClient({
+      chain: optedOut,
+      transport: mock.transport,
+      pollingInterval: 10,
+    }).extend(hashspan);
+    await sendAndTimeOut({ hashspan, wallet, reader } as never);
+    timedOut();
+    expect(mock.searched()).toHaveLength(0);
+  });
+
+  it('when the wait has checkReplacement behind an accessor', async () => {
+    const mock = chain();
+    const setup = clients(mock.transport);
+    const hash = await setup.wallet.sendTransaction({
+      to: TO,
+      value: 1n,
+      nonce: NONCE,
+      gas: 21_000n,
+    });
+    const args = { hash, timeout: 100, retryDelay: 1 };
+    Object.defineProperty(args, 'checkReplacement', { enumerable: true, get: () => true });
+    await expect(setup.reader.waitForTransactionReceipt(args)).rejects.toThrow(
+      expect.objectContaining({ name: 'WaitForTransactionReceiptTimeoutError' }),
+    );
+    await setup.hashspan.flush({ timeoutMs: 5_000 });
+    timedOut();
+    expect(mock.searched()).toHaveLength(0);
+  });
+
+  it('when the transaction was broadcast with sendRawTransaction, which records no sender', async () => {
+    const mock = chain();
+    const setup = clients(mock.transport);
+    // Anvil's first account, from its public test mnemonic.
+    const signer = mnemonicToAccount('test test test test test test test test test test test junk');
+    const serializedTransaction = await signer.signTransaction({
+      chainId: base.id,
+      to: TO,
+      value: 1n,
+      nonce: NONCE,
+      gas: 21_000n,
+      maxFeePerGas: 2n,
+      maxPriorityFeePerGas: 1n,
+    });
+    const hash = await setup.wallet.sendRawTransaction({ serializedTransaction });
+    await expect(
+      setup.reader.waitForTransactionReceipt({ hash, timeout: 100, retryDelay: 1 }),
+    ).rejects.toThrow(expect.objectContaining({ name: 'WaitForTransactionReceiptTimeoutError' }));
+    await setup.hashspan.flush({ timeoutMs: 5_000 });
     timedOut();
     expect(mock.searched()).toHaveLength(0);
   });

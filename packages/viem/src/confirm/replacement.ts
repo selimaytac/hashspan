@@ -63,7 +63,7 @@ export function detectsReplacement(args: unknown, client: unknown): boolean {
  * have reported it, without a reason (the adapter infers none); undefined when `hash` has a receipt, the nonce is not
  * taken yet, it was taken before the last {@link MAX_REPLACEMENT_BLOCKS} blocks, or the block that took it holds no
  * other transaction with that nonce. At most `log2(MAX_REPLACEMENT_BLOCKS) + 6` requests. Rejects when a request
- * fails, other than the first.
+ * fails, other than the first and the nonce before the window.
  */
 export async function findReplacement(
   client: unknown,
@@ -85,8 +85,12 @@ export async function findReplacement(
   // Block -1 stands for the state before the first block, where no nonce is taken.
   let low = latest - BigInt(MAX_REPLACEMENT_BLOCKS);
   if (low < 0n) low = -1n;
-  // Taken before the window: not searched.
-  else if ((await nonceAt(low)) > sent.nonce) return undefined;
+  else {
+    // Taken before the window: not searched. A node without that block's state fails this request; the search then
+    // goes on, and a nonce taken earlier still finds no match in the block it ends at.
+    const before = await nonceAt(low).catch(() => undefined);
+    if (before !== undefined && before > sent.nonce) return undefined;
+  }
   // The first block after `low` whose state has the nonce taken, by binary search:
   // `nonceAt(low)` <= nonce < `nonceAt(high)`.
   let high = latest;

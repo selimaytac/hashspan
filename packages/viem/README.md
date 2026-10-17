@@ -490,8 +490,8 @@ actions to trace their user operations ([smart account SDKs](#smart-account-sdks
   ([background confirmation](#background-confirmation)).
 - A transaction replaced before viem's wait read it ends its confirm span with `error.type` `timeout` unless it was
   sent through the same `withHashspan()` result with a `nonce` you passed and the replacement was mined in the last
-  128 blocks: a send whose nonce viem or the wallet filled in, a raw send and a transaction you `watch()` are not
-  searched ([replaced transactions](#replaced-transactions)).
+  128 blocks: a send whose nonce viem or the wallet filled in, a raw send and a transaction sent elsewhere that you
+  `watch()` are not searched ([replaced transactions](#replaced-transactions)).
 - A wait that resolves with the receipt of another transaction that viem did not report as a replacement, as after a
   mixed-up RPC response, ends the confirm span with `error.type` `_OTHER` and records none of that receipt's data;
   the transaction's own outcome is not recorded ([#355](https://github.com/selimaytac/hashspan/issues/355)).
