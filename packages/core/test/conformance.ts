@@ -1,13 +1,14 @@
 // What a test recorded, checked against the semantic conventions as @hashspan/core exports them: `ATTR_*` are the
 // attribute keys, `METRIC_*` the metric names and `BLOCKCHAIN_<NAME>_VALUE_<VALUE>` the closed set of values of
-// `ATTR_BLOCKCHAIN_<NAME>`. Nothing here copies docs/semconv.md, so a stray or renamed attribute fails a test at PR
-// time. The test tracing setups of the packages run it on every span when they tear down.
+// `ATTR_BLOCKCHAIN_<NAME>` (`MPP_<NAME>_VALUE_<VALUE>` those of `ATTR_MPP_<NAME>`). Nothing here copies
+// docs/semconv.md, so a stray or renamed attribute fails a test at PR time. The test tracing setups of the packages
+// run it on every span when they tear down.
 import type { Attributes } from '@opentelemetry/api';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import * as core from '../src/index.js';
 
 /** The namespaces hashspan owns: an attribute in one of them must be in the conventions. */
-const OWNED_PREFIXES = ['blockchain.', 'x402.'] as const;
+const OWNED_PREFIXES = ['blockchain.', 'x402.', 'mpp.'] as const;
 
 export interface Contract {
   /** Attribute keys, such as `blockchain.tx.hash`. */
@@ -34,8 +35,8 @@ export function readContract(exports: Record<string, unknown>): Contract {
   }
   const values = new Map<string, Set<string>>();
   for (const [name, value] of Object.entries(exports)) {
-    const match = /^BLOCKCHAIN_(.+)_VALUE_.+$/.exec(name);
-    const attribute = match && byConstant.get(`ATTR_BLOCKCHAIN_${match[1]}`);
+    const match = /^(BLOCKCHAIN|MPP)_(.+)_VALUE_.+$/.exec(name);
+    const attribute = match && byConstant.get(`ATTR_${match[1]}_${match[2]}`);
     if (typeof value !== 'string' || !attribute) continue;
     const set = values.get(attribute) ?? new Set<string>();
     set.add(value);

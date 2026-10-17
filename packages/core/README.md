@@ -9,8 +9,8 @@ built on OpenTelemetry.
 - **`confirm {chainId}`**: waiting for the receipt: status, block, gas, fees (including the OP-stack L1 fee) and
   revert reason. It carries a span link to its `send` span.
 
-Payments that another party settles on chain, such as x402 payments, become a **`payment {chainId}`** span instead
-of a `send` span.
+Payments that another party settles on chain, such as x402 payments, or that a payer settles through a payment
+protocol, such as MPP, become a **`payment {chainId}`** span instead of a `send` span.
 
 The core is library-agnostic and read-only: it never signs, sends or fetches anything. Adapters such as
 [`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/core@1.1.0/packages/viem) call it for you. Use the core directly to instrument any other send path.
@@ -80,6 +80,12 @@ party settles on chain, such as an x402 facilitator, as a `payment {chainId}` sp
 `end({ status, hash })`, `fail(error)` or `timeout()`, and call `link(hash)` to link a settling transaction's confirm
 span before the payment ends. A settlement with a hash links the transaction's confirm span to the payment
 span ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.1.0/docs/adr/0013-x402-payments.md)).
+For a payment whose settlement transaction the payer sends or signs itself, as with MPP, pass `sender: 'payer'`, so
+its fee is not labelled a facilitator's, and the transaction's `hash` when the payer knows it before the settlement
+is reported: it is recorded from the span's start, a timeout included, and when the tracker sent that transaction
+itself, the payment span starts with a link to its send span. `tracker.paymentSenders` tells an adapter that the
+tracker reads these fields
+([ADR 0029](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.1.0/docs/adr/0029-mpp-payments.md)).
 
 `tracker.startUserOperationSend({ chainId, sender, entryPoint, callCount })` records a user operation of an ERC-4337
 smart account handed to a bundler as a `send {chainId}` span; end it with `end({ userOpHash })` or `fail(error)`.
@@ -113,7 +119,7 @@ earlier releases, such as `send.end(hash, endTime)` ([migrating to 1.0](https://
 | `meterProvider` | global provider | Meter provider for the [metrics](#metrics) |
 | `address` | `'raw'` | `'raw'`, `'hashed'`, `'off'`, or `{ mode: 'hashed', hash: (address) => string }` |
 | `errorMessages` | `'off'` | What failed spans record about the error: `'off'` (type only), `'sanitized'` (first line, cut to 256 characters and `...`, URLs cut to their scheme, host and port, addresses per `address` mode, calldata removed; in `hashed` and `off` mode any hex longer than an address) or `'raw'` (full message and stack trace). `'raw'` can record RPC URLs that include API keys, as some libraries put the request URL in the message; `'sanitized'` keeps only the first line (viem puts the URL on a later line) and drops the path and query of any URL in it, which is best effort. See [ADR 0006](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.1.0/docs/adr/0006-error-privacy.md) |
-| `paymentResource` | `'origin'` | How much of a paid resource's URL `x402.resource` records: `'origin'` (scheme, host and port; nothing for a resource that is not a URL), `'path'` (also the path, never the query string, fragment or user info) or `'off'`. Paths often carry user or account identifiers. At most 512 characters are recorded |
+| `paymentResource` | `'origin'` | How much of a paid resource's URL `x402.resource` and `mpp.resource` record: `'origin'` (scheme, host and port; nothing for a resource that is not a URL), `'path'` (also the path, never the query string, fragment or user info) or `'off'`. Paths often carry user or account identifiers. At most 512 characters are recorded |
 | `recordFunctionArguments` | `false` | Record `functionArguments` as a JSON array in `blockchain.contract.function.arguments`: bigints as decimal strings, addresses per `address` mode (longer hex values become `<hex>` in `hashed` and `off` mode), at most 4096 characters. Reads only own enumerable data properties: `toJSON()` and getters are never called, so a `Date` records as `{}`; binary data records as `0x` hex; a Proxy's traps still run |
 | `agent` | none | Agent `{ id, name }`; a field set here always wins, unset fields come from the Baggage entries `gen_ai.agent.id` / `gen_ai.agent.name` |
 | `agentFromBaggage` | `true` | Read agent identity fields that `agent` leaves unset from Baggage; set to `false` in services that accept requests from outside their trust boundary |
@@ -126,8 +132,8 @@ earlier releases, such as `send.end(hash, endTime)` ([migrating to 1.0](https://
 Chain id, transaction hash, sender/recipient (per `address` mode), value, nonce, function name and selector, and,
 on confirmation, status, block number, gas used, effective gas price, L1 fee, total fee, OP Stack operator fee and revert reason. For user operations: their hash,
 smart account, EntryPoint, number of calls, success, gas used, cost, nonce and paymaster. For payments: payer,
-recipient, asset, amount, settled amount, status and whether the settlement was verified, and for x402 the scheme and
-resource. For a replaced transaction: the replacing hash and the reason. For call batches: the batch id, sender, number of
+recipient, asset, amount, settled amount, status and whether the settlement was verified, for x402 the scheme and
+resource, and for MPP the method, intent, mode, challenge id and resource. For a replaced transaction: the replacing hash and the reason. For call batches: the batch id, sender, number of
 calls, outcome, status code, atomicity and transaction hashes. On every span: the agent identity. Decoded
 call arguments are recorded only with `recordFunctionArguments`, and error messages only with `errorMessages`.
 Attribute definitions:

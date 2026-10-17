@@ -28,6 +28,7 @@ import type {
   ConfirmInput,
   PaymentHandle,
   PaymentInput,
+  PaymentSender,
   SendHandle,
   SendInput,
   TxTrackerOptions,
@@ -41,6 +42,8 @@ import { VERSION } from './version.js';
 const INSTRUMENTATION_NAME = '@hashspan/core';
 const DEFAULT_LINK_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_TRACKED = 10_000;
+/** The senders `startPayment` reads from {@link PaymentInput.sender}; one frozen array shared by every tracker. */
+const PAYMENT_SENDERS: readonly PaymentSender[] = Object.freeze(['facilitator', 'payer'] as const);
 
 /**
  * Records transactions, payments and user operations as spans. Obtain one from {@link createTxTracker}: it is not meant to be
@@ -68,6 +71,13 @@ export interface TxTracker {
    * span to this span, as a send span would.
    */
   startPayment(input: PaymentInput, parent?: Context): PaymentHandle;
+  /**
+   * Who can send a payment's settlement transaction, as `startPayment` reads {@link PaymentInput.sender}:
+   * `['facilitator', 'payer']`, frozen. Its presence tells an adapter that this tracker also reads
+   * {@link PaymentInput.hash} and {@link PaymentInput.mpp}; a tracker from an older core has none
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.1.0/docs/adr/0029-mpp-payments.md).
+   */
+  readonly paymentSenders: readonly PaymentSender[];
   /**
    * Starts a `send` span for a user operation of a smart account as a child of `parent` (default: the active context)
    * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.1.0/docs/adr/0021-user-operations.md). Call
@@ -206,6 +216,7 @@ export function createTxTracker(given: TxTrackerOptions = {}): TxTracker {
       started('send', startSend, () => noopSend(parentOf(parent)))(input, parent),
     startConfirm: started('confirm', startConfirm, () => NOOP_CONFIRM),
     startPayment: started('payment', startPayment, () => NOOP_PAYMENT),
+    paymentSenders: PAYMENT_SENDERS,
     startUserOperationSend: (input, parent) =>
       started('user operation send', startUserOperationSend, () => noopSend(parentOf(parent)))(
         input,

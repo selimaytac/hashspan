@@ -194,6 +194,21 @@ export const ATTR_GEN_AI_AGENT_ID: "gen_ai.agent.id";
 export const ATTR_GEN_AI_AGENT_NAME: "gen_ai.agent.name";
 
 // @public
+export const ATTR_MPP_CHALLENGE_ID: "mpp.challenge.id";
+
+// @public
+export const ATTR_MPP_INTENT: "mpp.intent";
+
+// @public
+export const ATTR_MPP_METHOD: "mpp.method";
+
+// @public
+export const ATTR_MPP_MODE: "mpp.mode";
+
+// @public
+export const ATTR_MPP_RESOURCE: "mpp.resource";
+
+// @public
 export const ATTR_X402_RESOURCE: "x402.resource";
 
 // @public
@@ -240,6 +255,9 @@ export const BLOCKCHAIN_OPERATION_SUBJECT_VALUE_CALL_BATCH: "call_batch";
 
 // @public
 export const BLOCKCHAIN_OPERATION_SUBJECT_VALUE_USER_OPERATION: "user_operation";
+
+// @public
+export const BLOCKCHAIN_PAYMENT_PROTOCOL_VALUE_MPP: "mpp";
 
 // @public
 export const BLOCKCHAIN_PAYMENT_PROTOCOL_VALUE_X402: "x402";
@@ -363,6 +381,21 @@ export const METRIC_BLOCKCHAIN_CLIENT_FEE: "blockchain.client.fee";
 export const METRIC_BLOCKCHAIN_CLIENT_SEND_DURATION: "blockchain.client.send.duration";
 
 // @public
+export const MPP_MODE_VALUE_PULL: "pull";
+
+// @public
+export const MPP_MODE_VALUE_PUSH: "push";
+
+// @public
+export interface MppPaymentDetails {
+    challengeId?: string | undefined;
+    intent?: string | undefined;
+    method?: string | undefined;
+    mode?: "push" | "pull" | undefined;
+    resource?: string | undefined;
+}
+
+// @public
 export interface PaymentHandle {
     end(settlement: PaymentSettlement, options?: EndOptions): void;
     fail(error: unknown, options?: FailOptions): void;
@@ -375,15 +408,21 @@ export interface PaymentInput {
     amount?: bigint | string | undefined;
     asset?: string | undefined;
     chainId: number;
+    hash?: string | undefined;
+    mpp?: MppPaymentDetails | undefined;
     payer?: string | undefined;
     protocol: string;
     recipient?: string | undefined;
+    sender?: PaymentSender | undefined;
     startTime?: TimeInput | undefined;
     x402?: X402PaymentDetails | undefined;
 }
 
 // @public
 export type PaymentResourceMode = "origin" | "path" | "off";
+
+// @public
+export type PaymentSender = "facilitator" | "payer";
 
 // @public
 export interface PaymentSettlement {
@@ -445,6 +484,7 @@ export interface SendResult {
 
 // @public
 export interface TxTracker {
+    readonly paymentSenders: readonly PaymentSender[];
     startCallBatchConfirm(input: CallBatchConfirmInput, parent?: Context): CallBatchConfirmHandle;
     startCallBatchSend(input: CallBatchInput, parent?: Context): CallBatchSendHandle;
     startConfirm(input: ConfirmInput, parent?: Context): ConfirmHandle;

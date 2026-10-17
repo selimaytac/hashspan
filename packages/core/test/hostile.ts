@@ -44,6 +44,9 @@ export const BOUNDS = {
   callBatchId: 256,
   x402Resource: 512,
   openX402Payments: 1000,
+  mppResource: 512,
+  mppChallengeId: 128,
+  openMppPayments: 1000,
 } as const;
 /** What a cut value ends with. */
 export const ELLIPSIS = '...';
@@ -421,6 +424,7 @@ const IDENTIFIER = /^[A-Za-z0-9_.-]{1,64}$/;
 const SELECTOR = /^0x[0-9a-fA-F]{8}$/;
 const CALL_BATCH_ID = /^0x[0-9a-fA-F]{1,256}$/;
 const SOLIDITY_NAME = /^[A-Za-z_$][A-Za-z0-9_$]{0,255}$/;
+const MPP_CHALLENGE_ID = /^[A-Za-z0-9._~-]{1,128}$/;
 
 type Check = (value: unknown, modes: Required<RecordingModes>) => string | undefined;
 
@@ -505,6 +509,11 @@ const ATTRIBUTE_CHECKS: Record<string, Check> = {
   'blockchain.payment.verified': boolean,
   'x402.scheme': matches(IDENTIFIER, 'a short identifier'),
   'x402.resource': bounded(BOUNDS.x402Resource),
+  'mpp.method': matches(IDENTIFIER, 'a short identifier'),
+  'mpp.intent': matches(IDENTIFIER, 'a short identifier'),
+  'mpp.mode': oneOf('push', 'pull'),
+  'mpp.challenge.id': matches(MPP_CHALLENGE_ID, 'a challenge id of at most 128 characters'),
+  'mpp.resource': bounded(BOUNDS.mppResource),
   'blockchain.user_operation.hash': matches(TX_HASH, 'a 32-byte hash'),
   'blockchain.user_operation.sender': address,
   'blockchain.user_operation.entry_point': address,

@@ -106,6 +106,19 @@ export const ATTR_BLOCKCHAIN_PAYMENT_VERIFIED = 'blockchain.payment.verified' as
 export const ATTR_X402_SCHEME = 'x402.scheme' as const;
 /** The resource paid for, as much of its URL as the tracker's `paymentResource` mode records. */
 export const ATTR_X402_RESOURCE = 'x402.resource' as const;
+/**
+ * MPP's own payment fields: the payment method, e.g. `tempo`. See
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.1.0/docs/adr/0029-mpp-payments.md.
+ */
+export const ATTR_MPP_METHOD = 'mpp.method' as const;
+/** The MPP intent, e.g. `charge`. */
+export const ATTR_MPP_INTENT = 'mpp.intent' as const;
+/** How an MPP charge is settled: `push` (the payer broadcasts) or `pull` (the server broadcasts). */
+export const ATTR_MPP_MODE = 'mpp.mode' as const;
+/** The id of the MPP challenge the payer paid, chosen by the server; spans only, never a metric attribute. */
+export const ATTR_MPP_CHALLENGE_ID = 'mpp.challenge.id' as const;
+/** The resource paid for, as much of its URL as the tracker's `paymentResource` mode records. */
+export const ATTR_MPP_RESOURCE = 'mpp.resource' as const;
 
 /**
  * User operations of ERC-4337 smart accounts. See
@@ -203,6 +216,13 @@ export const BLOCKCHAIN_OPERATION_NAME_VALUE_PAYMENT = 'payment' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL}. */
 export const BLOCKCHAIN_PAYMENT_PROTOCOL_VALUE_X402 = 'x402' as const;
+/** The Machine Payments Protocol (ADR 0029). */
+export const BLOCKCHAIN_PAYMENT_PROTOCOL_VALUE_MPP = 'mpp' as const;
+
+/** Values for {@link ATTR_MPP_MODE}. */
+export const MPP_MODE_VALUE_PUSH = 'push' as const;
+/** The server broadcasts the transaction the payer signed. */
+export const MPP_MODE_VALUE_PULL = 'pull' as const;
 
 /** Values for {@link ATTR_BLOCKCHAIN_PAYMENT_STATUS}. */
 export const BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED = 'settled' as const;
