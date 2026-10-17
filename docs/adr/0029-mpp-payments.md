@@ -262,8 +262,8 @@ The choices that were open when this record was proposed, as decided above or he
     challenges (long or repeated ids, malformed amounts and addresses, 11 or more splits), credential strings,
     `Payment-Receipt` headers, error objects, response and request copies that are not platform objects, and the
     options and client.
-  - *Anvil in Tempo mode* (`packages/mpp/test/*.int.test.ts`): `start-anvil.ts` gains a network option for
-    `-n tempo`, and the test mines one block before the first charge (the fresh-chain `validAfter` check). Real
+  - *Anvil in Tempo mode* (`packages/mpp/test/*.int.test.ts`): Anvil started with `start-anvil.ts`'s
+    `network: 'tempo'` option (added with the Tempo fee test of #442), and the test mines one block before the first charge (the fresh-chain `validAfter` check). Real
     charges through an mppx server in the same process, against the Anvil that `make tools` pins (1.8.4): push
     through a traced client on a shared tracker (payment span linked to the send span, one confirm span, a verdict,
     fee not `facilitator`) and on a separate tracker (what the documentation says it records), unsponsored and sponsored

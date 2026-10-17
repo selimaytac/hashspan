@@ -122,6 +122,17 @@ function payment(): Payment {
   };
 }
 
+/** Makes `pay` a batch-settlement payment that deposits into its channel; returns its settlement response. */
+function batchSettlement(pay: Payment): Record<string, unknown> {
+  (pay.requirements as Record<string, unknown>).scheme = 'batch-settlement';
+  const response = pay.settleResponse as Record<string, unknown>;
+  if (!('extra' in response)) {
+    response.amount = '10000';
+    response.extra = { chargedAmount: '10000', channelState: { chargedCumulativeAmount: '10000' } };
+  }
+  return response;
+}
+
 type Row = AdapterRow<WithHashspanX402Options>;
 
 /** Runs `pay` (after `change` made it hostile) through the hooks of a traced client; a hook that returns or throws fails it. */
@@ -232,6 +243,18 @@ const ROWS: Row[] = [
   ),
   // What the settling party answers.
   ...fieldRows('settlement response', (pay) => pay.settleResponse as Record<string, unknown>),
+  // A batch-settlement payment, whose charge the response reports in `extra` (docs/adr/0013-x402-payments.md).
+  {
+    name: 'batch-settlement response extra',
+    untraced: false,
+    scenario: paying((pay, value) => {
+      batchSettlement(pay).extra = value;
+    }),
+  },
+  ...fieldRows(
+    'batch-settlement response extra',
+    (pay) => batchSettlement(pay).extra as Record<string, unknown>,
+  ),
   {
     name: 'payment creation failure',
     untraced: false,

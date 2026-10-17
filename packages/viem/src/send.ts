@@ -49,6 +49,14 @@ export interface SendTracing {
   traceSend<R>(sendTrace: SendTrace<R>, send: () => Promise<R>): Promise<R>;
   /** Logs that reading the call's arguments for telemetry threw; the caller then makes the call untraced. */
   untraced(error: unknown): void;
+  /**
+   * True when `action` sends from a smart account: the call's `account`, else the client's, is a viem smart account
+   * (`type` `'smart'`, an own data property). viem's own wallet actions reject such an account, so the action is a
+   * smart account SDK's, which sends a user operation through the client it extended, out of the extension's reach,
+   * and returns the bundle transaction's hash: the caller makes the call untraced, as neither a transaction nor a
+   * call batch is sent (#430). Logs a `diag` warning the first time on this client. Never throws.
+   */
+  smartAccountSend(action: string, args: unknown): boolean;
 }
 
 export function createSendTracing(
@@ -175,5 +183,25 @@ export function createSendTracing(
     );
   };
 
-  return { knownChainId, queryChainId, traceSend, untraced };
+  let warnedSmartAccount = false;
+  const smartAccountSend = (action: string, args: unknown): boolean => {
+    let smart: boolean;
+    try {
+      smart = own(own(args, 'account') ?? client.account, 'type') === 'smart';
+    } catch {
+      // An account that cannot be read is no smart account here; the send path reads it again and records what it can.
+      return false;
+    }
+    if (smart && !warnedSmartAccount) {
+      warnedSmartAccount = true;
+      diag.warn(
+        `hashspan: ${action} of a smart account is not traced: it sends a user operation through the client the smart ` +
+          'account SDK extended. Apply withHashspan() before the SDK actions to trace the operation ' +
+          '(https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/packages/viem/README.md#smart-account-sdks)',
+      );
+    }
+    return smart;
+  };
+
+  return { knownChainId, queryChainId, traceSend, untraced, smartAccountSend };
 }

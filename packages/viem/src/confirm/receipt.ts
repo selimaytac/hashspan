@@ -335,8 +335,9 @@ const HEX_QUANTITY = /^0x[0-9a-fA-F]{1,64}$/;
 /**
  * Normalises a viem receipt; `l1Fee` is a bigint with the OP-stack formatter, else a raw hex string. An `l1Fee` that
  * is not a hex quantity is passed on as given: the core then records neither it nor the total fee, and the rest of
- * the receipt as usual (ADR 0025 rule 3). A Tempo receipt (type `0x76`) names the token its fee was paid in
- * (ADR 0028) and the account that paid it (ADR 0020); a pending one is no outcome (#402).
+ * the receipt as usual (ADR 0025 rule 3). A Tempo receipt names the token its fee was paid in (ADR 0028), of type
+ * `0x76` or of another type with a fee payer (#429); one of type `0x76` also names the account that paid it
+ * (ADR 0020), and a pending one is no outcome (#402).
  */
 export function toReceiptLike(receipt: ViemReceipt): ReceiptLike {
   const { l1Fee } = receipt;

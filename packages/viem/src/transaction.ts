@@ -172,7 +172,7 @@ export function addTransactionActions(
     confirmThrough,
     confirmPending,
     followMultisig,
-    sending: { knownChainId, queryChainId, traceSend, untraced },
+    sending: { knownChainId, queryChainId, traceSend, untraced, smartAccountSend },
   }: TransactionDependencies,
 ): void {
   const {
@@ -280,14 +280,17 @@ export function addTransactionActions(
 
   if (typeof sendTransaction === 'function') {
     actions.sendTransaction = (args: SendArgs) =>
-      traceSend(
-        transactionSend(args, (chainId) => transactionInput(args, chainId)),
-        () => sendTransaction(args),
-      );
+      smartAccountSend('sendTransaction', args)
+        ? sendTransaction(args)
+        : traceSend(
+            transactionSend(args, (chainId) => transactionInput(args, chainId)),
+            () => sendTransaction(args),
+          );
   }
 
   if (typeof writeContract === 'function') {
     actions.writeContract = (args: WriteContractArgs) => {
+      if (smartAccountSend('writeContract', args)) return writeContract(args);
       let write: ReturnType<typeof contractWrite>;
       try {
         write = contractWrite(args);
@@ -399,14 +402,17 @@ export function addTransactionActions(
 
   if (typeof sendTransactionSync === 'function') {
     actions.sendTransactionSync = (args: SendArgs) =>
-      traceSend(
-        syncSend(args, (chainId) => transactionInput(args, chainId)),
-        () => sendTransactionSync(args),
-      );
+      smartAccountSend('sendTransactionSync', args)
+        ? sendTransactionSync(args)
+        : traceSend(
+            syncSend(args, (chainId) => transactionInput(args, chainId)),
+            () => sendTransactionSync(args),
+          );
   }
 
   if (typeof writeContractSync === 'function') {
     actions.writeContractSync = (args: WriteContractArgs) => {
+      if (smartAccountSend('writeContractSync', args)) return writeContractSync(args);
       let write: ReturnType<typeof contractWrite>;
       try {
         write = contractWrite(args);

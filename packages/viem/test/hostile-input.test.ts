@@ -536,6 +536,16 @@ const ROWS: Row[] = [
         receipt: { type: '0x76', feeToken: ADDRESS, [field]: value },
       })(WAIT, hashspan),
   ),
+  // On Tempo a receipt of any type names its fee token and fee payer (#429): a receipt of another type that names both
+  // is read for its fee token, so both fields and the type are hostile input there too.
+  ...answerRows(
+    'node receipt of a plain Tempo transaction',
+    ['type', 'feeToken', 'feePayer'],
+    (value, field, hashspan) =>
+      onReader('waitForTransactionReceipt', {
+        receipt: { type: '0x2', feeToken: ADDRESS, feePayer: FROM, [field]: value },
+      })(WAIT, hashspan),
+  ),
   {
     name: 'node answer to eth_chainId',
     scenario: (value, hashspan) => {

@@ -110,3 +110,46 @@ and paid MCP tools. Relevant facts, from the v2 JavaScript SDK (`@x402/core`, `@
   ADR 0004 amendment).
 - `upto` settles each payment in one transaction with a hash, which is verified as ADR 0017's Permit2 amendment
   describes; only schemes that batch settlement, such as `batch-settlement`, stay open.
+
+## Amendment (2026-10-18): `batch-settlement`
+
+- Status: proposed
+
+### Context
+
+With x402's `batch-settlement` scheme (`@x402/evm` 2.28), the payer opens a channel with one deposit into an escrow
+contract, and each paid request is a voucher that charges the channel. The server claims the vouchers and settles
+them to `payTo` later, in batches, and refunds the rest of the deposit to the payer. The client never sees those
+transactions. The settlement response of a request, per x402's scheme spec (`specs/schemes/batch-settlement/`,
+settlement response): for the request that deposits, `transaction` is the deposit transaction, the top-level `amount`
+is the deposited amount and `extra.chargedAmount` is the request's charge; for a voucher, `transaction` and `amount`
+are empty and `extra.chargedAmount` is the charge. The server may charge less than the price
+(`setSettlementOverrides`), so the charge is not the requirements' `amount`.
+
+Recording these responses as for `exact` made the first payment's `blockchain.payment.settled_amount` the deposit, and
+its `blockchain.tx.hash` the deposit transaction, whose confirm span then linked to the payment as its settlement
+(#436). The deposit is not a payment: it is held in escrow and refundable.
+
+### Decision
+
+- For a payment whose selected requirements have the scheme `batch-settlement` (the payer's own choice, not the
+  response's), the settlement recorded is:
+  - `blockchain.payment.status` as reported: `settled` means the request was charged against the channel, not that a
+    transfer to the recipient happened at that time;
+  - `blockchain.payment.settled_amount` from `extra.chargedAmount`, as reported, and nothing when the response has
+    none; never the top-level `amount`;
+  - no transaction: a transaction the response reports is not recorded as `blockchain.tx.hash`, not linked and not
+    confirmed through the reader, since it is the deposit and no transaction of the scheme is one request's
+    settlement. There is no `blockchain.payment.verified` (ADR 0017).
+- `blockchain.payment.amount` stays the requirements' amount, the most the payer agreed to pay for the request, as for
+  `upto`. What a request spent is its `settled_amount`.
+- The deposit, claim, settlement and refund transactions are not recorded by the client adapter. Recording the
+  deposit, for example under an attribute of its own, would add to the schema and is left for a later decision.
+
+### Consequences
+
+- A batch-settlement payment span has no confirm span and no hash; the money moved on chain is visible only on the
+  server side (#164).
+- The sum of the `settled_amount` of a channel's settled payments is what the server can claim for them; the escrow
+  deposit appears in no payment span.
+- The open point in *Consequences* above, how to trace the later settlement of `batch-settlement`, stays open.

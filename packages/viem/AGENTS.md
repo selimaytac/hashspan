@@ -16,6 +16,8 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
     `src/user-operation.ts`, `src/call-batch.ts`; `src/send.ts` traces a send (also once a late chain id is known),
     `src/send-error.ts` gives a failed send's `error.type` (the error viem classified, under its wrappers),
     `src/arguments.ts` reads call arguments from own data properties only.
+  - A send from a smart account (`account.type` `'smart'`) is a smart account SDK's action, not viem's: it is called
+    untraced (`smartAccountSend` in `src/send.ts`; ADR 0021 amendment, #430).
   - `src/confirm/` is the confirmation work every EVM path needs (ADR 0001 amendment), and imports nothing from the
     extension: `confirmation.ts` (receipt, sealed receipt, revert reason, background limit), `watch.ts`,
     `pending.ts` (`track()`, `flush()`, ending a handle once), `receipt.ts` (normalising receipts, classifying
@@ -33,7 +35,9 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
 - `src/revert-reason.ts` replays reverted transactions and decodes the revert data (ADR 0005)
 - `test/mock-transport.ts` EIP-1193 mock for unit tests (`test/mock-bundler.ts` for bundler clients);
   `test/*.int.test.ts` run against Anvil via prool; user operations go through `test/test-bundler.ts`, an
-  in-process bundler, to a stand-in EntryPoint (`test/entry-point/`, compiled into `test-entry-point.ts`); every
+  in-process bundler, to a stand-in EntryPoint (`test/entry-point/`, compiled into `test-entry-point.ts`), from a
+  stand-in account (`test/test-smart-account.ts`); `test/sdk-smart-account.ts` copies the actions a smart account
+  SDK adds to a bundler client, so the SDKs themselves run only in `integrations/`; every
   Anvil test starts its own Anvil at module level with `startAnvil()` (`test/start-anvil.ts`), on a port the OS
   assigns as Anvil binds it, not with `test/free-port.ts`, whose port another process can take before Anvil binds it
 - `test/fault-proxy.ts` an HTTP proxy in front of Anvil that injects RPC faults per JSON-RPC method (timeouts, HTTP

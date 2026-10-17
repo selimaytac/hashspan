@@ -14,7 +14,9 @@ Root rules: [AGENTS.md](../AGENTS.md).
   `viem()` wallet setup; `test/mastra.int.test.ts` the Mastra OpenTelemetry bridge setup, with a scripted model;
   `test/mastra-agent.int.test.ts` runs the complete Mastra example of docs/integrations.md as written;
   `test/openinference-langchain.int.test.ts` and `test/openinference-openai-agents.int.test.ts` the OpenInference
-  setups, with scripted models (shared setup in `test/openinference.ts`)
+  setups, with scripted models (shared setup in `test/openinference.ts`); `test/smart-account-sdks.int.test.ts` the
+  permissionless.js and ZeroDev smart account clients and the permissionless example of docs/integrations.md, through
+  the in-process bundler of packages/viem with a stand-in account (`test/smart-account-setup.ts`)
 - `test/readme/` holds the `#region readme` files of doc examples that need these libraries, as
   `packages/*/test/readme/` does for the others: the typecheck compiles them and `packages/core/test/docs.test.ts`
   matches them with the docs
