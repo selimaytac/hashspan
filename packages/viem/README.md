@@ -209,9 +209,9 @@ confirmed with `watch()`, records no Celo fee currency, since only the transacti
 ## Tempo transactions
 
 - **Sponsored fees.** Only a Tempo transaction of type `0x76` can have its fee paid by another account, which its
-  receipt names in `feePayer`. When it is a valid address other than the receipt's `from`, the fee sample carries `blockchain.fee.payer` `sponsor`, so it is
-  not counted as the sender's fee; no address is recorded on the sample or the span
-  ([ADR 0020](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0020-metrics.md)).
+  receipt names in `feePayer`. When it is a valid address other than the receipt's `from`, the fee sample carries
+  `blockchain.fee.payer` `sponsor`, so it is not counted as the sender's fee; no address is recorded on the sample or
+  the span ([ADR 0020](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0020-metrics.md)).
 - **Pending receipts.** A Tempo multisig relay (`Relay.multisig` of `viem/tempo`) answers a sync send whose approvals
   are below quorum with a receipt whose `status` is `pending` (or none, without viem's Tempo formatter) and whose hash
   is the multisig operation's. The send span ends when the call returns, as usual. A pending receipt is no outcome: it
