@@ -10,6 +10,7 @@ workers, wallet backends, bots.
 [![CI](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml/badge.svg)](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml)
 [![npm @hashspan/core](https://img.shields.io/npm/v/@hashspan/core?label=%40hashspan%2Fcore)](https://www.npmjs.com/package/@hashspan/core)
 [![npm @hashspan/viem](https://img.shields.io/npm/v/@hashspan/viem?label=%40hashspan%2Fviem)](https://www.npmjs.com/package/@hashspan/viem)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/selimaytac/hashspan/badge)](https://scorecard.dev/viewer/?uri=github.com/selimaytac/hashspan)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > **Status: 1.0.** Published with npm provenance. 1.0 freezes the public API
@@ -38,11 +39,22 @@ decoded custom error.</sub>
 - **Metrics too.** Send and confirmation latency and fees are also recorded as histograms, and `traceTransport()` can
   add a span per JSON-RPC request ([semantic conventions](docs/semconv.md)).
 - **Small footprint.** `@hashspan/core` has one peer dependency, `@opentelemetry/api`; `@hashspan/viem` adds `viem`,
-  the library it instruments. It never signs or broadcasts transactions.
-- **Privacy by design.** Calldata arguments and error messages are opt-in, and addresses can be hashed or dropped
-  ([ADR 0004](docs/adr/0004-privacy-defaults.md), [ADR 0006](docs/adr/0006-error-privacy.md)). This limits what
-  your backend stores; it is not anonymity, since the transaction hash resolves to the parties on chain
+  the library it instruments.
+
+## Safe by design
+
+- **It never signs or broadcasts a transaction** and needs no private key ([principles](docs/architecture.md#principles),
+  [security model](SECURITY.md#security-model)).
+- **Its RPC calls are read-only**: receipts and the replay of a reverted transaction, and only those
+  ([the requests it adds](docs/architecture.md#json-rpc-requests-hashspan-adds)).
+- **Privacy defaults are conservative.** Calldata arguments and error messages are opt-in, and addresses can be hashed
+  or dropped ([ADR 0004](docs/adr/0004-privacy-defaults.md), [ADR 0006](docs/adr/0006-error-privacy.md)). This limits
+  what your backend stores; it is not anonymity, since the transaction hash resolves to the parties on chain
   ([privacy notes](packages/core#privacy-notes)).
+
+Releases are published from GitHub Actions with npm provenance. Each GitHub release carries `sbom.cdx.json`, a
+CycloneDX SBOM of the lockfile, among its assets ([releasing](docs/releasing.md#every-release)); the badge above is the
+repository's OpenSSF Scorecard.
 
 ## Packages
 
@@ -53,9 +65,11 @@ decoded custom error.</sub>
 | [`@hashspan/cdp`](packages/cdp) | Adapter for Coinbase CDP server and smart accounts | [![npm](https://img.shields.io/npm/v/@hashspan/cdp?label=)](https://www.npmjs.com/package/@hashspan/cdp) |
 | [`@hashspan/x402`](packages/x402) | Adapter for x402 payments | [![npm](https://img.shields.io/npm/v/@hashspan/x402?label=)](https://www.npmjs.com/package/@hashspan/x402) |
 
-Install the same minor version of every `@hashspan` package you use: the adapters depend on the
-`@hashspan/core` of their own minor (and `@hashspan/cdp` and `@hashspan/x402` on the `@hashspan/viem` of it), as
-caret ranges do before 1.0. A tracker from another core release passed as the `tracker` option still works; what it
+Install the latest version of every `@hashspan` package you use, or upgrade them together. The packages are a linked
+group ([releasing](docs/releasing.md)): the ones a release changes get one version, and a package without changes keeps
+its own, so the latest versions can differ in their minor until its next release. Each adapter requires the
+`@hashspan/core` of its own release or a later one in the same major (and `@hashspan/cdp` and `@hashspan/x402` the
+`@hashspan/viem` of it), as caret ranges do. A tracker from another core release passed as the `tracker` option still works; what it
 does not know is not recorded ([ADR 0014](docs/adr/0014-core-api-boundary.md)). The libraries each package
 instruments are peer dependencies, with the supported ranges in its `package.json`; CI runs the CDP and x402 adapters
 against the newest SDK releases in their ranges every week, and the x402 adapter also against the oldest.
