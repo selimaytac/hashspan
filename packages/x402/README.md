@@ -119,6 +119,7 @@ To run your version as a script, see the root
 | Outcome | Payment span |
 |---|---|
 | Settled | `blockchain.payment.status` `settled` and the transaction hash |
+| Settled with `batch-settlement`: the request was charged against the payer's channel | `settled` and the charge as `blockchain.payment.settled_amount`, with no hash ([known limits](#known-limits)) |
 | Settlement pending (`settlement_pending`) | `pending` and the hash; the confirm span resolves it |
 | Settlement failed | `failed`, error status, the facilitator's `errorReason` as `error.type` |
 | Response without a settlement: the facilitator refused the payment before settling it (e.g. the payer's balance is too low), or the API failed (e.g. answered 500) before settling; see [payment, request and task outcomes](#payment-request-and-task-outcomes) | error status, `error.type` `no_settlement` |
@@ -131,7 +132,8 @@ identifiers. The core option `paymentResource: 'path'` records the path too (nev
 info), and `'off'` nothing; see
 [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.0.0/docs/semconv.md). When the
 settlement reports the amount it settled, it is recorded as `blockchain.payment.settled_amount`, as reported: with the
-`upto` scheme, it can be less than the amount signed for.
+`upto` scheme, it can be less than the amount signed for. With `batch-settlement`, it is the request's charge
+(`extra.chargedAmount`), which can also be less than the price, and never the deposit into the channel.
 
 ## Payment, request and task outcomes
 
@@ -150,7 +152,8 @@ and confirm spans. Together they tell these cases apart, checked with `@x402/cor
 | The settlement's outcome is unknown | `pending`, and the linked confirm span ends with `error.type` `timeout` | |
 
 Count only `settled` payments as paid; a `pending` one is paid once its confirm span records the receipt. What a
-tool call or task spent is the `amount` of each settled payment (the `settled_amount` for `upto`), per
+tool call or task spent is the `amount` of each settled payment (the `settled_amount` for `upto` and
+`batch-settlement`), per
 `blockchain.payment.asset`: amounts of different assets do not add up. The settlement's gas was paid by the
 facilitator, not by the agent. Spans are not an accounting record: a trace that a sampler dropped, or that was not
 exported, misses its payments.
@@ -167,6 +170,11 @@ exported, misses its payments.
   `onPaymentCreationFailure` hook recovers a failed payment, its span still records the failure ([usage](#usage)).
 - `blockchain.payment.verified` needs a `reader` and covers `exact` payments authorized with EIP-3009 or Permit2 and
   `upto` with Permit2; other schemes, such as `batch-settlement`, are not checked ([usage](#usage)).
+- With `batch-settlement`, `settled` means the request was charged against your channel: the server claims the
+  charges and settles them to `payTo` later, in batches, and refunds the rest of the deposit. Those transactions, and
+  the deposit the first request makes, are sent on the server side and recorded in no payment span; a payment span
+  has no hash, no confirm span and no `verified`
+  ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.0.0/docs/adr/0013-x402-payments.md)).
 - The payment span records the payment, not the paid request's status or your tool's outcome
   ([payment, request and task outcomes](#payment-request-and-task-outcomes)).
 - The limits of `@hashspan/viem`'s confirmations and of the core apply to the confirm span

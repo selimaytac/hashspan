@@ -118,6 +118,8 @@ const UPTO_PROXY_FUNCTIONS = parseAbi([
 /** How long to wait for the settlement transaction of a Permit2 payment, to read its nonce. */
 const TRANSACTION_TIMEOUT_MS = 10_000;
 const SETTLEMENT_PENDING = 'settlement_pending';
+/** x402's scheme whose payments charge a channel the payer deposited into, settled later in batches. */
+const BATCH_SETTLEMENT = 'batch-settlement';
 const NO_SETTLEMENT = 'no_settlement';
 // Timers without Node.js or DOM types, which src/ is type-checked without.
 const timers = globalThis as unknown as {
@@ -214,8 +216,14 @@ function deadlineMs(maxTimeoutSeconds: unknown): number {
   return Math.min(Math.max(seconds * 1000 + GRACE_MS, MIN_DEADLINE_MS), MAX_DEADLINE_MS);
 }
 
-/** The settlement fields the payment span records, from a decoded `PAYMENT-RESPONSE`. */
-function settlementOf(response: object): PaymentSettlement {
+/**
+ * The settlement fields the payment span records, from a decoded `PAYMENT-RESPONSE`. For a `batch-settlement`
+ * payment (`batched`), what was settled is the request's charge, `extra.chargedAmount`, and no transaction is its
+ * settlement: the one a response reports is the payer's deposit into the channel, and the charges reach the recipient
+ * later, in transactions the server sends
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.0.0/docs/adr/0013-x402-payments.md).
+ */
+function settlementOf(response: object, batched: boolean): PaymentSettlement {
   const errorReason = stringOrUndefined(own(response, 'errorReason'));
   const status =
     own(response, 'success') === true
@@ -223,10 +231,10 @@ function settlementOf(response: object): PaymentSettlement {
       : errorReason === SETTLEMENT_PENDING
         ? 'pending'
         : 'failed';
-  const amount = own(response, 'amount');
+  const amount = batched ? own(own(response, 'extra'), 'chargedAmount') : own(response, 'amount');
   return {
     status,
-    hash: stringOrUndefined(own(response, 'transaction')),
+    hash: batched ? undefined : stringOrUndefined(own(response, 'transaction')),
     payer: stringOrUndefined(own(response, 'payer')),
     amount: typeof amount === 'string' || typeof amount === 'bigint' ? amount : undefined,
     errorReason: status === 'failed' ? errorReason : undefined,
@@ -493,6 +501,8 @@ interface OpenPayment {
   check: PaymentCheck | undefined;
   /** The settlement, while the payment span waits for its transaction's receipt to be checked. */
   settled: { settlement: PaymentSettlement; endTime: Date } | undefined;
+  /** Whether the payer selected the `batch-settlement` scheme, whose responses report no settlement transaction. */
+  batched: boolean;
 }
 
 /**
@@ -726,6 +736,7 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
       resolve,
       check: checkOf(requirements, payload),
       settled: undefined,
+      batched: own(requirements, 'scheme') === BATCH_SETTLEMENT,
     };
     payment.timer = timers.setTimeout(
       () => timeOut(payment),
@@ -781,7 +792,7 @@ export function withHashspan(client: object, options: WithHashspanX402Options = 
     let settlement: PaymentSettlement;
     let network: unknown;
     try {
-      settlement = settlementOf(response);
+      settlement = settlementOf(response, payment.batched);
       network = own(response, 'network');
     } catch {
       // A response that cannot be read still ends the payment span, as `_OTHER` (ADR 0025 rule 1).

@@ -134,3 +134,11 @@ nonce is this payment and no other.
   (ADR 0009).
 - A proxy whose settlement functions change would make genuine settlements `false` until the ABIs are updated; the
   unit tests encode inputs with the SDK's own proxy ABIs, so the weekly runs against the SDK peer range catch a change.
+
+## Amendment (2026-10-18): no settlement transaction for `batch-settlement`
+
+- Status: proposed
+
+A `batch-settlement` payment records no settlement transaction (ADR 0013, *Amendment: `batch-settlement`*): the one its
+response can report is the payer's deposit into the channel. The reader is not asked for it, the payment span ends
+when the response is processed, and it has no `blockchain.payment.verified`, as before.
