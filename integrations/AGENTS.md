@@ -9,8 +9,9 @@ Root rules: [AGENTS.md](../AGENTS.md).
 - `test/offline.ts` a setup file that lets only loopback requests through `fetch` and answers AgentKit's analytics
   requests; each test starts its own Anvil with `startAnvil()`
   (`packages/viem/test/start-anvil.ts`), on a port the OS assigns as Anvil binds it
-- `test/agentkit-viem.int.test.ts` the AgentKit `ViemWalletProvider` setup; `test/agentkit-cdp.int.test.ts` the
-  AgentKit CDP wallet providers, against `packages/cdp/test/mock-cdp-api.ts`; `test/goat-viem.int.test.ts` the GOAT
+- `test/agentkit-viem.int.test.ts` the AgentKit `ViemWalletProvider` setup; `test/agentkit-langchain.int.test.ts`
+  AgentKit's wallet actions as tools of a LangChain agent, with a tool span around each call and a scripted model;
+  `test/agentkit-cdp.int.test.ts` the AgentKit CDP wallet providers, against `packages/cdp/test/mock-cdp-api.ts`; `test/goat-viem.int.test.ts` the GOAT
   `viem()` wallet setup; `test/mastra.int.test.ts` the Mastra OpenTelemetry bridge setup, with a scripted model;
   `test/mastra-agent.int.test.ts` runs the complete Mastra example of docs/integrations.md as written;
   `test/openinference-langchain.int.test.ts` and `test/openinference-openai-agents.int.test.ts` the OpenInference
