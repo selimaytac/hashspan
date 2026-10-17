@@ -1,7 +1,12 @@
 import { Instance } from 'prool';
 
 /** What the test files pass to Anvil; the port is always 0. */
-type AnvilParameters = { binary: string; chainId?: number | undefined };
+type AnvilParameters = {
+  binary: string;
+  chainId?: number | undefined;
+  /** A network family Anvil emulates (`--network`), such as Tempo, whose receipts name a fee token (#429). */
+  network?: 'tempo' | undefined;
+};
 
 export type StartedAnvil = {
   instance: ReturnType<typeof Instance.anvil>;

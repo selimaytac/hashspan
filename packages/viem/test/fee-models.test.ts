@@ -41,7 +41,7 @@ async function confirmOn(chain: Chain, receipt: Record<string, unknown> = {}) {
 const FEE_TOKEN = '0x20C0000000000000000000000000000000000001';
 /** Tempo's transaction type: viem's receipt formatter keeps it as the raw `0x76`. */
 const TEMPO_RECEIPT = { type: '0x76', feeToken: FEE_TOKEN, feePayer: `0x${'44'.repeat(20)}` };
-/** A chain with Tempo's localnet id, which is no Tempo-only id: the filter is on the receipt type. */
+/** A chain with Tempo's localnet id, which is no Tempo-only id: the filter is on the receipt, never the chain id. */
 const tempoLocal = defineChain({
   id: 1337,
   name: 'Tempo localnet',
@@ -139,11 +139,38 @@ describe('fee attributes per chain family', () => {
     },
   );
 
+  // On Tempo every transaction pays its fee in a token (#429): a receipt of another type that names both a fee token
+  // and a fee payer, as a Tempo node's receipts all do, records its fee token too.
   it.each([
-    ['of another type', { ...TEMPO_RECEIPT, type: '0x2' }],
-    ['without a type', { ...TEMPO_RECEIPT, type: undefined }],
+    ['an EIP-1559 (0x2)', { ...TEMPO_RECEIPT, type: '0x2' }],
+    ['a legacy (0x0)', { ...TEMPO_RECEIPT, type: '0x0' }],
+    ['no', { ...TEMPO_RECEIPT, type: undefined }],
+  ])(
+    'Tempo: the fee token of a receipt of %s type that names a fee payer',
+    async (_name, receipt) => {
+      expect(await confirmOn(tempoLocal, receipt)).toEqual({
+        fee: EXECUTION_FEE,
+        l1Fee: undefined,
+        status: 'success',
+        feeAsset: FEE_TOKEN.toLowerCase(),
+      });
+    },
+  );
+
+  it.each([
     ['with a malformed fee token', { ...TEMPO_RECEIPT, feeToken: `${FEE_TOKEN}00` }],
     ['with a fee token that is no string', { ...TEMPO_RECEIPT, feeToken: 42 }],
+    ['of type 0x2 without a fee payer', { type: '0x2', feeToken: FEE_TOKEN }],
+    ['of type 0x2 with a malformed fee payer', { ...TEMPO_RECEIPT, type: '0x2', feePayer: '0x44' }],
+    [
+      'of type 0x2 with a fee payer that is no string',
+      { ...TEMPO_RECEIPT, type: '0x2', feePayer: 1 },
+    ],
+    [
+      'of type 0x2 with a malformed fee token',
+      { ...TEMPO_RECEIPT, type: '0x2', feeToken: '0x20c0' },
+    ],
+    ['without a type or fee payer', { feeToken: FEE_TOKEN }],
   ])('Tempo: no fee asset from a receipt %s (fails closed)', async (_name, receipt) => {
     expect(await confirmOn(tempoLocal, receipt)).toEqual({
       fee: EXECUTION_FEE,

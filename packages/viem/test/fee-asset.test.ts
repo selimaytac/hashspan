@@ -1,5 +1,5 @@
 // The token a fee was paid in (ADR 0028): Celo's `feeCurrency` from the sending call, Tempo's `feeToken` from a
-// receipt of type 0x76, recorded as `blockchain.tx.fee_asset` and marked on the fee sample, with no extra request.
+// receipt of type 0x76 or of another type that names a fee payer (#429), recorded as `blockchain.tx.fee_asset` and marked on the fee sample, with no extra request.
 import { createTxTracker } from '@hashspan/core';
 import { createPublicClient, createWalletClient, parseAbi, serializeTransaction } from 'viem';
 import { celo } from 'viem/chains';
@@ -362,6 +362,39 @@ describe('Tempo: the fee token of a 0x76 receipt', () => {
     });
     await hashspan.flush();
     expect(confirmOf()?.attributes['blockchain.tx.fee_asset']).toBe(FEE_TOKEN.toLowerCase());
+  });
+});
+
+describe('Tempo: the fee token of a receipt of another type that names a fee payer (#429)', () => {
+  const FEE_TOKEN = '0x20C0000000000000000000000000000000000001';
+
+  // As Anvil in Tempo mode and Tempo mainnet answer for a plain transaction: the fee payer is the sender.
+  it.each(['0x2', '0x0'])(
+    'records it from a receipt of type %s with no request more, and marks the fee sample',
+    async (type) => {
+      const node = { receipt: { type, feeToken: FEE_TOKEN, feePayer: FROM } };
+      const { hashspan, reader, mock, denominations } = clients(node);
+      await reader.waitForTransactionReceipt({ hash: HASH });
+      await hashspan.flush();
+      expect(confirmOf()?.attributes['blockchain.tx.fee_asset']).toBe(FEE_TOKEN.toLowerCase());
+      expect(denominations()).toEqual(['token']);
+      const plain = mockTransport({ chainIdHex: CHAIN_ID_HEX, retryCount: 0, ...node });
+      await createPublicClient({
+        chain: celo,
+        transport: plain.transport,
+      }).waitForTransactionReceipt({ hash: HASH });
+      expect(mock.calls).toEqual(plain.calls);
+    },
+  );
+
+  it('records neither the asset nor the marker from a receipt with a fee token but no fee payer', async () => {
+    const { hashspan, reader, denominations } = clients({
+      receipt: { type: '0x2', feeToken: FEE_TOKEN },
+    });
+    await reader.waitForTransactionReceipt({ hash: HASH });
+    await hashspan.flush();
+    expect(confirmOf()?.attributes).not.toHaveProperty('blockchain.tx.fee_asset');
+    expect(denominations()).toEqual([undefined]);
   });
 });
 

@@ -70,3 +70,23 @@ so this describes the existing meaning rather than changing it in place (ADR 002
 - Tempo's sponsored fees, pending receipts and `calls` lists are #402.
 - `@hashspan/cdp` and `@hashspan/x402` are unchanged; they can pass the same core fields when a network they support
   charges fees in a token.
+
+## Amendment (2026-10-18, proposed): Tempo receipts of any type
+
+On Tempo every transaction pays its fee in a token, not only type `0x76` (#429). A plain EIP-1559 (`0x2`) or legacy
+(`0x0`) transaction's receipt names `feeToken` and `feePayer` too, and its `effectiveGasPrice` is in attodollars as
+well; viem sends `0x2` on its Tempo chains unless the call or the chain names a fee token. Read only from `0x76`
+receipts, such a fee was recorded with no asset and its sample counted as native.
+
+- The viem adapter reads the `feeToken` of a receipt whose type is `0x76`, as before, or of a receipt of any other
+  type whose own data properties also include a `feePayer` that is a 20-byte hex address. Tempo's RPC receipt carries
+  both fields on every receipt; no other chain the adapter knows of names either. The rule still takes no chain id
+  and no chain module, and `feeToken` is validated as before (ADR 0025). A receipt with a `feeToken` but no valid
+  `feePayer` records no asset and no marker (fails closed).
+- `blockchain.tx.fee_asset` and `blockchain.fee.denomination` keep their meaning: the token the fee was paid in, and
+  the marker of a fee whose asset is known. They are now recorded for more Tempo fees, which were recorded as paid in
+  the native currency before.
+- The sponsored fee of ADR 0020 and pending receipts (#402) stay on type `0x76`: only that type can have a fee payer
+  other than the sender or a multisig operation, so reading `feePayer` from other types would add no value.
+- A node that names both fields on a receipt whose fee was native would have it marked `token`. The marker is a
+  constant and the address passes the same validation and address mode, so no unbounded value reaches telemetry.
