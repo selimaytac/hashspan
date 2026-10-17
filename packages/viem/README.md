@@ -197,12 +197,12 @@ is recorded without it. The span keeps the time the receipt arrived as its end t
 
 ## Fees paid in a token
 
-On Celo, a transaction with a `feeCurrency` pays gas in that token, and on Tempo every transaction (type `0x76`) pays
-in a fee token. The fee attributes are recorded as the receipt gives them, never converted, and the confirm span names
+On Celo, a transaction with a `feeCurrency` pays gas in that token, and on Tempo every transaction pays in a fee
+token, a plain EIP-1559 one as well as one of Tempo's type `0x76`. The fee attributes are recorded as the receipt gives them, never converted, and the confirm span names
 the token in `blockchain.tx.fee_asset` (under the address mode), while the fee sample carries
 `blockchain.fee.denomination` `token`. The adapter reads Celo's `feeCurrency` from the arguments of `sendTransaction`,
-`writeContract` and their sync forms, and Tempo's `feeToken` only from a receipt whose type is `0x76`; it imports no
-chain module and makes no request for either. A transaction sent with `sendRawTransaction`, or sent elsewhere and
+`writeContract` and their sync forms, and Tempo's `feeToken` from a receipt whose type is `0x76`, or of another type
+that also names a `feePayer`, as Tempo's receipts all do; it imports no chain module and makes no request for either. A transaction sent with `sendRawTransaction`, or sent elsewhere and
 confirmed with `watch()`, records no Celo fee currency, since only the transaction names it
 ([ADR 0028](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0028-fee-asset.md)).
 

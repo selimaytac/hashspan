@@ -21,12 +21,18 @@ export function feeCurrencyOf(transaction: unknown): string | undefined {
 }
 
 /**
- * The `feeToken` of a Tempo receipt, read from an own data property and only from a receipt whose raw type is
- * `0x76`, never by chain id: any other receipt gets none (fails closed).
+ * The `feeToken` of a Tempo receipt, read from an own data property, never by chain id: from a receipt whose raw type
+ * is `0x76`, or of any other type, as Tempo gives every transaction (#429), when it also names a `feePayer` that is a
+ * 20-byte hex address. Any other receipt gets none (fails closed).
  */
 export function feeTokenOf(receipt: unknown): string | undefined {
   if (receipt === null || typeof receipt !== 'object') return undefined;
-  if (ownField(receipt, 'type') !== TEMPO_TRANSACTION_TYPE) return undefined;
+  if (
+    ownField(receipt, 'type') !== TEMPO_TRANSACTION_TYPE &&
+    feeAssetOf(ownField(receipt, 'feePayer')) === undefined
+  ) {
+    return undefined;
+  }
   return feeAssetOf(ownField(receipt, 'feeToken'));
 }
 
