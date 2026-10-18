@@ -9,7 +9,13 @@ import {
   SpanStatusCode,
   trace,
 } from '@opentelemetry/api';
-import { createPublicClient, encodeAbiParameters, encodeEventTopics, type Hex } from 'viem';
+import {
+  createPublicClient,
+  encodeAbiParameters,
+  encodeEventTopics,
+  getAddress,
+  type Hex,
+} from 'viem';
 import { base } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockTransport } from '../../viem/test/mock-transport.js';
@@ -27,6 +33,15 @@ const TO = '0x2222222222222222222222222222222222222222';
 const PAYMASTER = '0x7777777777777777777777777777777777777777';
 const ENTRY_POINT = '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
 const ZERO = '0x0000000000000000000000000000000000000000';
+/** A contract that is neither an EntryPoint nor the one the bundle transaction called. */
+const UNKNOWN_EMITTER = '0x9999999999999999999999999999999999999999';
+/** The canonical EntryPoint deployments, 0.6 to 0.9. */
+const CANONICAL_ENTRY_POINTS = [
+  '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
+  '0x0000000071727De22E5E9d8BAf0edAc6f37da032',
+  '0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108',
+  '0x433709009B8330FDa32311DF1C2AFA402eD8D009',
+];
 
 let tracing: TestTracing;
 beforeEach(() => {
@@ -718,6 +733,22 @@ describe('waitForUserOperation with a reader', () => {
     );
   });
 
+  it('reads the operation event from the EntryPoint only, also when a later log has the same topics', async () => {
+    const span = await (
+      await run([
+        userOperationLog({ success: false, paymaster: ZERO }),
+        userOperationLog({ success: true, address: UNKNOWN_EMITTER }),
+      ])
+    ).confirm();
+    expect(span.status.code).toBe(SpanStatusCode.ERROR);
+    expect(span.attributes).toMatchObject({
+      'error.type': 'reverted',
+      'blockchain.user_operation.success': false,
+      'blockchain.user_operation.entry_point': ENTRY_POINT.toLowerCase(),
+    });
+    expect(span.attributes['blockchain.user_operation.paymaster']).toBeUndefined();
+  });
+
   it('records only the bundle hash and block without a matching event', async () => {
     const span = await (
       await run([
@@ -1094,16 +1125,62 @@ describe('userOperationReceiptFromBundle', () => {
     });
   });
 
-  it('checksums the EntryPoint address, and leaves out one that is not an address', () => {
+  it('checksums the EntryPoint address, and ignores a log whose address is not one', () => {
     const lower = userOperationLog({ address: ENTRY_POINT.toLowerCase() });
     expect(userOperationReceiptFromBundle({ logs: [lower] }, OP_HASH, SMART).entryPoint).toBe(
       ENTRY_POINT,
     );
-    const odd = userOperationLog({ address: 'nowhere' });
-    expect(userOperationReceiptFromBundle({ logs: [odd] }, OP_HASH, SMART)).toMatchObject({
-      entryPoint: undefined,
-      success: true,
-    });
+    for (const address of ['nowhere', undefined, null, 42, `0x${'00'.repeat(19)}`]) {
+      const odd = { ...userOperationLog({}), address };
+      expect(
+        userOperationReceiptFromBundle(
+          { transactionHash: BUNDLE, to: address, logs: [odd] },
+          OP_HASH,
+          SMART,
+        ),
+      ).toEqual({ transactionHash: BUNDLE, blockNumber: undefined });
+    }
+  });
+
+  it('accepts the event of each canonical EntryPoint version', () => {
+    for (const address of CANONICAL_ENTRY_POINTS) {
+      const receipt = userOperationReceiptFromBundle(
+        { logs: [userOperationLog({ address: address.toLowerCase() })] },
+        OP_HASH,
+        SMART,
+      );
+      expect(receipt).toMatchObject({ success: true, entryPoint: address });
+    }
+  });
+
+  it('accepts the event of the contract the bundle transaction called', () => {
+    const log = userOperationLog({ success: false, address: UNKNOWN_EMITTER });
+    expect(
+      userOperationReceiptFromBundle({ to: UNKNOWN_EMITTER, logs: [log] }, OP_HASH, SMART),
+    ).toMatchObject({ success: false, entryPoint: getAddress(UNKNOWN_EMITTER) });
+  });
+
+  it('reads the event from the EntryPoint only, whatever the other logs say', () => {
+    const fromEntryPoint = userOperationLog({ success: false, paymaster: ZERO });
+    const other = userOperationLog({ success: true, address: UNKNOWN_EMITTER });
+    // A later log with the same topics from another contract does not count.
+    expect(
+      userOperationReceiptFromBundle(
+        { to: ENTRY_POINT, logs: [fromEntryPoint, other] },
+        OP_HASH,
+        SMART,
+      ),
+    ).toMatchObject({ success: false, paymaster: ZERO, entryPoint: ENTRY_POINT });
+    // Without an EntryPoint log, the receipt is the bundle's only; a missing or malformed `to` adds no address.
+    for (const to of [undefined, null, 'nowhere', ENTRY_POINT, `0x${'99'.repeat(21)}`]) {
+      expect(
+        userOperationReceiptFromBundle(
+          { transactionHash: BUNDLE, blockNumber: '0x10', to, logs: [other, other] },
+          OP_HASH,
+          SMART,
+        ),
+      ).toEqual({ transactionHash: BUNDLE, blockNumber: 16n });
+    }
   });
 
   it('matches any sender when the sender is unknown, and the hash in any case', () => {

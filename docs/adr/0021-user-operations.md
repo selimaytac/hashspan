@@ -91,7 +91,8 @@ What the SDKs give (viem 2.57, `@coinbase/cdp-sdk` 1.57):
   bundle does not tell whether the operation reverted; with a reader, the adapter polls `eth_getTransactionReceipt`
   of the bundle through the reader's `request` (not a wrapped action, so a reader extended by `@hashspan/viem`
   records no transaction confirm span for the bundle) and takes the last `UserOperationEvent` whose `userOpHash`
-  and `sender` topics match; the span ends when the wait did. `failed` ends with `error.type` `failed`, the SDK's
+  and `sender` topics match, among the logs of the contract the bundle transaction called and of the canonical
+  EntryPoints 0.6 to 0.9; the span ends when the wait did. `failed` ends with `error.type` `failed`, the SDK's
   `TimeoutError` as `timeout`. Without a wait, only the send span is recorded. Revert reasons
   (`UserOperationRevertReason`) are not decoded yet.
 - **Tests.** The first Anvil test does not use the canonical EntryPoint or an external bundler: the common bundlers (Alto

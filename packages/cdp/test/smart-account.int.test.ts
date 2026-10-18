@@ -4,13 +4,27 @@
 // transactions and their `UserOperationEvent` logs, which the reader reads. What is not: CDP's bundler and
 // paymaster, signature validation and gas accounting (docs/adr/0021, Implementation notes).
 import { SpanStatusCode } from '@opentelemetry/api';
-import { type Address, createPublicClient, createWalletClient, type Hex, http } from 'viem';
+import {
+  type Address,
+  concat,
+  createPublicClient,
+  createWalletClient,
+  encodeAbiParameters,
+  encodeEventTopics,
+  encodeFunctionData,
+  type Hex,
+  http,
+  pad,
+  zeroAddress,
+} from 'viem';
 import { entryPoint07Address } from 'viem/account-abstraction';
 import { baseSepolia } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   reverterCode,
+  testAccountAbi,
   testAccountCode,
+  testEntryPointAbi,
   testEntryPointCode,
 } from '../../viem/test/entry-point/test-entry-point.js';
 import { collectingRejections, type Faults, faultsOn } from '../../viem/test/fault-checks.js';
@@ -23,6 +37,14 @@ import { setupTracing, type TestTracing } from './tracing.js';
 const SMART_ACCOUNT = '0x00000000000000000000000000000000000A11cE' as const;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
 const REVERTER = '0x00000000000000000000000000000000000000a1' as const;
+const OTHER_ACCOUNT = '0x0000000000000000000000000000000000000b0b' as const;
+const EMITTER = '0x00000000000000000000000000000000000000e1' as const;
+/**
+ * Runtime code that logs its call data as one event: four topics (the first 128 bytes), then the data. Hand-assembled:
+ * CALLDATASIZE PUSH1 0x80 SWAP1 SUB DUP1 PUSH1 0x80 PUSH1 0 CALLDATACOPY, CALLDATALOAD at 0x60, 0x40, 0x20 and 0,
+ * DUP5 PUSH1 0 LOG4 STOP.
+ */
+const EMITTER_CODE = '0x3660809003806080600037606035604035602035600035846000a400' as const;
 
 // Keep the SDK's own usage tracking and error reporting off: tests make no request outside localhost.
 process.env.DISABLE_CDP_USAGE_TRACKING = 'true';
@@ -57,7 +79,9 @@ beforeAll(async () => {
     reader.request({ method: 'anvil_setCode' as never, params: [address, code] as never });
   await setCode(entryPoint07Address, testEntryPointCode);
   await setCode(SMART_ACCOUNT, testAccountCode);
+  await setCode(OTHER_ACCOUNT, testAccountCode);
   await setCode(REVERTER, reverterCode);
+  await setCode(EMITTER, EMITTER_CODE);
   await reader.request({
     method: 'anvil_setBalance' as never,
     params: [SMART_ACCOUNT, '0xde0b6b3a7640000'] as never,
@@ -146,6 +170,75 @@ describe('CDP smart accounts against a local CDP API and Anvil', () => {
     expect(confirm.status.code).toBe(SpanStatusCode.ERROR);
     expect(confirm.attributes['error.type']).toBe('reverted');
     expect(confirm.attributes['blockchain.user_operation.success']).toBe(false);
+  });
+
+  it("reads the operation's outcome from the EntryPoint in a bundle it shares with a later operation", async () => {
+    const { hashspan, account } = await smartAccount();
+    // The later operation, of another sender, calls a contract that logs an event with the same topics.
+    api.shareNextBundle(async (userOpHash) => [
+      {
+        sender: OTHER_ACCOUNT,
+        nonce: 0n,
+        initCode: '0x',
+        callData: encodeFunctionData({
+          abi: testAccountAbi,
+          functionName: 'executeBatch',
+          args: [
+            [
+              {
+                target: EMITTER,
+                value: 0n,
+                data: concat([
+                  ...encodeEventTopics({
+                    abi: testEntryPointAbi,
+                    eventName: 'UserOperationEvent',
+                    args: { userOpHash, sender: SMART_ACCOUNT, paymaster: zeroAddress },
+                  }),
+                  encodeAbiParameters(
+                    [
+                      { type: 'uint256' },
+                      { type: 'bool' },
+                      { type: 'uint256' },
+                      { type: 'uint256' },
+                    ],
+                    [0n, true, 1n, 1n],
+                  ),
+                ]),
+              },
+            ],
+          ],
+        }),
+        accountGasLimits: pad('0x', { size: 32 }),
+        preVerificationGas: 50_000n,
+        gasFees: pad('0x', { size: 32 }),
+        paymasterAndData: '0x',
+        signature: '0x',
+      },
+    ]);
+    const { userOpHash } = await account.sendUserOperation({
+      network: 'base-sepolia',
+      calls: [{ to: REVERTER, value: 0n, data: '0x' }],
+    });
+    const result = await account.waitForUserOperation({ userOpHash });
+    expect(result.status).toBe('complete');
+    await hashspan.flush();
+
+    // The bundle carries both logs, the later one from the other contract.
+    const bundle = await reader.getTransactionReceipt({
+      hash: (result as { transactionHash: Hex }).transactionHash,
+    });
+    const emitters = bundle.logs
+      .filter((log) => log.topics[1] === userOpHash && log.topics.length === 4)
+      .map((log) => log.address);
+    expect(emitters).toEqual([entryPoint07Address.toLowerCase(), EMITTER.toLowerCase()]);
+    const confirm = tracing.spanNamed('confirm 84532');
+    expect(confirm.status.code).toBe(SpanStatusCode.ERROR);
+    expect(confirm.attributes).toMatchObject({
+      'error.type': 'reverted',
+      'blockchain.user_operation.success': false,
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
+    });
+    expect(confirm.attributes['blockchain.user_operation.gas.cost']).not.toBe('1');
   });
 
   it('records the bundle hash without a reader, and a failed operation as failed', async () => {

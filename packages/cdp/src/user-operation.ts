@@ -29,11 +29,29 @@ function sameHex(a: unknown, b: string): boolean {
 }
 
 /**
+ * The canonical EntryPoint deployments, 0.6 to 0.9, in lower case. `test/sdk-drift.test.ts` checks that viem lists
+ * no other.
+ */
+export const CANONICAL_ENTRY_POINTS: ReadonlySet<string> = new Set([
+  '0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789',
+  '0x0000000071727de22e5e9d8baf0edac6f37da032',
+  '0x4337084d9e255ff0702461cf8895ce9e3b5ff108',
+  '0x433709009b8330fda32311df1c2afa402ed8d009',
+]);
+
+/** `value` in lower case when it is an address; otherwise undefined. */
+function lowerAddress(value: unknown): string | undefined {
+  return typeof value === 'string' && isAddress(value, { strict: false })
+    ? value.toLowerCase()
+    : undefined;
+}
+
+/**
  * The user operation receipt for `userOpHash` in a node's raw receipt of its bundle transaction (`eth_getTransactionReceipt`):
  * the bundle's hash and block, and, when the bundle carries the operation's `UserOperationEvent`, its outcome and cost.
- * Only events whose `userOpHash` topic matches count, and whose `sender` topic matches `sender` when it is known. The
- * last matching log is used: the EntryPoint emits the event after the operation's calls ran, so a log the calls
- * emitted cannot come after it.
+ * Only an EntryPoint's events count: logs of the contract the bundle transaction called (its `to`), or of a canonical
+ * EntryPoint ({@link CANONICAL_ENTRY_POINTS}). Of those, only events whose `userOpHash` topic matches count, and whose
+ * `sender` topic matches `sender` when it is known; the last one is used.
  */
 export function userOperationReceiptFromBundle(
   raw: unknown,
@@ -48,8 +66,12 @@ export function userOperationReceiptFromBundle(
   };
   const logs = own(raw, 'logs');
   if (!Array.isArray(logs)) return bundle;
+  const called = lowerAddress(own(raw, 'to'));
   for (let i = logs.length - 1; i >= 0; i--) {
     const log: unknown = logs[i];
+    const address = lowerAddress(own(log, 'address'));
+    if (address === undefined || (address !== called && !CANONICAL_ENTRY_POINTS.has(address)))
+      continue;
     const topics = own(log, 'topics');
     if (!Array.isArray(topics) || !sameHex(topics[1], userOpHash)) continue;
     let event: ReturnType<typeof decodeEventLog<typeof USER_OPERATION_EVENT_ABI>>;
@@ -65,12 +87,6 @@ export function userOperationReceiptFromBundle(
     }
     const { args } = event;
     if (sender !== undefined && !sameHex(args.sender, sender)) continue;
-    // Checksummed like the decoded sender and paymaster; nodes return log addresses in lower case.
-    const address = own(log, 'address');
-    const entryPoint =
-      typeof address === 'string' && isAddress(address, { strict: false })
-        ? getAddress(address)
-        : undefined;
     return {
       ...bundle,
       success: args.success,
@@ -79,7 +95,8 @@ export function userOperationReceiptFromBundle(
       sender: args.sender,
       nonce: args.nonce,
       paymaster: args.paymaster,
-      entryPoint,
+      // Checksummed like the decoded sender and paymaster; nodes return log addresses in lower case.
+      entryPoint: getAddress(address),
     };
   }
   return bundle;

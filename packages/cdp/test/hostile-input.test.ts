@@ -3,6 +3,7 @@
 // value runs untraced and traced on a fake SDK client: the traced call must have the same outcome and run no more
 // getters of the caller's; what it records must keep the rules. A rule that does not hold yet is marked `it.fails`
 // with `// finding: <tag>`.
+import { encodeAbiParameters, encodeEventTopics, parseAbi } from 'viem';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   type AdapterRow,
@@ -94,6 +95,32 @@ function fakeCdp(answers: Answers = {}) {
   }
   return { evm: new EvmClient() };
 }
+
+const ENTRY_POINT = '0x0000000071727de22e5e9d8baf0edac6f37da032';
+
+/** A `UserOperationEvent` log of the operation, with `address` as the emitting contract. */
+function operationLog(address: unknown) {
+  return {
+    address,
+    topics: encodeEventTopics({
+      abi: parseAbi([
+        'event UserOperationEvent(bytes32 indexed userOpHash, address indexed sender, address indexed paymaster, uint256 nonce, bool success, uint256 actualGasCost, uint256 actualGasUsed)',
+      ]),
+      eventName: 'UserOperationEvent',
+      args: { userOpHash: OP_HASH as `0x${string}`, sender: SMART, paymaster: TO },
+    }),
+    data: encodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'bool' }, { type: 'uint256' }, { type: 'uint256' }],
+      [1n, true, 1_000n, 900n],
+    ),
+  };
+}
+
+/** A reader whose node answers every receipt request with `receipt`. */
+const bundleReader = (receipt: unknown) => ({
+  request: async ({ method }: { method: string }) =>
+    method === 'eth_getTransactionReceipt' ? receipt : null,
+});
 
 // biome-ignore lint/suspicious/noExplicitAny: SDK methods are called with hostile arguments on purpose.
 type Any = any;
@@ -271,6 +298,28 @@ const ROWS: Row[] = [
     }),
     (evm) =>
       evm.sendUserOperation({ smartAccount: { address: SMART }, network: 'base', calls: [] }),
+  ),
+
+  // What the node behind the reader answers for the bundle transaction of a user operation.
+  ...(
+    [
+      ['to', (value: unknown) => ({ to: value, logs: [operationLog(ENTRY_POINT)] })],
+      ['logs', (value: unknown) => ({ to: ENTRY_POINT, logs: value })],
+      ['log address', (value: unknown) => ({ to: value, logs: [operationLog(value)] })],
+    ] as const
+  ).map(
+    ([field, receipt]): Row => ({
+      name: `reader answer to the bundle receipt ${field}`,
+      options: (value) => ({ reader: bundleReader({ transactionHash: HASH, ...receipt(value) }) }),
+      scenario: on(async (evm) => {
+        await evm.sendUserOperation({
+          smartAccount: { address: SMART },
+          network: 'base',
+          calls: [],
+        });
+        return evm.waitForUserOperation({ userOpHash: OP_HASH });
+      }),
+    }),
   ),
 
   // A reader and a tracker passed in: the user's, so only rule 1 applies.

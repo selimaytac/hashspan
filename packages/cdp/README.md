@@ -103,9 +103,9 @@ The spans carry `blockchain.user_operation.*` attributes instead of a transactio
   span as an error with `error.type` `failed`. A wait that gives up (the SDK's `TimeoutError`) ends it as `timeout`.
 - `complete` does not say whether the operation's calls succeeded: a bundle can be mined while an operation in it
   reverts. With a `reader` for the chain, the adapter reads the bundle's receipt and records the operation's
-  `UserOperationEvent`: success (a reverted operation ends with `error.type` `reverted`), gas used, cost, nonce,
-  paymaster and EntryPoint. Without one, or if the bundle receipt is not found within `confirmTimeoutMs`, the confirm
-  span records the bundle transaction's hash only.
+  `UserOperationEvent`, as its EntryPoint emitted it: success (a reverted operation ends with `error.type`
+  `reverted`), gas used, cost, nonce, paymaster and EntryPoint. Without one, or if the bundle receipt is not found
+  within `confirmTimeoutMs`, the confirm span records the bundle transaction's hash only.
 - The bundle transaction's status and fee are not recorded: they cover every operation in the bundle.
 - Without a wait, only the send span is recorded, with or without a reader. A wait names no network: it is traced
   when the operation was sent through the same client, or on a network-scoped smart account.
