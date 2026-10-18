@@ -112,9 +112,10 @@ publishing, and set the environment to `npm`: npm then rejects publishes from an
 **4. Lock down tokens.** On npmjs.com, set each package's publishing access to require two-factor authentication and
 disallow tokens, so the trusted publisher is the only way to publish.
 
-**5. Let the workflow open the version pull request, and watch dependencies.** In the repository settings (Actions, General, Workflow
-permissions), enable "Allow GitHub Actions to create and approve pull requests". Under Code security, enable
-Dependabot alerts and security updates.
+**5. Keep pull requests to maintainers, and watch dependencies.** In the repository settings (Actions, General,
+Workflow permissions), leave "Allow GitHub Actions to create and approve pull requests" off: a maintainer opens the
+Version Packages pull request from the branch the workflow pushes (step 2 of [Every release](#every-release)), and no
+workflow can approve a pull request. Under Code security, enable Dependabot alerts and security updates.
 
 After a package's first real release, deprecate its placeholder:
 `npm deprecate @hashspan/<pkg>@0.0.0 "Placeholder; use a later version"`, e.g. for `@hashspan/x402`.

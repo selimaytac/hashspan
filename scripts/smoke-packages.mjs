@@ -197,6 +197,14 @@ ${checkBody}
 `,
 };
 
+/** `minimumReleaseAge` of pnpm-workspace.yaml (in minutes), in milliseconds. */
+function minimumReleaseAgeMs() {
+  const workspace = readFileSync(join(root, 'pnpm-workspace.yaml'), 'utf8');
+  const minutes = Number(workspace.match(/^minimumReleaseAge: (\d+)$/m)?.[1]);
+  if (!(minutes > 0)) throw new Error('pnpm-workspace.yaml sets no minimumReleaseAge');
+  return minutes * 60_000;
+}
+
 function prepare(dir) {
   const tarballs = join(dir, 'tarballs');
   mkdirSync(tarballs, { recursive: true });
@@ -230,6 +238,9 @@ function prepare(dir) {
       '--no-audit',
       '--no-fund',
       '--ignore-scripts',
+      // The newest versions in each range, as a user would get them, but only those published before the minimum
+      // release age of pnpm-workspace.yaml: npm does not read pnpm's setting. The packages come from the tarballs.
+      `--before=${new Date(Date.now() - minimumReleaseAgeMs()).toISOString()}`,
       ...packed,
       ...[...peers].map(([name, range]) => `${name}@${range}`),
     ],

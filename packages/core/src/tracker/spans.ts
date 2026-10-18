@@ -31,7 +31,7 @@ import { toEpochMs } from '../metrics.js';
 import { type AddressFormatter, formatAddressesIn, sanitizeErrorMessage } from '../privacy.js';
 import type { ErrorMessageMode, TxTrackerOptions } from '../types.js';
 import { errorType, safely } from './handles.js';
-import { ADDRESS, identifier, ownValue } from './values.js';
+import { ADDRESS, holdsAddress, identifier, ownValue } from './values.js';
 
 /** OpenTelemetry exception event and attributes. */
 const EXCEPTION_EVENT = 'exception';
@@ -141,6 +141,17 @@ export function createSpanRecording({
    * Error names are free text too: they follow the address mode and pass through the redaction hook.
    * `exceptionName` is the class name for `exception.type` when `errorName` is an adapter's error type.
    */
+  /**
+   * `name` as `error.type` or `exception.type`: a short identifier with addresses per the address mode, else `_OTHER`.
+   * A type can come from a remote party (a facilitator's failure reason, an API's error code), so one that still holds
+   * hex of an address's length after the address mode, such as an address without `0x`, is `_OTHER` where the address
+   * mode hides addresses.
+   */
+  const errorTypeOf = (name: string): string => {
+    const type = formatAddressesIn(identifier(name) ?? ERROR_TYPE_VALUE_OTHER, formatAddress);
+    return holdsAddress(type, formatAddress) ? ERROR_TYPE_VALUE_OTHER : type;
+  };
+
   const markError = (
     span: Span,
     errorName: string,
@@ -148,15 +159,12 @@ export function createSpanRecording({
     exceptionName: string = errorName,
   ): string => {
     // Checked here too, so no caller can record free text as a type (ADR 0025).
-    const type = formatAddressesIn(identifier(errorName) ?? ERROR_TYPE_VALUE_OTHER, formatAddress);
+    const type = errorTypeOf(errorName);
     // The failure is recorded first, so an exception event that cannot be built never hides it.
     span.setAttributes(redact({ [ATTR_ERROR_TYPE]: type }));
     span.setStatus({ code: SpanStatusCode.ERROR });
     if (error !== undefined) {
-      const exceptionType = formatAddressesIn(
-        identifier(exceptionName) ?? ERROR_TYPE_VALUE_OTHER,
-        formatAddress,
-      );
+      const exceptionType = errorTypeOf(exceptionName);
       const exception = redact(exceptionAttributes(exceptionType, error));
       span.addEvent(EXCEPTION_EVENT, exception);
       const recorded = exception[ATTR_EXCEPTION_MESSAGE];
@@ -199,7 +207,12 @@ export function createSpanRecording({
     ...SYSTEM,
     [ATTR_BLOCKCHAIN_CHAIN_ID]: chainId,
     [ATTR_BLOCKCHAIN_OPERATION_NAME]: operation,
-    ...agentAttributes(ctx, options.agent, options.agentFromBaggage !== false),
+    ...agentAttributes(
+      ctx,
+      options.agent,
+      options.agentFromBaggage !== false,
+      formatAddress.protectsAddresses,
+    ),
   });
 
   return { redact, markError, finisher, setAddress, setRemoteAddress, baseAttributes };

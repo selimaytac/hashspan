@@ -115,3 +115,29 @@ const IDENTIFIER = /^[A-Za-z0-9_.-]{1,64}$/;
 export function identifier(value: unknown): string | undefined {
   return typeof value === 'string' && IDENTIFIER.test(value) ? value : undefined;
 }
+
+/** 40 hex characters in a row: an address, with or without its `0x`, alone or inside other text. */
+const ADDRESS_LIKE = /[0-9a-fA-F]{40}/;
+
+/** What {@link holdsAddress} needs of the address mode. */
+interface AddressProtection {
+  readonly protectsAddresses: boolean;
+}
+
+/**
+ * True when `text`, chosen by a remote party, must not be recorded because the address mode hides addresses
+ * (`hashed`, `off`) and it holds 40 hex characters in a row: a server, a wallet or an upstream caller could put an
+ * address, such as the payer's, into an identifier. Always false in `raw` mode.
+ */
+export function holdsAddress(text: string, mode: AddressProtection): boolean {
+  return mode.protectsAddresses && ADDRESS_LIKE.test(text);
+}
+
+/**
+ * {@link identifier} for a value a remote party chooses: undefined also when it {@link holdsAddress} under the
+ * address mode.
+ */
+export function remoteIdentifier(value: unknown, mode: AddressProtection): string | undefined {
+  const kept = identifier(value);
+  return kept !== undefined && !holdsAddress(kept, mode) ? kept : undefined;
+}

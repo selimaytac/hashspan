@@ -183,6 +183,7 @@ export function createTxTracker(given: TxTrackerOptions = {}): TxTracker {
     callBatchLinks,
     callBatchConfirmations,
     txMetrics,
+    formatAddress,
     getTracer,
     recording,
   });

@@ -1,7 +1,7 @@
 // Installs the versions a release just published from the registry into an empty project and imports each, as a user
 // would, so a release that cannot be installed fails the workflow. Runs in the Release workflow's `check` job, after
-// `publish`, with read-only permissions: installing and importing runs the code of every dependency, which must not
-// happen in the job that can publish.
+// `publish`, with read-only permissions: importing runs the code of every dependency, resolved fresh from the
+// registry, which must not happen in the job that can publish. The install runs no lifecycle scripts.
 //
 // PUBLISHED_PACKAGES is the `published-packages` output of changesets/action: [{"name": "@hashspan/core", ...}].
 import { execFileSync } from 'node:child_process';
@@ -30,7 +30,13 @@ try {
   writeFileSync(join(project, 'package.json'), '{"private":true,"type":"module"}\n');
   run(
     'npm',
-    ['install', '--no-audit', '--no-fund', ...releases.map((r) => `${r.name}@${r.version}`)],
+    [
+      'install',
+      '--no-audit',
+      '--no-fund',
+      '--ignore-scripts',
+      ...releases.map((r) => `${r.name}@${r.version}`),
+    ],
     {
       cwd: project,
     },

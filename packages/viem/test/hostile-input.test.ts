@@ -914,6 +914,99 @@ describe('bounds', () => {
   });
 });
 
+// The call batch bounds of docs/semconv.md: what the adapter reads from a wallet's call batch results.
+describe.skipIf(!viemHasAction('waitForCallsStatus'))('call batch bounds', () => {
+  /** Longest call batch id parsed for viem's fallback transactions: `0x` and 128 words. */
+  const MAX_ID_LENGTH = 8194;
+  /** Most fallback transactions confirmed, and most receipts read from a status, per call batch. */
+  const MAX_ITEMS = 64;
+  const word = (n: number) => n.toString(16).padStart(64, '0');
+  /** An id shaped like the one viem's fallback returns, with `count` distinct non-zero transaction hashes. */
+  const fallbackId = (count: number) =>
+    `0x${Array.from({ length: count }, (_, i) => word(i + 1)).join('')}${word(base.id)}${'5792'.repeat(16)}`;
+
+  /** The distinct hashes whose receipts the adapter asked for after a wallet returned `id`, and the call's result. */
+  const confirmedFor = async (id: string) => {
+    tracing.reset();
+    const hashspan = withHashspan();
+    const { client, mock } = wallet(hashspan, { sendCalls: { id } });
+    const result = await client.sendCalls(CALLS as never);
+    await hashspan.flush({ timeoutMs: 3_000 });
+    const hashes = new Set(
+      mock.requests
+        .filter((r) => r.method === 'eth_getTransactionReceipt')
+        .map((r) => String((r.params as unknown[])[0])),
+    );
+    return { result, hashes };
+  };
+
+  it('confirms at most 64 transactions of a fallback id', async () => {
+    for (const count of [MAX_ITEMS - 1, MAX_ITEMS, MAX_ITEMS + 1, 126]) {
+      const id = fallbackId(count);
+      const { result, hashes } = await confirmedFor(id);
+      expect(result).toEqual({ id });
+      expect(hashes.size).toBe(Math.min(count, MAX_ITEMS));
+      // The first hashes of the id, in order.
+      expect([...hashes].sort()).toEqual(
+        Array.from({ length: Math.min(count, MAX_ITEMS) }, (_, i) => `0x${word(i + 1)}`).sort(),
+      );
+    }
+  });
+
+  it('parses a fallback id of at most 8194 characters', async () => {
+    expect(fallbackId(126)).toHaveLength(MAX_ID_LENGTH);
+    expect((await confirmedFor(fallbackId(126))).hashes.size).toBe(MAX_ITEMS);
+    for (const id of [fallbackId(127), fallbackId(10_000)]) {
+      expect(id.length).toBeGreaterThan(MAX_ID_LENGTH);
+      const { result, hashes } = await confirmedFor(id);
+      expect(result).toEqual({ id });
+      expect(hashes.size).toBe(0);
+      // The send span is still recorded, without an id longer than the bound and without links to transactions.
+      const send = tracing.spans().find((s) => s.name === 'send 8453');
+      expect(send).toBeDefined();
+      expect(send?.attributes).not.toHaveProperty('blockchain.call_batch.id');
+    }
+  });
+
+  it('reads at most 64 receipts of a call batch status', async () => {
+    for (const count of [MAX_ITEMS - 1, MAX_ITEMS, MAX_ITEMS + 1, 100_000]) {
+      tracing.reset();
+      const read = new Set<string>();
+      const list = Array.from({ length: count }, (_, i) => ({
+        transactionHash: `0x${word(i + 1)}`,
+        blockNumber: BigInt(i + 1),
+      }));
+      // A status from an extension applied before withHashspan(): its receipts list reaches the adapter as it is.
+      const receipts = new Proxy(list, {
+        getOwnPropertyDescriptor(target, key) {
+          if (typeof key === 'string' && /^\d+$/.test(key)) read.add(key);
+          return Reflect.getOwnPropertyDescriptor(target, key);
+        },
+        get(target, key, receiver) {
+          if (typeof key === 'string' && /^\d+$/.test(key)) read.add(key);
+          return Reflect.get(target, key, receiver);
+        },
+      });
+      const status = { id: BATCH_ID, chainId: base.id, statusCode: 200, atomic: true, receipts };
+      const hashspan = withHashspan();
+      const { client } = wallet(undefined);
+      const extended = client
+        .extend(() => ({ waitForCallsStatus: async () => status }))
+        .extend(hashspan);
+      await expect(extended.waitForCallsStatus({ id: BATCH_ID, timeout: WAIT_MS })).resolves.toBe(
+        status,
+      );
+      await hashspan.flush({ timeoutMs: 3_000 });
+      expect(read.size).toBeLessThanOrEqual(MAX_ITEMS);
+      const confirm = tracing.spans().find((s) => s.name === 'confirm 8453');
+      expect(confirm?.attributes['blockchain.call_batch.transaction_hashes']).toHaveLength(
+        Math.min(count, MAX_ITEMS),
+      );
+      expect(confirm?.attributes['blockchain.block.number']).toBe(Math.min(count, MAX_ITEMS));
+    }
+  });
+});
+
 // --- traceTransport() ---------------------------------------------------------------------------------------------
 
 describe('traceTransport', () => {
