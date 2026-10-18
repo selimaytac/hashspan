@@ -21,8 +21,10 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
   - `src/confirm/` is the confirmation work every EVM path needs (ADR 0001 amendment), and imports nothing from the
     extension: `confirmation.ts` (receipt, sealed receipt, revert reason, background limit), `watch.ts`,
     `pending.ts` (`track()`, `flush()`, ending a handle once), `receipt.ts` (normalising receipts, classifying
-    rejections), `operator-fee.ts` (the OP Stack operator fee of a receipt that charges one), `fee-asset.ts` (the
-    token a fee was paid in: Celo's `feeCurrency`, a Tempo receipt's `feeToken`; a sponsored Tempo fee),
+    rejections), `replacement.ts` (after a wait timed out, a replacement viem did not report, found from the sender
+    and nonce of hashspan's own send; ADR 0008 amendment), `operator-fee.ts` (the OP Stack operator fee of a receipt
+    that charges one), `fee-asset.ts` (the token a fee was paid in: Celo's `feeCurrency`, a Tempo receipt's
+    `feeToken`; a sponsored Tempo fee),
     `multisig.ts` (with `followMultisigOperations`: the receipt a Tempo multisig relay names an operation in),
     `timing.ts`, `recent.ts`.
   - Background confirmation must never delay or fail the user's call, and nothing the telemetry needs is awaited

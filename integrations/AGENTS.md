@@ -17,7 +17,11 @@ Root rules: [AGENTS.md](../AGENTS.md).
   `test/openinference-langchain.int.test.ts` and `test/openinference-openai-agents.int.test.ts` the OpenInference
   setups, with scripted models (shared setup in `test/openinference.ts`); `test/smart-account-sdks.int.test.ts` the
   permissionless.js and ZeroDev smart account clients and the permissionless example of docs/integrations.md, through
-  the in-process bundler of packages/viem with a stand-in account (`test/smart-account-setup.ts`)
+  the in-process bundler of packages/viem with a stand-in account (`test/smart-account-setup.ts`);
+  `test/mcp.int.test.ts` an MCP tool that sends, with the agent and the stdio server as child processes run with
+  tsx's loader (from the main install; it maps `@hashspan/*` to their sources through `tsconfig.json` paths) that
+  export over OTLP to a receiver in the test: the v1 SDK without and with
+  OpenInference's MCP instrumentation (`test/mcp-v1/`), and the v2 example of the docs as written
 - `test/readme/` holds the `#region readme` files of doc examples that need these libraries, as
   `packages/*/test/readme/` does for the others: the typecheck compiles them and `packages/core/test/docs.test.ts`
   matches them with the docs

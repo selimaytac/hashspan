@@ -3,6 +3,7 @@
 - Status: accepted
 - Date: 2026-09-27
 - Amended: 2026-10-05: the viem adapter records a receipt of another hash only as a replacement viem reported.
+- Amended: 2026-10-18 (proposed): after a timeout, the viem adapter finds a replacement viem did not report.
 
 ## Context
 
@@ -105,3 +106,34 @@ that answers a receipt request with another transaction's receipt (a mixed-up re
 to the core only when viem reported it through `onReplaced`, which viem matches on sender and nonce. Any other
 receipt of another hash is not recorded: the confirm span ends with `error.type` `_OTHER`
 ([semantic conventions](../semconv.md)). The caller's result is unchanged.
+
+## Amendment (2026-10-18, proposed): a replacement viem did not report
+
+viem detects a replacement only once its wait has read the awaited transaction, for its sender and nonce. A
+replacement that takes the transaction out of the node's pool before that read, such as a cancel sent right after it,
+is never detected: the wait polls for a transaction the node no longer knows until its timeout, and the confirm span
+ended with `error.type` `timeout`, although the chain holds the outcome.
+
+- **After the wait timed out, the viem adapter looks for the replacement itself**, from what it learned when it sent
+  the awaited transaction through the same `withHashspan()` result: the sender and the nonce the call passed, or,
+  when the call passed no nonce (the node, the wallet or viem fills it in) or no sender is known (a raw send, #33),
+  both read with one `eth_getTransactionByHash` of the returned hash through the sending client, right after the send
+  and off the caller's path. Not through an EIP-1193 provider (viem's `custom` transport), such as a wallet
+  service's: the requests it is sent stay those of the call, as docs/integrations.md promises, and such a send keeps
+  the timeout. Kept per hash for 10 minutes, for at most 10 000 hashes. A failed read is only logged
+  through `diag`. A transaction the node dropped before that read (a replacement that reached it first), and a
+  transaction confirmed with `watch()` that hashspan did not send, keep the timeout.
+- **The same match as viem's: sender and nonce, from chain data.** The awaited hash has no receipt, the sender's
+  nonce on chain is past the awaited one, and the block that took it, found by reading the sender's nonce at block
+  numbers, holds another transaction from that sender with that nonce. Only the last 128 blocks are searched, about
+  the state a full node keeps: at most 13 requests, bounded by 10 s, off the caller's path. Anything else, a failed
+  request, or a nonce taken earlier, keeps the timeout.
+- **Recorded as a replacement viem reported**, through the core path above: the awaited span ends as `replaced` with
+  `blockchain.tx.replacement.hash`, and the mined transaction's receipt goes to its own confirm span. Both end when
+  the wait gave up. `blockchain.tx.replacement.reason` is omitted: no library reported one, and the adapter infers
+  none. A flush that gives up during the search records the timeout.
+- **As viem decides `checkReplacement`.** With `checkReplacement: false`, on the wait or as the chain's
+  `supportsTransactionReplacementDetection`, nothing is looked for, as before.
+- **The caller's result is unchanged**: viem's `WaitForTransactionReceiptTimeoutError`.
+- The amendment of 2026-10-05 still holds for every other receipt of another hash: it is recorded only as a
+  replacement matched on sender and nonce, by viem or, after a timeout, by the adapter.

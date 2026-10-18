@@ -2,7 +2,15 @@
 // hashspan, so that a change that adds requests fails here. Agents often run against rate-limited endpoints; the
 // requests per case are listed in docs/architecture.md. Counts only, no timing.
 import { Instance } from 'prool';
-import { type Address, createPublicClient, createWalletClient, custom, type Hex, http } from 'viem';
+import {
+  type Address,
+  createPublicClient,
+  createWalletClient,
+  custom,
+  type Hex,
+  http,
+  type Transport,
+} from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -79,12 +87,12 @@ type Shape = 'operatorFee' | 'tempo' | 'sponsored' | 'pending' | undefined;
  * quorum (#402). A Celo `feeCurrency` is taken out of a sent transaction, which Anvil does not know.
  */
 function counting(shape: Shape = undefined): {
-  transport: ReturnType<typeof custom>;
+  transport: Transport;
   counts: Counts;
 } {
   const counts: Counts = {};
   const upstream = http(RPC_URL)({ chain: anvil });
-  const transport = custom({
+  const provider = custom({
     async request({ method, params }: { method: string; params?: unknown }) {
       counts[method] = (counts[method] ?? 0) + 1;
       const sent =
@@ -117,6 +125,11 @@ function counting(shape: Shape = undefined): {
       return result;
     },
   });
+  // A transport to a node, as http() is: custom() stands for a wallet's EIP-1193 provider, which hashspan sends no reads.
+  const transport: Transport = (parameters) => {
+    const created = provider(parameters);
+    return { ...created, config: { ...created.config, type: 'node' } };
+  };
   return { transport, counts };
 }
 
@@ -231,22 +244,52 @@ const rawSendAndWait = async (clients: Clients) => {
   return clients.reader.waitForTransactionReceipt({ hash });
 };
 
+/** The read of a transaction sent without a nonce, for its nonce (or a raw send's sender): one per send. */
+const NONCE_READ = { eth_getTransactionByHash: 1 };
+
 describe('JSON-RPC requests the viem adapter adds', () => {
   // Polling methods are left out of these exact counts (see POLLING); every other method is counted exactly.
-  it('none to a send and its wait on a client with a chain', async () => {
-    expect(await extraRequests(sendAndWait)).toEqual({});
+  it('one transaction read to a send without a nonce and its wait on a client with a chain', async () => {
+    expect(await extraRequests(sendAndWait)).toEqual(NONCE_READ);
     // Its receipt carries no operator fee fields: no operator fee is read or recorded.
     const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
     expect(confirm?.attributes).not.toHaveProperty('blockchain.tx.operator_fee');
   });
 
-  it('none to a raw send and its wait on a client with a chain', async () => {
-    expect(await extraRequests(rawSendAndWait)).toEqual({});
+  it('none to a send that passes a nonce and its wait', async () => {
+    const withNonce = async (clients: Clients) => {
+      const nonce = await clients.reader.getTransactionCount({
+        address: account,
+        blockTag: 'pending',
+      });
+      const hash = await clients.wallet.sendTransaction({
+        account,
+        chain: anvil,
+        to: RECIPIENT,
+        value: 1n,
+        gas: 100_000n,
+        nonce,
+      });
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const receipt = await clients.reader.getTransactionReceipt({ hash }).catch(() => undefined);
+        if (receipt) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      return clients.reader.waitForTransactionReceipt({ hash });
+    };
+    expect(await extraRequests(withNonce)).toEqual({});
+  });
+
+  it('one transaction read to a raw send, for its sender, and its wait', async () => {
+    expect(await extraRequests(rawSendAndWait)).toEqual(NONCE_READ);
     expect(tracing.spans().map((span) => span.name)).toContain(`send ${anvil.id}`);
   });
 
   it('one eth_chainId per send on a client without a chain', async () => {
-    expect(await extraRequests(sendAndWait, { chain: false })).toEqual({ eth_chainId: 1 });
+    expect(await extraRequests(sendAndWait, { chain: false })).toEqual({
+      eth_chainId: 1,
+      ...NONCE_READ,
+    });
   });
 
   it('for background confirmation, only the requests of a receipt wait', async () => {
@@ -266,7 +309,8 @@ describe('JSON-RPC requests the viem adapter adds', () => {
 
   it('for a reverted transaction, one transaction read and one call to replay it', async () => {
     const revert = (clients: Clients) => sendAndWait(clients, REVERTER);
-    expect(await extraRequests(revert)).toEqual({ eth_getTransactionByHash: 1, eth_call: 1 });
+    // The replay's read, and the read of the sent transaction for its nonce.
+    expect(await extraRequests(revert)).toEqual({ eth_getTransactionByHash: 2, eth_call: 1 });
     expect(tracing.spans().some((s) => s.attributes['blockchain.tx.status'] === 'reverted')).toBe(
       true,
     );
@@ -292,12 +336,16 @@ describe('JSON-RPC requests the viem adapter adds', () => {
       // another block (docs/adr/0026-receipt-after-several-confirmations.md).
       expect(await extraRequests(waitFor2, { polling: true })).toEqual({
         eth_getTransactionReceipt: 1,
+        ...NONCE_READ,
       });
     },
   );
 
   it('one eth_call for a receipt that charges an OP Stack operator fee', async () => {
-    expect(await extraRequests(sendAndWait, { shape: 'operatorFee' })).toEqual({ eth_call: 1 });
+    expect(await extraRequests(sendAndWait, { shape: 'operatorFee' })).toEqual({
+      eth_call: 1,
+      ...NONCE_READ,
+    });
     const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
     // The stand-in oracle returns 3 × gasUsed; the fee keeps its meaning.
     expect(confirm?.attributes['blockchain.tx.operator_fee']).toBe(String(3 * 21_000));
@@ -326,19 +374,19 @@ describe('JSON-RPC requests the viem adapter adds', () => {
       }
       return clients.reader.waitForTransactionReceipt({ hash });
     };
-    expect(await extraRequests(sendInFeeCurrency)).toEqual({});
+    expect(await extraRequests(sendInFeeCurrency)).toEqual(NONCE_READ);
     const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
     expect(confirm?.attributes['blockchain.tx.fee_asset']).toBe(FEE_CURRENCY.toLowerCase());
   });
 
   it('none for a fee paid in a Tempo fee token, read from a receipt of type 0x76', async () => {
-    expect(await extraRequests(sendAndWait, { shape: 'tempo' })).toEqual({});
+    expect(await extraRequests(sendAndWait, { shape: 'tempo' })).toEqual(NONCE_READ);
     const confirm = tracing.spans().find((s) => s.name === `confirm ${anvil.id}`);
     expect(confirm?.attributes['blockchain.tx.fee_asset']).toBe(FEE_TOKEN.toLowerCase());
   });
 
   it('none for a fee another account paid, read from the feePayer of a receipt of type 0x76', async () => {
-    expect(await extraRequests(sendAndWait, { shape: 'sponsored' })).toEqual({});
+    expect(await extraRequests(sendAndWait, { shape: 'sponsored' })).toEqual(NONCE_READ);
   });
 
   // sendRawTransactionSync came with viem 2.38.0.
@@ -384,7 +432,9 @@ describe('JSON-RPC requests the viem adapter adds', () => {
 
   it('none for a reverted transaction with decodeRevertReason off', async () => {
     const revert = (clients: Clients) => sendAndWait(clients, REVERTER);
-    expect(await extraRequests(revert, { hashspan: { decodeRevertReason: false } })).toEqual({});
+    expect(await extraRequests(revert, { hashspan: { decodeRevertReason: false } })).toEqual(
+      NONCE_READ,
+    );
   });
 });
 

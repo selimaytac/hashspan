@@ -6,6 +6,7 @@ import { addCallBatchActions } from './call-batch.js';
 import { createConfirmation } from './confirm/confirmation.js';
 import { createPending } from './confirm/pending.js';
 import { Recent } from './confirm/recent.js';
+import type { SentTransaction } from './confirm/replacement.js';
 import { durationOr } from './confirm/timing.js';
 import { createWatch } from './confirm/watch.js';
 import { guardTracker } from './safe-tracker.js';
@@ -34,7 +35,7 @@ export type {
  * Options of {@link withHashspan}: the tracker options of `createTxTracker()`, and those of this adapter. They are read
  * once, from the object's own enumerable properties; options it inherits through a prototype, such as the getters of a
  * class instance, are ignored
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0025-untrusted-input.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.1/docs/adr/0025-untrusted-input.md).
  */
 export interface WithHashspanOptions extends TxTrackerOptions {
   /**
@@ -53,14 +54,14 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    * when the first replay does not revert).
    * `{ timeoutMs }` bounds the replay; if the provider has not answered by then, the receipt is recorded without a
    * reason. Default: true, with a 10 000 ms bound. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0005-revert-reason-replay.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.1/docs/adr/0005-revert-reason-replay.md.
    */
   decodeRevertReason?: boolean | { timeoutMs?: number | undefined } | undefined;
   /**
    * Most background confirmations (`confirm: { mode: 'background' }` and `watch()`) polling at once. A transaction
    * sent while that many are polling gets no background confirm span, and a `diag` warning is logged; waits of the
    * caller are not counted and always traced. Default: 256. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0018-background-confirmation-limit.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.1/docs/adr/0018-background-confirmation-limit.md.
    */
   maxBackgroundConfirmations?: number | undefined;
   /**
@@ -70,7 +71,7 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    * caller's path, at most 60 `eth_getTransactionReceipt` requests spread over `timeoutMs` (default 120 000 ms), as
    * one of the background confirmations, and records it on the confirm span. `true` uses the default timeout. Off by
    * default; any other value leaves it off. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/packages/viem/README.md#tempo-transactions.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.1/packages/viem/README.md#tempo-transactions.
    */
   followMultisigOperations?: boolean | { timeoutMs?: number | undefined } | undefined;
 }
@@ -89,14 +90,14 @@ export interface HashspanExtension {
    * Waits for tracing work still running after traced calls returned (background confirmations, revert reason
    * replays, calls recorded once their chain id is known), so their spans are ended before the OpenTelemetry SDK
    * shuts down. Resolves true when all of it finished, false on timeout; never rejects. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0010-flush-before-shutdown.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.1/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
   /**
    * Confirms a transaction sent outside the extended clients (for example by a wallet API) through `client`, in the
    * background: a confirm span with the receipt, revert reason and fees, linked to the send span when the same
    * tracker recorded one. Never throws and never waits; `flush()` awaits it. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.0/docs/adr/0012-cdp-adapter.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.1/docs/adr/0012-cdp-adapter.md.
    */
   watch(client: ViemClientLike, options: WatchOptions): void;
 }
@@ -179,6 +180,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   const abis = new Recent<Abi>();
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
   const revertReasons = new Recent<Promise<string | undefined>>();
+  /** Sender and nonce of recent sends, to find a replacement viem did not report (ADR 0008). */
+  const senders = new Recent<SentTransaction>();
   const { track, flush, settleOnce } = createPending();
   const { recordConfirmation, confirmThrough, confirmPending } = createConfirmation({
     tracker,
@@ -188,6 +191,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     followMultisig: followMultisig !== undefined,
     abis,
     revertReasons,
+    senders,
     track,
     settleOnce,
   });
@@ -226,6 +230,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         tracker,
         confirm,
         abis,
+        senders,
         track,
         recordConfirmation,
         confirmThrough,
