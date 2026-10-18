@@ -2,10 +2,12 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import * as accountAbstraction from 'viem/account-abstraction';
 import * as chains from 'viem/chains';
 import { describe, expect, it } from 'vitest';
 import { CDP_NETWORK_CHAIN_IDS } from '../src/index.js';
 import { CDP_API_SEND_CHAIN_IDS } from '../src/networks.js';
+import { CANONICAL_ENTRY_POINTS } from '../src/user-operation.js';
 
 // Compares the adapter's copies of SDK rules with the installed SDK, which does not export them. The scheduled
 // workflow runs this against the newest SDK in the peer range, so that a change there fails here.
@@ -111,5 +113,16 @@ describe('the installed @coinbase/cdp-sdk', () => {
     const ids = names.map((name) => byName[name]?.id);
     expect(ids).not.toContain(undefined);
     expect(new Set(ids)).toEqual(new Set(CDP_API_SEND_CHAIN_IDS));
+  });
+});
+
+describe('the installed viem', () => {
+  it('names no canonical EntryPoint that CANONICAL_ENTRY_POINTS lacks', () => {
+    const addresses = Object.entries(accountAbstraction)
+      .filter(([name]) => /^entryPoint\d+Address$/.test(name))
+      .map(([, address]) => String(address).toLowerCase());
+    // viem 2.21, the floor of the peer range, already names 0.6 and 0.7.
+    expect(addresses.length).toBeGreaterThanOrEqual(2);
+    expect(addresses.filter((address) => !CANONICAL_ENTRY_POINTS.has(address))).toEqual([]);
   });
 });

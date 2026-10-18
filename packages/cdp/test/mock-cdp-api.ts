@@ -37,7 +37,7 @@ const readJson = async (request: IncomingMessage): Promise<Record<string, unknow
 };
 
 /** The fields of a v0.7 packed user operation, as the stand-in EntryPoint takes them. */
-interface PackedUserOperation {
+export interface PackedUserOperation {
   sender: Address;
   nonce: bigint;
   initCode: Hex;
@@ -70,6 +70,13 @@ export async function startMockCdpApi(options: {
   failNextSend: (error: { status: number; errorType: string; errorMessage: string }) => void;
   /** Reports the next user operation sent as `failed`, as CDP does for an operation that failed. */
   failNextUserOperation: () => void;
+  /**
+   * Puts the operations `after` builds into the next bundle, after the operation sent, as a bundler shares a bundle
+   * between operations of several senders; `after` gets the sent operation's hash.
+   */
+  shareNextBundle: (
+    after: (userOpHash: Hex) => PackedUserOperation[] | Promise<PackedUserOperation[]>,
+  ) => void;
   close: () => Promise<void>;
 }> {
   const anvil = createWalletClient({ account: options.account, transport: http(options.rpcUrl) });
@@ -77,6 +84,9 @@ export async function startMockCdpApi(options: {
   const requests: string[] = [];
   let nextSendError: { status: number; errorType: string; errorMessage: string } | undefined;
   let failUserOperation = false;
+  let sharedBundle:
+    | ((userOpHash: Hex) => PackedUserOperation[] | Promise<PackedUserOperation[]>)
+    | undefined;
   const bundler = options.bundler
     ? createWalletClient({ account: options.bundler, transport: http(options.rpcUrl) })
     : undefined;
@@ -203,13 +213,15 @@ export async function startMockCdpApi(options: {
       );
       if (request.method === 'POST' && sendOperation?.[1] && bundler) {
         const operation = operationOf(sendOperation[1]);
+        const after = sharedBundle ? await sharedBundle(sendOperation[1] as Hex) : [];
+        sharedBundle = undefined;
         const bundle = await bundler.writeContract({
           chain: null,
           address: entryPoint07Address,
           abi: testEntryPointAbi,
           functionName: 'handleOps',
           args: [
-            [{ ...operation.packed, signature: body.signature as Hex }],
+            [{ ...operation.packed, signature: body.signature as Hex }, ...after],
             bundler.account.address,
           ],
           gas: 5_000_000n,
@@ -243,6 +255,9 @@ export async function startMockCdpApi(options: {
     },
     failNextUserOperation: () => {
       failUserOperation = true;
+    },
+    shareNextBundle: (after) => {
+      sharedBundle = after;
     },
     close: () => new Promise((resolve) => server.close(() => resolve())),
   };

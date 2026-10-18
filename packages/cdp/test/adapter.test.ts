@@ -173,6 +173,39 @@ describe('cdp.evm.sendTransaction', () => {
     });
   });
 
+  it('parses a serialized transaction only up to the size a node accepts, 128 KiB', async () => {
+    const cdp = fakeCdp();
+    withHashspan(cdp);
+    const account = (await cdp.evm.createAccount()) as unknown as {
+      sendTransaction(options: unknown): Promise<unknown>;
+    };
+    const signed = (bytes: number) =>
+      serializeTransaction({
+        chainId: 8453,
+        to: TO,
+        value: 7n,
+        nonce: 3,
+        type: 'eip1559',
+        data: `0x${'00'.repeat(bytes)}`,
+      });
+    const small = signed(127 * 1024);
+    const large = signed(130 * 1024);
+    expect((small.length - 2) / 2).toBeLessThan(128 * 1024);
+    expect((large.length - 2) / 2).toBeGreaterThan(128 * 1024);
+    for (const transaction of [small, large]) {
+      tracing.exporter.reset();
+      await cdp.evm.sendTransaction({ address: ACCOUNT, network: 'base', transaction } as never);
+      await account.sendTransaction({ network: 'base', transaction });
+      const sends = tracing.exporter.getFinishedSpans().filter((s) => s.name === 'send 8453');
+      expect(sends).toHaveLength(2);
+      for (const send of sends) {
+        expect(send.attributes['blockchain.tx.hash']).toBe(HASH);
+        expect(send.attributes['blockchain.tx.to']).toBe(transaction === small ? TO : undefined);
+        expect(send.attributes['blockchain.tx.nonce']).toBe(transaction === small ? 3 : undefined);
+      }
+    }
+  });
+
   it('records a failure and rethrows the original error', async () => {
     const cdp = fakeCdp();
     const failure = new Error('insufficient funds');

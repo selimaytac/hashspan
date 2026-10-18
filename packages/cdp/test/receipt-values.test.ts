@@ -159,7 +159,7 @@ describe('userOperationReceiptFromBundle', () => {
     expect(receipt).toMatchObject({ success: true, actualGasCost: 1_234_000n });
   });
 
-  it('checksums an EntryPoint address given in any case, and leaves out one that is not a string', () => {
+  it('checksums an EntryPoint address given in any case, and ignores a log whose address is not a string', () => {
     const mixed = `0x${ENTRY_POINT.slice(2)
       .replace(/[a-f]/g, (c) => c.toUpperCase())
       .replace('E', 'e')}`;
@@ -169,6 +169,6 @@ describe('userOperationReceiptFromBundle', () => {
     ).toBe(ENTRY_POINT);
     expect(
       userOperationReceiptFromBundle({ logs: [userOperationLog([ENTRY_POINT])] }, OP_HASH, SMART),
-    ).toMatchObject({ entryPoint: undefined, success: true });
+    ).toEqual({ transactionHash: undefined, blockNumber: undefined });
   });
 });
