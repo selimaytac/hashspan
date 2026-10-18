@@ -41,7 +41,7 @@ npm install @opentelemetry/sdk-node
 - For CDP or x402, add the install line of
   [`@hashspan/cdp`](https://github.com/selimaytac/hashspan/blob/main/packages/cdp/README.md#install) or
   [`@hashspan/x402`](https://github.com/selimaytac/hashspan/blob/main/packages/x402/README.md#install).
-- Install the same minor version of every `@hashspan` package
+- Install the latest version of every `@hashspan` package, and upgrade them together; their minor versions can differ
   ([packages](https://github.com/selimaytac/hashspan/blob/main/README.md#packages)).
 
 ## 3. Start the SDK first
