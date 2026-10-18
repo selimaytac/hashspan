@@ -6,8 +6,8 @@
 // Each layer goes through `changeset pack` and `changeset publish --from-pack-dir` with a plan of that layer only.
 // Both append to the report file in CHANGESETS_OUTPUT, from which changesets/action creates the git tags and GitHub
 // releases, as it does for a single `changeset publish`. The script then waits until every published version is
-// visible; installing and importing them runs in a job of its own (scripts/check-published.mjs), so no code of a
-// dependency runs in the job that can publish.
+// visible; installing and importing them runs in a job of its own (scripts/check-published.mjs), so the job that can
+// publish runs only the build tooling pinned in the lockfile, not dependencies resolved fresh from the registry.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
