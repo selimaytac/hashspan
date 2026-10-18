@@ -21,7 +21,7 @@ another service, triggers becomes a `send` / `confirm` span pair under its own t
 - Package checks: `pnpm check:packages` (publint and arethetypeswrong on the built packages; runs in CI)
 - API reports: `pnpm api:check` (API Extractor on the built declarations; fails when they differ from the committed
   `packages/*/etc/*.api.md` or an export lacks a doc comment; runs in CI); `pnpm api:update` rewrites the reports
-- Smoke test: `pnpm smoke:packages` (packs the four packages, installs the tarballs with their peer dependencies into an
+- Smoke test: `pnpm smoke:packages` (packs the five packages, installs the tarballs with their peer dependencies into an
   empty project and checks `require()`, `import` and `hashed` address mode on the current Node.js; CI runs it on the
   lowest `engines.node`, the latest 22.x and the latest 24.x, and with `--runtime bun|deno` on Bun and Deno; needs
   the npm registry, no chain)
@@ -44,6 +44,8 @@ before changing there.
 - `packages/viem` → capture adapter for viem clients ([AGENTS.md](packages/viem/AGENTS.md))
 - `packages/cdp` → capture adapter for the Coinbase CDP SDK ([AGENTS.md](packages/cdp/AGENTS.md))
 - `packages/x402` → adapter for x402 payments ([AGENTS.md](packages/x402/AGENTS.md))
+- `packages/mpp` → adapter for MPP payments made with mppx, on a 0.x release line of its own
+  ([AGENTS.md](packages/mpp/AGENTS.md))
 - `examples/` → runnable integrations: an agent ([ai-sdk-agent](examples/ai-sdk-agent/AGENTS.md)) and a service that is
   not one ([payout-worker](examples/payout-worker/AGENTS.md))
 - `integrations/` → private tests of the setups in docs/integrations.md with the third-party libraries they name, a
@@ -60,7 +62,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 ## Conventions
 - Language: all code, comments, docs, commits and PRs in English.
 - Commits: Conventional Commits `<type>(<scope>): <description>`, subject ≤ 72 chars. Scopes: `core`, `viem`, `cdp`,
-  `x402`, `examples`, `docs`, `ci`, `lab`.
+  `x402`, `mpp`, `examples`, `docs`, `ci`, `lab`.
 - Small, focused PRs; one concern per PR; update tests and docs with the change.
 - Pick open issues by their priority label, `priority: P0` first: a P0 comes before work in progress
   ([CONTRIBUTING.md](CONTRIBUTING.md#priority-labels)). Link the issue in the PR (`Closes #123`).

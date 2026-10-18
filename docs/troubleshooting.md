@@ -29,6 +29,10 @@ exits with code 1. Start a [backend](backends.md), or print the spans in the ter
 - **x402 payments are missing.** x402 v1 payments and networks other than `eip155` are not traced, and a hook of
   your own registered before hashspan's can keep it from seeing the outcome
   ([x402 usage](../packages/x402/README.md#usage), [known limits](../packages/x402/README.md#known-limits)).
+- **MPP payments are missing.** Only Tempo `charge` payments made through the client `Mppx.create()` returns (its
+  `fetch` or the global `fetch` it polyfills) are traced: sessions, other methods and paid MCP tools are not, and a
+  tracker from a core before 1.2 traces nothing, with a `diag` warning
+  ([MPP usage](../packages/mpp/README.md#usage), [known limits](../packages/mpp/README.md#known-limits)).
 - **A span processor filters them out.** Langfuse's `LangfuseSpanProcessor` exports by default only GenAI and known
   LLM spans, and drops hashspan's spans without an agent identity and its JSON-RPC spans, logging that at debug level
   only ([keep them](backends.md#with-langfusespanprocessor)).
