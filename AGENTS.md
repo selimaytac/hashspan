@@ -14,7 +14,7 @@ another service, triggers becomes a `send` / `confirm` span pair under its own t
 - Load and long-run tests: `pnpm test:load` (`*.load.test.ts`, needs Anvil; weekly in CI, `.github/workflows/load.yml`)
   - Tests import workspace packages from source (`vitest.config.ts` alias), so no build is needed first
 - Third-party integration tests: `pnpm --dir integrations install`, then `pnpm test:integrations` (typecheck and
-  tests, needs Anvil)
+  tests, needs Anvil and eRPC: `make tools`)
 - Lint & format: `pnpm lint` / `pnpm format`
 - Typecheck: `pnpm typecheck` (builds the packages first, since adapters type-check against `@hashspan/core` output)
 - Coverage: `pnpm test:coverage` (unit and integration, with thresholds in `vitest.config.ts`; runs in CI)

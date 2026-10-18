@@ -5,9 +5,10 @@ COMPOSE := docker compose -f docker/compose.yaml
 help: ## Show available targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-18s %s\n", $$1, $$2}'
 
-tools: ## Install pinned Anvil and the ERC-4337 bundler Alto into ./.tools (project-local, for integration tests)
+tools: ## Install pinned Anvil, the ERC-4337 bundler Alto and the RPC gateway eRPC into ./.tools (project-local, for integration tests)
 	./scripts/install-anvil.sh
 	./scripts/install-bundler.sh
+	./scripts/install-erpc.sh
 
 anvil: ## Run a local chain on 127.0.0.1:8545 (foreground)
 	@./scripts/install-anvil.sh
