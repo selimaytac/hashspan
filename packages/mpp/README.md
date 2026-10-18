@@ -92,14 +92,20 @@ start, and a server that reports another one does not replace it. With a reader,
 of the amount to the recipient with the memo that binds it to this challenge (mppx's attribution memo: its tag, the
 server's realm and the challenge id), and one transfer per split; `false` when it does not, or when the server
 reported a transaction other than the payer's own. All of it is checked from the challenge the payer signed for and
-the payer's own credential, not from the server's receipt. The attribute is absent when no check was possible, for
-example: no reader, no receipt, a reverted one, a reader on another chain, a receipt funded in another currency
-(`fundingCurrency`), or values that do not validate. With a reader, the payment span is exported once the receipt is
-checked; its end time stays when the response came.
+the payer's own credential, not from the server's receipt. For a sponsored pull, whose hash only the server's
+`reference` names, `true` also needs the mined transaction to be the one the payer signed: the reader fetches it once
+(`eth_getTransactionByHash`, at most 10 s, off your call's path), and its sender must be the payer and its `nonceKey`,
+`nonce`, `validBefore` and `validAfter` those of the payer's signed transaction. The attribute is absent when no
+check was possible, for example: no reader, no receipt, a reverted one, a reader on another chain, a receipt funded in
+another currency (`fundingCurrency`), values that do not validate, or, for a sponsored pull, a credential whose
+transaction does not decode, a transaction that cannot be read or one whose sender or nonce fields differ. With a
+reader, the payment span is exported once the receipt is checked; its end time stays when the response came.
 
-`flush({ timeoutMs })` (default 10 000 ms) waits for payments still waiting for an outcome, then for confirmations
-through the reader, and ends what is left as `timeout` (a payment already settled and waiting for its receipt check
-ends as settled, without `verified`). Call it before a short-lived process exits.
+`flush({ timeoutMs })` (default 10 000 ms) waits for paid payments still waiting for an outcome, then for
+confirmations through the reader, and ends what is left as `timeout` (a payment already settled and waiting for its
+receipt check ends as settled, without `verified`). It does not wait for a challenge that was never paid (the client's
+policy refused it, or signing failed): that challenge records nothing and is dropped at its deadline. Call it before
+a short-lived process exits.
 
 ## Failures
 
@@ -168,9 +174,9 @@ that was not exported, misses its payments.
   outcome event: their payment spans end as `timeout`.
 - A 3xx, a 4xx or a final 402 after payment fires no event: the payment ends as `timeout`, although the money may have
   moved; for a push payment, its send span and hash show it.
-- A sponsored pull's hash, and with it the confirm span and the verdict, rest on the server's `reference`; its
-  verdict rests on the memo, which binds the transfer to the challenge with 56 bits, which a server choosing challenge
-  ids could search for a collision with an earlier payment of the same payer, recipient and amount.
+- A sponsored pull's hash, and with it the confirm span, rest on the server's `reference`. Its verdict is `true`
+  only when the mined transaction is the one the payer signed (its sender and nonce fields), so it costs one more
+  request to the reader; when that cannot be shown, the payment has no verdict.
 - Auto-swap and machine-token routes, whose receipt names another `fundingCurrency`, get no verdict.
 - A push payment from a wallet (JSON-RPC) account is sent with `sendCallsSync`: the payment span links to the call
   batch's send span, as checked on Anvil, where viem falls back to `eth_sendTransaction` for a single call; a wallet

@@ -84,6 +84,8 @@ export interface ServerOptions {
   after?: (settled: { withReceipt: (response: Response) => Response }) => Response;
   /** Answers the paid request without verifying it, with this response (a server that reports what it likes). */
   instead?: (request: Request) => Response | undefined;
+  /** Answers every unpaid request with the first challenge it made, id included. */
+  repeatChallenge?: boolean;
 }
 
 /** A paid API: an mppx server charging for every request, on the local chain. */
@@ -104,10 +106,13 @@ export function paidApi(chain: Chain, options: ServerOptions = {}) {
     secretKey: 'x'.repeat(32),
     realm: REALM,
   });
+  let firstChallenge: Response | undefined;
   return async (request: Request): Promise<Response> => {
     if (request.headers.get('authorization')) {
       const instead = options.instead?.(request);
       if (instead) return instead;
+    } else if (options.repeatChallenge && firstChallenge) {
+      return firstChallenge.clone();
     }
     const result = await server.charge({
       amount: options.amount ?? '0.01',
@@ -116,7 +121,11 @@ export function paidApi(chain: Chain, options: ServerOptions = {}) {
         ? { expires: new Date(Date.now() + options.expiresInMs).toISOString() }
         : {}),
     } as never)(request);
-    if (result.status === 402) return result.challenge as Response;
+    if (result.status === 402) {
+      const challenge = result.challenge as Response;
+      if (options.repeatChallenge) firstChallenge ??= challenge.clone();
+      return challenge;
+    }
     const settled = result as unknown as { withReceipt: (response: Response) => Response };
     return options.after
       ? options.after(settled)

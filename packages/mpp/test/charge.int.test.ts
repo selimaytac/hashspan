@@ -243,6 +243,59 @@ describe('a server that reports another transaction of the same payer, recipient
   });
 });
 
+describe('a sponsored pull for a repeated challenge, answered with the earlier settlement', () => {
+  it("records it settled with no verdict, since the mined transaction is not the payer's signed one", async () => {
+    let paid = 0;
+    let earlier: string | undefined;
+    const api = paidApi(chain, {
+      feePayer: true,
+      repeatChallenge: true,
+      // The second paid request is answered with the first one's settlement, which it did not make.
+      instead: () =>
+        ++paid === 2 && earlier
+          ? new Response('{}', {
+              headers: {
+                'payment-receipt': Receipt.serialize({
+                  method: 'tempo',
+                  reference: earlier,
+                  status: 'success',
+                  timestamp: new Date().toISOString(),
+                } as never),
+              },
+            })
+          : undefined,
+    });
+    const mppx = Mppx.create({
+      methods: [
+        tempo({
+          account: PAYER,
+          mode: 'pull',
+          getClient: () => chainClient(chain, PAYER) as never,
+        }),
+      ],
+      fetch: ((input: string | URL | Request, init?: RequestInit) =>
+        api(new Request(input, init))) as never,
+      polyfill: false,
+    });
+    const hashspan = withHashspan(mppx, { reader: reader() });
+    const first = await mppx.fetch(URL_PAID);
+    earlier = Receipt.deserialize(first.headers.get('payment-receipt') as string).reference;
+    expect(await hashspan.flush({ timeoutMs: 15_000 })).toBe(true);
+    const second = await mppx.fetch(URL_PAID);
+    expect(second.status).toBe(200);
+    expect(await hashspan.flush({ timeoutMs: 15_000 })).toBe(true);
+    const payments = tracing.spans().filter(({ name }) => name === PAYMENT_SPAN);
+    expect(payments).toHaveLength(2);
+    expect(payments[1]?.attributes['mpp.challenge.id']).toBe(
+      payments[0]?.attributes['mpp.challenge.id'],
+    );
+    expect(payments[0]?.attributes['blockchain.payment.verified']).toBe(true);
+    expect(payments[1]?.attributes['blockchain.tx.hash']).toBe(earlier);
+    expect(payments[1]?.attributes['blockchain.payment.status']).toBe('settled');
+    expect(payments[1]?.attributes['blockchain.payment.verified']).toBeUndefined();
+  });
+});
+
 describe('a paid request answered with an error after the charge settled', () => {
   it('ends as timeout after a 4xx, and keeps the hash of a push payment', async () => {
     const run = await charge({
