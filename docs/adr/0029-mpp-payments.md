@@ -264,10 +264,9 @@ does the following, proposed here for review before the record is accepted:
 - **Push from a wallet account** (`sendCallsSync`) was checked on Anvil, where viem falls back to
   `eth_sendTransaction` for a single call: the payment span links to the call batch's send span, and the
   transaction's confirm span to the same send span.
-- **A sponsored pull's verdict rests on the payer's signed transaction.** The values the memo check uses (payer,
-  currency, recipient, amount, splits, `realm` and challenge id) can repeat across payments to one server, so they
-  do not show on their own that the reported transaction settled this payment. mppx signs every pull with Tempo's
-  expiring nonce (`nonceKey` the maximum, `nonce` 0) and a validity window of its own (`validAfter`, `validBefore`).
+- **A sponsored pull's verdict rests on the payer's signed transaction.** For a sponsored pull the hash comes from
+  the server, so `true` also needs the mined transaction to be the payer's signed one. mppx signs every pull with
+  Tempo's expiring nonce (`nonceKey` the maximum, `nonce` 0) and a validity window of its own (`validAfter`, `validBefore`).
   The adapter keeps these four fields from the credential's signed transaction (the `0x78` envelope mppx sends the
   fee payer, or a `0x76` one with a fee payer marker), and once the receipt carries the charge it reads the
   receipt's own transaction with one `eth_getTransactionByHash` request, as the x402 adapter does for Permit2 (at
@@ -275,7 +274,7 @@ does the following, proposed here for review before the record is accepted:
   equal the signed ones. A transaction that cannot be read in time, a field that is missing or not a canonical
   quantity, or one that differs gives no verdict rather than `false`: the receipt may still carry this payment's
   transfer. A credential whose transaction does not decode gives no verdict without a read. Push and unsponsored
-  pull are unchanged. Unit tests cover each field and a repeated challenge answered with an earlier settlement; the
+  pull are unchanged. Unit tests cover each field and a reported transaction that is not the payer's signed one; the
   Anvil test checks the same with real sponsored charges.
 - **`flush()` waits only for payments with a span.** A challenge that never got a credential (the client's policy
   or spending limit refused it, or signing failed) has no span to end. `flush()` neither waits for it nor ends it:
