@@ -14,6 +14,8 @@ on:
       - 'pnpm-lock.yaml'
       - 'tsconfig.base.json'
       - '.github/workflows/integrations.yml'
+      # The pinned eRPC binary of test/erpc.int.test.ts.
+      - 'scripts/install-erpc.sh'
   schedule:
     - cron: '41 5 * * 1'
   workflow_dispatch:
@@ -60,4 +62,5 @@ jobs:
           pnpm --dir integrations update
           pnpm --dir integrations list --depth 0
       - run: ./scripts/install-anvil.sh
+      - run: ./scripts/install-erpc.sh
       - run: pnpm test:integrations

@@ -25,7 +25,11 @@ Root rules: [AGENTS.md](../AGENTS.md).
   `test/hardhat.int.test.ts` the Hardhat 3 examples of the docs as written, run with the Hardhat CLI in the project
   `test/hardhat/` on Hardhat's in-process network (no Anvil), with a control script in `test/hardhat/scripts/`; the
   project's artifacts are committed and every run passes `--no-compile`, since a build downloads solc (see
-  `test/hardhat/hardhat.config.ts`). Both export over OTLP to `test/otlp-receiver.ts`
+  `test/hardhat/hardhat.config.ts`); `test/erpc.int.test.ts` the agent of the eRPC section as written, with the undici
+  instrumentation, through the pinned eRPC binary of `scripts/install-erpc.sh` (`make tools`) in front of Anvil on
+  127.0.0.1, with the `erpc.yaml` block of the docs changed only in its addresses, and a control without the
+  instrumentation (`test/erpc/no-undici.ts`). All three export over OTLP to `test/otlp-receiver.ts`, which also reads
+  the protobuf that eRPC's exporter sends
 - `test/readme/` holds the `#region readme` files of doc examples that need these libraries, as
   `packages/*/test/readme/` does for the others: the typecheck compiles them and `packages/core/test/docs.test.ts`
   matches them with the docs
