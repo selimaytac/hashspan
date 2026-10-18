@@ -104,8 +104,9 @@ await hashspan.flush();
 - ZeroDev's `createKernelAccountClient` builds its client the same way, and adds `sendTransaction` and
   `writeContract` with `kernelAccountClientActions()`. Extended with `withHashspan()` (with the same cast), its
   `sendUserOperation` and `waitForUserOperationReceipt` are traced and its `sendTransaction` and `writeContract` are
-  not. A client built by hand with `withHashspan()` before ZeroDev's actions is not tested: `createKernelAccountClient`
-  also sets ZeroDev's fee estimate and an EIP-7702 authorization step.
+  not. `withHashspan()` applied last, as above, is the supported ZeroDev setup. Building the client by hand with
+  `withHashspan()` before ZeroDev's actions is not a documented setup, because `createKernelAccountClient` also sets
+  ZeroDev's fee estimate and an EIP-7702 authorization step.
 - In CI, both SDKs run with a stand-in smart account on a stand-in EntryPoint, since Kernel's and SimpleAccount's
   contracts are not available to the tests; the user operation spans themselves are also checked through a real
   bundler ([smart accounts](../packages/viem/README.md#smart-accounts-erc-4337)).
