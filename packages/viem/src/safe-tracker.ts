@@ -3,6 +3,7 @@ import type {
   CallBatchSendHandle,
   ConfirmHandle,
   PaymentHandle,
+  PaymentSender,
   SendHandle,
   TxTracker,
   UserOperationConfirmHandle,
@@ -30,6 +31,19 @@ const NOOP_CALL_BATCH_CONFIRM: CallBatchConfirmHandle = {
 };
 function noopCallBatchSend(parent: Context): CallBatchSendHandle {
   return { context: parent, end: () => {}, fail: () => {} };
+}
+const NO_PAYMENT_SENDERS: readonly PaymentSender[] = Object.freeze([]);
+
+/** The tracker's `paymentSenders`, read once; none for a tracker from a core before 1.2, or one that cannot be read. */
+function paymentSendersOf(tracker: TxTracker): readonly PaymentSender[] {
+  return safely(
+    'read the payment senders',
+    () => {
+      const senders: unknown = tracker.paymentSenders;
+      return Array.isArray(senders) ? (senders as readonly PaymentSender[]) : NO_PAYMENT_SENDERS;
+    },
+    NO_PAYMENT_SENDERS,
+  );
 }
 const NOOP_PAYMENT: PaymentHandle = {
   end: () => {},
@@ -110,6 +124,8 @@ function sendContextOf(handle: { context?: unknown }, caller: Context): Context 
  */
 export function guardTracker(tracker: TxTracker): TxTracker {
   return {
+    // A tracker from a core before 1.2 has none: the viem adapter records no payments itself, so it only passes it on.
+    paymentSenders: paymentSendersOf(tracker),
     startSend: (input, parent) => {
       const caller = parent ?? context.active();
       const handle = safely(

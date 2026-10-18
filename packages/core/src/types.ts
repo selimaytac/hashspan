@@ -23,8 +23,8 @@ export type AddressMode = 'raw' | 'hashed' | 'off';
 export type ErrorMessageMode = 'off' | 'sanitized' | 'raw';
 
 /**
- * How much of a paid resource's URL `x402.resource` records. Paths often carry user or account identifiers, so only
- * the origin is recorded by default (ADR 0004).
+ * How much of a paid resource's URL `x402.resource` and `mpp.resource` record. Paths often carry user or account
+ * identifiers, so only the origin is recorded by default (ADR 0004).
  * - `origin`: scheme, host and port only, e.g. `https://api.example.com`; a resource that is not a URL is not recorded
  * - `path`: the URL without its query string, fragment and user info
  * - `off`: nothing
@@ -69,7 +69,7 @@ export interface TxTrackerOptions {
    * attributes.
    */
   errorMessages?: ErrorMessageMode | undefined;
-  /** How much of a paid resource's URL `x402.resource` records. Default: `origin`. */
+  /** How much of a paid resource's URL `x402.resource` and `mpp.resource` record. Default: `origin`. */
   paymentResource?: PaymentResourceMode | undefined;
   /**
    * Record decoded contract call arguments ({@link SendInput.functionArguments}) as
@@ -295,15 +295,39 @@ export interface ConfirmHandle {
 }
 
 /**
+ * Who sends a payment's settlement transaction: `facilitator`, a party other than the payer, such as an x402
+ * facilitator, which also pays its fee; or `payer`, the payer itself, as with MPP
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.1.0/docs/adr/0029-mpp-payments.md).
+ */
+export type PaymentSender = 'facilitator' | 'payer';
+
+/**
  * A payment the agent authorizes and another party settles on chain, e.g. an x402 facilitator
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.1.0/docs/adr/0013-x402-payments.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.1.0/docs/adr/0013-x402-payments.md), or an MPP
+ * payment the payer sends itself or a server broadcasts
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.1.0/docs/adr/0029-mpp-payments.md).
  * Values often come from a remote server: addresses, amounts and identifiers that are malformed are not recorded.
  */
 export interface PaymentInput {
   /** EIP-155 chain id of the network the payment settles on. */
   chainId: number;
-  /** Payment protocol, e.g. `x402`; recorded only if it is a short identifier. */
+  /** Payment protocol, e.g. `x402` or `mpp`; recorded only if it is a short identifier. */
   protocol: string;
+  /**
+   * Who sends the settlement transaction. Default: `facilitator`, whose fee sample carries `blockchain.fee.payer`
+   * `facilitator`. With `payer`, the payer is the transaction's `from`: its fee sample carries `sponsor` when the
+   * receipt names another fee payer, and no payer when the payer paid. Any other value is read as `facilitator`. A
+   * tracker that reads this field, `hash` and `mpp` has {@link TxTracker.paymentSenders}.
+   */
+  sender?: PaymentSender | undefined;
+  /**
+   * Hash of the settlement transaction, when the payer knows it before the settlement is reported (it sent the
+   * transaction, or signed it without a fee payer). Recorded as `blockchain.tx.hash` when the span starts, so every
+   * ending keeps it, a timeout included, and a settlement that reports another hash does not replace it. Its confirm
+   * span links to this span, as {@link PaymentHandle.link} does; when this tracker sent the transaction itself, the
+   * payment span starts with a link to that send span instead.
+   */
+  hash?: string | undefined;
   /** Address that pays, recorded per the address mode. */
   payer?: string | undefined;
   /** Address that is paid, recorded per the address mode. */
@@ -314,8 +338,28 @@ export interface PaymentInput {
   amount?: bigint | string | undefined;
   /** Fields of x402 payments. */
   x402?: X402PaymentDetails | undefined;
+  /** Fields of MPP payments. */
+  mpp?: MppPaymentDetails | undefined;
   /** When the payment started, for adapters that record it after the fact; see {@link SendInput.startTime}. */
   startTime?: TimeInput | undefined;
+}
+
+/** Fields of MPP payments, in {@link PaymentInput.mpp}. */
+export interface MppPaymentDetails {
+  /** Payment method, e.g. `tempo`; recorded as `mpp.method` only if it is a short identifier. */
+  method?: string | undefined;
+  /** Intent, e.g. `charge`; recorded as `mpp.intent` only if it is a short identifier. */
+  intent?: string | undefined;
+  /** How a charge is settled; recorded as `mpp.mode` only if it is `push` or `pull`. */
+  mode?: 'push' | 'pull' | undefined;
+  /**
+   * Id of the challenge paid, chosen by the server; recorded as `mpp.challenge.id` only if it has 1 to 128 characters
+   * from `A-Z`, `a-z`, `0-9`, `-`, `.`, `_` and `~`, and in `hashed` and `off` address mode only if it holds no 40
+   * hex characters in a row, which could be an address. Recorded on spans, never as a metric attribute.
+   */
+  challengeId?: string | undefined;
+  /** URL of the resource paid for, recorded as `mpp.resource` as `x402.resource` is ({@link X402PaymentDetails}). */
+  resource?: string | undefined;
 }
 
 /** Fields of x402 payments, in {@link PaymentInput.x402}. */

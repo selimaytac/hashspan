@@ -55,6 +55,13 @@ as an x402 facilitator: the agent signs, but does not send, the settling transac
 transaction hash makes the payment span the one a confirm span for that hash links to, and whose parent it takes
 for confirmation in the background, as a `send` span would.
 
+For MPP ([ADR 0029](adr/0029-mpp-payments.md)), the payer is the settling transaction's `from` in both of its modes:
+in `push` the payer sends it itself, and in `pull` it signs it and the server broadcasts it. The payer pays its fee
+unless the server sponsors it as fee payer. The adapter passes the transaction's hash when the payer knows it before
+the settlement is reported (`push`, and a `pull` without a fee payer): the payment span then records
+`blockchain.tx.hash` from its start, keeps it whatever the server reports, and, when the same tracker recorded the
+payer's own send of it, starts with a link to that send span.
+
 `blockchain.payment.status` is recorded only from the settlement the settling party reported; when the client never
 learned it, the payment span has none and `error.type` says why.
 
@@ -122,7 +129,7 @@ transaction is not recorded, as it adds no span of its own.
 | Creating the payment failed (e.g. signing it) | payment | error | as for a failed send | none |
 | Payment response without a settlement | payment | error | `no_settlement` (x402 adapter) | none |
 | Payment response that cannot be read | payment | error | `_OTHER` | none |
-| Payment outcome never learned (no response before its authorization expired, or flush gave up) | payment | error | `timeout` | none |
+| Payment outcome never learned (no response before its authorization expired, or flush gave up) | payment | error | `timeout` | none; a hash the payer knew from the start stays recorded |
 
 **Timeouts.** `blockchain.tx.status` describes the transaction as the chain recorded it. A confirm span that gave up
 waiting has error status and `error.type` `timeout`, and no `blockchain.tx.status`: the transaction's outcome is
@@ -162,7 +169,7 @@ with or without hashspan.
 | `blockchain.system.name` | string | send, confirm, payment | on | `evm` |
 | `blockchain.chain.id` | int | all | on | EIP-155 chain id, e.g. `8453` |
 | `blockchain.operation.name` | string | send, confirm, payment | on | `send` \| `confirm` \| `payment` |
-| `blockchain.tx.hash` | string | send, confirm, payment | on | `0x`-prefixed tx hash; on a payment span, the settling transaction's, when reported, and never for x402 `batch-settlement`, whose reported transaction is the channel's deposit ([ADR 0013](adr/0013-x402-payments.md)); on a user operation's confirm span, the bundle transaction's; absent on a user operation's send span |
+| `blockchain.tx.hash` | string | send, confirm, payment | on | `0x`-prefixed tx hash; on a payment span, the settling transaction's, when reported, or from the span's start when the payer knows it (MPP), and never for x402 `batch-settlement`, whose reported transaction is the channel's deposit ([ADR 0013](adr/0013-x402-payments.md)); on a user operation's confirm span, the bundle transaction's; absent on a user operation's send span |
 | `blockchain.tx.from` | string | send | raw | sender address, subject to address mode |
 | `blockchain.tx.to` | string | send | raw | recipient / contract address, subject to address mode |
 | `blockchain.tx.value` | string | send | on | value in wei, decimal string |
@@ -178,7 +185,7 @@ with or without hashspan.
 | `blockchain.tx.gas.used` | int | confirm | on | gas used |
 | `blockchain.tx.effective_gas_price` | string | confirm | on | price per gas in the chain's fee unit (see the fee table below), decimal string; see the `fee` row for when it is omitted |
 | `blockchain.tx.l1_fee` | string | confirm | on | L1 data fee on OP-stack chains, in the chain's fee unit; see the `fee` row for when it is omitted |
-| `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, in the chain's fee unit: wei of the native currency, or the token `fee_asset` names (see the fee table below); omitted if the gas price is unknown. The OP Stack operator fee (Isthmus and later) is not included: it is recorded apart as `operator_fee`. Fee attributes come from the sealed receipt, never a flashblocks preconfirmation, and are omitted if only a preconfirmation was seen (see [ADR 0024](adr/0024-sealed-receipt-fees.md)). On the confirm span of a payment's settlement, the fee is the one the transaction's sender paid (for x402, the facilitator), unless the receipt names a fee payer other than the sender (a Tempo `feePayer`, which every Tempo receipt names and which is often the sender itself) |
+| `blockchain.tx.fee` | string | confirm | on | `gas.used × effective_gas_price + l1_fee`, in the chain's fee unit: wei of the native currency, or the token `fee_asset` names (see the fee table below); omitted if the gas price is unknown. The OP Stack operator fee (Isthmus and later) is not included: it is recorded apart as `operator_fee`. Fee attributes come from the sealed receipt, never a flashblocks preconfirmation, and are omitted if only a preconfirmation was seen (see [ADR 0024](adr/0024-sealed-receipt-fees.md)). On the confirm span of a payment's settlement, the fee is the one the transaction's sender paid (for x402, the facilitator; for MPP, the payer), unless the receipt names a fee payer other than the sender (a Tempo `feePayer`, which every Tempo receipt names and which is often the sender itself) |
 | `blockchain.tx.operator_fee` | string | confirm | on | OP Stack operator fee (Isthmus and later), wei, decimal string; not included in `blockchain.tx.fee`. Recorded only when the receipt carries `operatorFeeScalar` or `operatorFeeConstant`, which a node adds when the chain charges the fee; the viem adapter then reads it from the GasPriceOracle's `getOperatorFee(gasUsed)` at the receipt's block, with one `eth_call`. Like the other fee attributes, it comes from the sealed receipt only, and is omitted for a deposit transaction, which pays none |
 | `blockchain.tx.fee_asset` | string | confirm | raw | contract address of the token the fee was paid in, subject to address mode, as the chain reports it (a Celo fee currency, which for a 6-decimal token is its 18-decimal adapter contract; a Tempo fee token); absent when the fee is in the native currency. Recorded with the fee attributes, when `effective_gas_price` is. Taken from the receipt when it names one, else from the send: the viem adapter reads Celo's `feeCurrency` from the sending call, never from `sendRawTransaction`, and Tempo's `feeToken` from a receipt of type `0x76`, or of another type that also names a `feePayer` ([ADR 0028 amendment](adr/0028-fee-asset.md#amendment-2026-10-18-proposed-tempo-receipts-of-any-type)); a replacing transaction records its own, never the replaced one's ([ADR 0028](adr/0028-fee-asset.md)) |
 | `blockchain.tx.revert.reason` | string | confirm | on | decoded revert reason when available, also of a reverted user operation: the `Error(string)` message, `Panic(0x..)`, `ErrorName(arg, ...)` for custom errors with a known ABI, else the 4-byte error selector. See [ADR 0005](adr/0005-revert-reason-replay.md) |
@@ -202,9 +209,9 @@ with or without hashspan.
 | `blockchain.call_batch.atomic` | boolean | confirm | on | whether the wallet ran the calls atomically |
 | `blockchain.call_batch.transaction_hashes` | string[] | confirm | on | hashes of the transactions whose receipts the wallet reported for the batch, de-duplicated, at most 64 |
 | `blockchain.operation.subject` | string | none (metrics only) | on | on [metrics](#metrics) of user operations: `user_operation`; of call batches: `call_batch`; absent on those of transactions |
-| `blockchain.fee.payer` | string | none (metrics only) | on | on `blockchain.client.fee` samples whose fee the sender of the traced transaction or operation did not pay: `facilitator` for a payment's settlement transaction, `paymaster` for a user operation a paymaster paid for, `sponsor` for a transaction whose receipt names another account as its fee payer (a Tempo `feePayer`); a payment's settlement keeps `facilitator`, also when its fee was sponsored; absent when the sender paid ([ADR 0020](adr/0020-metrics.md)) |
+| `blockchain.fee.payer` | string | none (metrics only) | on | on `blockchain.client.fee` samples whose fee the sender of the traced transaction or operation did not pay: `facilitator` for a payment's settlement transaction that another party sent (x402), `paymaster` for a user operation a paymaster paid for, `sponsor` for a transaction whose receipt names another account as its fee payer (a Tempo `feePayer`); a payment's settlement sent by another party keeps `facilitator`, also when its fee was sponsored, while one the payer sent (MPP) is `sponsor` when the server paid its fee; absent when the sender paid ([ADR 0020](adr/0020-metrics.md)) |
 | `blockchain.fee.denomination` | string | none (metrics only) | on | on `blockchain.client.fee` samples whose fee was paid in a token rather than the chain's native currency: `token`, a constant, never an address or a value read from the chain; set whenever `blockchain.tx.fee_asset` is known, in every address mode; absent for the native currency, Arc's USDC included ([ADR 0028](adr/0028-fee-asset.md)) |
-| `blockchain.payment.protocol` | string | payment | on | `x402` |
+| `blockchain.payment.protocol` | string | payment | on | `x402` \| `mpp` |
 | `blockchain.payment.payer` | string | payment | raw | address that pays, subject to address mode; the settlement's payer only when the payer knew none |
 | `blockchain.payment.recipient` | string | payment | raw | address that is paid, subject to address mode |
 | `blockchain.payment.asset` | string | payment | raw | contract address of the token paid with, subject to address mode |
@@ -214,6 +221,11 @@ with or without hashspan.
 | `blockchain.payment.status` | string | payment | on | `settled` \| `pending` \| `failed` |
 | `x402.scheme` | string | payment | on | x402 payment scheme, e.g. `exact` |
 | `x402.resource` | string | payment | origin | the resource paid for, per the tracker's `paymentResource` mode: `origin` (default) records scheme, host and port only, `path` the URL without query string, fragment or user info, `off` nothing; at most 512 characters, and nothing for text whose user info contains `?` or `#` |
+| `mpp.method` | string | payment | on | MPP payment method, e.g. `tempo` |
+| `mpp.intent` | string | payment | on | MPP intent, e.g. `charge` |
+| `mpp.mode` | string | payment | on | how an MPP charge is settled: `push` (the payer broadcasts) \| `pull` (the server broadcasts what the payer signed) |
+| `mpp.challenge.id` | string | payment | on | id of the MPP challenge paid, chosen by the server: 1 to 128 characters of `A-Z a-z 0-9 - . _ ~`, and in `hashed` and `off` address mode no 40 hex characters in a row (an address), else not recorded; spans only, never a metric attribute ([ADR 0029](adr/0029-mpp-payments.md)) |
+| `mpp.resource` | string | payment | origin | the resource paid for, as `x402.resource` records it |
 | `error.type` | string | all | on | see *Span status*; reused from OpenTelemetry general conventions |
 
 Of this table, JSON-RPC spans carry only `blockchain.chain.id` and `error.type` (see [JSON-RPC spans](#spans)). In `blockchain.tx.*`, `tx` abbreviates transaction, the usual term in this domain; names outside that
@@ -226,7 +238,7 @@ The parties of each subject are named after the source the values come from:
 | Transaction | `blockchain.tx.from` | `blockchain.tx.to` | the `from` and `to` fields of a JSON-RPC transaction |
 | User operation | `blockchain.user_operation.sender` | none | the ERC-4337 `sender`, the smart account; the operation's calls have their own targets |
 | Call batch | `blockchain.call_batch.sender` | none | the account the calls are sent from, which can differ from the sender of the transaction that carries them, such as a bundler or relayer |
-| Payment | `blockchain.payment.payer` | `blockchain.payment.recipient` | the parties of the payment; the settling party, not the payer, sends the transaction |
+| Payment | `blockchain.payment.payer` | `blockchain.payment.recipient` | the parties of the payment; for x402 the settling party, not the payer, sends the transaction; for MPP the payer is the transaction's `from`, and pays its fee unless the server sponsors it |
 
 The fee fields follow the receipt of each chain family, as the viem adapter reads it (tested in
 `packages/viem/test/fee-models.test.ts`):
@@ -301,7 +313,7 @@ Hashing is pseudonymisation, not anonymisation. See [ADR 0004](adr/0004-privacy-
 `off` hides the parties of a transaction: `blockchain.tx.hash` is always recorded and resolves to them on chain, as
 `blockchain.user_operation.hash` does for a user operation.
 The address mode also applies to addresses inside `blockchain.tx.revert.reason`,
-`blockchain.contract.function.arguments`, `x402.resource`, `error.type` and sanitized error messages (`<address>` in `off` mode).
+`blockchain.contract.function.arguments`, `x402.resource`, `mpp.resource`, `error.type` and sanitized error messages (`<address>` in `off` mode).
 In `hashed` and `off` mode, hex values longer than an address are recorded as `<hex>` in those attributes, because a
 padded `bytes32` or ABI-encoded `bytes` value can embed an address. What a value longer than its bound becomes is
 listed under [Bounds](#bounds). The redaction hook also runs on `error.type` and on `exception` event
@@ -309,8 +321,8 @@ attributes; if it throws, only `exception.type` is kept on the event.
 
 Payment values usually come from a remote party (the paid server or the settling party): addresses that are not
 `0x`-prefixed 20-byte hex, amounts that are not non-negative integers, hashes that are not 32-byte hex and
-identifiers (protocol, scheme, failure reason) that are not short identifiers are not recorded. Paths of paid
-APIs often carry user or account identifiers, so `x402.resource` records only the origin by default; with
+identifiers (protocol, scheme, MPP method and intent, failure reason) that are not short identifiers are not recorded. Paths of paid
+APIs often carry user or account identifiers, so `x402.resource` and `mpp.resource` record only the origin by default; with
 `paymentResource: 'path'` it records the path too, never the query string, fragment or user info, which can carry
 credentials ([ADR 0004](adr/0004-privacy-defaults.md)). A user operation's hash and receipt come from the bundler and are checked the
 same way; its nonce, gas and cost may also be `0x` hex quantities.
@@ -339,11 +351,15 @@ of each package check the bounds against the values that split at them.
 | `exception.message` in `sanitized` mode | 256 characters of the first line, sanitized from its first 4096 characters | its first 256 characters, followed by `...`; a hex value the cut would split is dropped whole. Text past the 4096th character of the first line is not recorded (a hex value cut there is recorded as if whole, a URL cut there before its path as `<url>`) |
 | `blockchain.contract.function.arguments` | 4096 characters, nesting depth 32 | the JSON up to the value that crosses 4096 characters, cut there and followed by `...`; a hex value the cut would split is dropped whole; arguments nested deeper are not recorded |
 | `blockchain.contract.function.selector` of `writeContract` | an ABI of 10 000 items and 100 000 copied values; for an overloaded function, 100 000 copied argument values | no selector; past the ABI bound, no ABI is used for telemetry either, so custom errors in the revert reason show as their selector |
-| `x402.resource` | 512 characters | its first 512 characters, followed by `...`; a hex value the cut would split is dropped whole |
+| `x402.resource` and `mpp.resource` | 512 characters | its first 512 characters, followed by `...`; a hex value the cut would split is dropped whole |
+| `mpp.challenge.id` | 128 characters | not recorded |
 | `blockchain.call_batch.id` | 256 characters | its first 256 characters; an id that is not hex or longer than 8194 characters is not recorded |
 | `blockchain.tx.authorization.addresses` and `.chain_ids` | 64 entries | the first 64 well-formed entries; `blockchain.tx.authorization.count` keeps the full length, and no further entry is read |
 | `blockchain.call_batch.transaction_hashes` | 64 hashes | the first 64 distinct well-formed hashes among the first 64 receipts of a status, or of the hashes a send returned; no further entry is read, and `blockchain.block.number` is the highest among those receipts |
 | x402 payments waiting for their response | 1000 per `withHashspan()` | the oldest payment span ends as `timeout` |
+| MPP payments waiting for an outcome, counted from their challenge | 1000 per `withHashspan()` | the oldest payment ends as `timeout`; one not started yet records nothing |
+| MPP challenge ids the adapter correlates events by | 1024 characters | the payment is not traced |
+| MPP credential and `Payment-Receipt` header the adapter decodes | 65 536 and 4096 characters | the payment is traced without what they carry: no mode or payer's hash, or no settlement (`_OTHER`) |
 | Background confirmations polling at once | 256 per `withHashspan()` (`maxBackgroundConfirmations`) | the transaction gets no background confirm span; a `diag` warning is logged |
 | Sent transactions, user operations and call batches kept for links | 10 000 each, for 10 minutes (`maxTrackedTransactions`, `linkTtlMs`) | the oldest is forgotten: its confirm span has no link |
 

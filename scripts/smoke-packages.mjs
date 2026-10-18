@@ -1,4 +1,4 @@
-// Smoke test of the published packages: packs @hashspan/core, viem, cdp and x402 (`pnpm pack`), installs the tarballs
+// Smoke test of the published packages: packs @hashspan/core, viem, cdp, x402 and mpp (`pnpm pack`), installs the tarballs
 // and their peer dependencies into an empty project, and loads each with `require()` and `import` under the Node.js
 // that runs the checks, or under Bun or Deno. No chain and no network beyond the npm registry install.
 //
@@ -18,7 +18,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(import.meta.url), '../..');
-const packageNames = ['core', 'viem', 'cdp', 'x402'];
+const packageNames = ['core', 'viem', 'cdp', 'x402', 'mpp'];
 const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
 const manifests = packageNames.map((name) =>
   readJson(join(root, 'packages', name, 'package.json')),
@@ -128,6 +128,53 @@ const { x402Client } = await load('@x402/core/client');
   const traced = x402Adapter.withHashspan(client, options);
   assert.equal(typeof traced.flush, 'function');
   assert.equal(await traced.flush(), true);
+}
+
+const mppAdapter = await load_('@hashspan/mpp');
+// mppx is an ES module only: import() in both modes, as a CommonJS user of this package would.
+const { Mppx, tempo } = await import('mppx/client');
+{
+  const mppx = Mppx.create({
+    methods: [tempo()],
+    polyfill: false,
+    fetch: () => Promise.reject(new Error('no request in the smoke test')),
+  });
+  const traced = mppAdapter.withHashspan(mppx, options);
+  assert.equal(typeof traced.flush, 'function');
+  assert.equal(await traced.flush(), true);
+}
+{
+  // The events of one settled payment, as mppx emits them, on a stand-in client: no network, no chain.
+  exporter.reset();
+  const handlers = {};
+  const traced = mppAdapter.withHashspan({ on: (name, handler) => { handlers[name] = handler; } }, options);
+  const challenge = {
+    id: 'smoke-challenge',
+    realm: 'api.example.com',
+    method: 'tempo',
+    intent: 'charge',
+    request: { amount: '10000', currency: TO, recipient: TO, methodDetails: { chainId: 4217 } },
+  };
+  const hash = '0x' + 'ef'.repeat(32);
+  const base64url = (json) => Buffer.from(JSON.stringify(json)).toString('base64url');
+  const credential = 'Payment ' + base64url({
+    challenge,
+    payload: { type: 'hash', hash },
+    source: 'did:pkh:eip155:4217:' + FROM,
+  });
+  const receipt = base64url({ method: 'tempo', reference: hash, status: 'success', timestamp: '2026-10-18T00:00:00Z' });
+  handlers['challenge.received']({ challenge, input: 'https://api.example.com/weather' });
+  handlers['credential.created']({ challenge, credential });
+  handlers['payment.response']({
+    challenge,
+    credential,
+    response: new Response('{}', { headers: { 'payment-receipt': receipt } }),
+  });
+  assert.equal(await traced.flush(), true);
+  const span = exporter.getFinishedSpans().find((s) => s.name === 'payment 4217');
+  assert.ok(span, 'mpp recorded a payment span');
+  assert.equal(span.attributes['blockchain.payment.status'], 'settled');
+  assertHashed(span, core.ATTR_BLOCKCHAIN_PAYMENT_PAYER, FROM);
 }
 
 const runtime =

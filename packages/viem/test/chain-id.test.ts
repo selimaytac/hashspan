@@ -151,6 +151,7 @@ describe('a custom tracker', () => {
     const ended: unknown[][] = [];
     const inputs: unknown[] = [];
     const tracker: TxTracker = {
+      paymentSenders: [],
       startSend: (input) => {
         inputs.push(input);
         return {

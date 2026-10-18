@@ -3,9 +3,11 @@
 Releases are cut from `main`, and only from `main`, by the [Release workflow](../.github/workflows/release.yml), using
 [Changesets](https://github.com/changesets/changesets). Packages are published to npm with
 [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/): GitHub Actions authenticates with a short-lived
-OIDC token, npm adds a provenance attestation, and no npm token exists anywhere. `@hashspan/*` packages form a linked
-group (`.changeset/config.json`): the packages released together get one version, while a package without changes
-keeps its own, so versions can differ between packages.
+OIDC token, npm adds a provenance attestation, and no npm token exists anywhere. `@hashspan/core`, `viem`, `cdp`,
+`x402` and the examples form a linked group (`.changeset/config.json`): the packages released together get one
+version, while a package without changes keeps its own, so versions can differ between packages. `@hashspan/mpp` is
+outside the group: it is released as 0.x, on versions of its own, while mppx is 0.x
+([ADR 0029](adr/0029-mpp-payments.md)).
 
 ## Every release
 
@@ -50,8 +52,9 @@ A release candidate goes through the same steps in Changesets' pre mode. `pnpm c
 the publish step publishes them under the npm dist-tag `rc`, so `npm install @hashspan/core` keeps resolving to the
 last release on `latest` and a candidate is installed with `@rc`. Every changeset merged meanwhile goes into the next
 candidate. `pnpm changeset pre exit` in a pull request of its own ends pre mode; the next Version Packages pull
-request then releases `x.y.z` on `latest`. Pre mode reads every package matching the `@hashspan/*` group, the private
+request then releases `x.y.z` on `latest`. Pre mode reads every workspace package named `@hashspan/*`, the private
 ones too, so each has a `version` in its `package.json` (the examples have `0.0.0`; `docs.test.ts` checks it).
+`@hashspan/mpp`, outside the linked group, gets candidates of its own 0.x version.
 
 ## One-time setup
 
@@ -98,6 +101,7 @@ npm trust github @hashspan/core --repo selimaytac/hashspan --file release.yml --
 npm trust github @hashspan/viem --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust github @hashspan/cdp --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust github @hashspan/x402 --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
+npm trust github @hashspan/mpp --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust list @hashspan/core
 npm logout
 ```

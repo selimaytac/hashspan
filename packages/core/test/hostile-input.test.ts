@@ -85,6 +85,24 @@ const PAYMENT = {
   amount: 10_000n,
   x402: { scheme: 'exact', resource: 'https://api.example.com/weather' },
 };
+/** An MPP payment the payer settles itself (ADR 0029), with the fields only such payments have. */
+const MPP_PAYMENT = {
+  chainId: CHAIN_ID,
+  protocol: 'mpp',
+  sender: 'payer',
+  hash: HASH,
+  payer: ADDRESS,
+  recipient: OTHER_ADDRESS,
+  asset: OTHER_ADDRESS,
+  amount: '10000',
+  mpp: {
+    method: 'tempo',
+    intent: 'charge',
+    mode: 'push',
+    challengeId: 'qB3wVm6v2Jt4Xk9rLp0sZ_aQ',
+    resource: 'https://api.example.com/weather',
+  },
+};
 const SETTLEMENT = {
   status: 'settled',
   hash: HASH,
@@ -129,6 +147,7 @@ function exercise(tracker: TxTracker): void {
   tracker.startConfirm(CONFIRM).end(RECEIPT as never);
   tracker.startConfirm({ chainId: CHAIN_ID, hash: OTHER_HASH }).fail(error());
   tracker.startPayment(PAYMENT).end(SETTLEMENT as never);
+  tracker.startPayment(MPP_PAYMENT as never).timeout();
   tracker.startUserOperationSend(USER_OPERATION).end({ userOpHash: HASH });
   tracker.startUserOperationConfirm(USER_OPERATION_CONFIRM).end(USER_OPERATION_RECEIPT);
   tracker.startCallBatchSend(CALL_BATCH).end({ id: BATCH_ID, transactionHashes: [OTHER_HASH] });
@@ -292,6 +311,26 @@ const ROWS: Row[] = [
     name: 'startPayment input',
     run: (t, value) => t.startPayment(value as never).end(SETTLEMENT as never),
   },
+  ...fields('startPayment (mpp)', MPP_PAYMENT, (t, input) => {
+    // A send of the same hash first, so the payment span's link to it is exercised too.
+    t.startSend(SEND).end({ hash: HASH });
+    t.startPayment(input as never).end(SETTLEMENT as never);
+    t.startConfirm(CONFIRM).end(RECEIPT as never);
+  }),
+  {
+    // A server chooses the id: one that is an address must stay hidden in hashed and off mode (rule 6).
+    name: 'startPayment mpp.challengeId holding an address',
+    values: () => [
+      ['an address', ADDRESS],
+      ['an address without 0x', ADDRESS_HEX],
+      ['an id around an address', `id-${ADDRESS_HEX}-x`],
+    ],
+    run: (t, value) =>
+      t.startPayment({ ...MPP_PAYMENT, mpp: { challengeId: value } } as never).timeout(),
+  },
+  ...fields('startPayment mpp', MPP_PAYMENT.mpp, (t, mpp) =>
+    t.startPayment({ ...MPP_PAYMENT, mpp } as never).timeout(),
+  ),
   ...fields('PaymentHandle.end settlement', SETTLEMENT, (t, settlement) =>
     t.startPayment(PAYMENT).end(settlement as never),
   ),
@@ -591,6 +630,17 @@ const TEXT_BOUNDS: TextBound[] = [
         .startPayment({ ...PAYMENT, x402: { resource: text } })
         .end(SETTLEMENT as never);
       return spanAttribute('x402.resource');
+    },
+  },
+  {
+    name: 'mpp.resource (path)',
+    bound: BOUNDS.mppResource,
+    prefix: 'https://api.example.com/',
+    record: (text) => {
+      createTxTracker({ paymentResource: 'path' })
+        .startPayment({ ...PAYMENT, protocol: 'mpp', mpp: { resource: text } })
+        .end(SETTLEMENT as never);
+      return spanAttribute('mpp.resource');
     },
   },
   {

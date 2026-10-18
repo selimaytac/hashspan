@@ -64,15 +64,19 @@ repository's OpenSSF Scorecard.
 | [`@hashspan/viem`](packages/viem) | Adapter for [viem](https://viem.sh) clients | [![npm](https://img.shields.io/npm/v/@hashspan/viem?label=)](https://www.npmjs.com/package/@hashspan/viem) |
 | [`@hashspan/cdp`](packages/cdp) | Adapter for Coinbase CDP server and smart accounts | [![npm](https://img.shields.io/npm/v/@hashspan/cdp?label=)](https://www.npmjs.com/package/@hashspan/cdp) |
 | [`@hashspan/x402`](packages/x402) | Adapter for x402 payments | [![npm](https://img.shields.io/npm/v/@hashspan/x402?label=)](https://www.npmjs.com/package/@hashspan/x402) |
+| [`@hashspan/mpp`](packages/mpp) | Adapter for MPP payments made with mppx (0.x, follows mppx's minor lines) | in the next release |
 
-Install the latest version of every `@hashspan` package you use, or upgrade them together. The packages are a linked
-group ([releasing](docs/releasing.md)): the ones a release changes get one version, and a package without changes keeps
-its own, so the latest versions can differ in their minor until its next release. Each adapter requires the
-`@hashspan/core` of its own release or a later one in the same major (and `@hashspan/cdp` and `@hashspan/x402` the
-`@hashspan/viem` of it), as caret ranges do. A tracker from another core release passed as the `tracker` option still works; what it
+Install the latest version of every `@hashspan` package you use, or upgrade them together. The packages but
+`@hashspan/mpp` are a linked group ([releasing](docs/releasing.md)): the ones a release changes get one version, and a
+package without changes keeps its own, so the latest versions can differ in their minor until its next release. Each
+adapter requires the `@hashspan/core` of its own release or a later one in the same major (and `@hashspan/cdp`,
+`@hashspan/x402` and `@hashspan/mpp` the `@hashspan/viem` of it), as caret ranges do. A tracker from another core
+release passed as the `tracker` option still works; what it
 does not know is not recorded ([ADR 0014](docs/adr/0014-core-api-boundary.md)). The libraries each package
-instruments are peer dependencies, with the supported ranges in its `package.json`; CI runs the CDP and x402 adapters
-against the newest SDK releases in their ranges every week, and the x402 adapter also against the oldest.
+instruments are peer dependencies, with the supported ranges in its `package.json`; CI runs the CDP, x402 and MPP
+adapters against the newest SDK releases in their ranges every week, and the x402 and MPP adapters also against the
+oldest. `@hashspan/mpp` is versioned apart, as 0.x, while mppx is 0.x
+([ADR 0029](docs/adr/0029-mpp-payments.md)): it needs `@hashspan/core` 1.2 or later.
 
 ## Quick start
 
