@@ -228,6 +228,37 @@ The choices that were open when this record was proposed, as decided above or he
 - **Paid MCP tools:** the implementation pull request tests whether `mppx/mcp/client`'s `McpClient.wrap` fires these
   events. If it does not, paid MCP tools over MPP are a known limit, stated in the README.
 
+## Proposed amendment: what the implementation found (2026-10-18)
+
+The implementation pull request follows the decision above. Where the code showed more than this record says, it
+does the following, proposed here for review before the record is accepted:
+
+- **Observing `payment.failed` changes a 5xx answer.** mppx buffers the error body of a 5xx paid response (at most
+  64 KiB and 2 seconds) only when a `payment.failed` observer exists, and the adapter's is one. With the adapter, such
+  a body longer than 64 KiB comes back cut, with an `Mppx-Body-Truncated: true` header, and a body whose stream fails
+  makes `fetch` reject where it returned the response before. "Observers never change a payment" holds for the
+  payment and for every other answer; this one is a known limit in the README, pinned by a test, rather than a reason
+  to drop the `pending` row of the outcome table, which needs the observer.
+- **The manual APIs fire no outcome event.** `preparePayment`, `prepareRequest` and `createCredential` emit
+  `challenge.received` and `credential.created`, never `payment.response` or `payment.failed`: such a payment starts
+  its span and ends as `timeout`. A known limit.
+- **Further bounds**, listed in docs/semconv.md: a challenge id longer than 1024 characters is not followed (the
+  payment is not traced); a credential longer than 65 536 characters and a `Payment-Receipt` header longer than 4096
+  are not decoded (no mode or hash, and `_OTHER`). A challenge that gets no credential before its deadline, or that is
+  evicted by the 1000-payment bound, records nothing.
+- **The chain without a source.** A credential without a valid `source` gives the chain from the challenge's
+  `methodDetails.chainId` and no payer, so no verdict; a payment that fails before its credential is recorded the
+  same way. Without either chain id, nothing is recorded.
+- **Names settled in the API report:** `PaymentInput.sender` is `'facilitator' | 'payer'` (default `facilitator`;
+  any other value is read as `facilitator`), and the member that tells an adapter the core reads the three fields is
+  `TxTracker.paymentSenders`, the frozen list `['facilitator', 'payer']`. `mpp.challenge.id` is recorded when it has
+  1 to 128 characters of RFC 3986's unreserved set, which a base64url HMAC id uses.
+- **A cancelled copy is disturbed.** An observer that starts reading the paid response's copy after it was released
+  gets a rejected read (`TypeError`), as for a body read before.
+- **Push from a wallet account** (`sendCallsSync`) was checked on Anvil, where viem falls back to
+  `eth_sendTransaction` for a single call: the payment span links to the call batch's send span, and the
+  transaction's confirm span to the same send span.
+
 ## Open questions
 
 - **Sessions:** the status of an authorized but unsettled voucher payment (a new value such as `authorized`, or none),
