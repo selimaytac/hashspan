@@ -180,7 +180,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   const abis = new Recent<Abi>();
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
   const revertReasons = new Recent<Promise<string | undefined>>();
-  /** Sender and nonce of recent sends that passed a nonce, to find a replacement viem did not report (ADR 0008). */
+  /** Sender and nonce of recent sends, to find a replacement viem did not report (ADR 0008). */
   const senders = new Recent<SentTransaction>();
   const { track, flush, settleOnce } = createPending();
   const { recordConfirmation, confirmThrough, confirmPending } = createConfirmation({

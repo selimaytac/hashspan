@@ -32,6 +32,7 @@ import {
 import { confirmKey, type Recent } from './confirm/recent.js';
 import {
   detectsReplacement,
+  readSentTransaction,
   type SentTransaction,
   sentTransactionOf,
 } from './confirm/replacement.js';
@@ -146,7 +147,7 @@ export interface TransactionDependencies {
   tracker: TxTracker;
   confirm: BackgroundConfirmOptions | undefined;
   abis: Recent<Abi>;
-  /** Sender and nonce of recent sends that passed a nonce, to find a replacement viem did not report. */
+  /** Sender and nonce of recent sends, to find a replacement viem did not report. */
   senders: Recent<SentTransaction>;
   track(work: Promise<void>): void;
   recordConfirmation: Confirmation['recordConfirmation'];
@@ -194,8 +195,8 @@ export function addTransactionActions(
   } = base;
 
   /**
-   * Work after a successful send: remember the ABI, and the sender and nonce of `input` when the call passed a nonce,
-   * and start background confirmation.
+   * Work after a successful send: remember the ABI and the sender and nonce of `input`, read from the transaction when
+   * the call passed no nonce or no sender is known, and start background confirmation.
    */
   const afterSend = (
     chainId: number,
@@ -205,8 +206,17 @@ export function addTransactionActions(
   ): void => {
     try {
       if (abi) abis.set(confirmKey(chainId, hash), abi);
+      const key = confirmKey(chainId, hash);
       const sent = sentTransactionOf(input?.from, input?.nonce, input?.to);
-      if (sent) senders.set(confirmKey(chainId, hash), sent);
+      if (sent) senders.set(key, sent);
+      // The nonce viem or the wallet filled in, or the sender of a raw send: one request, off the caller's path.
+      else if (input !== undefined) {
+        track(
+          readSentTransaction(client, hash, input.from).then((read) => {
+            if (read) senders.set(key, read);
+          }),
+        );
+      }
       if (confirm?.mode === 'background') {
         confirmThrough(client, chainId, hash, confirm.timeoutMs ?? DEFAULT_BACKGROUND_TIMEOUT_MS);
       }

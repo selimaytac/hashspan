@@ -1,13 +1,17 @@
 // A replacement viem did not report: after its wait timed out, the transaction with the same sender and nonce that
-// was mined instead, found from what hashspan recorded when it sent the awaited one (ADR 0008 amendment).
+// was mined instead, found from what hashspan learned when it sent the awaited one (ADR 0008 amendment).
+import { diag } from '@opentelemetry/api';
 import {
   getBlock as viemGetBlock,
   getBlockNumber as viemGetBlockNumber,
+  getTransaction as viemGetTransaction,
   getTransactionCount as viemGetTransactionCount,
   getTransactionReceipt as viemGetTransactionReceipt,
 } from 'viem/actions';
 import { own } from '../arguments.js';
+import { errorName } from '../safe-tracker.js';
 import { sameHex, type ViemReceipt, type ViemReplacement } from './receipt.js';
+import { within } from './timing.js';
 
 /** The sender and nonce of a transaction hashspan sent, and its recipient, kept by hash for a while. */
 export interface SentTransaction {
@@ -22,6 +26,9 @@ export interface SentTransaction {
  */
 export const MAX_REPLACEMENT_BLOCKS = 128;
 
+/** How long telemetry waits for the transaction it reads after a send that passed no nonce. */
+const SENT_TRANSACTION_TIMEOUT_MS = 10_000;
+
 /** The `SentTransaction` of a send, or undefined without a sender address or a nonce the caller passed. */
 export function sentTransactionOf(
   from: unknown,
@@ -31,6 +38,32 @@ export function sentTransactionOf(
   if (typeof from !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(from)) return undefined;
   if (typeof nonce !== 'number' || !Number.isSafeInteger(nonce) || nonce < 0) return undefined;
   return { from, nonce, to: typeof to === 'string' ? to : undefined };
+}
+
+/**
+ * The sender and nonce of `hash`, sent through `client` by `from` (undefined for a raw send), read once with
+ * `eth_getTransactionByHash` after a send that passed no nonce, off the caller's path; undefined when the node no longer
+ * knows the transaction (a replacement took it out of the pool first), the request fails or takes longer than
+ * `SENT_TRANSACTION_TIMEOUT_MS`, or the answer is not that transaction from that sender. Never rejects.
+ */
+export function readSentTransaction(
+  client: unknown,
+  hash: string,
+  from: string | undefined,
+): Promise<SentTransaction | undefined> {
+  const read = viemGetTransaction(client as never, { hash: hash as `0x${string}` }).then(
+    (transaction: unknown) => {
+      if (!sameHex(own(transaction, 'hash'), hash)) return undefined;
+      const sender = own(transaction, 'from');
+      if (from !== undefined && !sameHex(sender, from)) return undefined;
+      return sentTransactionOf(sender, own(transaction, 'nonce'), own(transaction, 'to'));
+    },
+    (error: unknown) => {
+      diag.debug(`hashspan: could not read the sent transaction (${errorName(error)})`);
+      return undefined;
+    },
+  );
+  return within(read, SENT_TRANSACTION_TIMEOUT_MS, 'read the sent transaction');
 }
 
 /**

@@ -114,10 +114,13 @@ replacement that takes the transaction out of the node's pool before that read, 
 is never detected: the wait polls for a transaction the node no longer knows until its timeout, and the confirm span
 ended with `error.type` `timeout`, although the chain holds the outcome.
 
-- **After the wait timed out, the viem adapter looks for the replacement itself**, from what it recorded when it sent
-  the awaited transaction through the same `withHashspan()` result: the sender and the nonce the call passed. A
-  send without a `nonce` of its own, a raw send (no sender, #33), and a transaction confirmed with `watch()` that
-  hashspan did not send keep the timeout.
+- **After the wait timed out, the viem adapter looks for the replacement itself**, from what it learned when it sent
+  the awaited transaction through the same `withHashspan()` result: the sender and the nonce the call passed, or,
+  when the call passed no nonce (the node, the wallet or viem fills it in) or no sender is known (a raw send, #33),
+  both read with one `eth_getTransactionByHash` of the returned hash through the sending client, right after the send
+  and off the caller's path. Kept per hash for 10 minutes, for at most 10 000 hashes. A failed read is only logged
+  through `diag`. A transaction the node dropped before that read (a replacement that reached it first), and a
+  transaction confirmed with `watch()` that hashspan did not send, keep the timeout.
 - **The same match as viem's: sender and nonce, from chain data.** The awaited hash has no receipt, the sender's
   nonce on chain is past the awaited one, and the block that took it, found by reading the sender's nonce at block
   numbers, holds another transaction from that sender with that nonce. Only the last 128 blocks are searched, about

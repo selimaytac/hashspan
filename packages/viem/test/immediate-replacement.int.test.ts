@@ -158,7 +158,7 @@ describe('a transaction replaced before the wait read it', () => {
     expect(confirmOf(cancel)[0]?.attributes['blockchain.tx.status']).toBe('success');
   });
 
-  it('stays a timeout when the original send passed no nonce', async () => {
+  it('ends a cancelled transaction as replaced when the original send passed no nonce', async () => {
     const hashspan = withHashspan();
     const wallet = createWalletClient({ account, chain: anvil, transport: http(RPC_URL) }).extend(
       hashspan,
@@ -170,8 +170,9 @@ describe('a transaction replaced before the wait read it', () => {
     }).extend(hashspan);
 
     const nonce = await reader().getTransactionCount({ address: account, blockTag: 'pending' });
+    // The node fills in the nonce; hashspan reads it from the transaction after the send.
     const original = await wallet.sendTransaction({ to: RECIPIENT, value: 1n, ...LOW_FEE });
-    await wallet.sendTransaction({ to: account, value: 0n, nonce, ...HIGH_FEE });
+    const cancel = await wallet.sendTransaction({ to: account, value: 0n, nonce, ...HIGH_FEE });
     await rpc('evm_mine');
 
     await expect(
@@ -179,7 +180,10 @@ describe('a transaction replaced before the wait read it', () => {
     ).rejects.toThrow(expect.objectContaining({ name: 'WaitForTransactionReceiptTimeoutError' }));
     await hashspan.flush();
 
-    expect(confirmOf(original)[0]?.attributes['error.type']).toBe('timeout');
-    expect(confirmOf(original)[0]?.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(confirmOf(original)[0]?.attributes).toMatchObject({
+      'blockchain.tx.status': 'replaced',
+      'blockchain.tx.replacement.hash': cancel,
+    });
+    expect(confirmOf(cancel)[0]?.attributes['blockchain.tx.status']).toBe('success');
   });
 });

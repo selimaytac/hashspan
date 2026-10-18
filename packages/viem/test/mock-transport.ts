@@ -136,6 +136,9 @@ export function mockTransport(options: MockOptions = {}) {
           return `0x${(options.advanceBlocks ? block++ : block).toString(16)}`;
         case 'eth_getTransactionByHash':
           return transaction((params as unknown[] | undefined)?.[0]);
+        case 'eth_getTransactionCount':
+          // The sender's nonce at any block: the transaction's own (0) is not taken yet.
+          return '0x0';
         case 'eth_call':
           if (
             options.operatorFee &&

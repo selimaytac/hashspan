@@ -90,7 +90,8 @@ describe("Celo: the sending call's fee currency", () => {
     expect(denominations()).toEqual(['token']);
     const send = tracing.spans().find((s) => s.name === `send ${celo.id}`);
     expect(send?.attributes).not.toHaveProperty('blockchain.tx.fee_asset');
-    // The same requests as the calls without hashspan: the asset is read from the call, not the chain.
+    // The same requests as the calls without hashspan, but the read of a sent transaction without a nonce: the asset
+    // is read from the call, not the chain.
     const plain = mockTransport({ chainIdHex: CHAIN_ID_HEX, retryCount: 0 });
     const plainWallet = createWalletClient({
       account: FROM,
@@ -109,7 +110,10 @@ describe("Celo: the sending call's fee currency", () => {
         feeCurrency: FEE_CURRENCY,
       } as never),
     });
-    expect(mock.calls).toEqual(plain.calls);
+    expect(mock.calls.filter((method) => method !== 'eth_getTransactionByHash')).toEqual(
+      plain.calls,
+    );
+    expect(mock.calls.filter((method) => method === 'eth_getTransactionByHash')).toHaveLength(1);
   });
 
   it('records it for writeContract', async () => {

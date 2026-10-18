@@ -33,6 +33,10 @@ interface ChainOptions {
   failOn?: string[];
   /** A block whose `eth_getTransactionCount` fails, as on a node without its state. */
   failNonceAt?: number;
+  /** How many `eth_getTransactionByHash` requests still find HASH pending before the node drops it. */
+  knownFor?: number;
+  /** How many `eth_getTransactionByHash` requests fail first. */
+  failedReads?: number;
   hangOn?: string[];
 }
 
@@ -47,7 +51,11 @@ function chain({
   failOn = [],
   hangOn = [],
   failNonceAt,
+  knownFor = 0,
+  failedReads = 0,
 }: ChainOptions = {}) {
+  let failures = 0;
+  let reads = 0;
   const requests: { method: string; params: unknown[] }[] = [];
   const minedTransaction = {
     hash: takenBy,
@@ -90,7 +98,23 @@ function chain({
         case 'eth_blockNumber':
           return hex(latest);
         case 'eth_getTransactionByHash':
-          return null;
+          if (failures++ < failedReads) {
+            throw new RpcRequestError({
+              body: {},
+              error: { code: -32602, message: 'mock: read failed' },
+              url: 'mock',
+            });
+          }
+          if (String(params[0]).toLowerCase() !== HASH || reads++ >= knownFor) return null;
+          return {
+            ...minedTransaction,
+            hash: HASH,
+            to: TO,
+            value: '0x1',
+            blockHash: null,
+            blockNumber: null,
+            transactionIndex: null,
+          };
         case 'eth_getTransactionCount': {
           const tag = params[1];
           const at = tag === 'latest' || tag === 'pending' ? latest : Number(tag);
@@ -152,11 +176,12 @@ function chain({
       }
     },
   });
+  const reads_ = () => requests.filter((r) => r.method === 'eth_getTransactionByHash').length;
   const searched = () =>
     requests.filter(
       (r) => r.method === 'eth_getTransactionCount' || r.method === 'eth_getBlockByNumber',
     );
-  return { transport, requests, searched };
+  return { transport, requests, searched, reads: reads_ };
 }
 
 function clients(transport: ReturnType<typeof chain>['transport'], hashspan = withHashspan()) {
@@ -261,6 +286,74 @@ describe('a replacement viem did not report', () => {
   });
 });
 
+describe('the nonce of a send that passed none', () => {
+  it('is read once after the send, and the replacement is found with it', async () => {
+    const mock = chain({ knownFor: 1 });
+    const { hashspan, wallet, reader } = clients(mock.transport);
+    const hash = await wallet.sendTransaction({ to: TO, value: 1n, gas: 21_000n });
+    expect(await hashspan.flush({ timeoutMs: 5_000 })).toBe(true);
+    expect(mock.reads()).toBe(1);
+
+    await expect(
+      reader.waitForTransactionReceipt({ hash, timeout: 100, retryDelay: 1 }),
+    ).rejects.toThrow(expect.objectContaining({ name: 'WaitForTransactionReceiptTimeoutError' }));
+    expect(await hashspan.flush({ timeoutMs: 5_000 })).toBe(true);
+    expect(confirmOf(HASH)?.attributes).toMatchObject({
+      'blockchain.tx.status': 'replaced',
+      'blockchain.tx.replacement.hash': MINED,
+    });
+  });
+
+  it('is not read when the send passed one', async () => {
+    const mock = chain({ knownFor: 1 });
+    const { hashspan, wallet } = clients(mock.transport);
+    await wallet.sendTransaction({ to: TO, value: 1n, nonce: NONCE, gas: 21_000n });
+    await hashspan.flush({ timeoutMs: 5_000 });
+    expect(mock.reads()).toBe(0);
+  });
+
+  it('is read for a raw send, which gives the sender too', async () => {
+    const mock = chain({ knownFor: 1 });
+    const setup = clients(mock.transport);
+    const signer = mnemonicToAccount('test test test test test test test test test test test junk');
+    const serializedTransaction = await signer.signTransaction({
+      chainId: base.id,
+      to: TO,
+      value: 1n,
+      nonce: NONCE,
+      gas: 21_000n,
+      maxFeePerGas: 2n,
+      maxPriorityFeePerGas: 1n,
+    });
+    const hash = await setup.wallet.sendRawTransaction({ serializedTransaction });
+    await expect(
+      setup.reader.waitForTransactionReceipt({ hash, timeout: 100, retryDelay: 1 }),
+    ).rejects.toThrow(expect.objectContaining({ name: 'WaitForTransactionReceiptTimeoutError' }));
+    await setup.hashspan.flush({ timeoutMs: 5_000 });
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.replacement.hash']).toBe(MINED);
+  });
+
+  it('does not delay the send when the read never answers', async () => {
+    const mock = chain({ hangOn: ['eth_getTransactionByHash'] });
+    const { hashspan, wallet } = clients(mock.transport);
+    await expect(wallet.sendTransaction({ to: TO, value: 1n, gas: 21_000n })).resolves.toBe(HASH);
+    expect(await hashspan.flush({ timeoutMs: 100 })).toBe(false);
+  });
+
+  it('keeps the timeout when the read fails, and the send result unchanged', async () => {
+    const mock = chain({ failedReads: 1 });
+    const setup = clients(mock.transport);
+    const hash = await setup.wallet.sendTransaction({ to: TO, value: 1n, gas: 21_000n });
+    expect(hash).toBe(HASH);
+    await expect(
+      setup.reader.waitForTransactionReceipt({ hash, timeout: 100, retryDelay: 1 }),
+    ).rejects.toThrow(expect.objectContaining({ name: 'WaitForTransactionReceiptTimeoutError' }));
+    await setup.hashspan.flush({ timeoutMs: 5_000 });
+    expect(confirmOf(HASH)?.attributes['error.type']).toBe('timeout');
+    expect(mock.searched()).toHaveLength(0);
+  });
+});
+
 describe('a timeout that stays a timeout', () => {
   const timedOut = () => {
     expect(confirmOf(HASH)?.attributes['error.type']).toBe('timeout');
@@ -288,7 +381,7 @@ describe('a timeout that stays a timeout', () => {
     timedOut();
   });
 
-  it('when the send passed no nonce, without a request', async () => {
+  it('when the send passed no nonce and the node dropped it before hashspan read it', async () => {
     const mock = chain();
     await sendAndTimeOut(clients(mock.transport), { nonce: undefined });
     timedOut();
@@ -351,7 +444,7 @@ describe('a timeout that stays a timeout', () => {
     expect(mock.searched()).toHaveLength(0);
   });
 
-  it('when the transaction was broadcast with sendRawTransaction, which records no sender', async () => {
+  it('when a raw send was dropped before hashspan read its sender', async () => {
     const mock = chain();
     const setup = clients(mock.transport);
     // Anvil's first account, from its public test mnemonic.

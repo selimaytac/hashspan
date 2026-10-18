@@ -166,11 +166,14 @@ that paid them.
 - Your `onReplaced` callback is called unchanged, and your wait still resolves with viem's result. If your callback
   throws, the wait rejects with its error as in plain viem; the replacement is recorded anyway.
 - viem detects a replacement only after its wait has read the original transaction. A replacement sent right after
-  the original, before the wait read it, takes it out of the node's pool unseen, and viem's wait times out. hashspan
-  then looks for the replacement itself, when the original was sent through the same `withHashspan()` result with a
-  `nonce` you passed: it records it as above, without `blockchain.tx.replacement.reason`, as viem reported none. It
-  searches the last 128 blocks, with at most 13 requests after the timeout; your wait still rejects with viem's
-  `WaitForTransactionReceiptTimeoutError`, and both confirm spans end when it did.
+  the original, before the wait read it, takes it out of the node's pool unseen, and viem's wait times out
+  ([wevm/viem#5242](https://github.com/wevm/viem/issues/5242)). hashspan then looks for the replacement itself, for
+  a transaction sent through the same `withHashspan()` result: it records it as above, without
+  `blockchain.tx.replacement.reason`, as viem reported none. It knows the sender and nonce from your call, or, when
+  you pass no `nonce` or send a signed transaction, from one `eth_getTransactionByHash` it sends through the sending
+  client right after the send, off your call's path. It searches the last 128 blocks, with at most 13 requests after
+  the timeout; your wait still rejects with viem's `WaitForTransactionReceiptTimeoutError`, and both confirm spans
+  end when it did.
 - `checkReplacement: false` turns off viem's detection, and with it this attribution.
 - A replaced transaction is not an error: whether a cancellation is a failure is up to your application.
 
@@ -488,10 +491,13 @@ actions to trace their user operations ([smart account SDKs](#smart-account-sdks
 - A transaction sent while `maxBackgroundConfirmations` confirmations are polling gets no background confirm span, and
   in serverless runtimes that freeze after the response, background confirmations may not complete
   ([background confirmation](#background-confirmation)).
-- A transaction replaced before viem's wait read it ends its confirm span with `error.type` `timeout` unless it was
-  sent through the same `withHashspan()` result with a `nonce` you passed and the replacement was mined in the last
-  128 blocks: a send whose nonce viem or the wallet filled in, a raw send and a transaction sent elsewhere that you
-  `watch()` are not searched ([replaced transactions](#replaced-transactions)).
+- A transaction replaced before viem's wait read it still ends its confirm span with `error.type` `timeout` when the
+  replacement was mined before the last 128 blocks, when it was sent without a `nonce` and the replacement reached
+  the node before hashspan's read of the sent transaction (the node then no longer knows it), when that read fails
+  (a wallet provider that answers no reads), and when it was sent elsewhere and confirmed with `watch()`
+  ([replaced transactions](#replaced-transactions)).
+- A send without a `nonce`, and a raw send, cost one `eth_getTransactionByHash` through the sending client, for the
+  replacement search above; pass `nonce` to avoid it.
 - A wait that resolves with the receipt of another transaction that viem did not report as a replacement, as after a
   mixed-up RPC response, ends the confirm span with `error.type` `_OTHER` and records none of that receipt's data;
   the transaction's own outcome is not recorded ([#355](https://github.com/selimaytac/hashspan/issues/355)).

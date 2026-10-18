@@ -406,8 +406,10 @@ How a wallet service sends decides what hashspan records:
   with `withHashspan()`. viem sends `eth_sendTransaction` for an address-only account, so the send span covers the
   service's call; wait for receipts through an extended public client on an RPC endpoint when the provider does not
   answer reads, or confirm with `watch()` on one. The provider needs to answer only `eth_chainId`, which viem asks
-  before it sends, and `eth_sendTransaction`; hashspan sends it nothing else. Background confirmation polls through
-  the sending client, so it needs a provider that answers reads.
+  before it sends, and `eth_sendTransaction`. hashspan also sends it one `eth_getTransactionByHash` after a send
+  without a `nonce`, for the transaction's nonce (in case it is replaced before a wait reads it); a provider that
+  refuses it changes nothing but that. Background confirmation polls through the sending client, so it needs a
+  provider that answers reads.
 - **Services that send through their own API** return a transaction hash, sometimes only after polling: record the
   API call as a send span with the core's tracker and the transaction with `watch()` on the same tracker, as in
   [transactions sent elsewhere](../packages/viem/README.md#transactions-sent-elsewhere). The send span then covers the API call, the confirm span the wait, linked

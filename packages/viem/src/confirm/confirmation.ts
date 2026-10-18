@@ -78,7 +78,7 @@ export interface ConfirmationOptions {
   abis: Recent<Abi>;
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
   revertReasons: Recent<Promise<string | undefined>>;
-  /** Sender and nonce of recent sends that passed a nonce, to find a replacement viem did not report. */
+  /** Sender and nonce of recent sends, to find a replacement viem did not report. */
   senders: Recent<SentTransaction>;
   track(work: Promise<void>): void;
   settleOnce(handle: ConfirmHandle): PendingConfirmation;

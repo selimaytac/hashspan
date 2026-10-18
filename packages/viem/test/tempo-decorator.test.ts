@@ -52,7 +52,11 @@ describe.skipIf(!viemAtLeast('2.43.0'))('the Tempo extension and withHashspan()'
 
     expect(traced.result).toEqual(plain.result);
     expect(traced.result).toBe(HASH);
-    expect(traced.requests).toEqual(plain.requests);
+    // And the one read of a transaction sent without a nonce, for its nonce (ADR 0008 amendment).
+    expect(traced.requests).toEqual([
+      ...plain.requests,
+      { method: 'eth_getTransactionByHash', params: [HASH] },
+    ]);
     const [send, ...more] = sends();
     expect(more).toEqual([]);
     expect(send?.attributes).toMatchObject({
