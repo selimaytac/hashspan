@@ -56,6 +56,8 @@ import { ADDRESS, amount, identifier, TX_HASH } from './values.js';
 const MPP_MODES: ReadonlySet<unknown> = new Set([MPP_MODE_VALUE_PUSH, MPP_MODE_VALUE_PULL]);
 /** An MPP challenge id: text of RFC 3986's unreserved characters, as a base64url HMAC is, of bounded length. */
 const MPP_CHALLENGE_ID = /^[A-Za-z0-9._~-]{1,128}$/;
+/** Hex of an address's length, which a server-chosen id could hold: hidden where the address mode hides addresses. */
+const ADDRESS_LIKE = /[0-9a-fA-F]{40}/;
 
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
@@ -124,7 +126,11 @@ export function createPaymentSpans({
     const mode: unknown = mpp?.mode;
     if (MPP_MODES.has(mode)) attributes[ATTR_MPP_MODE] = mode as string;
     const challengeId: unknown = mpp?.challengeId;
-    if (typeof challengeId === 'string' && MPP_CHALLENGE_ID.test(challengeId)) {
+    if (
+      typeof challengeId === 'string' &&
+      MPP_CHALLENGE_ID.test(challengeId) &&
+      !(formatAddress.protectsAddresses && ADDRESS_LIKE.test(challengeId))
+    ) {
       attributes[ATTR_MPP_CHALLENGE_ID] = challengeId;
     }
     const mppResource = resourceOf(mpp?.resource);

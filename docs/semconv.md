@@ -221,7 +221,7 @@ with or without hashspan.
 | `mpp.method` | string | payment | on | MPP payment method, e.g. `tempo` |
 | `mpp.intent` | string | payment | on | MPP intent, e.g. `charge` |
 | `mpp.mode` | string | payment | on | how an MPP charge is settled: `push` (the payer broadcasts) \| `pull` (the server broadcasts what the payer signed) |
-| `mpp.challenge.id` | string | payment | on | id of the MPP challenge paid, chosen by the server: 1 to 128 characters of `A-Z a-z 0-9 - . _ ~`, else not recorded; spans only, never a metric attribute ([ADR 0029](adr/0029-mpp-payments.md)) |
+| `mpp.challenge.id` | string | payment | on | id of the MPP challenge paid, chosen by the server: 1 to 128 characters of `A-Z a-z 0-9 - . _ ~`, and in `hashed` and `off` address mode no 40 hex characters in a row (an address), else not recorded; spans only, never a metric attribute ([ADR 0029](adr/0029-mpp-payments.md)) |
 | `mpp.resource` | string | payment | origin | the resource paid for, as `x402.resource` records it |
 | `error.type` | string | all | on | see *Span status*; reused from OpenTelemetry general conventions |
 

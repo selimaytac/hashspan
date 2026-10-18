@@ -117,6 +117,28 @@ describe('a payment the payer settles', () => {
     expect(tracing.spanNamed(PAYMENT_SPAN).attributes['mpp.challenge.id']).toBe(challengeId);
   });
 
+  it('records no challenge id that holds an address when the address mode hides addresses', () => {
+    const address = '2222222222222222222222222222222222222222';
+    const ids = [address, `0x${address}`, `id-${address.toUpperCase()}-x`];
+    for (const mode of ['raw', 'hashed', 'off'] as const) {
+      for (const challengeId of ids) {
+        createTxTracker({ address: mode })
+          .startPayment({ ...mppPayment, mpp: { challengeId } })
+          .timeout();
+      }
+    }
+    const recorded = tracing.spans().map((span) => span.attributes['mpp.challenge.id']);
+    expect(recorded).toEqual([
+      ...ids,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  });
+
   it('records the hash the payer knows when the span starts, so a timeout keeps it', () => {
     const tracker = createTxTracker();
     tracker.startPayment({ ...mppPayment, hash: HASH }).timeout();

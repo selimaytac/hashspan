@@ -252,7 +252,8 @@ does the following, proposed here for review before the record is accepted:
 - **Names settled in the API report:** `PaymentInput.sender` is `'facilitator' | 'payer'` (default `facilitator`;
   any other value is read as `facilitator`), and the member that tells an adapter the core reads the three fields is
   `TxTracker.paymentSenders`, the frozen list `['facilitator', 'payer']`. `mpp.challenge.id` is recorded when it has
-  1 to 128 characters of RFC 3986's unreserved set, which a base64url HMAC id uses.
+  1 to 128 characters of RFC 3986's unreserved set, which a base64url HMAC id uses, and, in `hashed` and `off`
+  address mode, no run of 40 hex characters: a server could choose the payer's address as an id.
 - **A cancelled copy is disturbed.** An observer that starts reading the paid response's copy after it was released
   gets a rejected read (`TypeError`), as for a body read before.
 - **Push from a wallet account** (`sendCallsSync`) was checked on Anvil, where viem falls back to

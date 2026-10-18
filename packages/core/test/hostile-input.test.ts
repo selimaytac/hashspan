@@ -317,6 +317,17 @@ const ROWS: Row[] = [
     t.startPayment(input as never).end(SETTLEMENT as never);
     t.startConfirm(CONFIRM).end(RECEIPT as never);
   }),
+  {
+    // A server chooses the id: one that is an address must stay hidden in hashed and off mode (rule 6).
+    name: 'startPayment mpp.challengeId holding an address',
+    values: () => [
+      ['an address', ADDRESS],
+      ['an address without 0x', ADDRESS_HEX],
+      ['an id around an address', `id-${ADDRESS_HEX}-x`],
+    ],
+    run: (t, value) =>
+      t.startPayment({ ...MPP_PAYMENT, mpp: { challengeId: value } } as never).timeout(),
+  },
   ...fields('startPayment mpp', MPP_PAYMENT.mpp, (t, mpp) =>
     t.startPayment({ ...MPP_PAYMENT, mpp } as never).timeout(),
   ),

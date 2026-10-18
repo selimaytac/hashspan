@@ -354,7 +354,8 @@ export interface MppPaymentDetails {
   mode?: 'push' | 'pull' | undefined;
   /**
    * Id of the challenge paid, chosen by the server; recorded as `mpp.challenge.id` only if it has 1 to 128 characters
-   * from `A-Z`, `a-z`, `0-9`, `-`, `.`, `_` and `~`. Recorded on spans, never as a metric attribute.
+   * from `A-Z`, `a-z`, `0-9`, `-`, `.`, `_` and `~`, and in `hashed` and `off` address mode only if it holds no 40
+   * hex characters in a row, which could be an address. Recorded on spans, never as a metric attribute.
    */
   challengeId?: string | undefined;
   /** URL of the resource paid for, recorded as `mpp.resource` as `x402.resource` is ({@link X402PaymentDetails}). */

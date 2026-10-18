@@ -252,6 +252,19 @@ const ROWS: Row[] = [
     }),
   },
   {
+    // The server chooses the id: one that is an address stays hidden in hashed and off mode (rule 6).
+    name: 'challenge id holding an address',
+    untraced: false,
+    values: () => [
+      ['an address', ADDRESS],
+      ['an address without 0x', ADDRESS.slice(2)],
+      ['an id around an address', `id-${ADDRESS.slice(2)}-x`],
+    ],
+    scenario: paying((pay, value) => {
+      pay.challenge.id = value;
+    }),
+  },
+  {
     name: 'challenge id, repeated',
     untraced: false,
     scenario: paying((pay, value) => {
