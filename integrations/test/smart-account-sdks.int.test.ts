@@ -3,8 +3,8 @@
 // applied last. User operations go through packages/viem/test/test-bundler.ts to the stand-in EntryPoint, with a
 // stand-in account (smart-account-setup.ts); what that does not cover is in packages/viem/test/user-operation.int.test.ts.
 // Nothing leaves localhost (see offline.ts, a setup file).
-import { type HashspanExtension, withHashspan } from '@hashspan/viem';
-import { createKernelAccountClient } from '@zerodev/sdk';
+import { withHashspan } from '@hashspan/viem';
+import { type CreateKernelAccountReturnType, createKernelAccountClient } from '@zerodev/sdk';
 import { createSmartAccountClient } from 'permissionless';
 import {
   type Address,
@@ -17,7 +17,7 @@ import {
 } from 'viem';
 import { entryPoint07Address } from 'viem/account-abstraction';
 import { foundry } from 'viem/chains';
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { startAnvil } from '../../packages/viem/test/start-anvil.js';
 import { testBundler } from '../../packages/viem/test/test-bundler.js';
 import { installTestEntryPoint } from '../../packages/viem/test/test-smart-account.js';
@@ -91,13 +91,11 @@ interface SdkClient {
 }
 
 /**
- * `client.extend(hashspan)` on an SDK's finished client. viem's `extend()` types require an extension's
- * `sendTransaction` to have viem's signature, and the extension returns the SDK's: TypeScript rejects it without a
- * cast, while the call itself works. The SDKs' own types for a stand-in account are loose, so the client is typed with
- * the actions the tests call.
+ * An SDK's client, already extended with hashspan, typed with the actions the tests call: the SDKs' own types for the
+ * stand-in account are loose (no chain on the permissionless client, a `never` account on the Kernel client). The
+ * extension itself type-checks as written, see the `types` tests.
  */
-const extendLast = (client: { extend: unknown }, hashspan: HashspanExtension): SdkClient =>
-  (client.extend as (extension: unknown) => SdkClient)(hashspan);
+const testActions = (client: object): SdkClient => client as SdkClient;
 
 /** The user operation spans: a send, and a confirm linked to it. */
 function expectUserOperationSpans(bundleHash: string) {
@@ -140,14 +138,13 @@ describe('permissionless.js', () => {
 
   it('records no transaction or call batch of createSmartAccountClient with withHashspan() applied last', async () => {
     const hashspan = withHashspan({ confirm: { mode: 'background' } });
-    const client = extendLast(
+    const client = testActions(
       createSmartAccountClient({
         account,
         client: reader,
         bundlerTransport: http(bundlerUrl),
         pollingInterval: 100,
-      }),
-      hashspan,
+      }).extend(hashspan),
     );
 
     const sent = await client.sendTransaction({ to: RECIPIENT, value: 1n });
@@ -172,14 +169,21 @@ describe('permissionless.js', () => {
     expectUserOperationSpans(receipt.receipt.transactionHash);
   });
 
-  it('needs a cast in TypeScript to extend createSmartAccountClient last', () => {
+  it('types createSmartAccountClient(...).extend(withHashspan()) without a cast', () => {
     const client = createSmartAccountClient({
       account,
       client: reader,
       bundlerTransport: http(bundlerUrl),
     });
-    // @ts-expect-error viem's extend() types expect viem's own sendTransaction (docs/integrations.md).
     const extended = client.extend(withHashspan());
+    // The SDK's actions keep the SDK's signatures, and the bundler actions stay.
+    expectTypeOf(extended.sendTransaction).toEqualTypeOf(client.sendTransaction);
+    expectTypeOf(extended.writeContract).toEqualTypeOf(client.writeContract);
+    expectTypeOf(extended.sendCalls).toEqualTypeOf(client.sendCalls);
+    expectTypeOf(extended.sendUserOperation).toEqualTypeOf(client.sendUserOperation);
+    expectTypeOf(extended.waitForUserOperationReceipt).toEqualTypeOf(
+      client.waitForUserOperationReceipt,
+    );
     expect(extended).toHaveProperty('sendUserOperation');
   });
 });
@@ -187,7 +191,7 @@ describe('permissionless.js', () => {
 describe('ZeroDev', () => {
   it('records no transaction of createKernelAccountClient with withHashspan() applied last', async () => {
     const hashspan = withHashspan({ confirm: { mode: 'background' } });
-    const client = extendLast(
+    const client = testActions(
       createKernelAccountClient({
         // A Kernel account needs Kernel's contracts, which are not published as npm artifacts: ZeroDev's client runs
         // with the stand-in account.
@@ -198,8 +202,7 @@ describe('ZeroDev', () => {
         pollingInterval: 100,
         // ZeroDev's default asks its own bundler for `zd_getUserOperationGasPrice`.
         userOperation: { estimateFeesPerGas: async () => reader.estimateFeesPerGas() },
-      }),
-      hashspan,
+      }).extend(hashspan),
     );
 
     const hash = await client.sendTransaction({ to: RECIPIENT, value: 1n });
@@ -211,5 +214,24 @@ describe('ZeroDev', () => {
     const userOpHash = await client.sendUserOperation({ calls: [{ to: RECIPIENT, value: 1n }] });
     const receipt = await client.waitForUserOperationReceipt({ hash: userOpHash });
     expectUserOperationSpans(receipt.receipt.transactionHash);
+  });
+
+  it('types createKernelAccountClient(...).extend(withHashspan()) without a cast', () => {
+    // Typed as a Kernel account, so that the client has ZeroDev's own action types; the stand-in runs underneath.
+    const client = createKernelAccountClient({
+      account: account as unknown as CreateKernelAccountReturnType,
+      chain: foundry,
+      client: reader,
+      bundlerTransport: http(bundlerUrl),
+      userOperation: { estimateFeesPerGas: async () => reader.estimateFeesPerGas() },
+    });
+    const extended = client.extend(withHashspan());
+    expectTypeOf(extended.sendTransaction).toEqualTypeOf(client.sendTransaction);
+    expectTypeOf(extended.writeContract).toEqualTypeOf(client.writeContract);
+    expectTypeOf(extended.sendUserOperation).toEqualTypeOf(client.sendUserOperation);
+    expectTypeOf(extended.waitForUserOperationReceipt).toEqualTypeOf(
+      client.waitForUserOperationReceipt,
+    );
+    expect(extended).toHaveProperty('sendUserOperation');
   });
 });

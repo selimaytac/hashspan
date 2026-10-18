@@ -24,7 +24,9 @@ export interface FlushOptions {
 
 // @public
 export interface HashspanExtension {
-    <TClient extends ViemClientLike>(client: TClient): Pick<TClient, Extract<keyof TClient, TracedAction>>;
+    <TClient extends ViemClientLike>(client: TClient): Pick<TClient, Exclude<Extract<keyof TClient, TracedAction>, TClient extends {
+        extend: (...args: infer TArguments) => unknown;
+    } ? TArguments extends [(client: never) => infer TAccepted] ? { [K in Extract<keyof TClient, TracedAction>]: K extends keyof TAccepted ? TClient[K] extends TAccepted[K] ? never : K : never; }[Extract<keyof TClient, TracedAction>] : never : never>>;
     flush(options?: FlushOptions): Promise<boolean>;
     watch(client: ViemClientLike, options: WatchOptions): void;
 }

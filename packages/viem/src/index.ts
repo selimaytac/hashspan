@@ -82,10 +82,31 @@ const DEFAULT_REVERT_REASON_TIMEOUT_MS = 10_000;
 
 /** Client extension returned by {@link withHashspan}: the traced actions present on the client. */
 export interface HashspanExtension {
-  /** Extends `client` with traced versions of the actions it has. */
+  /**
+   * Extends `client` with traced versions of the actions it has. The returned type leaves out an action whose type
+   * the client's `extend()` does not accept from an extension, such as the `sendTransaction` a smart account SDK
+   * client has in place of viem's, so that `extend()` accepts the extension; the extended client keeps that action's
+   * type from the client.
+   */
   <TClient extends ViemClientLike>(
     client: TClient,
-  ): Pick<TClient, Extract<keyof TClient, TracedAction>>;
+  ): Pick<
+    TClient,
+    Exclude<
+      Extract<keyof TClient, TracedAction>,
+      TClient extends { extend: (...args: infer TArguments) => unknown }
+        ? TArguments extends [(client: never) => infer TAccepted]
+          ? {
+              [K in Extract<keyof TClient, TracedAction>]: K extends keyof TAccepted
+                ? TClient[K] extends TAccepted[K]
+                  ? never
+                  : K
+                : never;
+            }[Extract<keyof TClient, TracedAction>]
+          : never
+        : never
+    >
+  >;
   /**
    * Waits for tracing work still running after traced calls returned (background confirmations, revert reason
    * replays, calls recorded once their chain id is known), so their spans are ended before the OpenTelemetry SDK
