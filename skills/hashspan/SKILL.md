@@ -1,6 +1,6 @@
 ---
 name: hashspan
-description: Instruments a TypeScript project with hashspan, so that every on-chain transaction or agent payment it sends becomes OpenTelemetry send, payment and confirm spans inside the active trace, exported to Jaeger or any OTLP backend. Use when a project, an AI agent or any other service, sends EVM transactions or x402 payments through viem, the Coinbase CDP SDK or x402 and uses or wants OpenTelemetry tracing of them.
+description: Instruments a TypeScript project with hashspan, so that every on-chain transaction or agent payment it sends becomes OpenTelemetry send, payment and confirm spans inside the active trace, exported to Jaeger or any OTLP backend. Use when a project, an AI agent or any other service, sends EVM transactions or x402 payments through viem, the Coinbase CDP SDK, x402 or MPP and uses or wants OpenTelemetry tracing of them.
 license: Apache-2.0
 ---
 
@@ -19,6 +19,8 @@ Search the source for the clients that send, and pick the package for each:
   ([usage](https://github.com/selimaytac/hashspan/blob/main/packages/cdp/README.md#usage)).
 - An `x402Client` of `@x402/core`, also behind `@x402/fetch`, `@x402/axios` or `@x402/mcp`: `@hashspan/x402`
   ([usage](https://github.com/selimaytac/hashspan/blob/main/packages/x402/README.md#usage)).
+- An `Mppx` client of `mppx` (`Mppx.create()`), which pays MPP challenges: `@hashspan/mpp`
+  ([usage](https://github.com/selimaytac/hashspan/blob/main/packages/mpp/README.md#usage)).
 - A toolkit, an agent framework, a smart account SDK or a wallet service in between: find it in the
   [support table](https://github.com/selimaytac/hashspan/blob/main/docs/integrations.md#support-at-a-glance) and
   follow its setup.
@@ -38,9 +40,10 @@ npm install @opentelemetry/sdk-node
 
 - Leave out `@opentelemetry/sdk-node` when the project already starts an OpenTelemetry SDK; keep its setup and use
   its provider in step 3.
-- For CDP or x402, add the install line of
-  [`@hashspan/cdp`](https://github.com/selimaytac/hashspan/blob/main/packages/cdp/README.md#install) or
-  [`@hashspan/x402`](https://github.com/selimaytac/hashspan/blob/main/packages/x402/README.md#install).
+- For CDP, x402 or MPP, add the install line of
+  [`@hashspan/cdp`](https://github.com/selimaytac/hashspan/blob/main/packages/cdp/README.md#install),
+  [`@hashspan/x402`](https://github.com/selimaytac/hashspan/blob/main/packages/x402/README.md#install) or
+  [`@hashspan/mpp`](https://github.com/selimaytac/hashspan/blob/main/packages/mpp/README.md#install).
 - Install the latest version of every `@hashspan` package, and upgrade them together; their minor versions can differ
   ([packages](https://github.com/selimaytac/hashspan/blob/main/README.md#packages)).
 
@@ -106,6 +109,9 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   confirm spans; flush their handle in `shutdown()` as well
   ([CDP](https://github.com/selimaytac/hashspan/blob/main/packages/cdp/README.md#with-hashspanviem),
   [x402](https://github.com/selimaytac/hashspan/blob/main/packages/x402/README.md#usage)).
+- MPP: call `withHashspan(mppx, { reader })` of `@hashspan/mpp` once, right after `Mppx.create()`, with a viem public
+  client as `reader`. Give it the same tracker as the paying viem client, and flush its handle in `shutdown()` as
+  well ([usage](https://github.com/selimaytac/hashspan/blob/main/packages/mpp/README.md#usage)).
 - Agent frameworks: the spans nest under the span active when the transaction is sent, so the framework's own
   OpenTelemetry integration must be on for them to appear under its tool spans
   ([agent frameworks](https://github.com/selimaytac/hashspan/blob/main/docs/integrations.md#agent-frameworks)).
@@ -129,6 +135,8 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
    Ask the user before anything signs. Never read `.env` files, key files or secrets.
 3. Check that each transaction shows `send {chainId}` and `confirm {chainId}` spans under the span that was active
    when it was sent; an x402 payment shows `payment {chainId}` and `confirm {chainId}` instead, with no send span
-   ([x402](https://github.com/selimaytac/hashspan/blob/main/packages/x402/README.md#usage)). When one is missing, follow
+   ([x402](https://github.com/selimaytac/hashspan/blob/main/packages/x402/README.md#usage)). An MPP payment shows
+   a `payment {chainId}` span and, with a reader, a linked `confirm {chainId}` span
+   ([MPP](https://github.com/selimaytac/hashspan/blob/main/packages/mpp/README.md#usage)). When one is missing, follow
    [troubleshooting](https://github.com/selimaytac/hashspan/blob/main/docs/troubleshooting.md).
 4. Run the project's typecheck and tests.
