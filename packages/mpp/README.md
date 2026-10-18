@@ -8,7 +8,7 @@ token transfer that the agent either sends itself (`push`) or signs for the serv
 records each payment as a `payment {chainId}` span inside your agent's trace, with what was paid, to whom, in which
 mode, whether it settled and, with a reader, a linked `confirm {chainId}` span with block, gas and fees, and whether
 the transaction carries this payment
-([ADR 0029](https://github.com/selimaytac/hashspan/blob/main/docs/adr/0029-mpp-payments.md)).
+([ADR 0029](https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.0/docs/adr/0029-mpp-payments.md)).
 
 This package is 0.x and follows mppx, which is 0.x too: it supports one mppx minor line at a time (`~0.13.5`), and a
 new line raises that range in a minor release of this package.
@@ -60,7 +60,7 @@ await hashspan.flush();
 ```
 
 A test runs this example as written, against an mppx server and Anvil in Tempo mode, with only its URLs redirected
-([`quick-start.int.test.ts`](https://github.com/selimaytac/hashspan/blob/main/packages/mpp/test/quick-start.int.test.ts)).
+([`quick-start.int.test.ts`](https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.0/packages/mpp/test/quick-start.int.test.ts)).
 
 Pass the client `Mppx.create()` returns. Every payment made through its `fetch`, or through the global `fetch` it
 polyfills (the default), reaches the adapter. The adapter only registers observers with `on()`: it replaces no
@@ -73,7 +73,7 @@ sends the transaction itself, through the client `getClient` returns: extend tha
 then starts with a link to that send span, and the transaction gets one confirm span. With two trackers, a push payment
 gets two confirm spans and two fee samples for one transaction, and no link between the payment and its send.
 
-`withHashspan(mppx, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/main/packages/core#options)
+`withHashspan(mppx, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/mpp@0.1.0/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem` but off by default,
 `maxBackgroundConfirmations` as in `@hashspan/viem` (it limits the confirmations through the reader; a payment whose
 confirmation is not started gets no `verified`), `tracker`, `reader` (a viem public client, or a function returning
@@ -83,7 +83,7 @@ with the settlement as the server reported it. With `tracker`, the core options 
 `@hashspan/core` 1.2 or later, which records who sent the settlement, and with an older one nothing is traced, with
 a `diag` warning. Options are read once, from the object's own enumerable properties: options it inherits through a
 prototype, such as the getters of a class instance, are ignored
-([ADR 0025](https://github.com/selimaytac/hashspan/blob/main/docs/adr/0025-untrusted-input.md)).
+([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.0/docs/adr/0025-untrusted-input.md)).
 
 The server's `Payment-Receipt` names the settlement's transaction (`reference`). For `push`, and for `pull` without a
 fee payer, the payer knows the transaction's hash before it is sent: the payment span records that hash from its
@@ -118,9 +118,9 @@ as `pending` with the hash, or as an error.
 
 A payment can be made and traced on a local [Anvil](https://getfoundry.sh) chain in Tempo mode (`anvil --network
 tempo`), with no public network and no funds: Anvil funds its test accounts with pathUSD. The
-[charge integration test](https://github.com/selimaytac/hashspan/blob/main/packages/mpp/test/charge.int.test.ts)
+[charge integration test](https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.0/packages/mpp/test/charge.int.test.ts)
 is the complete recipe, with its helpers in
-[`tempo-anvil.ts`](https://github.com/selimaytac/hashspan/blob/main/packages/mpp/test/tempo-anvil.ts): a vitest file
+[`tempo-anvil.ts`](https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.0/packages/mpp/test/tempo-anvil.ts): a vitest file
 that uses the repository's test helpers, to read rather than to copy as is. Take from it:
 
 - The chain: Anvil started with `--network tempo` and Tempo's chain id (`4217`), with one block mined before the first
@@ -148,7 +148,7 @@ the asset (the challenge's `currency`), the amount, `mpp.method` (`tempo`), `mpp
 the transfer's memo; on spans only) and the origin of the resource URL as `mpp.resource`, e.g.
 `https://api.example.com`: paths of paid APIs often carry user or account identifiers. The core option
 `paymentResource: 'path'` records the path too (never the query string, fragment or user info), and `'off'` nothing;
-see [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/main/docs/semconv.md).
+see [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.0/docs/semconv.md).
 
 The settlement's fee is the payer's: its fee sample carries no `blockchain.fee.payer`, or `sponsor` when the server
 paid it as fee payer, never `facilitator`. Count only `settled` payments as paid; a `pending` one is paid once its
@@ -181,8 +181,8 @@ that was not exported, misses its payments.
 - The adapter cancels its copy of the paid response once the `payment.response` observers ran, unless one of them
   started reading it: an observer of yours that waits longer than that before it reads the copy finds it cancelled.
 - The limits of `@hashspan/viem`'s confirmations and of the core apply to the confirm span
-  ([`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/main/packages/viem#known-limits),
-  [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/main/packages/core#known-limits)).
+  ([`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/mpp@0.1.0/packages/viem#known-limits),
+  [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/mpp@0.1.0/packages/core#known-limits)).
 
 ## License
 

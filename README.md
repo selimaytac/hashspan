@@ -64,7 +64,7 @@ repository's OpenSSF Scorecard.
 | [`@hashspan/viem`](packages/viem) | Adapter for [viem](https://viem.sh) clients | [![npm](https://img.shields.io/npm/v/@hashspan/viem?label=)](https://www.npmjs.com/package/@hashspan/viem) |
 | [`@hashspan/cdp`](packages/cdp) | Adapter for Coinbase CDP server and smart accounts | [![npm](https://img.shields.io/npm/v/@hashspan/cdp?label=)](https://www.npmjs.com/package/@hashspan/cdp) |
 | [`@hashspan/x402`](packages/x402) | Adapter for x402 payments | [![npm](https://img.shields.io/npm/v/@hashspan/x402?label=)](https://www.npmjs.com/package/@hashspan/x402) |
-| [`@hashspan/mpp`](packages/mpp) | Adapter for MPP payments made with mppx (0.x, follows mppx's minor lines) | in the next release |
+| [`@hashspan/mpp`](packages/mpp) | Adapter for MPP payments made with mppx (0.x, follows mppx's minor lines) | [![npm](https://img.shields.io/npm/v/@hashspan/mpp?label=)](https://www.npmjs.com/package/@hashspan/mpp) |
 
 Install the latest version of every `@hashspan` package you use, or upgrade them together. The packages but
 `@hashspan/mpp` are a linked group ([releasing](docs/releasing.md)): the ones a release changes get one version, and a
