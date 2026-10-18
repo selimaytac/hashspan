@@ -1,5 +1,21 @@
 # @hashspan/cdp
 
+## 1.2.1
+
+### Patch Changes
+
+- [#458](https://github.com/selimaytac/hashspan/pull/458) [`b999fd4`](https://github.com/selimaytac/hashspan/commit/b999fd4fbd2627b4b45857989377af0e30af2816) Thanks [@selimaytac](https://github.com/selimaytac)! - Reads a user operation's outcome only from its EntryPoint: with a `reader`, the confirm span takes the
+  `UserOperationEvent` of the contract the bundle transaction called or of a canonical EntryPoint (0.6 to 0.9), and
+  ignores logs of other contracts.
+
+- [#458](https://github.com/selimaytac/hashspan/pull/458) [`b999fd4`](https://github.com/selimaytac/hashspan/commit/b999fd4fbd2627b4b45857989377af0e30af2816) Thanks [@selimaytac](https://github.com/selimaytac)! - Bounds the size of serialized transactions it parses: a send span records the fields of a serialized transaction
+  only up to 128 KiB, the size a node accepts, as `@hashspan/viem` does for raw sends.
+
+- [#456](https://github.com/selimaytac/hashspan/pull/456) [`d494f00`](https://github.com/selimaytac/hashspan/commit/d494f00e661d5c5654db692eca964bce8819bb17) Thanks [@selimaytac](https://github.com/selimaytac)! - Clearer npm description and keywords
+- Updated dependencies [[`d494f00`](https://github.com/selimaytac/hashspan/commit/d494f00e661d5c5654db692eca964bce8819bb17), [`af72f4e`](https://github.com/selimaytac/hashspan/commit/af72f4eb7bc848f493bd7f9c2978cd2fdb676163), [`db5851b`](https://github.com/selimaytac/hashspan/commit/db5851b79c5b33317cd34705af5f87a9f8a25c5e)]:
+  - @hashspan/core@1.2.1
+  - @hashspan/viem@1.2.1
+
 ## 1.1.0
 
 ### Minor Changes

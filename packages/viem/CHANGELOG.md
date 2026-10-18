@@ -1,5 +1,16 @@
 # @hashspan/viem
 
+## 1.2.1
+
+### Patch Changes
+
+- [#456](https://github.com/selimaytac/hashspan/pull/456) [`d494f00`](https://github.com/selimaytac/hashspan/commit/d494f00e661d5c5654db692eca964bce8819bb17) Thanks [@selimaytac](https://github.com/selimaytac)! - Clearer npm description and keywords
+
+- [#463](https://github.com/selimaytac/hashspan/pull/463) [`db5851b`](https://github.com/selimaytac/hashspan/commit/db5851b79c5b33317cd34705af5f87a9f8a25c5e) Thanks [@selimaytac](https://github.com/selimaytac)! - Bounds what it reads from a wallet's call batch results: a fallback batch id is parsed only up to 8194 characters,
+  at most 64 of its transactions are recorded and confirmed, and at most 64 receipts are read from a call batch status.
+- Updated dependencies [[`d494f00`](https://github.com/selimaytac/hashspan/commit/d494f00e661d5c5654db692eca964bce8819bb17), [`af72f4e`](https://github.com/selimaytac/hashspan/commit/af72f4eb7bc848f493bd7f9c2978cd2fdb676163)]:
+  - @hashspan/core@1.2.1
+
 ## 1.1.1
 
 ### Patch Changes
