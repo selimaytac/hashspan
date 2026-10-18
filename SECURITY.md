@@ -45,4 +45,6 @@ change a traced call.
 
 ## Supported versions
 
-Only the latest minor release receives security fixes while the project is below 1.0.
+Security fixes are released for the latest minor of each package: `@hashspan/core`, `@hashspan/viem`,
+`@hashspan/cdp` and `@hashspan/x402` on 1.x, and `@hashspan/mpp`, which stays on 0.x while mppx does, on its latest
+0.x minor. Fixes are not backported to earlier minors or majors; upgrade to the latest version to receive them.
