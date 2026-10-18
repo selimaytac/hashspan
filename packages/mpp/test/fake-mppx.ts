@@ -26,7 +26,8 @@ export const REALM = 'api.example.com';
 export const URL_PAID = 'https://api.example.com/weather';
 export const PAYMENT_SPAN = `payment ${CHAIN_ID}`;
 export const CONFIRM_SPAN = `confirm ${CHAIN_ID}`;
-const SECRET_KEY = 'offline-test-secret-key-0123456789abcdef';
+/** The server's HMAC key for challenge ids: mppx asks for 32 bytes; a test needs no secret. */
+const HMAC_KEY = 'x'.repeat(32);
 
 /** A receipt as Tempo returns it, for the transaction `hash`. */
 export function rpcReceipt(
@@ -161,7 +162,7 @@ export function paidServer(options: ChargeOptions = {}) {
         getClient: () => payerClient() as never,
       }),
     ],
-    secretKey: SECRET_KEY,
+    secretKey: HMAC_KEY,
     realm: REALM,
   });
   return async (request: Request): Promise<Response> => {

@@ -98,7 +98,8 @@ export function paidApi(chain: Chain, options: ServerOptions = {}) {
         getClient: () => serverClient as never,
       }),
     ],
-    secretKey: 'local-test-secret-key-0123456789abcdef',
+    // mppx asks for 32 bytes; a test needs no secret.
+    secretKey: 'x'.repeat(32),
     realm: REALM,
   });
   return async (request: Request): Promise<Response> => {
