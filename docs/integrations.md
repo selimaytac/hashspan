@@ -381,18 +381,6 @@ await sdk.shutdown();
   - Flush before the process exits, as the example does: `await hashspan.flush()`, then `await sdk.shutdown()`
     ([shutting down](../packages/viem/README.md#shutting-down)).
 
-  Known limits, each checked in the test above:
-  - **Start your SDK first:** when a Genkit span starts before your SDK does, Genkit's own SDK registers the tracer
-    provider, your SDK's registration fails, and none of the process's spans reach your exporters. Without
-    `disableGenkitOTelInitialization()` but with your SDK started first, the trace is recorded as above, and
-    Genkit's SDK fails to register and stays idle; with a diag logger set, OpenTelemetry reports
-    `Attempted duplicate registration of API: trace`.
-  - **An active span of your own:** `generate` starts a trace of its own even when a span is active, such as an
-    HTTP server's span. Call `disableOTelRootSpanDetection()` from `genkit/tracing` at startup to make it a child of
-    the active span.
-  - **Genkit's Developer UI:** Genkit sends traces to its Developer UI (`GENKIT_TELEMETRY_SERVER`) through a span
-    processor of its own SDK, so with this setup the Developer UI receives no spans.
-
 ```ts
 import { withHashspan } from '@hashspan/viem';
 import { NodeSDK } from '@opentelemetry/sdk-node';
@@ -459,6 +447,19 @@ console.log(text);
 await hashspan.flush();
 await sdk.shutdown();
 ```
+
+Known limits with Genkit 1.42; CI checks the first two, with and without the calls they name:
+
+- **Start your SDK first:** without `disableGenkitOTelInitialization()`, when a Genkit span starts before your SDK
+  does, Genkit's own SDK registers the tracer provider, your SDK's registration fails, and none of the process's
+  spans reach your exporters. With your SDK started first, the trace is recorded as above, and Genkit's SDK fails to
+  register and stays idle; with a diag logger set, OpenTelemetry reports
+  `Attempted duplicate registration of API: trace` for it.
+- **An active span of your own:** `generate` starts a trace of its own even when a span is active, such as an HTTP
+  server's span. Call `disableOTelRootSpanDetection()` from `genkit/tracing` at startup to make it a child of the
+  active span.
+- **Genkit's Developer UI:** Genkit sends traces to its Developer UI (`GENKIT_TELEMETRY_SERVER`) only through a span
+  processor of its own SDK, so with this setup the Developer UI receives no spans.
 
 - **LangChain JS and the OpenAI Agents SDK:** OpenInference's instrumentations
   (`@arizeai/openinference-instrumentation-langchain` 4.1.4, `@arizeai/openinference-instrumentation-openai-agents`
