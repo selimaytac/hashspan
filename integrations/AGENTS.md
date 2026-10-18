@@ -14,6 +14,8 @@ Root rules: [AGENTS.md](../AGENTS.md).
   `test/agentkit-cdp.int.test.ts` the AgentKit CDP wallet providers, against `packages/cdp/test/mock-cdp-api.ts`; `test/goat-viem.int.test.ts` the GOAT
   `viem()` wallet setup; `test/mastra.int.test.ts` the Mastra OpenTelemetry bridge setup, with a scripted model;
   `test/mastra-agent.int.test.ts` runs the complete Mastra example of docs/integrations.md as written;
+  `test/genkit.int.test.ts` a Genkit tool that sends, with a scripted model: the Genkit example of the docs as
+  written and the setups of its limits (`test/genkit/control.ts`), each a child process run with tsx's loader;
   `test/openinference-langchain.int.test.ts` and `test/openinference-openai-agents.int.test.ts` the OpenInference
   setups, with scripted models (shared setup in `test/openinference.ts`); `test/smart-account-sdks.int.test.ts` the
   permissionless.js and ZeroDev smart account clients and the permissionless example of docs/integrations.md, through
@@ -28,8 +30,8 @@ Root rules: [AGENTS.md](../AGENTS.md).
   `test/hardhat/hardhat.config.ts`); `test/erpc.int.test.ts` the agent of the eRPC section as written, with the undici
   instrumentation, through the pinned eRPC binary of `scripts/install-erpc.sh` (`make tools`) in front of Anvil on
   127.0.0.1, with the `erpc.yaml` block of the docs changed only in its addresses, and a control without the
-  instrumentation (`test/erpc/no-undici.ts`). All three export over OTLP to `test/otlp-receiver.ts`, which also reads
-  the protobuf that eRPC's exporter sends
+  instrumentation (`test/erpc/no-undici.ts`). The MCP, Hardhat, eRPC and Genkit tests export over OTLP to
+  `test/otlp-receiver.ts`, which also reads the protobuf that eRPC's exporter sends
 - `test/readme/` holds the `#region readme` files of doc examples that need these libraries, as
   `packages/*/test/readme/` does for the others: the typecheck compiles them and `packages/core/test/docs.test.ts`
   matches them with the docs

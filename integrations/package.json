@@ -38,6 +38,7 @@
     "@types/node": "^24.19.1",
     "@zerodev/sdk": "^5.5.11",
     "ai": "^7.0.127",
+    "genkit": "^1.42.0",
     "hardhat": "^3.20.0",
     "langchain": "^1.5.15",
     "permissionless": "^0.5.0",
@@ -48,10 +49,13 @@
     "zod": "^4.6.5"
   },
   "pnpm": {
-    "//": "tar: prool pins tar@7.2.0 but never imports it, as at the root. ws: the advisory covers 8.x before 8.21.0; the lockfile also has ws 7 (WalletConnect), which a plain override would move a major.",
+    "//": "tar: prool pins tar@7.2.0 but never imports it, as at the root. ws: the advisory covers 8.x before 8.21.0; the lockfile also has ws 7 (WalletConnect), which a plain override would move a major. ignoredOptionalDependencies: Genkit's core lists @genkit-ai/firebase as optional, with firebase-admin and Google Cloud exporters behind it; it loads only with ENABLE_FIREBASE_MONITORING.",
     "overrides": {
       "tar": ">=7.5.21",
       "ws@>=8.0.0 <8.21.0": "^8.21.0"
-    }
+    },
+    "ignoredOptionalDependencies": [
+      "@genkit-ai/firebase"
+    ]
   }
 }
