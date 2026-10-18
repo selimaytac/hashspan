@@ -150,6 +150,7 @@ export interface TransactionDependencies {
   /** Sender and nonce of recent sends, to find a replacement viem did not report. */
   senders: Recent<SentTransaction>;
   track(work: Promise<void>): void;
+  startConfirm: Confirmation['startConfirm'];
   recordConfirmation: Confirmation['recordConfirmation'];
   confirmThrough: Confirmation['confirmThrough'];
   confirmPending: Confirmation['confirmPending'];
@@ -177,6 +178,7 @@ export function addTransactionActions(
     abis,
     senders,
     track,
+    startConfirm,
     recordConfirmation,
     confirmThrough,
     confirmPending,
@@ -351,7 +353,7 @@ export function addTransactionActions(
   ): void => {
     try {
       if (abi) abis.set(confirmKey(chainId, hash), abi);
-      const handle = context.with(parent, () => tracker.startConfirm({ chainId, hash, startTime }));
+      const handle = context.with(parent, () => startConfirm({ chainId, hash, startTime }));
       track(
         recordConfirmation(
           chainId,
@@ -550,7 +552,7 @@ export function addTransactionActions(
       let handle: ConfirmHandle | undefined;
       if (chainId !== undefined) {
         try {
-          handle = tracker.startConfirm({ chainId, hash, confirmations });
+          handle = startConfirm({ chainId, hash, confirmations });
         } catch (error) {
           diag.error(`hashspan: failed to start confirm span (${errorName(error)})`);
         }
@@ -580,8 +582,7 @@ export function addTransactionActions(
             late.ctx,
             wait,
             () => late.chainId,
-            (id) =>
-              tracker.startConfirm({ chainId: id, hash, startTime: late.startTime, confirmations }),
+            (id) => startConfirm({ chainId: id, hash, startTime: late.startTime, confirmations }),
             (lateHandle, id, endTimeOf) =>
               recordConfirmation(
                 id,
