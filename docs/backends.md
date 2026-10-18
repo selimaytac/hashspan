@@ -81,6 +81,20 @@ The second query finds failed confirmations under a given tool. When you call Te
 Grafana Cloud takes the same variables with the OTLP endpoint and Basic authentication header shown in your stack's
 OpenTelemetry settings; it was not part of this test.
 
+### grafana/otel-lgtm
+
+Tested with `grafana/otel-lgtm` 0.37.0 (Grafana 13.2.3, Tempo 3.1.0, Prometheus 3.15.0) against hashspan 1.1.0 on
+2026-10-18. Both files in [dashboards/](../dashboards/README.md) import and every query runs, and the `traces.json`
+TraceQL panels return the expected rows on Tempo 3.1.0 (Tempo's search lags ingest by some seconds, so an immediate
+query can return none). On the stock image every "in range" panel of `metrics.json` shows 0 for a short-lived process,
+because its Prometheus runs without `created-timestamp-zero-ingestion`. Start it with the feature enabled and the
+panels match the sends:
+
+```sh
+docker run --rm -p 127.0.0.1:3000:3000 -p 127.0.0.1:4318:4318 \
+  -e PROMETHEUS_EXTRA_ARGS=--enable-feature=created-timestamp-zero-ingestion grafana/otel-lgtm:0.37.0
+```
+
 ## Langfuse
 
 Tested with Langfuse 4.49.0, self-hosted with its Docker Compose file, against hashspan 0.9.0 on 2026-10-03.
@@ -140,6 +154,20 @@ Use an ingest key from your environment's API keys. The spans land in a dataset 
 GenAI spans, so the agent span shows its model and token usage. See
 [Honeycomb's OpenTelemetry docs](https://docs.honeycomb.io/send-data/opentelemetry/).
 
+## Aspire dashboard, OpenObserve, HyperDX and MLflow
+
+Each was run once against hashspan 1.1.0 on 2026-10-18: spans, parents, names, status, `exception` events and links
+arrive complete. The differences are in how the backend stores them:
+
+- Aspire dashboard 13.6.1: returns every attribute as a string (`blockchain.chain.id`, `blockchain.block.number`,
+  `blockchain.tx.gas.used`, `server.port`); take that into account when filtering or exporting.
+- OpenObserve v1.1.1: returns every attribute as a string and flattens the names (`blockchain.tx.status` is the column
+  `blockchain_tx_status`). Its metric names lack `_seconds` (`blockchain_client_send_duration_count`) and carry no
+  `job` label, so [`metrics.json`](../dashboards/metrics.json) applies only in part.
+- HyperDX 2.41.0 (local mode): returns every attribute as a string (a `Map(String, String)` in ClickHouse).
+- MLflow 3.17.1: drops the span kind on OTLP ingest ([mlflow/mlflow#26841](https://github.com/mlflow/mlflow/issues/26841))
+  and has no OTLP metrics endpoint (`/v1/metrics` answers 404).
+
 ## Span links
 
 A confirm span links to its send or payment span. Where no span was active at the send, the confirm span is in a
@@ -153,6 +181,18 @@ trace of its own and the link is the only relation between them
 | Grafana Tempo 3.0.0 | yes | `/api/v2/traces/{traceId}` returns the link; how Grafana shows it was not checked |
 | Langfuse 4.49.0 | no | no link in the observations API (`/api/public/v2/observations`) or in its storage; see [langfuse/langfuse#12337](https://github.com/langfuse/langfuse/issues/12337) |
 | Honeycomb | yes | the link shows on the span (hashspan 0.5.0, 2026-10-02, [above](#honeycomb)) |
+| Aspire dashboard 13.6.1 | yes | hashspan 1.1.0, 2026-10-18: the telemetry API returns every link, including the cross-trace link of `watch()` |
+| Grafana Tempo 3.1.0 (in otel-lgtm) | yes | hashspan 1.1.0, 2026-10-18: same check, no link differs |
+| OpenObserve v1.1.1 | yes | hashspan 1.1.0, 2026-10-18: the links are a JSON string column |
+| HyperDX 2.41.0 | yes | hashspan 1.1.0, 2026-10-18: the `Links.*` columns in ClickHouse |
+| MLflow 3.17.1 | yes | hashspan 1.1.0, 2026-10-18: the link's trace id is rewritten to `tr-<hex>` and resolves |
+
+## Span metrics and HTTP instrumentation
+
+With HTTP instrumentation next to `traceTransport()` (for example `@opentelemetry/instrumentation-undici`), each
+JSON-RPC span gets an HTTP client child span. A span-metrics generator such as Tempo's counts both as client calls of
+the service (`eth_*` and `POST`), so a RED panel that sums client calls counts each request twice. Filter on
+`rpc.system.name` or on the span name there. The nesting is described under [JSON-RPC spans](semconv.md#spans).
 
 ## Common questions
 

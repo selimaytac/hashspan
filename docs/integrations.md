@@ -26,6 +26,7 @@ This page collects the setups that were checked; each code block is compiled in 
 | Mastra | `@hashspan/viem` | Mastra's OpenTelemetry bridge | the bridge is experimental ([setup](#agent-frameworks)) | `integrations/` |
 | LangChain JS, OpenAI Agents SDK (OpenInference) | `@hashspan/viem` | run tools in an active span of your own | tool spans are not active ([setup](#agent-frameworks)) | `integrations/` |
 | ElizaOS `plugin-evm` | none | none | not traced: it creates its own wallet client ([details](#agent-frameworks)) | no |
+| Coinbase Agentic Wallets (`awal`, payments MCP) | none | none | not traced: sends run as smart account user operations in a Coinbase-hosted page inside awal's own app; `watch()` on the returned hash records the bundle transaction, not the account's operation | no |
 | Wallet services with a viem account (Turnkey, Privy) | `@hashspan/viem` | none | none ([setup](#wallet-services)) | as viem clients |
 | Wallet services with an EIP-1193 provider (Circle, Fireblocks) | `@hashspan/viem` on a `custom()` transport | a public client for receipts when the provider does not answer reads | Circle smart contract accounts not checked ([setup](#wallet-services)) | the pattern in `packages/viem` tests |
 | Wallet services that send through their API | `@hashspan/viem` `watch()` | a public client; for a send span, the API call recorded with the same tracker | none ([setup](#wallet-services)) | the pattern in `packages/viem` tests |
