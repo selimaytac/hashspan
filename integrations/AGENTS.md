@@ -21,7 +21,11 @@ Root rules: [AGENTS.md](../AGENTS.md).
   `test/mcp.int.test.ts` an MCP tool that sends, with the agent and the stdio server as child processes run with
   tsx's loader (from the main install; it maps `@hashspan/*` to their sources through `tsconfig.json` paths) that
   export over OTLP to a receiver in the test: the v1 SDK without and with
-  OpenInference's MCP instrumentation (`test/mcp-v1/`), and the v2 example of the docs as written
+  OpenInference's MCP instrumentation (`test/mcp-v1/`), and the v2 example of the docs as written;
+  `test/hardhat.int.test.ts` the Hardhat 3 examples of the docs as written, run with the Hardhat CLI in the project
+  `test/hardhat/` on Hardhat's in-process network (no Anvil), with a control script in `test/hardhat/scripts/`; the
+  project's artifacts are committed and every run passes `--no-compile`, since a build downloads solc (see
+  `test/hardhat/hardhat.config.ts`). Both export over OTLP to `test/otlp-receiver.ts`
 - `test/readme/` holds the `#region readme` files of doc examples that need these libraries, as
   `packages/*/test/readme/` does for the others: the typecheck compiles them and `packages/core/test/docs.test.ts`
   matches them with the docs

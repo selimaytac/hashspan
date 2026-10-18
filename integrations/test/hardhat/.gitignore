@@ -1,0 +1,3 @@
+# Written by `hardhat build`; the artifacts of contracts/ are committed, so that the tests never compile.
+cache/
+artifacts/build-info/
