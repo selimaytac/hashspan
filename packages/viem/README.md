@@ -381,7 +381,9 @@ await wallet.waitForCallsStatus({ id }); // confirm span, linked to the send spa
 - With `experimental_fallback`, viem sends the calls as plain transactions when the wallet lacks `wallet_sendCalls`.
   Each is confirmed as a transaction linked to the batch's send span, as `watch()` does, so its receipt and fee are
   recorded whether or not background confirmation is on. Each of these confirmations polls until `confirm.timeoutMs`
-  (120 000 ms by default, also without background mode) and counts toward `maxBackgroundConfirmations`.
+  (120 000 ms by default, also without background mode) and counts toward `maxBackgroundConfirmations`. At most 64
+  transactions of a batch are confirmed this way
+  ([bounds](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.1.1/docs/semconv.md#bounds)).
 - `sendCallsSync` records one send span and one confirm span: viem's own `sendCallsSync` runs with the traced
   `sendCalls` and `waitForCallsStatus`, so an extension applied before this one that replaces `sendCallsSync` itself
   is not called ([apply it last](#apply-it-last)). This needs viem 2.45.2 or later: from 2.38.0 to 2.45.1, viem's

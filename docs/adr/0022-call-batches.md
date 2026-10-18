@@ -82,13 +82,13 @@ understood is recorded as such rather than guessed:
   The receipts viem builds for a fallback id do carry the node's `l1Fee`, but they can be flashblocks preconfirmations
   whose `l1Fee` is another transaction's (ADR 0024); fees therefore come only from the transaction path below, where
   the sealed receipt is checked.
-- **viem's fallback.** The hashes in a fallback id are the account's own transactions. Each is registered as a send
-  of the batch and confirmed through the transaction confirmation path, as `watch()` does, whether or not
-  background confirmation is enabled: its receipt is read through the client, off the call path, in `track()`, within
-  the background limit (ADR 0018). ADR 0024 and ADR 0005 apply as for any transaction, so each fee is recorded once,
-  on the transaction's own confirm span; the cost is one receipt request per fallback transaction. The batch confirm
-  span does not create them. The id format is copied from viem; tests run the installed viem's fallback, including a
-  call that fails to send.
+- **viem's fallback.** The hashes in a fallback id are the account's own transactions. Each, up to the bound in
+  [Bounds](../semconv.md#bounds), is registered as a send of the batch and confirmed through the transaction
+  confirmation path, as `watch()` does, whether or not background confirmation is enabled: its receipt is read through
+  the client, off the call path, in `track()`, within the background limit (ADR 0018). ADR 0024 and ADR 0005 apply as
+  for any transaction, so each fee is recorded once, on the transaction's own confirm span; the cost is one receipt
+  request per fallback transaction. The batch confirm span does not create them. The id format is copied from viem;
+  tests run the installed viem's fallback, including a call that fails to send.
 - **Wrapped actions**: `sendCalls`, `waitForCallsStatus`, and `sendCallsSync` as one send span and one confirm span,
   by running viem's own `sendCallsSync` over a shim client whose `sendCalls` and `waitForCallsStatus` are the wrapped
   ones. An extension applied before `withHashspan()` that replaced `sendCallsSync` itself is then not called; one
