@@ -31,6 +31,7 @@ import {
 import type { ConfirmRegistry, SharedConfirm } from '../confirm-registry.js';
 import type { LinkStore } from '../link-store.js';
 import { type TxMetrics, toEpochMs } from '../metrics.js';
+import type { AddressFormatter } from '../privacy.js';
 import type {
   CallBatchConfirmHandle,
   CallBatchConfirmInput,
@@ -48,7 +49,7 @@ import {
   reportedErrorType,
 } from './handles.js';
 import { metricAttributes, type SpanRecording, secondsSince } from './spans.js';
-import { isTxHash, smallQuantity, ZERO_TX_HASH } from './values.js';
+import { holdsAddress, isTxHash, smallQuantity, ZERO_TX_HASH } from './values.js';
 
 /** `error.type` of a call batch that failed without being included (EIP-5792 status 400). */
 const CALL_BATCH_FAILED = 'failed';
@@ -106,6 +107,7 @@ export interface CallBatchDependencies {
   callBatchLinks: LinkStore;
   callBatchConfirmations: ConfirmRegistry<CallBatchConfirmSpan>;
   txMetrics: TxMetrics;
+  formatAddress: AddressFormatter;
   getTracer: () => Tracer;
   recording: SpanRecording;
 }
@@ -122,9 +124,21 @@ export function createCallBatchSpans({
   callBatchLinks,
   callBatchConfirmations,
   txMetrics,
+  formatAddress,
   getTracer,
   recording: { redact, markError, finisher, setRemoteAddress, baseAttributes },
 }: CallBatchDependencies): CallBatchSpans {
+  /**
+   * The part of a batch id recorded as `blockchain.call_batch.id`. The wallet chooses the id, so where the address
+   * mode hides addresses, an id that holds hex of an address's length is not recorded; it still keys the batch.
+   */
+  const recordedId = (id: string): Attributes => {
+    const recorded = id.slice(0, MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH);
+    return holdsAddress(recorded, formatAddress)
+      ? {}
+      : { [ATTR_BLOCKCHAIN_CALL_BATCH_ID]: recorded };
+  };
+
   const startCallBatchSend = (input: CallBatchInput, parentCtx?: Context): CallBatchSendHandle => {
     const parent = parentCtx ?? context.active();
     const { chainId } = input;
@@ -173,11 +187,7 @@ export function createCallBatchSpans({
             for (const hash of firstItems(hashes)) {
               if (isTxHash(hash) && !ZERO_TX_HASH.test(hash)) links.set(chainId, hash, sent);
             }
-            span.setAttributes(
-              redact({
-                [ATTR_BLOCKCHAIN_CALL_BATCH_ID]: id.slice(0, MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH),
-              }),
-            );
+            span.setAttributes(redact(recordedId(id)));
             recordSend(endTime);
           },
           endTime,
@@ -267,8 +277,10 @@ export function createCallBatchSpans({
     const sent = callBatchLinks.get(chainId, id);
     const active = context.active();
     const parent = parentCtx ?? (trace.getSpan(active) ? active : (sent?.parent ?? active));
-    const attributes = baseAttributes(chainId, BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM, parent);
-    attributes[ATTR_BLOCKCHAIN_CALL_BATCH_ID] = id.slice(0, MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH);
+    const attributes = {
+      ...baseAttributes(chainId, BLOCKCHAIN_OPERATION_NAME_VALUE_CONFIRM, parent),
+      ...recordedId(id),
+    };
     const span = getTracer().startSpan(
       `confirm ${chainId}`,
       {

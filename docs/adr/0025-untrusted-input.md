@@ -64,3 +64,24 @@ repository itself.
 - The hostile-input table adds test time and some upkeep when an entry point changes.
 - Out of scope: the security of the user's own exporter, collector and backend, and of the instrumented libraries
   themselves; vulnerabilities are reported per SECURITY.md.
+
+## Amendment (2026-10-18, proposed): values a remote party chooses
+
+Rule 6 says addresses follow the address mode. It was applied to fields that hold an address, and to `0x` hex inside
+free text. A value that a remote party chooses can carry an address in other forms: an identifier such as an x402
+scheme, an MPP method or a facilitator's failure reason accepts `0x` followed by 40 hex characters as a short
+identifier, and a resource host, an error type or an id can hold the 40 characters without `0x`. In `hashed` and `off`
+mode, such a value put the address into the backend as it is. Only `mpp.challenge.id` checked for this
+([ADR 0029](0029-mpp-payments.md)).
+
+- In `hashed` and `off` address mode, a value a remote party chooses that is not itself an address is not recorded
+  when it holds 40 hex characters in a row, with or without `0x`. One check in the core applies it to the payment
+  protocol, `x402.scheme`, `mpp.method`, `mpp.intent`, `mpp.challenge.id`, `blockchain.call_batch.id` (the wallet
+  chooses it) and the agent id and name taken from Baggage (an upstream caller sets them).
+- `x402.resource`, `mpp.resource`, `error.type` and `exception.type` keep formatting a `0x` address by the address
+  mode. What still holds 40 hex characters in a row after that is not recorded; an error type becomes `_OTHER`.
+- A call batch id is usually 32 bytes of hex or longer, so in these modes the attribute is rarely recorded. The id
+  still keys the batch, so its confirm span links to its send span as before.
+- `raw` mode is unchanged, and so is the static `agent` option, which is the user's own text.
+- The hostile-input table has rows with an address, an address without `0x` and one inside other text for each of
+  these fields. The rule is stated once in docs/semconv.md, under "Values a remote party chooses".

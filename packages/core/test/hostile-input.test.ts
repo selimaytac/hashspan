@@ -39,6 +39,22 @@ const CHAIN_ID = 8453;
 const OTHER_HASH = `0x${'cd'.repeat(32)}`;
 const BATCH_ID = '0xb47c4';
 
+/** Identifiers a remote party could choose to carry an address (rule 6 in hashed and off mode). */
+const holdingAddress = (): [string, unknown][] => [
+  ['an address', ADDRESS],
+  ['an address without 0x', ADDRESS_HEX],
+  ['an id around an address', `id-${ADDRESS_HEX}-x`],
+];
+/** Call batch ids that hold an address: an id of the address, one padded to 32 bytes, one with more after it. */
+const batchIdsHoldingAddress = (): [string, unknown][] => [
+  ['an address', ADDRESS],
+  ['an address padded to 32 bytes', `0x${'00'.repeat(12)}${ADDRESS_HEX}`],
+  [
+    'an address followed by a chain id',
+    `${ADDRESS}0000000000000000000000000000000000000000000000000000000000002105`,
+  ],
+];
+
 let tracing: HostileTracing;
 let meters: ReturnType<typeof recordingMeterProvider>;
 beforeEach(() => {
@@ -320,13 +336,69 @@ const ROWS: Row[] = [
   {
     // A server chooses the id: one that is an address must stay hidden in hashed and off mode (rule 6).
     name: 'startPayment mpp.challengeId holding an address',
-    values: () => [
-      ['an address', ADDRESS],
-      ['an address without 0x', ADDRESS_HEX],
-      ['an id around an address', `id-${ADDRESS_HEX}-x`],
-    ],
+    values: holdingAddress,
     run: (t, value) =>
       t.startPayment({ ...MPP_PAYMENT, mpp: { challengeId: value } } as never).timeout(),
+  },
+  // Other identifiers a remote party chooses: one that holds an address stays hidden in hashed and off mode too.
+  ...Object.entries({
+    protocol: (value: unknown) => ({ ...PAYMENT, protocol: value }),
+    'x402.scheme': (value: unknown) => ({ ...PAYMENT, x402: { ...PAYMENT.x402, scheme: value } }),
+    'mpp.method': (value: unknown) => ({
+      ...MPP_PAYMENT,
+      mpp: { ...MPP_PAYMENT.mpp, method: value },
+    }),
+    'mpp.intent': (value: unknown) => ({
+      ...MPP_PAYMENT,
+      mpp: { ...MPP_PAYMENT.mpp, intent: value },
+    }),
+  }).map(
+    ([field, input]): Row => ({
+      name: `startPayment ${field} holding an address`,
+      values: holdingAddress,
+      run: (t, value) => t.startPayment(input(value) as never).end(SETTLEMENT as never),
+    }),
+  ),
+  ...(['x402', 'mpp'] as const).map(
+    (protocol): Row => ({
+      name: `startPayment ${protocol}.resource holding an address`,
+      values: () => [
+        ['a host that is an address', `https://${ADDRESS_HEX}.example`],
+        ['a host around an address', `https://id-${ADDRESS_HEX}-x.example/weather`],
+        ['a path with an address without 0x', `https://api.example.com/u/${ADDRESS_HEX}`],
+        ['a path with an address', `https://api.example.com/u/${ADDRESS}`],
+      ],
+      run: (t, value) =>
+        t
+          .startPayment({ ...PAYMENT, protocol, [protocol]: { resource: value } } as never)
+          .end(SETTLEMENT as never),
+    }),
+  ),
+  {
+    name: 'PaymentHandle.end settlement.errorReason holding an address',
+    values: holdingAddress,
+    run: (t, value) =>
+      t.startPayment(PAYMENT).end({ status: 'failed', errorReason: value } as never),
+  },
+  {
+    name: 'PaymentHandle.fail options.errorType holding an address',
+    values: holdingAddress,
+    run: (t, value) => t.startPayment(PAYMENT).fail(undefined, { errorType: value as never }),
+  },
+  {
+    name: 'SendHandle.fail options.errorType holding an address',
+    values: holdingAddress,
+    run: (t, value) => t.startSend(SEND).fail(error(), { errorType: value as never }),
+  },
+  {
+    name: 'SendHandle.fail error named with an address',
+    values: () =>
+      holdingAddress().map(([label, name]): [string, unknown] => {
+        const named = new Error('boom');
+        named.name = `Error${name as string}`;
+        return [`an Error named after ${label}`, named];
+      }),
+    run: (t, value) => t.startSend(SEND).fail(value),
   },
   ...fields('startPayment mpp', MPP_PAYMENT.mpp, (t, mpp) =>
     t.startPayment({ ...MPP_PAYMENT, mpp } as never).timeout(),
@@ -417,6 +489,21 @@ const ROWS: Row[] = [
   {
     name: 'CallBatchSendHandle.end result.id',
     run: (t, value) => t.startCallBatchSend(CALL_BATCH).end({ id: value as never }),
+  },
+  {
+    // The wallet chooses the id; one that holds an address stays hidden in hashed and off mode.
+    name: 'CallBatchSendHandle.end result.id holding an address',
+    values: batchIdsHoldingAddress,
+    run: (t, value) => {
+      t.startCallBatchSend(CALL_BATCH).end({ id: value as never });
+      t.startCallBatchConfirm({ chainId: CHAIN_ID, id: value as never }).end(CALL_BATCH_STATUS);
+    },
+  },
+  {
+    name: 'startCallBatchConfirm id holding an address',
+    values: batchIdsHoldingAddress,
+    run: (t, value) =>
+      t.startCallBatchConfirm({ chainId: CHAIN_ID, id: value as never }).end(CALL_BATCH_STATUS),
   },
   {
     name: 'CallBatchSendHandle.end result.transactionHashes',
