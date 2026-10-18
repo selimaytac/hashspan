@@ -137,6 +137,36 @@ describe.skipIf(!RUNS)('call batches on Anvil', () => {
     },
   );
 
+  it("confirms at most 64 transactions of viem's fallback per batch", async () => {
+    const hashspan = withHashspan();
+    const wallet = createWalletClient({
+      account: LOCAL_ACCOUNT,
+      chain: anvil,
+      transport: http(RPC_URL),
+      pollingInterval: 50,
+    }).extend(hashspan);
+
+    const { id } = await wallet.sendCalls({
+      calls: Array.from({ length: 65 }, (_, i) => ({ to: RECIPIENT, value: BigInt(i + 1) })),
+      experimental_fallback: true,
+    });
+    await expect(hashspan.flush()).resolves.toBe(true);
+
+    // The id carries the 65 transaction hashes, the chain id and viem's suffix.
+    expect(id).toHaveLength(2 + 67 * 64);
+    const hashes = Array.from({ length: 64 }, (_, i) => `0x${id.slice(2 + i * 64, 66 + i * 64)}`);
+    const [send] = sends();
+    expect(send?.attributes['blockchain.call_batch.call_count']).toBe(65);
+    const transactions = confirms().filter((s) => s.attributes['blockchain.tx.hash'] !== undefined);
+    expect(transactions.map((s) => s.attributes['blockchain.tx.hash']).sort()).toEqual(
+      [...hashes].sort(),
+    );
+    for (const span of transactions) {
+      expect(span.attributes['blockchain.tx.status']).toBe('success');
+      expect(span.links[0]?.context.spanId).toBe(send?.spanContext().spanId);
+    }
+  });
+
   it('traces a batch a wallet answers, from wallet_sendCalls to its status', async () => {
     const hashspan = withHashspan();
     const wallet = createWalletClient({

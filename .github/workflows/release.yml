@@ -35,7 +35,9 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-          cache: pnpm
+          # No dependency cache in the release jobs: other jobs on main save it, and they run code resolved fresh
+          # from the registry. Every release job installs from the lockfile instead.
+          package-manager-cache: false
       - run: pnpm install --frozen-lockfile
       - id: select
         uses: changesets/action/select-mode@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
@@ -56,7 +58,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-          cache: pnpm
+          package-manager-cache: false
       - run: pnpm install --frozen-lockfile
       - name: Bump versions and write the changelogs
         env:
@@ -137,7 +139,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-          cache: pnpm
+          package-manager-cache: false
           # No registry-url: setup-node would write an .npmrc with an empty token, which gets in the way of OIDC.
       - run: pnpm install --frozen-lockfile
       - id: publish

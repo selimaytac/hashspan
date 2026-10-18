@@ -50,14 +50,12 @@ import {
   safely,
 } from './handles.js';
 import type { SpanRecording } from './spans.js';
-import { ADDRESS, amount, identifier, TX_HASH } from './values.js';
+import { ADDRESS, amount, holdsAddress, identifier, remoteIdentifier, TX_HASH } from './values.js';
 
 /** The modes of an MPP charge (`mpp.mode`). */
 const MPP_MODES: ReadonlySet<unknown> = new Set([MPP_MODE_VALUE_PUSH, MPP_MODE_VALUE_PULL]);
 /** An MPP challenge id: text of RFC 3986's unreserved characters, as a base64url HMAC is, of bounded length. */
 const MPP_CHALLENGE_ID = /^[A-Za-z0-9._~-]{1,128}$/;
-/** Hex of an address's length, which a server-chosen id could hold: hidden where the address mode hides addresses. */
-const ADDRESS_LIKE = /[0-9a-fA-F]{40}/;
 
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
@@ -101,7 +99,7 @@ export function createPaymentSpans({
       BLOCKCHAIN_OPERATION_NAME_VALUE_PAYMENT,
       parent,
     );
-    const protocol = identifier(input.protocol);
+    const protocol = remoteIdentifier(input.protocol, formatAddress);
     if (protocol !== undefined) attributes[ATTR_BLOCKCHAIN_PAYMENT_PROTOCOL] = protocol;
     setRemoteAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_PAYER, input.payer);
     const knownPayer = typeof input.payer === 'string' && ADDRESS.test(input.payer);
@@ -109,19 +107,23 @@ export function createPaymentSpans({
     setRemoteAddress(attributes, ATTR_BLOCKCHAIN_PAYMENT_ASSET, input.asset);
     const paid = amount(input.amount);
     if (paid !== undefined) attributes[ATTR_BLOCKCHAIN_PAYMENT_AMOUNT] = paid;
-    const scheme = identifier(input.x402?.scheme);
+    const scheme = remoteIdentifier(input.x402?.scheme, formatAddress);
     if (scheme !== undefined) attributes[ATTR_X402_SCHEME] = scheme;
     const resourceOf = (resource: unknown): string | undefined => {
       const recorded =
         typeof resource === 'string' ? paymentResourceOf(resource, paymentResource) : undefined;
-      return recorded ? formatAddressesIn(recorded, formatAddress) : undefined;
+      if (!recorded) return undefined;
+      // The server chooses the resource: hex of an address's length left after the address mode, such as a host or
+      // a path segment without `0x`, hides the whole value.
+      const formatted = formatAddressesIn(recorded, formatAddress);
+      return holdsAddress(formatted, formatAddress) ? undefined : formatted;
     };
     const x402Resource = resourceOf(input.x402?.resource);
     if (x402Resource) attributes[ATTR_X402_RESOURCE] = x402Resource;
     const mpp = input.mpp;
-    const method = identifier(mpp?.method);
+    const method = remoteIdentifier(mpp?.method, formatAddress);
     if (method !== undefined) attributes[ATTR_MPP_METHOD] = method;
-    const intent = identifier(mpp?.intent);
+    const intent = remoteIdentifier(mpp?.intent, formatAddress);
     if (intent !== undefined) attributes[ATTR_MPP_INTENT] = intent;
     const mode: unknown = mpp?.mode;
     if (MPP_MODES.has(mode)) attributes[ATTR_MPP_MODE] = mode as string;
@@ -129,7 +131,7 @@ export function createPaymentSpans({
     if (
       typeof challengeId === 'string' &&
       MPP_CHALLENGE_ID.test(challengeId) &&
-      !(formatAddress.protectsAddresses && ADDRESS_LIKE.test(challengeId))
+      !holdsAddress(challengeId, formatAddress)
     ) {
       attributes[ATTR_MPP_CHALLENGE_ID] = challengeId;
     }
