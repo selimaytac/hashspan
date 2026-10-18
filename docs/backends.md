@@ -37,11 +37,18 @@ Without a checkout of this repository, the same Jaeger runs with one command, it
 localhost only:
 
 ```sh
-docker run --rm -p 127.0.0.1:16686:16686 -p 127.0.0.1:4318:4318 jaegertracing/jaeger:2.21.0
+docker run --rm -p 127.0.0.1:16686:16686 -p 127.0.0.1:4318:4318 jaegertracing/jaeger:2.22.0
 ```
 
-To check from a terminal, use the v3 query API, since Jaeger 2.x has no v1 `/api/traces`; it requires a start time
-range in RFC 3339:
+Tested with Jaeger 2.22.0 against hashspan 1.2.0 on 2026-10-19: every send, confirm, payment, call batch and user
+operation shape renders as one tree, with links shown as references. Jaeger 2.21.0 and older label a trace that holds
+only a confirm span (its send ran with no parent) as Incomplete, as they count its cross-trace link as a missing parent. When the caller span (for example `execute_tool`) is missing
+from a trace, Jaeger 2.21.0 nests each confirm span under the span it only links to (send, payment, batch send or the
+replaced confirm), while 2.22.0 shows them as roots.
+
+To search from a terminal, use the v3 query API: in Jaeger 2.22.0 the v1 search `/api/traces?service=` and
+`/api/services` answer 404 (not checked in 2.21.0), while `/api/traces/{traceId}` still answers in 2.21.0 and 2.22.0.
+The v3 search requires a start time range in RFC 3339:
 
 ```sh
 curl 'http://localhost:16686/api/v3/traces?query.service_name=my-agent&query.start_time_min=2026-10-05T00:00:00Z&query.start_time_max=2026-10-06T00:00:00Z'
@@ -177,6 +184,7 @@ trace of its own and the link is the only relation between them
 
 | Backend | Keeps span links | How it was checked |
 |---|---|---|
+| Jaeger 2.22.0 | yes | hashspan 1.2.0, 2026-10-19: `/api/traces/{traceId}` returns each link as a `FOLLOWS_FROM` reference with the link's own trace id |
 | Jaeger 2.21.0 | yes | both query APIs return the link: `/api/v3/traces` as an OTLP link, `/api/traces` as a `FOLLOWS_FROM` reference |
 | Grafana Tempo 3.0.0 | yes | `/api/v2/traces/{traceId}` returns the link; how Grafana shows it was not checked |
 | Langfuse 4.49.0 | no | no link in the observations API (`/api/public/v2/observations`) or in its storage; see [langfuse/langfuse#12337](https://github.com/langfuse/langfuse/issues/12337) |

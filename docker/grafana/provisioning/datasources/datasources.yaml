@@ -1,5 +1,5 @@
 apiVersion: 1
-# Prometheus only: Grafana's Jaeger data source still calls Jaeger's v1 query API, which Jaeger 2.21 no longer
+# Prometheus only: Grafana's Jaeger data source still calls Jaeger's v1 query API, which Jaeger 2.22 no longer
 # serves, so the dashboard links to the Jaeger UI instead.
 datasources:
   - name: Prometheus
