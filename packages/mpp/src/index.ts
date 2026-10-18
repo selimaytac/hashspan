@@ -50,8 +50,9 @@ export interface WithHashspanMppOptions extends Omit<ViemOptions, 'confirm'> {
 /** Returned by {@link withHashspan}; the mppx client itself gets observers, nothing is replaced. */
 export interface HashspanMpp {
   /**
-   * Waits for tracing work still running after paid requests returned (payments without an outcome yet, then
-   * confirmations through the reader), so their spans are ended before the OpenTelemetry SDK shuts down. Resolves true
+   * Waits for tracing work still running after paid requests returned (paid payments without an outcome yet, then
+   * confirmations through the reader), so their spans are ended before the OpenTelemetry SDK shuts down; a challenge
+   * that was never paid is not waited for. Resolves true
    * when all of it finished, false on timeout (default 10 000 ms), ending payment spans still open as `timeout`; never
    * rejects. See https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.0/docs/adr/0010-flush-before-shutdown.md.
    */
@@ -92,6 +93,10 @@ const TX_HASH = /^0x[0-9a-fA-F]{64}$/;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const AMOUNT = /^(0|[1-9][0-9]{0,77})$/;
 const HEX = /^0x([0-9a-fA-F]{2})*$/;
+/** A JSON-RPC quantity of at most 32 bytes, without leading zeros. */
+const QUANTITY = /^0x(0|[1-9a-fA-F][0-9a-fA-F]{0,63})$/;
+/** How long to wait for the transaction of a sponsored pull's settlement, to read its nonce. */
+const TRANSACTION_TIMEOUT_MS = 10_000;
 const IDENTIFIER = /^[A-Za-z0-9_.-]{1,64}$/;
 /** A credential as mppx serializes it: the `Payment` scheme and base64url JSON. */
 const CREDENTIAL = /^Payment\s+([A-Za-z0-9_-]+={0,2})$/i;
@@ -292,12 +297,25 @@ function base64urlJson(encoded: string, max: number): unknown {
   }
 }
 
+/**
+ * The nonce and validity fields the payer signed into a Tempo transaction. A Tempo node accepts a transaction with
+ * them once, so the mined transaction that carries them is the one the payer signed.
+ */
+interface SignedNonce {
+  nonceKey: bigint;
+  nonce: bigint;
+  validBefore: bigint;
+  validAfter: bigint;
+}
+
 /** What the adapter reads from a credential, which the payer's own client wrote. */
 interface CredentialFields {
   /** `push` for a hash credential, `pull` for a signed transaction, `proof` for a zero-amount proof. */
   type: 'push' | 'pull' | 'proof' | undefined;
   /** The settlement's hash, when the credential determines it (push, unsponsored pull). */
   hash: string | undefined;
+  /** The signed nonce and validity fields of a pull, when its transaction decodes and carries them all. */
+  signed: SignedNonce | undefined;
   chainId: number | undefined;
   payer: string | undefined;
 }
@@ -305,6 +323,7 @@ interface CredentialFields {
 const NO_CREDENTIAL: CredentialFields = {
   type: undefined,
   hash: undefined,
+  signed: undefined,
   chainId: undefined,
   payer: undefined,
 };
@@ -331,13 +350,15 @@ function credentialFieldsOf(credential: unknown): CredentialFields {
     return {
       type: 'push',
       hash: typeof hash === 'string' && TX_HASH.test(hash) ? hash.toLowerCase() : undefined,
+      signed: undefined,
       ...fields,
     };
   }
   if (kind === 'transaction') {
-    return { type: 'pull', hash: signedTransactionHash(own(payload, 'signature')), ...fields };
+    const signed = signedTransactionOf(own(payload, 'signature'));
+    return { type: 'pull', hash: signed?.hash, signed: signed?.nonce, ...fields };
   }
-  if (kind === 'proof') return { type: 'proof', hash: undefined, ...fields };
+  if (kind === 'proof') return { type: 'proof', hash: undefined, signed: undefined, ...fields };
   return { ...NO_CREDENTIAL, ...fields };
 }
 
@@ -348,15 +369,26 @@ function isMinimalInteger(value: RlpItem | undefined): boolean {
   return typeof value === 'string' && (value === '0x' || !value.startsWith('0x00'));
 }
 
+/** An RLP integer field of at most 32 bytes as a bigint, `0x` as zero; undefined for anything else. */
+function rlpInteger(value: RlpItem | undefined): bigint | undefined {
+  if (!isMinimalInteger(value) || (value as string).length > 66) return undefined;
+  return value === '0x' ? 0n : BigInt(value as string);
+}
+
 /**
- * The hash a signed Tempo transaction will have on chain, as mppx derives it (`transactionHash` in
- * `tempo/client/Charge.js`): the `keccak256` of a `0x76` envelope signed by the payer, without a fee payer marker,
- * serialized canonically. Undefined when it cannot tell, such as for a transaction that waits for a fee payer's
- * signature, which changes the hash (ADR 0029).
+ * What a pull credential's signed Tempo transaction fixes: its nonce and validity fields, and the hash it will have
+ * on chain when no fee payer changes it. The hash is mppx's (`transactionHash` in `tempo/client/Charge.js`): the
+ * `keccak256` of a `0x76` envelope signed by the payer, without a fee payer marker, serialized canonically; undefined
+ * for a transaction that waits for a fee payer's signature (a `0x76` envelope with a fee payer marker, or the `0x78`
+ * envelope mppx sends the fee payer), which changes the hash (ADR 0029). The nonce fields are undefined unless all
+ * four are there, a validity bound of `0x` counting as missing. Undefined for a transaction that does not decode.
  */
-function signedTransactionHash(serialized: unknown): string | undefined {
+function signedTransactionOf(
+  serialized: unknown,
+): { hash: string | undefined; nonce: SignedNonce | undefined } | undefined {
   if (typeof serialized !== 'string' || serialized.length > MAX_CREDENTIAL_LENGTH) return undefined;
-  if (!HEX.test(serialized) || !serialized.toLowerCase().startsWith('0x76')) return undefined;
+  const envelope = serialized.slice(0, 4).toLowerCase();
+  if (!HEX.test(serialized) || (envelope !== '0x76' && envelope !== '0x78')) return undefined;
   let fields: RlpItem;
   try {
     // fromRlp rejects trailing bytes and lengths that do not add up.
@@ -370,14 +402,51 @@ function signedTransactionHash(serialized: unknown): string | undefined {
   if (!Array.isArray(fields[4]) || !Array.isArray(fields[5]) || !Array.isArray(fields[12])) {
     return undefined;
   }
-  // `0x` without a fee payer; `0x00` or an address marks a transaction that waits for one; a list is its signature.
-  const feePayer = fields[11];
-  if (feePayer !== '0x' && !Array.isArray(feePayer)) return undefined;
   const keyAuthorization = Array.isArray(fields[13]);
   const signature = keyAuthorization ? fields[14] : fields[13];
   if (fields.length !== (keyAuthorization ? 15 : 14)) return undefined;
   if (typeof signature !== 'string' || signature === '0x') return undefined;
-  return keccak256(serialized as `0x${string}`).toLowerCase();
+  // In a `0x76` envelope: `0x` without a fee payer, `0x00` or an address for a transaction that waits for one, a list
+  // for the fee payer's signature. In a `0x78` envelope: the sender's address.
+  const feePayer = fields[11];
+  const final = envelope === '0x76' && (feePayer === '0x' || Array.isArray(feePayer));
+  const waiting =
+    typeof feePayer === 'string' &&
+    (ADDRESS.test(feePayer) || (envelope === '0x76' && feePayer === '0x00'));
+  if (!final && !waiting) return undefined;
+  const [nonceKey, nonce, validBefore, validAfter] = [6, 7, 8, 9].map((index) =>
+    rlpInteger(fields[index]),
+  );
+  const complete =
+    nonceKey !== undefined &&
+    nonce !== undefined &&
+    validBefore !== undefined &&
+    validBefore !== 0n &&
+    validAfter !== undefined &&
+    validAfter !== 0n;
+  return {
+    hash: final ? keccak256(serialized as `0x${string}`).toLowerCase() : undefined,
+    nonce: complete ? { nonceKey, nonce, validBefore, validAfter } : undefined,
+  };
+}
+
+/** A JSON-RPC quantity of at most 32 bytes, written canonically, as a bigint; undefined for anything else. */
+function quantityOf(value: unknown): bigint | undefined {
+  return typeof value === 'string' && QUANTITY.test(value) ? BigInt(value) : undefined;
+}
+
+/**
+ * Whether `transaction`, as a node returns it for `eth_getTransactionByHash`, is the one the payer signed: sent by
+ * `payer`, with the nonce and validity fields of `signed`. A Tempo node accepts a transaction with them once.
+ */
+function isSignedTransaction(transaction: unknown, payer: string, signed: SignedNonce): boolean {
+  return (
+    addressOf(own(transaction, 'from')) === payer &&
+    quantityOf(own(transaction, 'nonceKey')) === signed.nonceKey &&
+    quantityOf(own(transaction, 'nonce')) === signed.nonce &&
+    quantityOf(own(transaction, 'validBefore')) === signed.validBefore &&
+    quantityOf(own(transaction, 'validAfter')) === signed.validAfter
+  );
 }
 
 /** What the server reported in its `Payment-Receipt`. */
@@ -739,6 +808,44 @@ export function withHashspan(client: object, options: WithHashspanMppOptions = {
     }
   };
 
+  /** The transaction `hash`, read through `client`, or undefined when it cannot be read in time. */
+  const transactionOf = (client: ViemClientLike, hash: string): Promise<unknown> =>
+    new Promise((resolve) => {
+      const done = (transaction: unknown): void => {
+        timers.clearTimeout(timer);
+        resolve(transaction);
+      };
+      const timer = timers.setTimeout(() => done(undefined), TRANSACTION_TIMEOUT_MS);
+      // The timer must not keep a process alive that is otherwise done.
+      (timer as { unref?: () => void } | undefined)?.unref?.();
+      Promise.resolve()
+        .then(() => client.request({ method: 'eth_getTransactionByHash', params: [hash] }))
+        .then(done, (error: unknown) => {
+          diag.debug(`hashspan: could not read the settlement transaction (${errorName(error)})`);
+          done(undefined);
+        });
+    });
+
+  /**
+   * The verdict on `receipt` for a payment checked with `check`. When the server named the settlement (a sponsored
+   * pull), a receipt that carries the charge is `true` only when its own transaction, read through `client`, is the
+   * one the payer signed; else there is no verdict (ADR 0029). The receipt's transaction is the mined one, so the
+   * receipt and the transaction always belong together.
+   */
+  const verdictOf = async (
+    client: ViemClientLike,
+    check: ChargeCheck,
+    signed: SignedNonce | undefined,
+    receipt: unknown,
+  ): Promise<boolean | undefined> => {
+    const carried = carriesCharge(receipt, check);
+    if (carried !== true || signed === undefined) return carried;
+    const mined = own(receipt, 'transactionHash');
+    if (typeof mined !== 'string' || !TX_HASH.test(mined)) return undefined;
+    const transaction = await transactionOf(client, mined);
+    return isSignedTransaction(transaction, check.payer, signed) ? true : undefined;
+  };
+
   /** The payment of an event's challenge, when it is open. */
   const paymentOf = (payload: unknown): Payment | undefined => {
     const id = own(own(payload, 'challenge'), 'id');
@@ -956,8 +1063,11 @@ export function withHashspan(client: object, options: WithHashspanMppOptions = {
     const funded =
       reported.fundingCurrency === undefined ||
       reported.fundingCurrency === addressOf(started.request.currency);
+    // A hash the server named is checked against the nonce the payer signed; without one, there is no verdict.
+    const signed = ownHash === undefined ? started.fields.signed : undefined;
+    const checkable = ownHash !== undefined || signed !== undefined;
     const check =
-      funded && !mismatch
+      funded && !mismatch && checkable
         ? chargeCheckOf(payment.challenge, started.request, started.fields.payer)
         : undefined;
     if (ownHash === undefined) {
@@ -986,12 +1096,12 @@ export function withHashspan(client: object, options: WithHashspanMppOptions = {
           end();
           return;
         }
-        try {
-          end(carriesCharge(receipt, check));
-        } catch (error) {
-          diag.error(`hashspan: failed to check the settlement (${errorName(error)})`);
-          end();
-        }
+        void verdictOf(confirmWith, check, signed, receipt)
+          .then((verified) => end(verified))
+          .catch((error: unknown) => {
+            diag.error(`hashspan: failed to check the settlement (${errorName(error)})`);
+            end();
+          });
       },
     });
   });
@@ -1034,21 +1144,27 @@ export function withHashspan(client: object, options: WithHashspanMppOptions = {
       viem.watch(confirmWith, { hash, chainId: started.chainId, timeoutMs: confirmTimeoutMs });
   });
 
-  /** Waits for every open payment to end; true if they did before `deadline`, else ends them as `timeout`. */
+  /** The open payments whose credential was created, so that a span waits for their outcome. */
+  const paidPayments = (): Payment[] => [...open.values()].filter((payment) => payment.started);
+
+  /**
+   * Waits for every open payment with a span to end; true if they did before `deadline`, else ends them as `timeout`.
+   * A challenge that got no credential has no span: flush does not wait for it, and its deadline still drops it.
+   */
   const flushPayments = async (deadline: number): Promise<boolean> => {
-    while (open.size > 0) {
+    for (let paid = paidPayments(); paid.length > 0; paid = paidPayments()) {
       const remaining = deadline - Date.now();
       const settled =
         remaining > 0 &&
         (await new Promise<boolean>((resolve) => {
           const timer = timers.setTimeout(() => resolve(false), remaining);
-          void Promise.all([...open.values()].map((payment) => payment.done)).then(() => {
+          void Promise.all(paid.map((payment) => payment.done)).then(() => {
             timers.clearTimeout(timer);
             resolve(true);
           });
         }));
       if (!settled) {
-        for (const payment of [...open.values()]) timeOut(payment);
+        for (const payment of paidPayments()) timeOut(payment);
         return false;
       }
     }

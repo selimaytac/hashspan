@@ -20,6 +20,7 @@ import {
   CURRENCY,
   decodeCredential,
   hashOf,
+  minedTransactionOf,
   offlineRpc,
   PAYER,
   PAYMENT_SPAN,
@@ -110,6 +111,8 @@ interface Run {
   logs?: (logs: ReturnType<typeof logsOf>) => unknown[];
   server?: ReturnType<typeof paidServer>;
   reader?: 'none' | 'other-chain';
+  /** What the reader returns for the reported transaction; default: one made from its receipt. */
+  transaction?: ((credential: string, reference: string) => unknown) | undefined;
 }
 
 /** Pays once in pull mode, with the reader on the offline chain, and returns the payment span's verdict. */
@@ -126,6 +129,7 @@ async function verdict(run: Run = {}) {
         ...run.receipt,
       }),
     );
+    if (run.transaction) rpc.transactions.set(reference, run.transaction(credential, reference));
     return new Response('{}', {
       headers: { 'payment-receipt': receiptHeader(reference, run.receiptExtra) },
     });
@@ -238,11 +242,220 @@ describe('a verified payment', () => {
     ).toBe(false);
   });
 
-  it('checks the reported transaction of a sponsored pull by its memo', async () => {
+  it("is true for a sponsored pull whose mined transaction is the payer's signed one, carrying the memo", async () => {
     const server = paidServer({ feePayer: true });
     const reference = `0x${'5a'.repeat(32)}`;
-    expect(await verdict({ server, reference, transfers: (id) => [primary(id)] })).toBe(true);
+    expect(
+      await verdict({
+        server,
+        reference,
+        transfers: (id) => [primary(id)],
+        transaction: minedTransactionOf,
+      }),
+    ).toBe(true);
   });
+
+  it('is false for a sponsored pull whose receipt does not carry the charge', async () => {
+    const server = paidServer({ feePayer: true });
+    const reference = `0x${'5a'.repeat(32)}`;
+    expect(
+      await verdict({
+        server,
+        reference,
+        transfers: (id) => [primary(id, 9_999n)],
+        transaction: minedTransactionOf,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('a sponsored pull, whose hash only the server reports', () => {
+  const server = () => paidServer({ feePayer: true });
+  const reference = `0x${'5a'.repeat(32)}` as Hex;
+  type Mined = (credential: string, hash: string) => unknown;
+  /** The payer's mined transaction with `field` changed by `change`, or removed. */
+  const withField =
+    (field: string, change?: (value: bigint) => unknown): Mined =>
+    (credential, hash) => {
+      const { [field]: value, ...mined } = minedTransactionOf(credential, hash);
+      return change ? { ...mined, [field]: change(BigInt(value as string)) } : mined;
+    };
+  const NONCE_FIELDS = ['nonceKey', 'nonce', 'validBefore', 'validAfter'] as const;
+
+  it.each<[string, Mined | undefined]>([
+    ['a transaction without the Tempo nonce fields', undefined],
+    ['no transaction (null)', () => null],
+    [
+      'a transaction from another sender',
+      (credential, hash) => minedTransactionOf(credential, hash, { from: OTHER }),
+    ],
+    ...NONCE_FIELDS.map((field): [string, Mined] => [
+      `a transaction with another ${field}`,
+      withField(field, (value) => `0x${(value + 1n).toString(16)}`),
+    ]),
+    ...['from', ...NONCE_FIELDS].map((field): [string, Mined] => [
+      `a transaction without ${field}`,
+      withField(field),
+    ]),
+    ...NONCE_FIELDS.map((field): [string, Mined] => [
+      `a transaction whose ${field} is a number`,
+      withField(field, (value) => Number(value)),
+    ]),
+    ...NONCE_FIELDS.map((field): [string, Mined] => [
+      `a transaction whose ${field} is longer than a quantity`,
+      withField(field, () => `0x1${'0'.repeat(64)}`),
+    ]),
+    ['a transaction that is not an object', () => '0x76'],
+  ])(
+    'has no verdict for %s, although the receipt carries the charge',
+    async (_name, transaction) => {
+      expect(
+        await verdict({
+          server: server(),
+          reference,
+          transfers: (id) => [primary(id)],
+          transaction,
+        }),
+      ).toBeUndefined();
+    },
+  );
+
+  it('has no verdict when the server repeats a challenge and reports the settlement of the earlier payment', async () => {
+    const rpc = offlineRpc();
+    // The same challenge, id included, for both paid requests.
+    const challenges = server();
+    let challenge: Response | undefined;
+    const repeated = async (request: Request) => {
+      challenge ??= await challenges(request);
+      return challenge.clone();
+    };
+    let settledOnce = false;
+    const api = paidApi((credential) => {
+      const id = (decodeCredential(credential).challenge as { id: string }).id;
+      if (!settledOnce) {
+        // The first payment settles in its own transaction, which the reader returns.
+        settledOnce = true;
+        rpc.mined.set(reference, rpcReceipt(reference, { logs: logsOf([primary(id)]) }));
+        rpc.transactions.set(reference, minedTransactionOf(credential, reference));
+      }
+      // Both answers name the first payment's transaction.
+      return new Response('{}', { headers: { 'payment-receipt': receiptHeader(reference) } });
+    }, repeated);
+    const client = testClient(api.fetch, { mode: 'pull' });
+    const reader = createPublicClient({ chain: tempoChain, transport: rpc.transport });
+    const hashspan = withHashspan(client, { reader, confirmTimeoutMs: 500 });
+    await client.fetch(URL_PAID);
+    expect(await hashspan.flush()).toBe(true);
+    await client.fetch(URL_PAID);
+    expect(await hashspan.flush()).toBe(true);
+    const payments = tracing.spans().filter(({ name }) => name === PAYMENT_SPAN);
+    expect(payments).toHaveLength(2);
+    expect(payments[1]?.attributes['mpp.challenge.id']).toBe(
+      payments[0]?.attributes['mpp.challenge.id'],
+    );
+    expect(payments[0]?.attributes['blockchain.payment.verified']).toBe(true);
+    expect(payments[1]?.attributes['blockchain.tx.hash']).toBe(reference);
+    expect(payments[1]?.attributes['blockchain.payment.status']).toBe('settled');
+    expect(payments[1]?.attributes['blockchain.payment.verified']).toBeUndefined();
+  });
+
+  it('reads the transaction once, through the reader, by the hash of the receipt', async () => {
+    const rpc = offlineRpc();
+    const api = paidApi((credential) => {
+      const id = (decodeCredential(credential).challenge as { id: string }).id;
+      rpc.mined.set(reference, rpcReceipt(reference, { logs: logsOf([primary(id)]) }));
+      rpc.transactions.set(reference, minedTransactionOf(credential, reference));
+      return new Response('{}', { headers: { 'payment-receipt': receiptHeader(reference) } });
+    }, server());
+    const client = testClient(api.fetch, { mode: 'pull' });
+    const reader = createPublicClient({ chain: tempoChain, transport: rpc.transport });
+    const hashspan = withHashspan(client, { reader, confirmTimeoutMs: 500 });
+    await client.fetch(URL_PAID);
+    expect(await hashspan.flush()).toBe(true);
+    const reads = rpc.requests.filter(({ method }) => method === 'eth_getTransactionByHash');
+    expect(reads).toEqual([{ method: 'eth_getTransactionByHash', params: [reference] }]);
+    expect(tracing.spanNamed(PAYMENT_SPAN).attributes['blockchain.payment.verified']).toBe(true);
+  });
+
+  it.each([
+    ['fails', () => Promise.reject(new Error('unavailable'))],
+    [
+      'throws',
+      () => {
+        throw new Error('unavailable');
+      },
+    ],
+  ])('has no verdict when the read of the transaction %s', async (_name, transaction) => {
+    vi.spyOn(diag, 'debug').mockImplementation(() => {});
+    const rpc = offlineRpc();
+    const api = paidApi((credential) => {
+      const id = (decodeCredential(credential).challenge as { id: string }).id;
+      rpc.mined.set(reference, rpcReceipt(reference, { logs: logsOf([primary(id)]) }));
+      return new Response('{}', { headers: { 'payment-receipt': receiptHeader(reference) } });
+    }, server());
+    const client = testClient(api.fetch, { mode: 'pull' });
+    const reader = createPublicClient({ chain: tempoChain, transport: rpc.transport });
+    const request = reader.request.bind(reader);
+    // Only the adapter's own read of the transaction fails; viem's receipt wait reads the receipt first.
+    reader.request = ((args: { method: string }) =>
+      args.method === 'eth_getTransactionByHash' ? transaction() : request(args as never)) as never;
+    const hashspan = withHashspan(client, { reader, confirmTimeoutMs: 500 });
+    await client.fetch(URL_PAID);
+    expect(await hashspan.flush()).toBe(true);
+    const span = tracing.spanNamed(PAYMENT_SPAN);
+    expect(span.attributes['blockchain.payment.status']).toBe('settled');
+    expect(span.attributes['blockchain.payment.verified']).toBeUndefined();
+  });
+
+  it('ends without a verdict, off the caller, when the read of the transaction never answers', async () => {
+    const rpc = offlineRpc();
+    const api = paidApi((credential) => {
+      const id = (decodeCredential(credential).challenge as { id: string }).id;
+      rpc.mined.set(reference, rpcReceipt(reference, { logs: logsOf([primary(id)]) }));
+      rpc.transactions.set(reference, new Promise(() => {}));
+      return new Response('{}', { headers: { 'payment-receipt': receiptHeader(reference) } });
+    }, server());
+    const client = testClient(api.fetch, { mode: 'pull' });
+    const reader = createPublicClient({
+      chain: tempoChain,
+      transport: rpc.transport,
+      pollingInterval: 20,
+    });
+    const hashspan = withHashspan(client, { reader, confirmTimeoutMs: 500 });
+    const response = await client.fetch(URL_PAID);
+    expect(response.status).toBe(200);
+    expect(await hashspan.flush({ timeoutMs: 300 })).toBe(false);
+    const span = tracing.spanNamed(PAYMENT_SPAN);
+    expect(span.attributes['blockchain.payment.status']).toBe('settled');
+    expect(span.attributes['blockchain.payment.verified']).toBeUndefined();
+  });
+
+  it('gives up the read of the transaction after 10 seconds, and ends without a verdict', async () => {
+    const rpc = offlineRpc();
+    const api = paidApi((credential) => {
+      const id = (decodeCredential(credential).challenge as { id: string }).id;
+      rpc.mined.set(reference, rpcReceipt(reference, { logs: logsOf([primary(id)]) }));
+      rpc.transactions.set(reference, new Promise(() => {}));
+      return new Response('{}', { headers: { 'payment-receipt': receiptHeader(reference) } });
+    }, server());
+    const client = testClient(api.fetch, { mode: 'pull' });
+    const reader = createPublicClient({
+      chain: tempoChain,
+      transport: rpc.transport,
+      pollingInterval: 20,
+    });
+    const hashspan = withHashspan(client, { reader, confirmTimeoutMs: 500 });
+    await client.fetch(URL_PAID);
+    // The receipt is read; then the transaction read hangs until the adapter's own bound ends it.
+    await vi.waitFor(() =>
+      expect(rpc.requests.map(({ method }) => method)).toContain('eth_getTransactionByHash'),
+    );
+    expect(tracing.spans().filter(({ name }) => name === PAYMENT_SPAN)).toEqual([]);
+    expect(await hashspan.flush({ timeoutMs: 11_000 })).toBe(true);
+    expect(
+      tracing.spanNamed(PAYMENT_SPAN).attributes['blockchain.payment.verified'],
+    ).toBeUndefined();
+  }, 15_000);
 });
 
 describe('a payment without a verdict', () => {

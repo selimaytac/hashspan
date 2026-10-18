@@ -4,7 +4,7 @@
 import { Receipt } from 'mppx';
 import { Mppx, tempo } from 'mppx/client';
 import { Mppx as ServerMppx, tempo as serverTempo } from 'mppx/server';
-import { createClient, custom, type Hex, keccak256 } from 'viem';
+import { createClient, custom, fromRlp, type Hex, keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { tempo as tempoChain } from 'viem/chains';
 
@@ -57,12 +57,14 @@ export function rpcReceipt(
 
 /**
  * The JSON-RPC stand-in of the payer's (and reader's) chain: what mppx's Tempo charge asks while it prepares, signs and,
- * for push, sends a transaction. `eth_sendRawTransactionSync` answers with a receipt of the raw transaction's hash, and
- * `eth_getTransactionReceipt` with the receipts `mined` holds.
+ * for push, sends a transaction. `eth_sendRawTransactionSync` answers with a receipt of the raw transaction's hash,
+ * `eth_getTransactionReceipt` with the receipts `mined` holds, and `eth_getTransactionByHash` with what
+ * `transactions` holds for the hash, else a transaction made from the receipt.
  */
 export function offlineRpc(options: { failSend?: boolean } = {}) {
   const requests: { method: string; params: unknown[] }[] = [];
   const mined = new Map<string, Record<string, unknown>>();
+  const transactions = new Map<string, unknown>();
   // A new block on every poll, so viem's receipt wait looks again.
   let block = 0x11;
   const transport = custom({
@@ -99,8 +101,10 @@ export function offlineRpc(options: { failSend?: boolean } = {}) {
         case 'eth_getTransactionReceipt':
           return mined.get((params as [string])[0]) ?? null;
         case 'eth_getTransactionByHash': {
+          const [hash] = params as [string];
+          if (transactions.has(hash)) return transactions.get(hash);
           // viem's receipt wait looks for the transaction before it looks for its receipt again.
-          const receipt = mined.get((params as [string])[0]);
+          const receipt = mined.get(hash);
           return receipt
             ? {
                 hash: receipt.transactionHash,
@@ -131,7 +135,37 @@ export function offlineRpc(options: { failSend?: boolean } = {}) {
       }
     },
   });
-  return { transport, requests, mined };
+  return { transport, requests, mined, transactions };
+}
+
+/**
+ * The mined transaction of a pull credential, as a Tempo node returns it for `eth_getTransactionByHash`: the sender
+ * and the nonce and validity fields the payer signed, decoded from the credential's 0x76 or 0x78 envelope, with
+ * `extra` over them.
+ */
+export function minedTransactionOf(
+  credential: string,
+  hash: string,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const signed = (decodeCredential(credential).payload as { signature: Hex }).signature;
+  const fields = fromRlp(`0x${signed.slice(4)}`, 'hex') as Hex[];
+  const quantity = (value: Hex | undefined) =>
+    `0x${BigInt(value === '0x' ? 0 : (value as Hex)).toString(16)}`;
+  return {
+    hash,
+    type: '0x76',
+    chainId: `0x${CHAIN_ID.toString(16)}`,
+    from: PAYER.address.toLowerCase(),
+    nonceKey: quantity(fields[6]),
+    nonce: quantity(fields[7]),
+    validBefore: quantity(fields[8]),
+    validAfter: quantity(fields[9]),
+    blockHash: `0x${'22'.repeat(32)}`,
+    blockNumber: '0x11',
+    transactionIndex: '0x0',
+    ...extra,
+  };
 }
 
 /** A viem client of the payer on the offline chain, as mppx's `getClient` returns it. */

@@ -11,6 +11,7 @@ import {
   encodeEventTopics,
   type Hex,
   parseAbi,
+  toRlp,
 } from 'viem';
 import { tempo as tempoChain } from 'viem/chains';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -77,12 +78,44 @@ const settlementLogs = () => {
     removed: false,
   }));
 };
-const readerWith = (receipt: Record<string, unknown> = {}) =>
+/** The nonce and validity fields of {@link SPONSORED}, as a Tempo node returns them for its mined transaction. */
+const SPONSORED_FIELDS = {
+  from: PAYER.address.toLowerCase(),
+  nonceKey: `0x${'f'.repeat(64)}`,
+  nonce: '0x0',
+  validBefore: '0x6ad4dac4',
+  validAfter: '0x6197cee9',
+};
+/**
+ * A sponsored pull's signed transaction, as mppx writes it into the credential: a `0x78` envelope that names the
+ * payer as sender and waits for the fee payer's signature. The signature is not checked by the adapter.
+ */
+const SPONSORED = `0x78${toRlp([
+  '0x1079',
+  '0x3b9aca00',
+  '0x03368b4a00',
+  '0x04b933',
+  [],
+  [],
+  SPONSORED_FIELDS.nonceKey as Hex,
+  '0x',
+  SPONSORED_FIELDS.validBefore as Hex,
+  SPONSORED_FIELDS.validAfter as Hex,
+  '0x',
+  PAYER.address.toLowerCase() as Hex,
+  [],
+  `0x${'11'.repeat(64)}1c`,
+]).slice(2)}`;
+const readerWith = (
+  receipt: Record<string, unknown> = {},
+  transaction: Record<string, unknown> = SPONSORED_FIELDS,
+) =>
   createPublicClient({
     chain: tempoChain,
     transport: mockTransport({
       chainIdHex: '0x1079',
       receipt: { logs: settlementLogs(), ...receipt },
+      transaction,
     }).transport,
     pollingInterval: 10,
   });
@@ -140,6 +173,7 @@ const paying =
   (
     change: (pay: Payment, value: unknown) => void,
     readerReceipt?: (value: unknown) => Record<string, unknown>,
+    readerTransaction?: (value: unknown) => Record<string, unknown>,
   ) =>
   (value: unknown, options: WithHashspanMppOptions | undefined): AdapterScenario => {
     const fake = fakeClient();
@@ -148,7 +182,7 @@ const paying =
     return {
       call: async () => {
         hashspan = withHashspan(fake.client, {
-          reader: readerWith(readerReceipt?.(value)),
+          reader: readerWith(readerReceipt?.(value), readerTransaction?.(value)),
           confirmTimeoutMs: 2_000,
           // The failure rows need the payment.failed observer.
           observeFailures: true,
@@ -376,6 +410,36 @@ const ROWS: Row[] = [
       (value) => ({ logs: [value, ...settlementLogs()] }),
     ),
   },
+  // The mined transaction of a sponsored pull, which the reader returns for the check of ADR 0029.
+  ...Object.keys(SPONSORED_FIELDS).map(
+    (field): Row => ({
+      name: `sponsored settlement transaction ${field}`,
+      untraced: false,
+      scenario: paying(
+        (pay) => {
+          pay.credentialJson.payload = { type: 'transaction', signature: SPONSORED };
+        },
+        undefined,
+        (value) => ({ ...SPONSORED_FIELDS, [field]: value }),
+      ),
+    }),
+  ),
+  {
+    name: 'sponsored credential signature',
+    untraced: false,
+    values: () => [
+      [
+        'a 0x78 envelope without the sender',
+        `0x78${SPONSORED.slice(4).replace(PAYER.address.toLowerCase().slice(2), '')}`,
+      ],
+      ['a 0x78 envelope with a trailing byte', `${SPONSORED}00`],
+      ['a 0x77 envelope', `0x77${SPONSORED.slice(4)}`],
+      ...hostileValues(),
+    ],
+    scenario: paying((pay, value) => {
+      pay.credentialJson.payload = { type: 'transaction', signature: value };
+    }),
+  },
   // What the caller passes in: only rule 1 applies.
   ...(
     ['reader', 'tracker', 'confirmTimeoutMs', 'decodeRevertReason', 'observeFailures'] as const
@@ -409,6 +473,37 @@ describe('hostile input', () => {
     modes: [{}, { address: 'off', errorMessages: 'sanitized' }],
     tracing: () => tracing,
     meters,
+  });
+});
+
+describe("a sponsored pull's verdict", () => {
+  /** Pays one sponsored pull whose mined transaction the reader returns as `transaction`; returns its verdict. */
+  async function verdict(transaction: Record<string, unknown>): Promise<unknown> {
+    tracing.reset();
+    const scenario = paying(
+      (pay) => {
+        pay.credentialJson.payload = { type: 'transaction', signature: SPONSORED };
+      },
+      undefined,
+      () => transaction,
+    )(undefined, undefined);
+    await scenario.call();
+    await scenario.flush?.();
+    return tracing.spans().find(({ name }) => name.startsWith('payment '))?.attributes[
+      'blockchain.payment.verified'
+    ];
+  }
+
+  it("is true for the payer's own signed transaction", async () => {
+    expect(await verdict(SPONSORED_FIELDS)).toBe(true);
+  });
+
+  it.each(
+    Object.keys(SPONSORED_FIELDS).flatMap((field) =>
+      hostileValues().map(([label, value]): [string, string, unknown] => [field, label, value]),
+    ),
+  )('is never true for a transaction whose %s is %s', async (field, _label, value) => {
+    expect(await verdict({ ...SPONSORED_FIELDS, [field]: value })).not.toBe(true);
   });
 });
 

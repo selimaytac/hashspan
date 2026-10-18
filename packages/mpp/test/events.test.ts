@@ -286,9 +286,71 @@ describe('bounds in time and number', () => {
     await fake.emit('challenge.received', { challenge: challengeOf({ id: 'payment-1001' }) });
     const second = challengeOf({ id: 'payment-1' });
     await fake.emit('credential.created', { challenge: second, credential: credentialFor(second) });
-    expect(await hashspan.flush({ timeoutMs: 10 })).toBe(false);
-    // Only the evicted payment's span: flush() forgets the challenges that never got a credential.
+    // No open payment has a span: flush() does not wait for the challenges that never got a credential.
+    expect(await hashspan.flush({ timeoutMs: 10 })).toBe(true);
     expect(tracing.spans()).toHaveLength(1);
+  });
+
+  it('does not make flush() wait for a challenge that was never paid, which it still drops at its deadline', async () => {
+    const fake = fakeClient();
+    const hashspan = withHashspan(fake.client);
+    // A challenge the client refuses (its policy or spending limit): no credential, no span, an hour to expire.
+    const unpaid = challengeOf({
+      id: 'unpaid',
+      expires: new Date(Date.now() + 3600_000).toISOString(),
+    });
+    await fake.emit('challenge.received', { challenge: unpaid });
+    const started = Date.now();
+    expect(await hashspan.flush({ timeoutMs: 500 })).toBe(true);
+    expect(Date.now() - started).toBeLessThan(250);
+    expect(tracing.spans()).toEqual([]);
+    // The challenge is still followed: a credential created after flush() starts its span.
+    await fake.emit('credential.created', { challenge: unpaid, credential: credentialFor(unpaid) });
+    await fake.emit('payment.response', {
+      challenge: unpaid,
+      credential: credentialFor(unpaid),
+      response: paidResponse(),
+    });
+    expect(await hashspan.flush({ timeoutMs: 500 })).toBe(true);
+    expect(tracing.spanNamed(PAYMENT_SPAN).attributes['blockchain.payment.status']).toBe('settled');
+  });
+
+  it('makes flush() wait for a payment with a span while an unpaid challenge is open', async () => {
+    const fake = fakeClient();
+    const hashspan = withHashspan(fake.client);
+    await fake.emit('challenge.received', { challenge: challengeOf({ id: 'unpaid' }) });
+    const paid = challengeOf({ id: 'paid' });
+    await fake.emit('challenge.received', { challenge: paid });
+    await fake.emit('credential.created', { challenge: paid, credential: credentialFor(paid) });
+    setTimeout(() => {
+      void fake.emit('payment.response', {
+        challenge: paid,
+        credential: credentialFor(paid),
+        response: paidResponse(),
+      });
+    }, 50);
+    expect(await hashspan.flush({ timeoutMs: 2_000 })).toBe(true);
+    expect(tracing.spanNamed(PAYMENT_SPAN).attributes['blockchain.payment.status']).toBe('settled');
+  });
+
+  it('keeps following an unpaid challenge, until its deadline, after a flush() that timed out on another payment', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const fake = fakeClient();
+    const hashspan = withHashspan(fake.client);
+    const unpaid = challengeOf({ id: 'unpaid' });
+    await fake.emit('challenge.received', { challenge: unpaid });
+    const paid = challengeOf({ id: 'paid' });
+    await fake.emit('challenge.received', { challenge: paid });
+    await fake.emit('credential.created', { challenge: paid, credential: credentialFor(paid) });
+    const flushed = hashspan.flush({ timeoutMs: 100 });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await flushed).toBe(false);
+    // Only the paid one ended, as timeout; the unpaid challenge waits for its deadline.
+    expect(tracing.spans()).toHaveLength(1);
+    await fake.emit('credential.created', { challenge: unpaid, credential: credentialFor(unpaid) });
+    await vi.advanceTimersByTimeAsync(25_000 + 30_000);
+    expect(tracing.spans()).toHaveLength(2);
+    expect(tracing.spans()[1]?.attributes['error.type']).toBe('timeout');
   });
 
   it('ends a challenge that failed before its credential as a failed payment, with observeFailures', async () => {

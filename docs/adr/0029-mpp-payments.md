@@ -150,7 +150,7 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
   | `payment.failed` for a challenge no observer saw | nothing |
   | no event: 3xx, a 4xx, a 402 after payment | error, `error.type` `timeout`, no status (ADR 0016), once the challenge's `expires` (bounded) or, without one, the client's default validity of 25 seconds, plus a grace period, has passed; the payer's own hash, when known, stays recorded (see below) |
   | too many payments open | the oldest ends as `timeout` |
-  | `flush()` gives up | every payment still open ends as `timeout` |
+  | `flush()` gives up | every payment still open with a span ends as `timeout`; a challenge without a credential is left to its deadline |
 
   At most 1000 payments are open per `withHashspan()` result, counting the start state of `challenge.received`, as
   for x402: the server decides how many challenges arrive. A later event for the same `challenge.id` and credential
@@ -179,10 +179,11 @@ the source of mppx 0.13.5 (`dist/client/internal/Fetch.js`, `dist/tempo/client/C
   `false` when the receipt does not carry them, or when the server's `reference` differs from the payer's own hash.
   Absent when no check was possible: no reader, no receipt, a reverted receipt, a `fundingCurrency` other than the
   challenge's currency (auto-swap and machine-token routes, where the log's `from` is not the payer), or values that
-  do not validate. For push and unsponsored pull, the payer's own hash is the strong part of the check; for a
-  sponsored pull, the memo is: it binds the transfer to the challenge with 56 bits, which a server choosing the
-  challenge ids could search for a collision with an earlier payment of the same payer, recipient and amount. That is
-  a known limit.
+  do not validate. For push and unsponsored pull, the payer's own hash is the strong part of the check. For a
+  sponsored pull, whose hash only the server names, it is the payer's signed transaction: a receipt that carries the
+  charge gives `true` only when the receipt's own transaction, read once through the reader (bounded, off the
+  caller's path), was sent by the payer with the `nonceKey`, `nonce`, `validBefore` and `validAfter` of the signed
+  transaction in the credential; otherwise there is no verdict (see the amendment below).
 - **Response and request copies.** The adapter reads only the `Payment-Receipt` header of the paid response and the
   URL of the input (a string, a `URL` or a `Request`); it never reads a body. The copies of the 402 response and of
   the input, which mppx makes whether or not anyone observes, are left alone. The copy of the paid response exists
@@ -263,6 +264,22 @@ does the following, proposed here for review before the record is accepted:
 - **Push from a wallet account** (`sendCallsSync`) was checked on Anvil, where viem falls back to
   `eth_sendTransaction` for a single call: the payment span links to the call batch's send span, and the
   transaction's confirm span to the same send span.
+- **A sponsored pull's verdict rests on the payer's signed transaction.** For a sponsored pull the hash comes from
+  the server, so `true` also needs the mined transaction to be the payer's signed one. mppx signs every pull with
+  Tempo's expiring nonce (`nonceKey` the maximum, `nonce` 0) and a validity window of its own (`validAfter`, `validBefore`).
+  The adapter keeps these four fields from the credential's signed transaction (the `0x78` envelope mppx sends the
+  fee payer, or a `0x76` one with a fee payer marker), and once the receipt carries the charge it reads the
+  receipt's own transaction with one `eth_getTransactionByHash` request, as the x402 adapter does for Permit2 (at
+  most 10 seconds, the timer unref'd). `true` needs that transaction's `from` to be the payer and its four fields to
+  equal the signed ones. A transaction that cannot be read in time, a field that is missing or not a canonical
+  quantity, or one that differs gives no verdict rather than `false`: the receipt may still carry this payment's
+  transfer. A credential whose transaction does not decode gives no verdict without a read. Push and unsponsored
+  pull are unchanged. Unit tests cover each field and a reported transaction that is not the payer's signed one; the
+  Anvil test checks the same with real sponsored charges.
+- **`flush()` waits only for payments with a span.** A challenge that never got a credential (the client's policy
+  or spending limit refused it, or signing failed) has no span to end. `flush()` neither waits for it nor ends it:
+  it stays open until its deadline, so a credential created later is still traced, and it records nothing when
+  dropped.
 
 ## Open questions
 
@@ -282,8 +299,8 @@ does the following, proposed here for review before the record is accepted:
   pins the narrow range above; a weekly workflow, `.github/workflows/mppx-sdk.yml` like `x402-sdk.yml`, runs the tests
   against the newest mppx in range and the adapter's own tests against the oldest.
 - Known limits, stated in the package README: sessions, subscriptions, `evm`, `stripe` and x402 over mppx are not
-  traced; a 3xx, a 4xx or a final 402 after payment ends as `timeout`; a sponsored pull's hash and verification rest
-  on the server's `reference` and the 56-bit memo binding; auto-swap and machine-token routes get no verdict; push
+  traced; a 3xx, a 4xx or a final 402 after payment ends as `timeout`; a sponsored pull's hash rests on the
+  server's `reference`, and its verdict needs one more read of the mined transaction; auto-swap and machine-token routes get no verdict; push
   from a JSON-RPC account (`sendCallsSync`) is linked only as far as its test shows; paid MCP tools, if their test
   shows they fire no events.
 - **Tests the implementation pull request brings, written first:**
