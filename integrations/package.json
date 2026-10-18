@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "@arizeai/openinference-instrumentation-langchain": "^4.1.4",
+    "@arizeai/openinference-instrumentation-mcp": "^0.2.36",
     "@arizeai/openinference-instrumentation-openai-agents": "^0.3.2",
     "@coinbase/agentkit": "^0.10.4",
     "@coinbase/agentkit-langchain": "^0.3.0",
@@ -23,6 +24,9 @@
     "@mastra/core": "^1.74.0",
     "@mastra/observability": "^1.18.3",
     "@mastra/otel-bridge": "^1.5.13",
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@modelcontextprotocol/server": "^2.3.1",
     "@openai/agents": "^0.18.0",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/sdk-node": "^0.222.0",

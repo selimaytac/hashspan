@@ -24,6 +24,7 @@ This page collects the setups that were checked; each code block is compiled in 
 | GOAT | `@hashspan/viem` | background confirmation | no longer maintained ([setup](#goat-sdk)) | `integrations/` |
 | Mastra | `@hashspan/viem` | Mastra's OpenTelemetry bridge | the bridge is experimental ([setup](#agent-frameworks)) | `integrations/` |
 | LangChain JS, OpenAI Agents SDK (OpenInference) | `@hashspan/viem` | run tools in an active span of your own | tool spans are not active ([setup](#agent-frameworks)) | `integrations/` |
+| MCP server tools (stdio) | `@hashspan/viem` in the server | the agent's trace context in each request's `_meta`: OpenInference's MCP instrumentation (v1 SDK) or a few lines of your own (v2 SDK) | without it, the server's spans start a trace of their own; pass the `OTEL_*` settings to the server ([setup](#mcp-servers)) | `integrations/` |
 | ElizaOS `plugin-evm` | none | none | not traced: it creates its own wallet client ([details](#agent-frameworks)) | no |
 | Coinbase Agentic Wallets (`awal`, payments MCP) | none | none | not traced: sends run as smart account user operations in a Coinbase-hosted page inside awal's own app; `watch()` on the returned hash records the bundle transaction, not the account's operation | no |
 | Wallet services with a viem account (Turnkey, Privy) | `@hashspan/viem` | none | none ([setup](#wallet-services)) | as viem clients |
@@ -394,6 +395,161 @@ async function payVendor(): Promise<`0x${string}`> {
 
 - **ElizaOS:** `@elizaos/plugin-evm` 1.0.13 creates a new wallet client from the `EVM_PRIVATE_KEY` setting for each
   action and offers no way to pass a client of your own, so its transactions are not traced today.
+
+## MCP servers
+
+When an agent calls a tool of an MCP server and that tool sends the transaction, hashspan runs in the server's
+process, and its spans are children of the span active there. Nothing in the MCP SDKs carries the agent's trace
+context to the server, so the server's `send` and `confirm` spans start a trace of their own, apart from the agent's
+tool call. MCP reserves the `traceparent`, `tracestate` and `baggage` keys of a request's `_meta` for W3C trace
+context; the v2 SDK exports their names (`TRACEPARENT_META_KEY`, `TRACESTATE_META_KEY`, `BAGGAGE_META_KEY`), but
+neither SDK fills or reads them. Checked over stdio with `@modelcontextprotocol/sdk` 1.32.1 (v1) and
+`@modelcontextprotocol/client` and `@modelcontextprotocol/server` 2.3.1 (v2).
+
+With the v2 SDK, inject the active context into the `_meta` of each tool call, and run each tool handler in the
+context it extracts from `ctx.mcpReq._meta`. The server, `mcp-server.ts`, sends with a client extended with
+`withHashspan()`:
+
+```ts
+import { withHashspan } from '@hashspan/viem';
+import { McpServer, type ServerContext } from '@modelcontextprotocol/server';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import { context, propagation } from '@opentelemetry/api';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { createPublicClient, createWalletClient, http, parseEther } from 'viem';
+import { mnemonicToAccount } from 'viem/accounts';
+import { foundry } from 'viem/chains';
+import { z } from 'zod';
+
+// Exports over OTLP, to http://localhost:4318 unless OTEL_EXPORTER_OTLP_ENDPOINT says otherwise. Never log to
+// stdout: it carries the MCP messages.
+const sdk = new NodeSDK({ serviceName: 'wallet-mcp' });
+sdk.start();
+
+const account = mnemonicToAccount('test test test test test test test test test test test junk');
+const transport = http(process.env.RPC_URL ?? 'http://127.0.0.1:8545'); // Anvil
+const hashspan = withHashspan();
+const wallet = createWalletClient({ account, chain: foundry, transport }).extend(hashspan);
+const reader = createPublicClient({ chain: foundry, transport }).extend(hashspan);
+
+/** Runs `fn` in the trace context the client sent in the request's `_meta`. */
+function inClientTrace<T>(ctx: ServerContext, fn: () => Promise<T>): Promise<T> {
+  return context.with(propagation.extract(context.active(), ctx.mcpReq._meta ?? {}), fn);
+}
+
+function createServer(): McpServer {
+  const server = new McpServer({ name: 'wallet', version: '1.0.0' });
+  server.registerTool(
+    'pay_vendor',
+    { description: 'Pays the vendor an amount of ETH.', inputSchema: z.object({ amountEth: z.string() }) },
+    ({ amountEth }, ctx) =>
+      inClientTrace(ctx, async () => {
+        const to = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'; // Anvil's second account
+        const hash = await wallet.sendTransaction({ to, value: parseEther(amountEth) });
+        const receipt = await reader.waitForTransactionReceipt({ hash });
+        return { content: [{ type: 'text', text: `${hash} ${receipt.status}` }] };
+      }),
+  );
+  return server;
+}
+
+serveStdio(createServer);
+
+// The client ends stdin to stop the server: export the pending spans before the process exits.
+process.stdin.once('end', async () => {
+  await hashspan.flush();
+  await sdk.shutdown();
+  process.exit(0);
+});
+```
+
+The agent, `mcp-client.ts`, starts the server as a child process and calls the tool inside an active span of its
+own. With Anvil running, run it with `node --import tsx mcp-client.ts` after installing
+`@modelcontextprotocol/client @modelcontextprotocol/server @opentelemetry/sdk-node zod tsx` and the packages of the
+[quick start](../README.md#quick-start). The trace shows `pay_vendor` of the service `my-agent`, with `send 31337`
+and `confirm 31337` of the service `wallet-mcp` under it:
+
+```ts
+import { Client } from '@modelcontextprotocol/client';
+import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { context, propagation, trace } from '@opentelemetry/api';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+
+const sdk = new NodeSDK({ serviceName: 'my-agent' });
+sdk.start();
+
+/** The active trace context as `_meta` keys (`traceparent`, `tracestate`, `baggage`) for one request. */
+function traceMeta(): Record<string, string> {
+  const meta: Record<string, string> = {};
+  propagation.inject(context.active(), meta);
+  return meta;
+}
+
+// A stdio server gets only a few variables of this environment, such as PATH and HOME: pass on its
+// OpenTelemetry and RPC settings. It runs mcp-server.ts next to this file, with this process's Node.js flags (tsx's).
+const settings = Object.entries(process.env).filter(
+  (entry): entry is [string, string] =>
+    (entry[0].startsWith('OTEL_') || entry[0] === 'RPC_URL') && entry[1] !== undefined,
+);
+const transport = new StdioClientTransport({
+  command: process.execPath,
+  args: [...process.execArgv, new URL('./mcp-server.ts', import.meta.url).pathname],
+  env: { ...getDefaultEnvironment(), ...Object.fromEntries(settings) },
+});
+const client = new Client({ name: 'my-agent', version: '1.0.0' });
+await client.connect(transport);
+
+// The agent's tool call: the server's send and confirm spans become children of this span.
+await trace.getTracer('my-agent').startActiveSpan('pay_vendor', async (span) => {
+  try {
+    const result = await client.callTool({
+      name: 'pay_vendor',
+      arguments: { amountEth: '0.01' },
+      _meta: traceMeta(),
+    });
+    console.log(result.content);
+  } finally {
+    span.end();
+  }
+});
+
+// Closing ends the server's stdin, so it exports its spans and exits; then this process's spans.
+await client.close();
+await sdk.shutdown();
+```
+
+With the v1 SDK, `@arizeai/openinference-instrumentation-mcp` 0.2.36 does both steps for every request, and creates
+no spans of its own. Install it, and run this in the agent's process and in the server's:
+
+```ts
+import { MCPInstrumentation } from '@arizeai/openinference-instrumentation-mcp';
+import * as clientStdioModule from '@modelcontextprotocol/sdk/client/stdio.js';
+import * as serverStdioModule from '@modelcontextprotocol/sdk/server/stdio.js';
+
+// In the agent's process and in the server's, after the OpenTelemetry SDK starts and before the transport
+// connects: the client's requests carry the active trace context in `_meta`, and the server handles each request
+// in that context.
+new MCPInstrumentation().manuallyInstrument({ clientStdioModule, serverStdioModule });
+```
+
+CI runs all three setups against Anvil in [`integrations/test/mcp.int.test.ts`](../integrations/test/mcp.int.test.ts),
+with the agent and the server as separate processes: the v2 files above as written, and a v1 agent and server with
+and without the instrumentation. Without it, the server's `send` span is the root of a trace of its own; with it,
+and with the v2 setup, `send` and `confirm` are children of the agent's `pay_vendor` span. Known limits:
+
+- **The server's environment:** both SDKs' stdio transports start the server with only a few variables of the
+  agent's environment (`getDefaultEnvironment()`), so the server does not see `OTEL_*` settings unless the agent
+  passes them in `env`, as above.
+- **stdout:** it carries the MCP messages, so the server cannot use a console exporter or log to stdout.
+- **Shutting down:** the v1 server transport does not close when stdin ends, and both clients' `close()` waits 2
+  seconds for the server to exit before it sends SIGTERM. Flush on the end of stdin, as the server above does, so
+  the last spans are exported in time.
+- **OpenInference with v2:** the instrumentation's types and its automatic hooks cover only the modules of
+  `@modelcontextprotocol/sdk`; use the hand-written lines with the v2 packages.
+- **Other transports:** only stdio is checked. The `_meta` lines do not depend on the transport.
+- **Which span is the parent:** the tool span must be active in the agent when it calls `callTool`; see
+  [agent frameworks](#agent-frameworks) for frameworks whose tool spans are not active. The server takes the
+  client's trace context as given, as an HTTP server does with a `traceparent` header.
 
 ## Wallet services
 
