@@ -1,5 +1,17 @@
 # @hashspan/core
 
+## 1.2.0
+
+### Minor Changes
+
+- [#450](https://github.com/selimaytac/hashspan/pull/450) [`b6ca775`](https://github.com/selimaytac/hashspan/commit/b6ca775ca80ab38649588952e5a697bfd60f2883) Thanks [@selimaytac](https://github.com/selimaytac)! - Record payments whose settlement transaction the payer sends or signs itself, as with MPP (ADR 0029):
+  `PaymentInput` gains `sender` (`'payer'` labels the settlement's fee `sponsor` only when the receipt names another
+  fee payer, never `facilitator`), `hash` (the settlement's hash when the payer knows it first: recorded as
+  `blockchain.tx.hash` from the span's start, so a timeout keeps it, never replaced by a reported one, and linked to
+  the tracker's own send span of it) and `mpp` (`mpp.method`, `mpp.intent`, `mpp.mode`, `mpp.challenge.id` and
+  `mpp.resource`). `blockchain.payment.protocol` gains the value `mpp`. `TxTracker.paymentSenders` tells an adapter
+  that the tracker reads the new fields.
+
 ## 1.1.0
 
 ### Minor Changes

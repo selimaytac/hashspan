@@ -1,6 +1,6 @@
 {
   "name": "@hashspan/mpp",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "MPP adapter for @hashspan/core: traces the payments an AI agent makes with the Machine Payments Protocol (mppx) as payment spans.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",
