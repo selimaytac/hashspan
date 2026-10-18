@@ -42,11 +42,13 @@ docker run --rm -p 127.0.0.1:16686:16686 -p 127.0.0.1:4318:4318 jaegertracing/ja
 
 Tested with Jaeger 2.22.0 against hashspan 1.2.0 on 2026-10-19: every send, confirm, payment, call batch and user
 operation shape renders as one tree, with links shown as references. Jaeger 2.21.0 and older label a trace that holds
-only a confirm span (its send ran with no parent) as Incomplete, as they count its cross-trace link as a missing parent.
+only a confirm span (its send ran with no parent) as Incomplete, as they count its cross-trace link as a missing parent. When the caller span (for example `execute_tool`) is missing
+from a trace, Jaeger 2.21.0 nests each confirm span under the span it only links to (send, payment, batch send or the
+replaced confirm), while 2.22.0 shows them as roots.
 
-To search from a terminal, use the v3 query API, since Jaeger 2.x answers 404 on the v1 search `/api/traces?service=`
-and on `/api/services` (`/api/traces/{traceId}` still answers in 2.21.0 and 2.22.0); it requires a start time
-range in RFC 3339:
+To search from a terminal, use the v3 query API: in Jaeger 2.22.0 the v1 search `/api/traces?service=` and
+`/api/services` answer 404 (not checked in 2.21.0), while `/api/traces/{traceId}` still answers in 2.21.0 and 2.22.0.
+The v3 search requires a start time range in RFC 3339:
 
 ```sh
 curl 'http://localhost:16686/api/v3/traces?query.service_name=my-agent&query.start_time_min=2026-10-05T00:00:00Z&query.start_time_max=2026-10-06T00:00:00Z'
