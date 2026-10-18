@@ -112,8 +112,10 @@ describe('a retry while the replacement search of a timed-out wait runs', () => 
     const [timedOut, retried] = spans as [(typeof spans)[0], (typeof spans)[0]];
     expect(timedOut.attributes['error.type']).toBe('timeout');
     expect(timedOut.attributes['blockchain.tx.status']).toBeUndefined();
-    // It ends when the wait gave up, not when the search or the retry finished.
-    expect(ms(timedOut.endTime)).toBeGreaterThanOrEqual(firstStart + 1_400);
+    // It ends when the wait gave up, not when the search or the retry finished. viem decides when that is: the floor
+    // of the peer range (2.21.0) also gives up after `retryCount` polls, before the timeout, so only the order is
+    // checked.
+    expect(ms(timedOut.startTime)).toBeGreaterThanOrEqual(firstStart - 50);
     expect(ms(timedOut.endTime)).toBeLessThanOrEqual(gaveUpAt + 50);
     expect(ms(timedOut.endTime)).toBeLessThanOrEqual(retryStart + 50);
     expect(retried.attributes['blockchain.tx.status']).toBe('success');

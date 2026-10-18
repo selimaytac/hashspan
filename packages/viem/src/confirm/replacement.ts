@@ -1,11 +1,11 @@
 // A replacement viem did not report: after its wait timed out, the transaction with the same sender and nonce that
 // was mined instead, found from what hashspan learned when it sent the awaited one (ADR 0008 amendment).
 import { diag } from '@opentelemetry/api';
+import { hexToNumber, numberToHex } from 'viem';
 import {
   getBlock as viemGetBlock,
   getBlockNumber as viemGetBlockNumber,
   getTransaction as viemGetTransaction,
-  getTransactionCount as viemGetTransactionCount,
   getTransactionReceipt as viemGetTransactionReceipt,
 } from 'viem/actions';
 import { own } from '../arguments.js';
@@ -111,8 +111,15 @@ export async function findReplacement(
   // Mined after all: not a replacement. The timeout stands, as before.
   if (awaited) return undefined;
   const latest = await viemGetBlockNumber(viemClient, { cacheTime: 0 });
-  const nonceAt = (blockNumber: bigint): Promise<number> =>
-    viemGetTransactionCount(viemClient, { address, blockNumber });
+  // Requested directly: viem before 2.29.1 sends block 0 as `latest` (wevm/viem#3629), and on a chain younger than the
+  // window the search reads block 0.
+  const nonceAt = async (blockNumber: bigint): Promise<number> =>
+    hexToNumber(
+      await (viemClient as { request: (args: unknown) => Promise<`0x${string}`> }).request({
+        method: 'eth_getTransactionCount',
+        params: [address, numberToHex(blockNumber)],
+      }),
+    );
   // The nonce after a block is the count of transactions the sender had mined by then.
   if ((await nonceAt(latest)) <= sent.nonce) return undefined;
   // Block -1 stands for the state before the first block, where no nonce is taken.

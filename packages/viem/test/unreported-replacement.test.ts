@@ -293,6 +293,19 @@ describe('a replacement viem did not report', () => {
     expect(confirmOf(MINED)?.attributes['blockchain.block.number']).toBe(0);
   });
 
+  it('reads the nonce at block 0 of a chain shorter than the window', async () => {
+    // Taken in block 1: the search reads the nonce at block 0, which viem before 2.29.1 sends as `latest`.
+    const mock = chain({ latest: 5, takenAt: 1 });
+    await sendAndTimeOut(clients(mock.transport));
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.replacement.hash']).toBe(MINED);
+    expect(confirmOf(MINED)?.attributes['blockchain.block.number']).toBe(1);
+    expect(
+      mock
+        .searched()
+        .filter((r) => r.method === 'eth_getTransactionCount' && r.params[1] === '0x0'),
+    ).toHaveLength(1);
+  });
+
   it('finds it in the newest block of the window', async () => {
     const mock = chain({ takenAt: 1_000 });
     await sendAndTimeOut(clients(mock.transport));
