@@ -384,7 +384,7 @@ describe('payment privacy', () => {
   });
 
   it('drops a hex value cut by the length bound whole, so no part of an address is recorded', () => {
-    const path = `https://api.example.com/${'a'.repeat(470)}/`;
+    const path = `https://api.example.com/${'z'.repeat(470)}/`;
     createTxTracker({ address: 'off', paymentResource: 'path' })
       .startPayment({ ...payment, x402: { resource: `${path}${PAYER}` } })
       .end({ status: 'settled' });
