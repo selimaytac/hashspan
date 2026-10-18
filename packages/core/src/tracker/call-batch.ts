@@ -49,7 +49,7 @@ import {
   reportedErrorType,
 } from './handles.js';
 import { metricAttributes, type SpanRecording, secondsSince } from './spans.js';
-import { holdsAddress, isTxHash, smallQuantity, ZERO_TX_HASH } from './values.js';
+import { isTxHash, smallQuantity, ZERO_TX_HASH } from './values.js';
 
 /** `error.type` of a call batch that failed without being included (EIP-5792 status 400). */
 const CALL_BATCH_FAILED = 'failed';
@@ -129,14 +129,15 @@ export function createCallBatchSpans({
   recording: { redact, markError, finisher, setRemoteAddress, baseAttributes },
 }: CallBatchDependencies): CallBatchSpans {
   /**
-   * The part of a batch id recorded as `blockchain.call_batch.id`. The wallet chooses the id, so where the address
-   * mode hides addresses, an id that holds hex of an address's length is not recorded; it still keys the batch.
+   * `blockchain.call_batch.id` of a batch id. The wallet chooses the id, which can hold an address, so the address mode
+   * applies to it as to an address: `hashed` records the hash of the whole id, `off` nothing, `raw` its first 256
+   * characters. The id still keys the batch in every mode.
    */
   const recordedId = (id: string): Attributes => {
-    const recorded = id.slice(0, MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH);
-    return holdsAddress(recorded, formatAddress)
-      ? {}
-      : { [ATTR_BLOCKCHAIN_CALL_BATCH_ID]: recorded };
+    const recorded = formatAddress.protectsAddresses
+      ? formatAddress(id)
+      : id.slice(0, MAX_CALL_BATCH_ID_ATTRIBUTE_LENGTH);
+    return recorded === undefined ? {} : { [ATTR_BLOCKCHAIN_CALL_BATCH_ID]: recorded };
   };
 
   const startCallBatchSend = (input: CallBatchInput, parentCtx?: Context): CallBatchSendHandle => {

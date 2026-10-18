@@ -76,12 +76,14 @@ mode, such a value put the address into the backend as it is. Only `mpp.challeng
 
 - In `hashed` and `off` address mode, a value a remote party chooses that is not itself an address is not recorded
   when it holds 40 hex characters in a row, with or without `0x`. One check in the core applies it to the payment
-  protocol, `x402.scheme`, `mpp.method`, `mpp.intent`, `mpp.challenge.id`, `blockchain.call_batch.id` (the wallet
-  chooses it) and the agent id and name taken from Baggage (an upstream caller sets them).
+  protocol, `x402.scheme`, `mpp.method`, `mpp.intent`, `mpp.challenge.id` and the agent id and name taken from
+  Baggage (an upstream caller sets them).
 - `x402.resource`, `mpp.resource`, `error.type` and `exception.type` keep formatting a `0x` address by the address
   mode. What still holds 40 hex characters in a row after that is not recorded; an error type becomes `_OTHER`.
-- A call batch id is usually 32 bytes of hex or longer, so in these modes the attribute is rarely recorded. The id
-  still keys the batch, so its confirm span links to its send span as before.
+- `blockchain.call_batch.id` is chosen by the wallet and usually 32 bytes of hex or longer, so it would almost always
+  hold 40 hex characters; dropping it would lose the correlation it gives. It is treated like an address instead:
+  `hashed` mode records the hash of the whole id with the address mode's hash function, `off` mode records nothing.
+  The id still keys the batch, so its confirm span links to its send span as before.
 - `raw` mode is unchanged, and so is the static `agent` option, which is the user's own text.
 - The hostile-input table has rows with an address, an address without `0x` and one inside other text for each of
   these fields. The rule is stated once in docs/semconv.md, under "Values a remote party chooses".

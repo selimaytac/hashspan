@@ -186,21 +186,55 @@ describe('blockchain.call_batch.id', () => {
     `${ADDRESS}0000000000000000000000000000000000000000000000000000000000002105`,
   ];
 
-  it.each(HIDING)('is not recorded when it holds an address, in %s mode', (address) => {
-    const tracker = createTxTracker({ address });
-    for (const id of holding) {
-      tracker.startCallBatchSend({ chainId: CHAIN_ID, callCount: 1 }).end({ id });
-      tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id }).end({ statusCode: 200 });
-      const spans = tracing.spans();
-      expect(spans.map((span) => span.name)).toEqual([`send ${CHAIN_ID}`, `confirm ${CHAIN_ID}`]);
-      for (const span of spans)
-        expect(span.attributes['blockchain.call_batch.id'], id).toBeUndefined();
-      // The batch is still keyed by its id: the confirm span links to the send span.
-      expect(spans[1]?.links[0]?.context.spanId).toBe(spans[0]?.spanContext().spanId);
+  const ids = [...holding, '0xb47c4', `0x${'ab'.repeat(32)}`];
+  /** Sends and confirms the batch `id`; returns its send and confirm spans. */
+  const sendAndConfirm = (tracker: ReturnType<typeof createTxTracker>, id: string) => {
+    tracker.startCallBatchSend({ chainId: CHAIN_ID, callCount: 1 }).end({ id });
+    tracker.startCallBatchConfirm({ chainId: CHAIN_ID, id }).end({ statusCode: 200 });
+    const spans = tracing.spans();
+    expect(spans.map((span) => span.name)).toEqual([`send ${CHAIN_ID}`, `confirm ${CHAIN_ID}`]);
+    // The batch is still keyed by its id: the confirm span links to the send span.
+    expect(spans[1]?.links[0]?.context.spanId).toBe(spans[0]?.spanContext().spanId);
+    return spans;
+  };
+
+  it('is hashed like an address in hashed mode, never recorded as it is', () => {
+    const tracker = createTxTracker({ address: 'hashed' });
+    const recorded = new Set<unknown>();
+    for (const id of ids) {
+      const spans = sendAndConfirm(tracker, id);
+      const [send, confirm] = spans.map((span) => span.attributes['blockchain.call_batch.id']);
+      expect(send, id).toMatch(/^sha256:[0-9a-f]{32}$/);
+      // The same id has the same hash on both spans, and the hash does not depend on letter case.
+      expect(confirm, id).toBe(send);
+      reset();
+      createTxTracker({ address: 'hashed' })
+        .startCallBatchSend({ chainId: CHAIN_ID, callCount: 1 })
+        .end({ id: id.toUpperCase().replace(/^0X/, '0x') });
+      expect(attribute('blockchain.call_batch.id')).toBe(send);
+      recorded.add(send);
       reset();
     }
-    tracker.startCallBatchSend({ chainId: CHAIN_ID, callCount: 1 }).end({ id: '0xb47c4' });
-    expect(attribute('blockchain.call_batch.id')).toBe('0xb47c4');
+    // Different ids keep different values, so batches stay apart.
+    expect(recorded.size).toBe(ids.length);
+  });
+
+  it('uses the custom hash function of the address mode', () => {
+    const tracker = createTxTracker({
+      address: { mode: 'hashed', hash: (id) => `h:${id.length}` },
+    });
+    sendAndConfirm(tracker, ADDRESS);
+    for (const span of tracing.spans())
+      expect(span.attributes['blockchain.call_batch.id']).toBe('h:42');
+  });
+
+  it('is not recorded in off mode', () => {
+    const tracker = createTxTracker({ address: 'off' });
+    for (const id of ids) {
+      for (const span of sendAndConfirm(tracker, id))
+        expect(span.attributes['blockchain.call_batch.id'], id).toBeUndefined();
+      reset();
+    }
   });
 
   it('is recorded as before in raw mode', () => {

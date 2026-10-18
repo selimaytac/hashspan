@@ -491,7 +491,7 @@ const ROWS: Row[] = [
     run: (t, value) => t.startCallBatchSend(CALL_BATCH).end({ id: value as never }),
   },
   {
-    // The wallet chooses the id; one that holds an address stays hidden in hashed and off mode.
+    // The wallet chooses the id; one that holds an address is hashed in hashed mode and dropped in off mode.
     name: 'CallBatchSendHandle.end result.id holding an address',
     values: batchIdsHoldingAddress,
     run: (t, value) => {

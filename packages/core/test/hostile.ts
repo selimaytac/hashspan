@@ -523,7 +523,13 @@ const ATTRIBUTE_CHECKS: Record<string, Check> = {
   'blockchain.user_operation.gas.used': count,
   'blockchain.user_operation.gas.cost': matches(DECIMAL, 'a decimal amount'),
   'blockchain.user_operation.nonce': matches(DECIMAL, 'a decimal amount'),
-  'blockchain.call_batch.id': matches(CALL_BATCH_ID, 'a call batch id of at most 256 characters'),
+  // Hashed like an address in hashed mode, not recorded in off mode.
+  'blockchain.call_batch.id': (value, { address: mode }) => {
+    if (mode === 'off') return 'recorded in off mode';
+    if (mode === 'hashed')
+      return matches(/^sha256:[0-9a-f]{32}$/, 'a hashed id')(value, {} as never);
+    return matches(CALL_BATCH_ID, 'a call batch id of at most 256 characters')(value, {} as never);
+  },
   'blockchain.call_batch.sender': address,
   'blockchain.call_batch.call_count': count,
   'blockchain.call_batch.status': oneOf('success', 'reverted', 'partially_reverted'),

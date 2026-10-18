@@ -201,7 +201,7 @@ with or without hashspan.
 | `blockchain.user_operation.gas.used` | int | confirm | on | gas the operation used (`actualGasUsed`) |
 | `blockchain.user_operation.gas.cost` | string | confirm | on | what the operation paid (`actualGasCost`), wei, decimal string; its share of the bundle, not the bundle transaction's fee; paid by the paymaster when `blockchain.user_operation.paymaster` is recorded |
 | `blockchain.user_operation.paymaster` | string | confirm | raw | address of the paymaster that paid for the operation, subject to address mode; absent when none paid |
-| `blockchain.call_batch.id` | string | send, confirm | on | the batch id the wallet returned for EIP-5792 `wallet_sendCalls` (`0x`-prefixed hex, at most 8194 characters), truncated after 256 characters; with the chain id, it identifies the batch; in `hashed` and `off` address mode, see [values a remote party chooses](#values-a-remote-party-chooses) |
+| `blockchain.call_batch.id` | string | send, confirm | on | the batch id the wallet returned for EIP-5792 `wallet_sendCalls` (`0x`-prefixed hex, at most 8194 characters), truncated after 256 characters; with the chain id, it identifies the batch; hashed like an address in `hashed` address mode and not recorded in `off` mode, see [values a remote party chooses](#values-a-remote-party-chooses) |
 | `blockchain.call_batch.sender` | string | send | raw | address of the account the calls are sent from, subject to address mode |
 | `blockchain.call_batch.call_count` | int | send | on | number of calls in the batch |
 | `blockchain.call_batch.status` | string | confirm | on | the batch's outcome from chain data: `success` \| `reverted` \| `partially_reverted`; absent for other outcomes, which `error.type` describes |
@@ -345,12 +345,13 @@ transaction. The signatures and the authorities' nonces are never recorded.
 In `hashed` and `off` address mode, a value that a remote party chooses and that is not itself an address is not
 recorded when it holds 40 hex characters in a row, with or without `0x`: a server, a facilitator, a wallet or an
 upstream caller could put an address there, such as the payer's. This applies to `blockchain.payment.protocol`,
-`x402.scheme`, `mpp.method`, `mpp.intent`, `mpp.challenge.id`, `blockchain.call_batch.id`, and `gen_ai.agent.id` and
-`gen_ai.agent.name` taken from Baggage. In `x402.resource`, `mpp.resource`, `error.type` and `exception.type`, an
+`x402.scheme`, `mpp.method`, `mpp.intent`, `mpp.challenge.id`, and `gen_ai.agent.id` and `gen_ai.agent.name` taken
+from Baggage. In `x402.resource`, `mpp.resource`, `error.type` and `exception.type`, an
 address with `0x` follows the address mode as above; a resource that still holds 40 hex characters in a row after
 that, such as a host or path segment without `0x`, is not recorded, and such an error type is recorded as `_OTHER`.
-A call batch id is usually 32 bytes of hex or longer, so in these modes it is rarely recorded; the batch is still
-tracked by it, and its confirm span still links to its send span. `raw` mode records these values as before, and the
+`blockchain.call_batch.id`, which the wallet chooses, is treated like an address: in `hashed` mode it records the
+whole id through the address mode's hash (the same function, so one id has one value on its send and confirm spans),
+and in `off` mode nothing; the batch is still tracked by its id in every mode. `raw` mode records these values as before, and the
 static `agent` option, which is the user's own text, is always recorded as given
 ([ADR 0025](adr/0025-untrusted-input.md#amendment-2026-10-18-proposed-values-a-remote-party-chooses)).
 
@@ -369,7 +370,7 @@ of each package check the bounds against the values that split at them.
 | `blockchain.contract.function.selector` of `writeContract` | an ABI of 10 000 items and 100 000 copied values; for an overloaded function, 100 000 copied argument values | no selector; past the ABI bound, no ABI is used for telemetry either, so custom errors in the revert reason show as their selector |
 | `x402.resource` and `mpp.resource` | 512 characters | its first 512 characters, followed by `...`; a hex value the cut would split is dropped whole |
 | `mpp.challenge.id` | 128 characters | not recorded |
-| `blockchain.call_batch.id` | 256 characters | its first 256 characters; an id that is not hex or longer than 8194 characters is not recorded |
+| `blockchain.call_batch.id` | 256 characters | its first 256 characters (in `raw` address mode); an id that is not hex or longer than 8194 characters is not recorded |
 | `blockchain.tx.authorization.addresses` and `.chain_ids` | 64 entries | the first 64 well-formed entries; `blockchain.tx.authorization.count` keeps the full length, and no further entry is read |
 | `blockchain.call_batch.transaction_hashes` | 64 hashes | the first 64 distinct well-formed hashes among the first 64 receipts of a status, or of the hashes a send returned; no further entry is read, and `blockchain.block.number` is the highest among those receipts |
 | x402 payments waiting for their response | 1000 per `withHashspan()` | the oldest payment span ends as `timeout` |
