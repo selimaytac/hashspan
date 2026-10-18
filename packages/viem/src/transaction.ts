@@ -209,8 +209,10 @@ export function addTransactionActions(
       const key = confirmKey(chainId, hash);
       const sent = sentTransactionOf(input?.from, input?.nonce, input?.to);
       if (sent) senders.set(key, sent);
-      // The nonce viem or the wallet filled in, or the sender of a raw send: one request, off the caller's path.
-      else if (input !== undefined) {
+      // The nonce viem or the wallet filled in, or the sender of a raw send: one request, off the caller's path. Not
+      // through an EIP-1193 provider (viem's `custom` transport), such as a wallet service's, which is sent nothing
+      // but what the call sends (docs/integrations.md#wallet-services).
+      else if (input !== undefined && own(own(client, 'transport'), 'type') !== 'custom') {
         track(
           readSentTransaction(client, hash, input.from).then((read) => {
             if (read) senders.set(key, read);

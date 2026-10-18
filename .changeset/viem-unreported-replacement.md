@@ -13,4 +13,5 @@ caller's path) when the original was sent through the same `withHashspan()` resu
 
 To know the nonce, a traced send that passes no `nonce`, and a raw send, now add one `eth_getTransactionByHash` of
 the returned hash through the sending client, off the caller's path; its failure is only logged through `diag`. A
-send that passes `nonce` adds no request.
+send that passes `nonce` adds no request, and neither does a send through an EIP-1193 provider (`custom()`, such as
+a wallet service's), whose immediate replacement therefore still ends as a timeout.

@@ -2,7 +2,15 @@
 // hashspan, so that a change that adds requests fails here. Agents often run against rate-limited endpoints; the
 // requests per case are listed in docs/architecture.md. Counts only, no timing.
 import { Instance } from 'prool';
-import { type Address, createPublicClient, createWalletClient, custom, type Hex, http } from 'viem';
+import {
+  type Address,
+  createPublicClient,
+  createWalletClient,
+  custom,
+  type Hex,
+  http,
+  type Transport,
+} from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -79,12 +87,12 @@ type Shape = 'operatorFee' | 'tempo' | 'sponsored' | 'pending' | undefined;
  * quorum (#402). A Celo `feeCurrency` is taken out of a sent transaction, which Anvil does not know.
  */
 function counting(shape: Shape = undefined): {
-  transport: ReturnType<typeof custom>;
+  transport: Transport;
   counts: Counts;
 } {
   const counts: Counts = {};
   const upstream = http(RPC_URL)({ chain: anvil });
-  const transport = custom({
+  const provider = custom({
     async request({ method, params }: { method: string; params?: unknown }) {
       counts[method] = (counts[method] ?? 0) + 1;
       const sent =
@@ -117,6 +125,11 @@ function counting(shape: Shape = undefined): {
       return result;
     },
   });
+  // A transport to a node, as http() is: custom() stands for a wallet's EIP-1193 provider, which hashspan sends no reads.
+  const transport: Transport = (parameters) => {
+    const created = provider(parameters);
+    return { ...created, config: { ...created.config, type: 'node' } };
+  };
   return { transport, counts };
 }
 

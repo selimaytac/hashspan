@@ -118,7 +118,9 @@ ended with `error.type` `timeout`, although the chain holds the outcome.
   the awaited transaction through the same `withHashspan()` result: the sender and the nonce the call passed, or,
   when the call passed no nonce (the node, the wallet or viem fills it in) or no sender is known (a raw send, #33),
   both read with one `eth_getTransactionByHash` of the returned hash through the sending client, right after the send
-  and off the caller's path. Kept per hash for 10 minutes, for at most 10 000 hashes. A failed read is only logged
+  and off the caller's path. Not through an EIP-1193 provider (viem's `custom` transport), such as a wallet
+  service's: the requests it is sent stay those of the call, as docs/integrations.md promises, and such a send keeps
+  the timeout. Kept per hash for 10 minutes, for at most 10 000 hashes. A failed read is only logged
   through `diag`. A transaction the node dropped before that read (a replacement that reached it first), and a
   transaction confirmed with `watch()` that hashspan did not send, keep the timeout.
 - **The same match as viem's: sender and nonce, from chain data.** The awaited hash has no receipt, the sender's

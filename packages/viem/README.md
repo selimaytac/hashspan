@@ -171,7 +171,8 @@ that paid them.
   a transaction sent through the same `withHashspan()` result: it records it as above, without
   `blockchain.tx.replacement.reason`, as viem reported none. It knows the sender and nonce from your call, or, when
   you pass no `nonce` or send a signed transaction, from one `eth_getTransactionByHash` it sends through the sending
-  client right after the send, off your call's path. It searches the last 128 blocks, with at most 13 requests after
+  client right after the send, off your call's path; not through an EIP-1193 provider (`custom()`), such as a wallet
+  service's, which hashspan sends nothing. It searches the last 128 blocks, with at most 13 requests after
   the timeout; your wait still rejects with viem's `WaitForTransactionReceiptTimeoutError`, and both confirm spans
   end when it did.
 - `checkReplacement: false` turns off viem's detection, and with it this attribution.
@@ -493,11 +494,12 @@ actions to trace their user operations ([smart account SDKs](#smart-account-sdks
   ([background confirmation](#background-confirmation)).
 - A transaction replaced before viem's wait read it still ends its confirm span with `error.type` `timeout` when the
   replacement was mined before the last 128 blocks, when it was sent without a `nonce` and the replacement reached
-  the node before hashspan's read of the sent transaction (the node then no longer knows it), when that read fails
-  (a wallet provider that answers no reads), and when it was sent elsewhere and confirmed with `watch()`
-  ([replaced transactions](#replaced-transactions)).
+  the node before hashspan's read of the sent transaction (the node then no longer knows it), when that read fails,
+  and when it was sent elsewhere and confirmed with `watch()` ([replaced transactions](#replaced-transactions)).
+- Through an EIP-1193 provider (`custom()`, such as a wallet service's), a send without a `nonce` is not read, so a
+  replacement sent right after it ends its confirm span with `error.type` `timeout`; pass `nonce` to have it found.
 - A send without a `nonce`, and a raw send, cost one `eth_getTransactionByHash` through the sending client, for the
-  replacement search above; pass `nonce` to avoid it.
+  replacement search above, unless the client sends through an EIP-1193 provider; pass `nonce` to avoid it.
 - A wait that resolves with the receipt of another transaction that viem did not report as a replacement, as after a
   mixed-up RPC response, ends the confirm span with `error.type` `_OTHER` and records none of that receipt's data;
   the transaction's own outcome is not recorded ([#355](https://github.com/selimaytac/hashspan/issues/355)).

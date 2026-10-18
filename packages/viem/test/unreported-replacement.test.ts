@@ -1,7 +1,13 @@
 // A replacement viem did not report, because the replacing transaction took the original out of the node's pool before
 // viem's wait read it: hashspan looks for it after the wait timed out (ADR 0008 amendment).
 import { SpanStatusCode } from '@opentelemetry/api';
-import { createPublicClient, createWalletClient, custom, RpcRequestError } from 'viem';
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  RpcRequestError,
+  type Transport,
+} from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { base } from 'viem/chains';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -78,7 +84,7 @@ function chain({
     s: `0x${'22'.repeat(32)}`,
     yParity: '0x0',
   };
-  const transport = custom({
+  const provider = {
     async request({ method, params = [] }: { method: string; params?: unknown[] }) {
       requests.push({ method, params });
       if (hangOn.includes(method)) return new Promise(() => {});
@@ -175,13 +181,18 @@ function chain({
           throw new Error(`mock chain: unexpected method ${method}`);
       }
     },
-  });
+  };
+  /** A transport to a node; `custom(provider)` is a wallet's EIP-1193 provider, which hashspan sends no reads. */
+  const transport: Transport = (parameters) => {
+    const created = custom(provider)(parameters);
+    return { ...created, config: { ...created.config, type: 'node' } };
+  };
   const reads_ = () => requests.filter((r) => r.method === 'eth_getTransactionByHash').length;
   const searched = () =>
     requests.filter(
       (r) => r.method === 'eth_getTransactionCount' || r.method === 'eth_getBlockByNumber',
     );
-  return { transport, requests, searched, reads: reads_ };
+  return { transport, eip1193: custom(provider), requests, searched, reads: reads_ };
 }
 
 function clients(transport: ReturnType<typeof chain>['transport'], hashspan = withHashspan()) {
@@ -302,6 +313,30 @@ describe('the nonce of a send that passed none', () => {
       'blockchain.tx.status': 'replaced',
       'blockchain.tx.replacement.hash': MINED,
     });
+  });
+
+  it('is not read through an EIP-1193 provider, which is asked for nothing but the send', async () => {
+    const mock = chain({ knownFor: 1 });
+    const hashspan = withHashspan();
+    const wallet = createWalletClient({
+      account: FROM,
+      chain: base,
+      transport: mock.eip1193,
+    }).extend(hashspan);
+    const reader = createPublicClient({
+      chain: base,
+      transport: mock.transport,
+      pollingInterval: 10,
+    }).extend(hashspan);
+    const hash = await wallet.sendTransaction({ to: TO, value: 1n, gas: 21_000n });
+    await hashspan.flush({ timeoutMs: 5_000 });
+    expect(mock.reads()).toBe(0);
+    // Without its nonce, a replacement before the wait read it stays a timeout.
+    await expect(
+      reader.waitForTransactionReceipt({ hash, timeout: 100, retryDelay: 1 }),
+    ).rejects.toThrow(expect.objectContaining({ name: 'WaitForTransactionReceiptTimeoutError' }));
+    await hashspan.flush({ timeoutMs: 5_000 });
+    expect(confirmOf(HASH)?.attributes['error.type']).toBe('timeout');
   });
 
   it('is not read when the send passed one', async () => {

@@ -106,12 +106,8 @@ describe('a wallet service with an EIP-1193 provider, through custom()', () => {
     expect(sendMs).toBeGreaterThanOrEqual(QUEUE_MS - 5);
     expect(confirm.links[0]?.context.spanId).toBe(send.spanContext().spanId);
     expect(confirm.attributes['blockchain.tx.status']).toBe('success');
-    // hashspan asks the provider for one read only, the sent transaction for its nonce; the provider refusing it
-    // changes nothing.
-    expect(methods.filter((method) => method !== 'eth_chainId')).toEqual([
-      'eth_sendTransaction',
-      'eth_getTransactionByHash',
-    ]);
+    // hashspan asks the provider for nothing it does not answer.
+    expect(methods.filter((method) => method !== 'eth_chainId')).toEqual(['eth_sendTransaction']);
   });
 
   it('confirms through watch() on a public client when the provider answers no reads', async () => {
