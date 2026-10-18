@@ -1,5 +1,19 @@
 # @hashspan/x402
 
+## 1.1.1
+
+### Patch Changes
+
+- [#440](https://github.com/selimaytac/hashspan/pull/440) [`a519a76`](https://github.com/selimaytac/hashspan/commit/a519a760279b0decc035f9f487218c9667e5d326) Thanks [@selimaytac](https://github.com/selimaytac)! - Payments with x402's `batch-settlement` scheme no longer record the channel's deposit as their settlement. The
+  response to the request that opens a channel reports the deposit into escrow as its `transaction` and `amount`; that
+  payment span recorded the deposit as `blockchain.payment.settled_amount` and as `blockchain.tx.hash`, and the
+  deposit's confirm span linked to it. A `batch-settlement` payment span now records the request's charge
+  (`extra.chargedAmount`, which can be less than the price) as `blockchain.payment.settled_amount`, and no transaction:
+  no hash, no confirm span through the reader and no `blockchain.payment.verified`. The README says what `settled`
+  means for this scheme, and that the deposit, claim, settle and refund transactions are sent on the server side.
+- Updated dependencies [[`61f48e2`](https://github.com/selimaytac/hashspan/commit/61f48e221d39ea911a2ef9ffe49d754ffce06994), [`9fcfb16`](https://github.com/selimaytac/hashspan/commit/9fcfb16ac53a353a7fdf7a8077667b9471afdede), [`3337012`](https://github.com/selimaytac/hashspan/commit/33370126b9c2570302948090c7970b04b8971d30)]:
+  - @hashspan/viem@1.1.1
+
 ## 1.0.0
 
 ### Major Changes

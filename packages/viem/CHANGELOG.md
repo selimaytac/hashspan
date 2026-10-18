@@ -1,5 +1,33 @@
 # @hashspan/viem
 
+## 1.1.1
+
+### Patch Changes
+
+- [#443](https://github.com/selimaytac/hashspan/pull/443) [`61f48e2`](https://github.com/selimaytac/hashspan/commit/61f48e221d39ea911a2ef9ffe49d754ffce06994) Thanks [@selimaytac](https://github.com/selimaytac)! - A smart account SDK's `sendTransaction`, `writeContract` and `sendCalls` (permissionless.js `createSmartAccountClient`, ZeroDev `createKernelAccountClient`) are no longer recorded as a transaction of the bundle, with the bundler's status and fee, or as a call batch, when `withHashspan()` is applied to the finished client: a send whose account is a smart account is called untraced, with a `diag` warning ([#430](https://github.com/selimaytac/hashspan/issues/430)). `sendUserOperation` and `waitForUserOperationReceipt` on such a client stay traced, and applying `withHashspan()` before the SDK's actions records the user operations of those sends; docs/integrations.md shows the permissionless setup.
+
+- [#442](https://github.com/selimaytac/hashspan/pull/442) [`9fcfb16`](https://github.com/selimaytac/hashspan/commit/9fcfb16ac53a353a7fdf7a8077667b9471afdede) Thanks [@selimaytac](https://github.com/selimaytac)! - On Tempo, a fee paid by a transaction of a type other than `0x76`, such as the EIP-1559 (`0x2`) transaction viem
+  sends on its Tempo chains unless a fee token is named, now records the receipt's `feeToken` as
+  `blockchain.tx.fee_asset`, and its `blockchain.client.fee` sample carries `blockchain.fee.denomination` `token`.
+  Before, only a `0x76` receipt was read, so such a fee was recorded as paid in the native currency. A receipt of
+  another type is read when it also names a `feePayer` that is a valid address, as every Tempo receipt does; the rule
+  still takes no chain id and imports no chain module. Sponsored fees and pending receipts still come from `0x76`
+  receipts only.
+
+- [#446](https://github.com/selimaytac/hashspan/pull/446) [`3337012`](https://github.com/selimaytac/hashspan/commit/33370126b9c2570302948090c7970b04b8971d30) Thanks [@selimaytac](https://github.com/selimaytac)! - A transaction replaced before viem's `waitForTransactionReceipt` read it, such as one cancelled right after it was
+  sent, now ends its confirm span as `replaced`, with `blockchain.tx.replacement.hash`, and the replacing transaction's
+  receipt is recorded on its own confirm span. viem detects a replacement only after it has read the original
+  transaction, so its wait timed out and the span ended with `error.type` `timeout`. After such a timeout, hashspan
+  looks for the transaction with the same sender and nonce in the last 128 blocks (at most 13 requests, off the
+  caller's path) when the original was sent through the same `withHashspan()` result;
+  `blockchain.tx.replacement.reason` is then omitted, as no library reported one. The wait still rejects with viem's
+  `WaitForTransactionReceiptTimeoutError`, and `checkReplacement: false` turns the search off.
+  
+  To know the nonce, a traced send that passes no `nonce`, and a raw send, now add one `eth_getTransactionByHash` of
+  the returned hash through the sending client, off the caller's path; its failure is only logged through `diag`. A
+  send that passes `nonce` adds no request, and neither does a send through an EIP-1193 provider (`custom()`, such as
+  a wallet service's), whose immediate replacement therefore still ends as a timeout.
+
 ## 1.1.0
 
 ### Minor Changes
