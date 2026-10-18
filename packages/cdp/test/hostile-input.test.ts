@@ -3,7 +3,7 @@
 // value runs untraced and traced on a fake SDK client: the traced call must have the same outcome and run no more
 // getters of the caller's; what it records must keep the rules. A rule that does not hold yet is marked `it.fails`
 // with `// finding: <tag>`.
-import { encodeAbiParameters, encodeEventTopics, parseAbi } from 'viem';
+import { encodeAbiParameters, encodeEventTopics, parseAbi, serializeTransaction } from 'viem';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   type AdapterRow,
@@ -122,6 +122,32 @@ const bundleReader = (receipt: unknown) => ({
     method === 'eth_getTransactionReceipt' ? receipt : null,
 });
 
+/** The largest transaction a node accepts, in bytes. */
+const RAW_LIMIT_BYTES = 128 * 1024;
+
+/** Serialized transactions viem parses, around the size a node accepts, and hex that is not one. */
+function serializedTransactions(): [string, unknown][] {
+  // A type 2 transaction with this much data serializes to `bytes` plus a few bytes of fields.
+  const signed = (bytes: number) =>
+    serializeTransaction({
+      chainId: 8453,
+      to: TO,
+      value: 1n,
+      nonce: 1,
+      type: 'eip1559',
+      data: `0x${'00'.repeat(bytes)}`,
+    });
+  return [
+    ['a transaction well below the limit', signed(1_000)],
+    ['a transaction just below the limit', signed(RAW_LIMIT_BYTES - 64)],
+    ['a transaction just above the limit', signed(RAW_LIMIT_BYTES)],
+    ['a transaction of a megabyte', signed(1024 * 1024)],
+    ['hex just above the limit that is no transaction', `0x${'ff'.repeat(RAW_LIMIT_BYTES + 1)}`],
+    ['hex of a million characters', `0x${'0'.repeat(1_000_000)}`],
+    ['an empty hex string', '0x'],
+  ];
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: SDK methods are called with hostile arguments on purpose.
 type Any = any;
 type Options = WithHashspanCdpOptions | undefined;
@@ -196,6 +222,22 @@ const ROWS: Row[] = [
     'cdp.evm.sendTransaction transaction',
     { to: TO, value: 1n, nonce: 1, data: '0xa9059cbb' },
     on((evm, transaction) => evm.sendTransaction({ ...SEND, transaction })),
+  ),
+  ...(
+    [
+      ['cdp.evm.sendTransaction', sendTransaction],
+      [
+        'account.sendTransaction',
+        async (evm: Any, args: unknown) =>
+          (await evm.getOrCreateAccount({ name: 'a' })).sendTransaction(args),
+      ],
+    ] as const
+  ).map(
+    ([name, call]): Row => ({
+      name: `${name} serialized transaction`,
+      values: serializedTransactions,
+      scenario: (value, options) => on(call)({ ...SEND, transaction: value }, options),
+    }),
   ),
   ...argumentRows(
     'account.transfer',

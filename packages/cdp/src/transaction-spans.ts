@@ -25,8 +25,19 @@ import {
   shadowing,
 } from './replacement.js';
 
-/** Transaction fields for the send span, from a request object or a serialized transaction. */
+/**
+ * Longest serialized transaction parsed for telemetry, as hex: nodes accept transactions up to 128 KiB. The same
+ * bound as `@hashspan/viem`'s for raw sends.
+ */
+const MAX_RAW_TRANSACTION_LENGTH = 2 + 2 * 128 * 1024;
+
+/**
+ * Transaction fields for the send span, from a request object or a serialized transaction; none for a serialized
+ * transaction longer than {@link MAX_RAW_TRANSACTION_LENGTH}.
+ */
 export function describeTransaction(transaction: unknown): Omit<SendInput, 'chainId'> {
+  // Checked before the hex pattern, which reads the whole string.
+  if (typeof transaction === 'string' && transaction.length > MAX_RAW_TRANSACTION_LENGTH) return {};
   let request: object | undefined;
   if (isHexString(transaction)) {
     try {
