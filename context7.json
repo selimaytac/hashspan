@@ -1,0 +1,7 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "hashspan",
+  "description": "OpenTelemetry instrumentation for viem, the Coinbase CDP SDK, x402 and MPP: trace the transactions and payments your AI agents and services send.",
+  "folders": ["packages", "docs", "skills"],
+  "excludeFolders": ["examples", "integrations", "dashboards", "docker", "dist", "node_modules"]
+}

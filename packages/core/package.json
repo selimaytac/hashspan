@@ -1,7 +1,7 @@
 {
   "name": "@hashspan/core",
   "version": "1.2.0",
-  "description": "Transaction lifecycle tracing for the on-chain actions of AI agents and other services, built on OpenTelemetry.",
+  "description": "OpenTelemetry transaction tracker behind the hashspan adapters: a send and a confirm span for each transaction an AI agent or service sends.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",
   "homepage": "https://hashspan.dev",
@@ -15,6 +15,7 @@
   },
   "keywords": [
     "opentelemetry",
+    "otel",
     "tracing",
     "blockchain",
     "evm",

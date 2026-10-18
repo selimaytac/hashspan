@@ -1,7 +1,7 @@
 {
   "name": "@hashspan/x402",
   "version": "1.1.1",
-  "description": "x402 adapter for @hashspan/core: traces the payments an AI agent makes over x402 as payment spans.",
+  "description": "OpenTelemetry instrumentation for x402 payments: traces the payments an AI agent makes as payment spans, with whether they settled.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",
   "homepage": "https://hashspan.dev",
@@ -15,12 +15,14 @@
   },
   "keywords": [
     "opentelemetry",
-    "tracing",
+    "opentelemetry-instrumentation",
+    "otel",
     "x402",
     "payments",
+    "tracing",
+    "observability",
     "evm",
-    "ai-agents",
-    "observability"
+    "ai-agents"
   ],
   "type": "module",
   "sideEffects": false,
