@@ -35,7 +35,13 @@ const readBody = (request: IncomingMessage): Promise<string> =>
     request.on('end', () => resolve(body));
     request.on('error', reject);
   });
+/** Requests the proxy received and has not answered yet. */
+let inFlight = 0;
 const proxy = createServer(async (request, response) => {
+  inFlight++;
+  response.on('close', () => {
+    inFlight--;
+  });
   const body = await readBody(request);
   const parsed = JSON.parse(body) as { method: string } | { method: string }[];
   seen.push({
@@ -79,6 +85,16 @@ async function transfer(transport: ReturnType<typeof traceTransport>): Promise<v
   const hash = await wallet.sendTransaction({ to: RECIPIENT, value: 1n });
   await reader.waitForTransactionReceipt({ hash });
   await hashspan.flush();
+  // A receipt poll can still be on its way when the wait returns: wait until every request the proxy saw was
+  // answered and its JSON-RPC span ended.
+  const rpcSpans = () =>
+    tracing.spans().filter((s) => s.attributes['rpc.system.name'] === 'jsonrpc');
+  const deadline = Date.now() + 5_000;
+  while (inFlight > 0 || rpcSpans().length < seen.length) {
+    if (Date.now() > deadline)
+      throw new Error(`${inFlight} requests in flight, ${seen.length} seen`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
 }
 
 // viem 2.21.25 is the first release whose `onFetchRequest` gets the request init and whose result it sends.
