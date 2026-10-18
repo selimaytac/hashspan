@@ -124,19 +124,26 @@ describe('blockchain.tx.wait.confirmations on Anvil', () => {
       await rpc('evm_setAutomine', [false]);
       const hashspan = withHashspan();
       const client = reader(hashspan);
+      const resolved = new Set<number>();
       const depthAt: Record<number, number> = {};
-      let depth = 1;
+      /** Gives each wait resolved by now, and not yet given one, the depth the chain is at. */
+      const note = (depth: number): void => {
+        for (const confirmations of resolved) depthAt[confirmations] ??= depth;
+      };
       const waits = [5, 2].map((confirmations) =>
         client.waitForTransactionReceipt({ hash, confirmations }).then(() => {
-          depthAt[confirmations] = depth;
+          resolved.add(confirmations);
         }),
       );
-      while (depth < 5) {
+      // The depth is noted between blocks, never as one is mined: a wait can see a new block before the response to
+      // `anvil_mine` reaches this test, so a depth counted after `mine()` returns can still be the previous one.
+      for (let depth = 1; depth < 5; depth++) {
         await sleep(SETTLE_MS);
+        note(depth);
         await mine();
-        depth++;
       }
       await Promise.all(waits);
+      note(5);
       await hashspan.flush();
       // Each wait polls with its own count: the wait of 2 resolves first, and its count is the one recorded.
       expect(depthAt).toEqual({ 2: 2, 5: 5 });
