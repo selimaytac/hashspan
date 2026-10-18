@@ -57,6 +57,7 @@ interface Setup {
   account?: 'local' | 'json-rpc';
   /** How long flush() waits; default 15 s. */
   flushMs?: number;
+  observeFailures?: boolean;
 }
 
 /** Pays `URL_PAID` once and returns the response, the spans and the fee samples. */
@@ -83,6 +84,7 @@ async function charge(setup: Setup) {
   });
   const hashspan = withHashspan(mppx, {
     reader: reader(),
+    ...(setup.observeFailures ? { observeFailures: true } : {}),
     ...(setup.tracker === 'separate' ? { meterProvider: meters.provider } : { tracker }),
   });
   const response = await mppx.fetch(URL_PAID);
@@ -257,10 +259,32 @@ describe('a paid request answered with an error after the charge settled', () =>
     );
   });
 
-  it('is pending after a 5xx, and the confirm span records the settled transaction', async () => {
+  it("ends as timeout after a 5xx by default, once the challenge expired, keeping the payer's hash, and confirms it", async () => {
+    // A challenge valid for 8 s: the payment's deadline is that plus the 30 s grace period.
+    const run = await charge({
+      mode: 'pull',
+      server: { after: () => new Response('failed', { status: 500 }), expiresInMs: 8_000 },
+      flushMs: 50_000,
+    });
+    expect(run.response.status).toBe(500);
+    expect(run.body).toBe('failed');
+    expect(run.flushed).toBe(true);
+    expect(run.payment?.attributes['error.type']).toBe('timeout');
+    const hash = run.payment?.attributes['blockchain.tx.hash'];
+    expect(hash).toMatch(/^0x[0-9a-f]{64}$/);
+    const [confirm] = run.confirms;
+    expect(confirm?.attributes['blockchain.tx.hash']).toBe(hash);
+    expect(confirm?.attributes['blockchain.tx.status']).toBe('success');
+    expect(confirm?.links.map((link) => link.context.spanId)).toEqual([
+      run.payment?.spanContext().spanId,
+    ]);
+  }, 70_000);
+
+  it('is pending after a 5xx with observeFailures, and the confirm span records the settled transaction', async () => {
     const run = await charge({
       mode: 'pull',
       server: { after: () => new Response('failed', { status: 500 }) },
+      observeFailures: true,
     });
     expect(run.response.status).toBe(500);
     expect(run.flushed).toBe(true);

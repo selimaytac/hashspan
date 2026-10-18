@@ -78,6 +78,8 @@ export interface ServerOptions {
   feePayer?: boolean;
   amount?: string;
   splits?: { amount: string; recipient: string }[];
+  /** When the challenge expires, in milliseconds from when it is made. */
+  expiresInMs?: number;
   /** How the server answers once the charge settled; default: 200 with the receipt. */
   after?: (settled: { withReceipt: (response: Response) => Response }) => Response;
   /** Answers the paid request without verifying it, with this response (a server that reports what it likes). */
@@ -110,6 +112,9 @@ export function paidApi(chain: Chain, options: ServerOptions = {}) {
     const result = await server.charge({
       amount: options.amount ?? '0.01',
       ...(options.splits ? { splits: options.splits } : {}),
+      ...(options.expiresInMs !== undefined
+        ? { expires: new Date(Date.now() + options.expiresInMs).toISOString() }
+        : {}),
     } as never)(request);
     if (result.status === 402) return result.challenge as Response;
     const settled = result as unknown as { withReceipt: (response: Response) => Response };

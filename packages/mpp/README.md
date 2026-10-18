@@ -77,7 +77,8 @@ gets two confirm spans and two fee samples for one transaction, and no link betw
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem` but off by default,
 `maxBackgroundConfirmations` as in `@hashspan/viem` (it limits the confirmations through the reader; a payment whose
 confirmation is not started gets no `verified`), `tracker`, `reader` (a viem public client, or a function returning
-one for a chain id) and `confirmTimeoutMs` (default 120 000 ms). Without a reader, only payment spans are recorded,
+one for a chain id), `confirmTimeoutMs` (default 120 000 ms) and `observeFailures` (default `false`, see
+[failures](#failures)). Without a reader, only payment spans are recorded,
 with the settlement as the server reported it. With `tracker`, the core options are not used; it must come from
 `@hashspan/core` 1.2 or later, which records who sent the settlement, and with an older one nothing is traced, with
 a `diag` warning. Options are read once, from the object's own enumerable properties: options it inherits through a
@@ -99,6 +100,19 @@ checked; its end time stays when the response came.
 `flush({ timeoutMs })` (default 10 000 ms) waits for payments still waiting for an outcome, then for confirmations
 through the reader, and ends what is left as `timeout` (a payment already settled and waiting for its receipt check
 ends as settled, without `verified`). Call it before a short-lived process exits.
+
+## Failures
+
+By default, the adapter does not observe mppx's `payment.failed` event: observing it makes mppx buffer the body of a
+5xx answer to a paid request (at most 64 KiB and 2 seconds), so with an observer a longer body reaches you cut, with an
+`Mppx-Body-Truncated: true` header, and a body whose stream fails makes `fetch` reject. Without it, the adapter changes
+nothing you get. A paid request answered with a 5xx, or that failed on the network, then ends as `timeout` once the
+challenge's deadline passed, with the payer's own hash; with a reader, the confirm span then records the transaction.
+A payment that failed before its credential (the client's policy or spending limits, signing, a failed push send)
+records nothing.
+
+`observeFailures: true` adds the `payment.failed` observer, with mppx's buffering: such payments then end at once,
+as `pending` with the hash, or as an error.
 
 ## Try it locally
 
@@ -122,9 +136,8 @@ that uses the repository's test helpers, to read rather than to copy as is. Take
 |---|---|
 | A response with a readable `Payment-Receipt` | `blockchain.payment.status` `settled` and the transaction hash: the payer's own, or for a sponsored pull the receipt's `reference` |
 | A response without a `Payment-Receipt`, or with one that cannot be read | error status, `error.type` `no_settlement` or `_OTHER` |
-| A 5xx answer, or a paid request that failed on the network, when the payer knows the hash | `pending` and the hash; the confirm span resolves it |
-| The same for a sponsored pull, whose hash only the receipt names | error status, `error.type` `PaymentOutcomeUnknownError` |
-| Creating the payment failed: the client's policy or spending limits, signing, or a push transaction that failed | error status, the error's class name as `error.type`, no hash |
+| A 5xx answer, or a paid request that failed on the network | by default, as for no outcome below; with a reader, the confirm span of the payer's hash records the transaction. With `observeFailures`: `pending` and the hash, the confirm span resolves it, or for a sponsored pull, whose hash only the receipt names, error status with `error.type` `PaymentOutcomeUnknownError` |
+| Creating the payment failed: the client's policy or spending limits, signing, or a push transaction that failed | by default, nothing. With `observeFailures`: error status, the error's class name as `error.type`, no hash |
 | A challenge the client refused before paying (no method for it, an expired one) | nothing |
 | A zero-amount challenge, answered with a signed proof | nothing, failures included: no value moves |
 | No outcome: a 3xx, a 4xx, or a final 402 after payment | error status, `error.type` `timeout`, once the challenge's `expires` (or, without one, mppx's default validity of 25 s) plus 30 s passed (at most 1 h), when more than 1000 payments are open (the oldest first), or on `flush()`; the payer's own hash stays recorded |
@@ -162,9 +175,9 @@ that was not exported, misses its payments.
 - A push payment from a wallet (JSON-RPC) account is sent with `sendCallsSync`: the payment span links to the call
   batch's send span, as checked on Anvil, where viem falls back to `eth_sendTransaction` for a single call; a wallet
   that carries the batch otherwise (several transactions, a user operation) was not checked.
-- mppx buffers the body of a 5xx answer to a paid request (at most 64 KiB and 2 seconds) for its `payment.failed`
-  observers, and the adapter is one: with the adapter, such a body longer than 64 KiB comes back cut, with an
-  `Mppx-Body-Truncated: true` header, and one whose stream fails makes `fetch` reject.
+- By default, a 5xx after payment, or a paid request that failed on the network, ends as `timeout` only once the
+  challenge's deadline passed, and a payment that failed before its credential records nothing
+  ([failures](#failures)). `observeFailures: true` records them at once, but lets mppx buffer and cut 5xx bodies.
 - The adapter cancels its copy of the paid response once the `payment.response` observers ran, unless one of them
   started reading it: an observer of yours that waits longer than that before it reads the copy finds it cancelled.
 - The limits of `@hashspan/viem`'s confirmations and of the core apply to the confirm span

@@ -150,6 +150,8 @@ const paying =
         hashspan = withHashspan(fake.client, {
           reader: readerWith(readerReceipt?.(value)),
           confirmTimeoutMs: 2_000,
+          // The failure rows need the payment.failed observer.
+          observeFailures: true,
           ...options,
         });
         const pay = payment();
@@ -375,7 +377,9 @@ const ROWS: Row[] = [
     ),
   },
   // What the caller passes in: only rule 1 applies.
-  ...(['reader', 'tracker', 'confirmTimeoutMs', 'decodeRevertReason'] as const).map(
+  ...(
+    ['reader', 'tracker', 'confirmTimeoutMs', 'decodeRevertReason', 'observeFailures'] as const
+  ).map(
     (key): Row => ({
       name: `options.${key}`,
       untraced: false,
@@ -507,7 +511,7 @@ describe('the options withHashspan() gets', () => {
       const fake = fakeClient();
       try {
         withHashspan(fake.client, options as never);
-        if (fake.handlers.size !== 4) problems.push(`${label}: no observers registered`);
+        if (fake.handlers.size < 3) problems.push(`${label}: no observers registered`);
       } catch (error) {
         problems.push(`${label}: ${String(error)}`);
       }
@@ -542,7 +546,7 @@ describe('the observers withHashspan() registers', () => {
         },
       );
     const fake = fakeClient();
-    withHashspan(fake.client);
+    withHashspan(fake.client, { observeFailures: true });
     const problems: string[] = [];
     for (const [name, handlers] of fake.handlers) {
       for (const handler of handlers) {

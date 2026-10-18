@@ -47,9 +47,9 @@ async function pay(
 }
 
 describe('the observers', () => {
-  it('are registered with on() for the four events, and challenge.received never supplies a credential', async () => {
+  it('are registered with on() for the four events with observeFailures, and challenge.received never supplies a credential', async () => {
     const fake = fakeClient();
-    withHashspan(fake.client);
+    withHashspan(fake.client, { observeFailures: true });
     expect([...fake.handlers.keys()].sort()).toEqual([
       'challenge.received',
       'credential.created',
@@ -291,9 +291,9 @@ describe('bounds in time and number', () => {
     expect(tracing.spans()).toHaveLength(1);
   });
 
-  it('ends a challenge that failed before its credential as a failed payment, and forgets it', async () => {
+  it('ends a challenge that failed before its credential as a failed payment, with observeFailures', async () => {
     const fake = fakeClient();
-    const hashspan = withHashspan(fake.client);
+    const hashspan = withHashspan(fake.client, { observeFailures: true });
     const challenge = challengeOf();
     await fake.emit('challenge.received', { challenge });
     await fake.emit('payment.failed', { challenge, error: new RangeError('spending limit') });

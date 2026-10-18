@@ -233,12 +233,16 @@ The choices that were open when this record was proposed, as decided above or he
 The implementation pull request follows the decision above. Where the code showed more than this record says, it
 does the following, proposed here for review before the record is accepted:
 
-- **Observing `payment.failed` changes a 5xx answer.** mppx buffers the error body of a 5xx paid response (at most
-  64 KiB and 2 seconds) only when a `payment.failed` observer exists, and the adapter's is one. With the adapter, such
-  a body longer than 64 KiB comes back cut, with an `Mppx-Body-Truncated: true` header, and a body whose stream fails
-  makes `fetch` reject where it returned the response before. "Observers never change a payment" holds for the
-  payment and for every other answer; this one is a known limit in the README, pinned by a test, rather than a reason
-  to drop the `pending` row of the outcome table, which needs the observer.
+- **`payment.failed` is observed only on request.** mppx buffers the error body of a 5xx paid response (at most
+  64 KiB and 2 seconds) only when a `payment.failed` observer exists: with one, a longer body comes back cut, with an
+  `Mppx-Body-Truncated: true` header, and a body whose stream fails makes `fetch` reject where it returned the
+  response before. Instrumentation must never alter the result of the user's call, so by default the adapter
+  registers no `payment.failed` observer (and no `'*'` one, which counts as one). Then a 5xx after payment, or a paid
+  request that threw, gets no event and ends as `timeout` once its deadline passed, keeping the payer's hash, and with
+  a reader the adapter confirms that hash then; a failure before the credential records nothing. The option
+  `observeFailures: true` registers the observer and gives the outcome table's `pending` and failure rows, with mppx's
+  buffering as its documented trade-off. Tests compare a 5xx body over 64 KiB and a failing body stream byte for byte
+  with a run without hashspan.
 - **The manual APIs fire no outcome event.** `preparePayment`, `prepareRequest` and `createCredential` emit
   `challenge.received` and `credential.created`, never `payment.response` or `payment.failed`: such a payment starts
   its span and ends as `timeout`. A known limit.

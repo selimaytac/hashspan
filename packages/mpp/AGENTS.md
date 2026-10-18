@@ -6,7 +6,8 @@ Adapter for MPP payments made with mppx (ADR 0029). Root rules: [AGENTS.md](../.
   returns: each Tempo `charge` becomes a `payment` span (`sender: 'payer'`, with the payer's own hash when the
   credential determines it); confirmations and the check of `blockchain.payment.verified` go through
   `@hashspan/viem`'s `watch()`. Observers never throw or return a value; payments are followed by `challenge.id`,
-  since every event gets copies, and end as `timeout` when no outcome event comes, bounded in time and number. mppx is
+  since every event gets copies, and end as `timeout` when no outcome event comes, bounded in time and number.
+  `payment.failed` is observed only with `observeFailures`, since observing it makes mppx buffer 5xx bodies. mppx is
   never imported at runtime: the credential and the `Payment-Receipt` header are decoded here, so the CommonJS build
   works.
 - `test/fake-mppx.ts` a real mppx client and a real mppx server's challenges, offline: the payer's viem client talks

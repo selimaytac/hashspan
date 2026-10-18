@@ -20,6 +20,7 @@ export function withHashspan(client: object, options?: WithHashspanMppOptions): 
 export interface WithHashspanMppOptions extends Omit<WithHashspanOptions, "confirm"> {
     confirmTimeoutMs?: number | undefined;
     decodeRevertReason?: WithHashspanOptions["decodeRevertReason"];
+    observeFailures?: boolean | undefined;
     reader?: ViemClientLike | ((chainId: number) => ViemClientLike | undefined) | undefined;
 }
 

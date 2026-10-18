@@ -54,7 +54,7 @@ async function hashes({ mode, sponsored, change }: Case) {
     paidServer({ feePayer: sponsored === true }),
   );
   const client = testClient(api.fetch, { mode });
-  withHashspan(client);
+  withHashspan(client, { observeFailures: true });
   if (change) {
     client.onChallengeReceived(async ({ createCredential }) => change(await createCredential()));
   }

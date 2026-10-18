@@ -11,6 +11,7 @@ import {
   CONFIRM_SPAN,
   CURRENCY,
   decodeCredential,
+  fakeClient,
   hashOf,
   offlineRpc,
   PAYER,
@@ -208,7 +209,7 @@ describe('a paid request without a settlement', () => {
   });
 });
 
-describe('a payment whose outcome is unknown', () => {
+describe('a payment whose outcome is unknown, with observeFailures', () => {
   it.each(['push', 'pull'] as const)(
     "is pending with the payer's hash after a 5xx (%s), resolved by the confirm span",
     async (mode) => {
@@ -216,7 +217,11 @@ describe('a payment whose outcome is unknown', () => {
       const api = paidApi(() => new Response('upstream failed', { status: 502 }));
       const client = testClient(api.fetch, { mode, rpc });
       const reader = createPublicClient({ chain: tempoChain, transport: rpc.transport });
-      const hashspan = withHashspan(client, { reader, confirmTimeoutMs: 2_000 });
+      const hashspan = withHashspan(client, {
+        reader,
+        confirmTimeoutMs: 2_000,
+        observeFailures: true,
+      });
       const response = await client.fetch(URL_PAID);
       expect(response.status).toBe(502);
       expect(await response.text()).toBe('upstream failed');
@@ -238,7 +243,7 @@ describe('a payment whose outcome is unknown', () => {
       throw new TypeError('fetch failed');
     });
     const client = testClient(api.fetch, { mode: 'pull' });
-    withHashspan(client);
+    withHashspan(client, { observeFailures: true });
     await expect(client.fetch(URL_PAID)).rejects.toThrow('fetch failed');
     const span = tracing.spanNamed(PAYMENT_SPAN);
     expect(span.attributes['blockchain.payment.status']).toBe('pending');
@@ -248,7 +253,7 @@ describe('a payment whose outcome is unknown', () => {
   it('fails with the error type and no status when a sponsored pull has no hash', async () => {
     const api = paidApi(() => new Response(null, { status: 500 }), paidServer({ feePayer: true }));
     const client = testClient(api.fetch, { mode: 'pull' });
-    withHashspan(client);
+    withHashspan(client, { observeFailures: true });
     await client.fetch(URL_PAID);
     const span = tracing.spanNamed(PAYMENT_SPAN);
     expect(span.attributes['error.type']).toBe('PaymentOutcomeUnknownError');
@@ -256,13 +261,11 @@ describe('a payment whose outcome is unknown', () => {
     expect(span.attributes['blockchain.tx.hash']).toBeUndefined();
     expect(span.status.code).toBe(SpanStatusCode.ERROR);
   });
-});
 
-describe('a payment that was not made', () => {
   it('fails as a failed send when the push transaction cannot be sent, with no hash', async () => {
     const api = paidApi(settled());
     const client = testClient(api.fetch, { mode: 'push', rpc: offlineRpc({ failSend: true }) });
-    withHashspan(client);
+    withHashspan(client, { observeFailures: true });
     await expect(client.fetch(URL_PAID)).rejects.toThrow();
     expect(api.paidRequests).toEqual([]);
     const span = tracing.spanNamed(PAYMENT_SPAN);
@@ -273,7 +276,81 @@ describe('a payment that was not made', () => {
     expect(span.attributes['blockchain.payment.status']).toBeUndefined();
     expect(span.attributes['blockchain.payment.recipient']).toBe(RECIPIENT);
   });
+});
 
+describe('a payment whose outcome is unknown, by default', () => {
+  it("ends as timeout with the payer's hash once the challenge expired after a 5xx, and confirms that hash", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+    const rpc = offlineRpc();
+    const api = paidApi(
+      () => new Response('upstream failed', { status: 502 }),
+      paidServer({ expires: new Date(Date.now() + 60_000).toISOString() }),
+    );
+    const client = testClient(api.fetch, { mode: 'pull', rpc });
+    const reader = createPublicClient({
+      chain: tempoChain,
+      transport: rpc.transport,
+      pollingInterval: 20,
+    });
+    const hashspan = withHashspan(client, { reader, confirmTimeoutMs: 2_000 });
+    const response = await client.fetch(URL_PAID);
+    expect(response.status).toBe(502);
+    expect(await response.text()).toBe('upstream failed');
+    const hash = hashOf(credentialsOf(api)[0] as string) as `0x${string}`;
+    rpc.mined.set(hash, rpcReceipt(hash));
+    expect(tracing.spans()).toEqual([]);
+    vi.advanceTimersByTime(60_000 + 30_000 + 1_000);
+    // The fake timers keep advancing with the clock, for the confirmation's polling.
+    expect(await hashspan.flush()).toBe(true);
+    const span = tracing.spanNamed(PAYMENT_SPAN);
+    expect(span.attributes['error.type']).toBe('timeout');
+    expect(span.attributes['blockchain.payment.status']).toBeUndefined();
+    expect(span.attributes['blockchain.tx.hash']).toBe(hash);
+    // The confirmation starts at the deadline, for the payer's hash, linked to the payment span; its outcome under
+    // fake timers is not the point here (charge.int.test.ts confirms one on Anvil).
+    const confirm = tracing.spanNamed(CONFIRM_SPAN);
+    expect(confirm.attributes['blockchain.tx.hash']).toBe(hash);
+    expect(confirm.links.map((link) => link.context.spanId)).toEqual([span.spanContext().spanId]);
+    expect(rpc.requests.map(({ method }) => method)).toContain('eth_getTransactionReceipt');
+  });
+
+  it("ends as timeout with the payer's hash when the paid request throws", async () => {
+    const api = paidApi(() => {
+      throw new TypeError('fetch failed');
+    });
+    const client = testClient(api.fetch, { mode: 'pull' });
+    const hashspan = withHashspan(client);
+    await expect(client.fetch(URL_PAID)).rejects.toThrow('fetch failed');
+    expect(await hashspan.flush({ timeoutMs: 20 })).toBe(false);
+    const span = tracing.spanNamed(PAYMENT_SPAN);
+    expect(span.attributes['error.type']).toBe('timeout');
+    expect(span.attributes['blockchain.tx.hash']).toBe(hashOf(credentialsOf(api)[0] as string));
+  });
+
+  it('records nothing once the deadline passed for a payment that failed before its credential', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+    const api = paidApi(settled());
+    const client = testClient(api.fetch, { mode: 'push', rpc: offlineRpc({ failSend: true }) });
+    const hashspan = withHashspan(client);
+    await expect(client.fetch(URL_PAID)).rejects.toThrow();
+    vi.advanceTimersByTime(60 * 60 * 1000);
+    vi.useRealTimers();
+    expect(await hashspan.flush()).toBe(true);
+    expect(tracing.spans()).toEqual([]);
+  });
+
+  it('registers no payment.failed observer, so mppx leaves 5xx bodies alone', () => {
+    const fake = fakeClient();
+    withHashspan(fake.client);
+    expect([...fake.handlers.keys()].sort()).toEqual([
+      'challenge.received',
+      'credential.created',
+      'payment.response',
+    ]);
+  });
+});
+
+describe('a payment that was not made', () => {
   it('records nothing for a challenge the client refused before any observer saw it (it expired)', async () => {
     const api = paidApi(
       settled(),

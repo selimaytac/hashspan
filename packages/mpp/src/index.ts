@@ -35,6 +35,16 @@ export interface WithHashspanMppOptions extends Omit<ViemOptions, 'confirm'> {
    * https://github.com/selimaytac/hashspan/blob/main/docs/adr/0029-mpp-payments.md.
    */
   decodeRevertReason?: ViemOptions['decodeRevertReason'];
+  /**
+   * Also observe mppx's `payment.failed` event, so a payment answered with a 5xx, or whose paid request threw, ends as
+   * `pending` with its hash, and one that failed before its credential (policy, signing, a failed push send) as an
+   * error. Default: false. With it, mppx buffers the body of a 5xx paid response for the observer, at most 64 KiB and
+   * 2 seconds: a longer body reaches you cut, with an `Mppx-Body-Truncated: true` header, and a body whose stream fails
+   * makes `fetch` reject. Without it, nothing changes what you get: such payments end as `timeout`, keeping the payer's
+   * hash, and with a reader the confirm span records the transaction
+   * (https://github.com/selimaytac/hashspan/blob/main/docs/adr/0029-mpp-payments.md).
+   */
+  observeFailures?: boolean | undefined;
 }
 
 /** Returned by {@link withHashspan}; the mppx client itself gets observers, nothing is replaced. */
@@ -55,6 +65,13 @@ const EVENTS = [
   'payment.response',
   'payment.failed',
 ] as const;
+/**
+ * The events observed by default. Observing `payment.failed` makes mppx buffer 5xx bodies, which changes what the
+ * caller gets, so it is observed only with `observeFailures` (ADR 0029).
+ */
+const DEFAULT_EVENTS: readonly (typeof EVENTS)[number][] = EVENTS.filter(
+  (name) => name !== 'payment.failed',
+);
 // The same default as @hashspan/viem's flush().
 const DEFAULT_FLUSH_TIMEOUT_MS = 10_000;
 /** How long a payment may wait for its outcome: the challenge's validity, else mppx's default of 25 s, plus a grace. */
@@ -631,6 +648,7 @@ export function withHashspan(client: object, options: WithHashspanMppOptions = {
   const {
     reader,
     confirmTimeoutMs,
+    observeFailures,
     tracker: providedTracker,
     ...rest
   } = optionsOf(options) as WithHashspanMppOptions;
@@ -703,6 +721,22 @@ export function withHashspan(client: object, options: WithHashspanMppOptions = {
       return;
     }
     finish(payment, 'payment timeout', (handle) => handle.timeout({ endTime: new Date() }));
+  };
+
+  /**
+   * Ends a payment whose deadline passed without an outcome event, as `timeout`. When the payer knows its hash, the
+   * money may have moved (a 4xx or 5xx after payment): with a reader, the confirm span records the transaction.
+   */
+  const expire = (payment: Payment): void => {
+    const started = payment.started;
+    const waiting = payment.ended || payment.settled ? undefined : started;
+    timeOut(payment);
+    const hash = waiting?.fields.hash;
+    if (!waiting || hash === undefined) return;
+    const confirmWith = readerFor(waiting.chainId);
+    if (confirmWith) {
+      viem.watch(confirmWith, { hash, chainId: waiting.chainId, timeoutMs: confirmTimeoutMs });
+    }
   };
 
   /** The payment of an event's challenge, when it is open. */
@@ -833,7 +867,7 @@ export function withHashspan(client: object, options: WithHashspanMppOptions = {
       started: undefined,
       settled: undefined,
     };
-    payment.timer = timers.setTimeout(() => timeOut(payment), deadlineMs(challenge));
+    payment.timer = timers.setTimeout(() => expire(payment), deadlineMs(challenge));
     // The timer must not keep a process alive that is otherwise done.
     (payment.timer as { unref?: () => void } | undefined)?.unref?.();
     open.set(id, payment);
@@ -1077,7 +1111,7 @@ export function withHashspan(client: object, options: WithHashspanMppOptions = {
     'payment.response': paymentResponse,
     'payment.failed': paymentFailed,
   } as const;
-  for (const name of EVENTS) {
+  for (const name of observeFailures === true ? EVENTS : DEFAULT_EVENTS) {
     try {
       Reflect.apply(on, client, [name, observers[name]]);
     } catch (error) {
