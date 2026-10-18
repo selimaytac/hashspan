@@ -1,80 +1,21 @@
 // An agent that calls a wallet tool of an MCP server over stdio, as in docs/integrations.md: the server is a child
 // process of the agent, which is a child process of this test, so no context crosses between them in memory. Both
-// processes start the OpenTelemetry Node SDK and export over OTLP (JSON) to a receiver in this file; the server's
-// tool sends on this file's Anvil. The test checks the parent of the server's `send` span:
+// processes start the OpenTelemetry Node SDK and export over OTLP (JSON) to a receiver in this test
+// (otlp-receiver.ts); the server's tool sends on this file's Anvil. The test checks the parent of the server's `send`
+// span:
 // - without propagation (v1 SDK), `send` is the root of a trace of its own. This shows the setup can tell an
 //   orphan from a child, so the other two results mean something;
 // - with OpenInference's MCP instrumentation (v1 SDK, readme/mcp-instrumentation.ts) and with the hand-written
 //   `_meta` propagation of the v2 SDK (readme/mcp-client.ts and readme/mcp-server.ts, run as written), `send` and
 //   `confirm` are children of the agent's `pay_vendor` span.
 import { execFile } from 'node:child_process';
-import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { promisify } from 'node:util';
 import { foundry } from 'viem/chains';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { startAnvil } from '../../packages/viem/test/start-anvil.js';
+import { type ReceivedSpan, startOtlpReceiver } from './otlp-receiver.js';
 
-type ReceivedSpan = {
-  service: string;
-  name: string;
-  traceId: string;
-  spanId: string;
-  parentSpanId: string | undefined;
-  attributes: Record<string, unknown>;
-};
-
-type OtlpValue = { stringValue?: string; intValue?: string; boolValue?: boolean };
-type OtlpAttribute = { key: string; value: OtlpValue };
-type OtlpTraces = {
-  resourceSpans?: {
-    resource?: { attributes?: OtlpAttribute[] };
-    scopeSpans?: {
-      spans?: {
-        name: string;
-        traceId: string;
-        spanId: string;
-        parentSpanId?: string;
-        attributes?: OtlpAttribute[];
-      }[];
-    }[];
-  }[];
-};
-
-const attributeValue = (value: OtlpValue) => value.stringValue ?? value.intValue ?? value.boolValue;
-const attributesOf = (attributes: OtlpAttribute[] = []) =>
-  Object.fromEntries(attributes.map(({ key, value }) => [key, attributeValue(value)]));
-
-// The OTLP/HTTP receiver: keeps the spans of every export, answers metrics and logs too.
-const received: ReceivedSpan[] = [];
-const receiver = createServer((request, response) => {
-  let body = '';
-  request.setEncoding('utf8');
-  request.on('data', (chunk: string) => {
-    body += chunk;
-  });
-  request.on('end', () => {
-    if (request.url === '/v1/traces') {
-      for (const resourceSpans of (JSON.parse(body) as OtlpTraces).resourceSpans ?? []) {
-        const service = attributesOf(resourceSpans.resource?.attributes)['service.name'];
-        for (const scopeSpans of resourceSpans.scopeSpans ?? [])
-          for (const span of scopeSpans.spans ?? [])
-            received.push({
-              service: String(service),
-              name: span.name,
-              traceId: span.traceId,
-              spanId: span.spanId,
-              parentSpanId: span.parentSpanId || undefined,
-              attributes: attributesOf(span.attributes),
-            });
-      }
-    }
-    response.writeHead(200, { 'content-type': 'application/json' });
-    response.end('{}');
-  });
-});
-await new Promise<void>((resolve) => receiver.listen(0, '127.0.0.1', resolve));
-const otlpEndpoint = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}`;
+const { endpoint: otlpEndpoint, received, close: closeReceiver } = await startOtlpReceiver();
 
 const { instance, rpcUrl } = await startAnvil({
   binary: new URL('../../.tools/bin/anvil', import.meta.url).pathname,
@@ -82,7 +23,7 @@ const { instance, rpcUrl } = await startAnvil({
 });
 
 afterAll(async () => {
-  await new Promise((resolve) => receiver.close(resolve));
+  await closeReceiver();
   await instance.stop();
 });
 

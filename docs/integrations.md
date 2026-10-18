@@ -30,6 +30,7 @@ This page collects the setups that were checked; each code block is compiled in 
 | Wallet services with a viem account (Turnkey, Privy) | `@hashspan/viem` | none | none ([setup](#wallet-services)) | as viem clients |
 | Wallet services with an EIP-1193 provider (Circle, Fireblocks) | `@hashspan/viem` on a `custom()` transport | a public client for receipts when the provider does not answer reads | Circle smart contract accounts not checked ([setup](#wallet-services)) | the pattern in `packages/viem` tests |
 | Wallet services that send through their API | `@hashspan/viem` `watch()` | a public client; for a send span, the API call recorded with the same tracker | none ([setup](#wallet-services)) | the pattern in `packages/viem` tests |
+| Hardhat 3 scripts and tests (hardhat-viem) | `@hashspan/viem` on the clients of `viem.getPublicClient()` and `viem.getWalletClients()` | pass them as `client` to `deployContract` and `getContractAt` | a deployment gets a confirm span only; Ignition deployments are not traced ([setup](#hardhat-3)) | `integrations/`, on Hardhat's in-process network |
 
 ## Libraries that take a viem client
 
@@ -591,3 +592,135 @@ recorded as a send (`packages/viem/test/api-wallet.test.ts`).
   the same way.
 - **Circle smart contract accounts (ERC-4337):** Circle reports their hash only once the transaction is confirmed;
   this path was not checked.
+
+## Hardhat 3
+
+Checked with `hardhat` 3.20.0 and, of the plugins of Hardhat's viem project template (`npx hardhat --init`),
+`@nomicfoundation/hardhat-viem` 3.0.10, `@nomicfoundation/hardhat-ignition` 3.1.9,
+`@nomicfoundation/hardhat-ignition-viem` 3.1.6 and `@nomicfoundation/hardhat-node-test-runner` 3.1.1, on Hardhat's
+in-process network. The `viem` helpers of a network connection create new viem clients on every call, and
+`deployContract` and `getContractAt` send with clients of their own unless they get a `client` option. Extend the public client and a wallet client with `withHashspan()`, and pass both as `client` to
+every helper that sends. A script, `scripts/counter.ts`, after installing the packages of the
+[quick start](../README.md#quick-start) in the project, run with `npx hardhat run scripts/counter.ts`:
+
+```ts
+import { withHashspan } from '@hashspan/viem';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { network } from 'hardhat';
+
+// Exports over OTLP, to http://localhost:4318 unless OTEL_EXPORTER_OTLP_ENDPOINT says otherwise.
+const sdk = new NodeSDK({ serviceName: 'counter-script' });
+sdk.start();
+
+const { viem } = await network.create();
+const hashspan = withHashspan();
+// hardhat-viem creates new clients for each helper: extend them, and pass them to every helper that sends.
+const publicClient = (await viem.getPublicClient()).extend(hashspan);
+const [sender] = await viem.getWalletClients();
+if (sender === undefined) throw new Error('The network has no accounts');
+const client = { public: publicClient, wallet: sender.extend(hashspan) };
+
+// The deployment records a confirm span only: deployContract is not traced yet.
+const counter = await viem.deployContract('Counter', [], { client });
+const hash = await counter.write.incBy([5n]);
+const receipt = await publicClient.waitForTransactionReceipt({ hash });
+console.log(`${hash} ${receipt.status}`);
+
+// Before the script ends:
+await hashspan.flush();
+await sdk.shutdown();
+```
+
+The `incBy` call records a `send 31337` and a `confirm 31337` span; the deployment records a `confirm` span only,
+since viem's `deployContract` is not traced yet ([#36](https://github.com/selimaytac/hashspan/issues/36)). The
+in-process network mines each transaction when it is sent (automine), so a confirm span covers only the wait for a
+receipt that is already there.
+
+In a test file of Hardhat's node:test runner, run with `npx hardhat test nodejs`, the same clients are set up once per
+suite. The runner runs the test files in Hardhat's own process, so the SDK starts once and shuts down after the last
+test:
+
+```ts
+import assert from 'node:assert/strict';
+import { after, describe, it } from 'node:test';
+import { withHashspan } from '@hashspan/viem';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { network } from 'hardhat';
+
+// Hardhat runs the test files in its own process: start the SDK once, before the first test.
+const sdk = new NodeSDK({ serviceName: 'counter-tests' });
+sdk.start();
+
+describe('Counter', async () => {
+  const { viem } = await network.create();
+  const hashspan = withHashspan();
+  const publicClient = (await viem.getPublicClient()).extend(hashspan);
+  const [sender] = await viem.getWalletClients();
+  if (sender === undefined) throw new Error('The network has no accounts');
+  const client = { public: publicClient, wallet: sender.extend(hashspan) };
+
+  after(async () => {
+    await hashspan.flush();
+    await sdk.shutdown();
+  });
+
+  it('adds the increment', async () => {
+    const counter = await viem.deployContract('Counter', [], { client });
+    const hash = await counter.write.incBy([5n]);
+    await publicClient.waitForTransactionReceipt({ hash });
+    assert.equal(await counter.read.x(), 5n);
+  });
+});
+```
+
+Ignition sends a deployment's transactions through the network connection's provider, not through a viem client, so
+`ignition.deploy()` records no spans; `npx hardhat ignition deploy` sends the same way. The contracts it returns send
+with clients hardhat-viem creates; bind them to the extended clients with `getContractAt` to trace their calls:
+
+```ts
+import { withHashspan } from '@hashspan/viem';
+import { buildModule } from '@nomicfoundation/hardhat-ignition/modules';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { network } from 'hardhat';
+
+const sdk = new NodeSDK({ serviceName: 'counter-ignition' });
+sdk.start();
+
+const CounterModule = buildModule('CounterModule', (m) => {
+  const counter = m.contract('Counter');
+  m.call(counter, 'incBy', [5n]);
+  return { counter };
+});
+
+const { viem, ignition } = await network.create();
+const hashspan = withHashspan();
+const publicClient = (await viem.getPublicClient()).extend(hashspan);
+const [sender] = await viem.getWalletClients();
+if (sender === undefined) throw new Error('The network has no accounts');
+const client = { public: publicClient, wallet: sender.extend(hashspan) };
+
+// Ignition sends through the network connection's provider, not through a viem client: no spans.
+const { counter } = await ignition.deploy(CounterModule);
+
+// The contract Ignition returns sends with clients of its own: bind it to the extended ones.
+const traced = await viem.getContractAt('Counter', counter.address, { client });
+const hash = await traced.write.incBy([1n]);
+const receipt = await publicClient.waitForTransactionReceipt({ hash });
+console.log(`${hash} ${receipt.status}`);
+
+await hashspan.flush();
+await sdk.shutdown();
+```
+
+CI runs the three files above as written, with `hardhat run` and `hardhat test nodejs` in a Hardhat project, in
+[`integrations/test/hardhat.int.test.ts`](../integrations/test/hardhat.int.test.ts), and a script without the
+`client` option that records no spans. Known limits:
+
+- **Deployments:** with `client`, `deployContract` records only the confirm span of its own wait; without it, nothing.
+- **Ignition:** the transactions of a deployment are not traced. Calls after the deployment are, through a contract
+  bound with `getContractAt` as above. CI runs `ignition.deploy()` from a script; the CLI task
+  `hardhat ignition deploy` is not run.
+- **Several test files:** the file above starts and shuts down an SDK of its own. Two such files in one run exported
+  only the first file's spans, since Hardhat runs them in one process. Only one test file per run is checked.
+- **Networks:** only the in-process network (`edr-simulated`, `chainType: 'l1'`) is checked; `http` networks and the
+  `op` chain type are not.

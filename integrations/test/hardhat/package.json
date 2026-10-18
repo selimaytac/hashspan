@@ -1,0 +1,5 @@
+{
+  "name": "hardhat-fixture",
+  "private": true,
+  "type": "module"
+}
