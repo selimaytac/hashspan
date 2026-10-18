@@ -13,9 +13,10 @@ outside the group: it is released as 0.x, on versions of its own, while mppx is 
 
 1. Merge pull requests with their changesets (`pnpm changeset`) into `main`.
 2. Run the **Release** workflow (Actions, Release, Run workflow). It runs the CI checks, then pushes the
-   `changeset-release/main` branch, which bumps the versions and writes `CHANGELOG.md` from the changesets. GitHub
-   Actions may not open pull requests in this repository, so the workflow stops there and its summary links the pull
-   request to open: `gh pr create --base main --head changeset-release/main --title "Version Packages"`. This step
+   `changeset-release/main` branch, which bumps the versions and writes `CHANGELOG.md` from the changesets. The job
+   that bumps them installs the dependencies, so its token is read-only; a second job, which installs nothing and
+   runs only git, commits the result and pushes the branch. GitHub Actions may not open pull requests in this
+   repository, so the workflow stops there and its summary links the pull request to open: `gh pr create --base main --head changeset-release/main --title "Version Packages"`. This step
    needs no approval: only the job that publishes to npm runs in the `npm` environment.
 3. Review that pull request (versions, `CHANGELOG.md`, the release-tag links) and merge it once its CI is green; opened
    by a maintainer, it gets the usual checks.
