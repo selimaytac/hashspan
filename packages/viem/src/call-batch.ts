@@ -29,12 +29,33 @@ import type {
 // transaction hashes (a zero hash for a call that failed to send), the chain id, then this. Copied from viem; the
 // fallback tests in test/call-batch.test.ts and test/call-batch.int.test.ts run the installed viem's fallback.
 const FALLBACK_ID_SUFFIX = '5792'.repeat(16);
+// The bounds of what is read from a wallet's call batch results (docs/semconv.md, Bounds; ADR 0025 rule 4).
+// Longest call batch id parsed for fallback transactions: `0x` and 8192 hex digits, the bound EIP-5792 sets and the
+// core records. A longer id is not parsed, so the parse on the caller's path stays bounded.
+const MAX_FALLBACK_ID_LENGTH = 8194;
+// Most fallback transactions of one call batch that are recorded and confirmed.
+const MAX_FALLBACK_TRANSACTIONS = 64;
+// Most receipts read from one call batch status, as many as the core records.
+const MAX_CALL_BATCH_RECEIPTS = 64;
 
-/** The transactions of a fallback batch id, without failed calls; undefined for any other id. */
+/**
+ * The first {@link MAX_FALLBACK_TRANSACTIONS} transactions of a fallback batch id, without failed calls; undefined
+ * for any other id, and for an id longer than {@link MAX_FALLBACK_ID_LENGTH}.
+ */
 function fallbackTransactionHashes(id: string): string[] | undefined {
-  if (!/^0x(?:[0-9a-fA-F]{64}){3,}$/.test(id) || !id.endsWith(FALLBACK_ID_SUFFIX)) return undefined;
-  const words = id.slice(2, -128).match(/.{64}/g) ?? [];
-  return words.filter((word) => !/^0+$/.test(word)).map((word) => `0x${word}`);
+  if (
+    id.length > MAX_FALLBACK_ID_LENGTH ||
+    !/^0x(?:[0-9a-fA-F]{64}){3,}$/.test(id) ||
+    !id.endsWith(FALLBACK_ID_SUFFIX)
+  )
+    return undefined;
+  const hashes: string[] = [];
+  // The last two words are the chain id and the suffix.
+  for (let at = 2; at < id.length - 128 && hashes.length < MAX_FALLBACK_TRANSACTIONS; at += 64) {
+    const word = id.slice(at, at + 64);
+    if (!/^0+$/.test(word)) hashes.push(`0x${word}`);
+  }
+  return hashes;
 }
 
 /** The id of a `sendCalls` result: an object with `id`, or a string from viem's earlier experimental action. */
@@ -49,10 +70,12 @@ function toCallBatchStatusLike(status: unknown): CallBatchStatusLike {
   const atomic = own(status, 'atomic');
   const receipts = own(status, 'receipts');
   const length = Array.isArray(receipts) ? own(receipts, 'length') : 0;
+  // A list from a wallet is never read in full (ADR 0025 rule 4): the core records no more receipts than this.
+  const count = typeof length === 'number' ? Math.min(length, MAX_CALL_BATCH_RECEIPTS) : 0;
   return {
     statusCode: typeof statusCode === 'number' ? statusCode : undefined,
     atomic: typeof atomic === 'boolean' ? atomic : undefined,
-    receipts: Array.from({ length: typeof length === 'number' ? length : 0 }, (_, i) => {
+    receipts: Array.from({ length: count }, (_, i) => {
       const receipt = own(receipts, String(i));
       const transactionHash = own(receipt, 'transactionHash');
       const blockNumber = own(receipt, 'blockNumber');
@@ -127,7 +150,8 @@ export function addCallBatchActions(
                 };
               },
               // The transactions of viem's fallback are the account's own: always confirmed as transactions, as
-              // watch() does, so their fees are recorded with the sealed receipt (ADR 0022, ADR 0024).
+              // watch() does, so their fees are recorded with the sealed receipt (ADR 0022, ADR 0024). At most
+              // MAX_FALLBACK_TRANSACTIONS of them, each counted toward the background limit.
               after: (chainId, result) => {
                 let id: string | undefined;
                 try {

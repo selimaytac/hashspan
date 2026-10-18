@@ -356,6 +356,9 @@ of each package check the bounds against the values that split at them.
 | `blockchain.call_batch.id` | 256 characters | its first 256 characters; an id that is not hex or longer than 8194 characters is not recorded |
 | `blockchain.tx.authorization.addresses` and `.chain_ids` | 64 entries | the first 64 well-formed entries; `blockchain.tx.authorization.count` keeps the full length, and no further entry is read |
 | `blockchain.call_batch.transaction_hashes` | 64 hashes | the first 64 distinct well-formed hashes among the first 64 receipts of a status, or of the hashes a send returned; no further entry is read, and `blockchain.block.number` is the highest among those receipts |
+| Call batch id the viem adapter parses for viem's fallback transactions | 8194 characters | not parsed: no fallback transaction is recorded or confirmed for the batch |
+| Fallback transactions the viem adapter records and confirms per call batch | 64 | the first 64 non-zero hashes of the id; later calls of the batch get no confirm span |
+| Receipts the viem adapter reads from a call batch status | 64 | the first 64; no further receipt is read |
 | x402 payments waiting for their response | 1000 per `withHashspan()` | the oldest payment span ends as `timeout` |
 | MPP payments waiting for an outcome, counted from their challenge | 1000 per `withHashspan()` | the oldest payment ends as `timeout`; one not started yet records nothing |
 | MPP challenge ids the adapter correlates events by | 1024 characters | the payment is not traced |
