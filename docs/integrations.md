@@ -544,7 +544,7 @@ and with the v2 setup, `send` and `confirm` are children of the agent's `pay_ven
 - **Shutting down:** the v1 server transport does not close when stdin ends, and both clients' `close()` waits 2
   seconds for the server to exit before it sends SIGTERM. Flush on the end of stdin, as the server above does, so
   the last spans are exported in time.
-- **OpenInference with v2:** the instrumentation is typed against and hooks only the modules of
+- **OpenInference with v2:** the instrumentation's types and its automatic hooks cover only the modules of
   `@modelcontextprotocol/sdk`; use the hand-written lines with the v2 packages.
 - **Other transports:** only stdio is checked. The `_meta` lines do not depend on the transport.
 - **Which span is the parent:** the tool span must be active in the agent when it calls `callTool`; see
