@@ -371,6 +371,20 @@ describe('a paid request with no outcome event', () => {
   });
 });
 
+describe('a payment made with the manual APIs', () => {
+  it('starts at the challenge and ends as timeout, since no outcome event comes', async () => {
+    const client = testClient(paidApi(settled()).fetch, { mode: 'pull' });
+    const hashspan = withHashspan(client);
+    const challenge = await paidServer()(new Request(URL_PAID));
+    const credential = await client.createCredential(challenge);
+    expect(credential).toMatch(/^Payment /);
+    expect(await hashspan.flush({ timeoutMs: 20 })).toBe(false);
+    const span = tracing.spanNamed(PAYMENT_SPAN);
+    expect(span.attributes['error.type']).toBe('timeout');
+    expect(span.attributes['mpp.mode']).toBe('pull');
+  });
+});
+
 describe('the client', () => {
   it('passes the same credential to the paid request as without hashspan, and the same response to the caller', async () => {
     const results: { status: number; body: string; mode: string }[] = [];

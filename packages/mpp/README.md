@@ -159,6 +159,9 @@ that was not exported, misses its payments.
   verdict rests on the memo, which binds the transfer to the challenge with 56 bits, which a server choosing challenge
   ids could search for a collision with an earlier payment of the same payer, recipient and amount.
 - Auto-swap and machine-token routes, whose receipt names another `fundingCurrency`, get no verdict.
+- A push payment from a wallet (JSON-RPC) account is sent with `sendCallsSync`: the payment span links to the call
+  batch's send span, as checked on Anvil, where viem falls back to `eth_sendTransaction` for a single call; a wallet
+  that carries the batch otherwise (several transactions, a user operation) was not checked.
 - mppx buffers the body of a 5xx answer to a paid request (at most 64 KiB and 2 seconds) for its `payment.failed`
   observers, and the adapter is one: with the adapter, such a body longer than 64 KiB comes back cut, with an
   `Mppx-Body-Truncated: true` header, and one whose stream fails makes `fetch` reject.

@@ -146,12 +146,26 @@ describe('push', () => {
     expect(run.feePayers).toEqual([undefined, undefined]);
   });
 
-  it('pays from a JSON-RPC account with sendCallsSync, and records the payment span with its hash', async () => {
+  it("pays from a JSON-RPC account with sendCallsSync, linked to the call batch's send span", async () => {
+    // viem falls back to eth_sendTransaction for a single call on a node without wallet_sendCalls, as Anvil is.
     const run = await charge({ mode: 'push', tracker: 'shared', account: 'json-rpc' });
     expect(run.response.status).toBe(200);
     expect(run.payment?.attributes['mpp.mode']).toBe('push');
     expect(run.payment?.attributes['blockchain.tx.hash']).toBe(run.reference);
     expect(run.payment?.attributes['blockchain.payment.verified']).toBe(true);
+    const [batch] = run.sends;
+    expect(run.sends).toHaveLength(1);
+    expect(batch?.attributes['blockchain.call_batch.id']).toBeDefined();
+    expect(run.payment?.links.map((link) => link.context.spanId)).toEqual([
+      batch?.spanContext().spanId,
+    ]);
+    // The transaction's confirm span, linked to the batch's send span, beside the batch's own confirm span.
+    const transaction = run.confirms.find(
+      (span) => span.attributes['blockchain.tx.hash'] === run.reference,
+    );
+    expect(transaction?.links.map((link) => link.context.spanId)).toEqual([
+      batch?.spanContext().spanId,
+    ]);
   });
 });
 
