@@ -24,6 +24,7 @@ This page collects the setups that were checked; each code block is compiled in 
 | Other AgentKit wallet providers | `@hashspan/viem` `watch()` | the returned hash | a send span only when you record the call ([setup](#other-wallet-providers)) | the pattern in `packages/viem` tests |
 | GOAT | `@hashspan/viem` | background confirmation | no longer maintained ([setup](#goat-sdk)) | `integrations/` |
 | Mastra | `@hashspan/viem` | Mastra's OpenTelemetry bridge | the bridge is experimental ([setup](#agent-frameworks)) | `integrations/` |
+| Genkit | `@hashspan/viem` | `disableGenkitOTelInitialization()`, and your SDK started before Genkit's first span | `generate` starts a trace of its own inside an active span unless `disableOTelRootSpanDetection()` is called; Genkit's Developer UI gets no spans ([setup](#agent-frameworks)) | `integrations/` |
 | LangChain JS, OpenAI Agents SDK (OpenInference) | `@hashspan/viem` | run tools in an active span of your own | tool spans are not active ([setup](#agent-frameworks)) | `integrations/` |
 | MCP server tools (stdio) | `@hashspan/viem` in the server | the agent's trace context in each request's `_meta`: OpenInference's MCP instrumentation (v1 SDK) or a few lines of your own (v2 SDK) | without it, the server's spans start a trace of their own; pass the `OTEL_*` settings to the server ([setup](#mcp-servers)) | `integrations/` |
 | ElizaOS `plugin-evm` | none | none | not traced: it creates its own wallet client ([details](#agent-frameworks)) | no |
@@ -363,6 +364,103 @@ console.log(result.text);
 await hashspan.flush();
 await sdk.shutdown();
 ```
+
+- **Genkit:** Genkit runs each tool's function inside the tool's span, so with a registered tracer provider and
+  context manager the trace reads `generate`, then Genkit's spans of the model calls and of the tool, `pay_vendor`,
+  whose children are `send` and `confirm`. On its first span Genkit starts an OpenTelemetry Node SDK of its own,
+  from the 1.x SDK line (`@opentelemetry/sdk-node` 0.52), unless `disableGenkitOTelInitialization()` from
+  `genkit/tracing` was called first. Both SDK lines install side by side; OpenTelemetry keeps the first tracer
+  provider registered in a process and refuses the others. CI runs the example below as written and the setups of
+  the limits against Anvil with a scripted model, from `genkit` 1.42.0 on, in
+  [`integrations/test/genkit.int.test.ts`](../integrations/test/genkit.int.test.ts). To set it up:
+  - Install `genkit @opentelemetry/sdk-node` next to the packages of the [quick start](../README.md#quick-start).
+    The scripted model below stands in for a model plugin, so the example needs no API key.
+  - Call `disableGenkitOTelInitialization()` and start the Node SDK before Genkit runs anything, and send from the
+    tool with a client extended with `withHashspan()`, as in this `agent.ts`. It runs against Anvil like the quick
+    start, prints the model's answer, and the trace shows in Jaeger under the service `my-agent`: `pay_vendor`,
+    with `send 31337` and `confirm 31337` under it.
+  - Flush before the process exits, as the example does: `await hashspan.flush()`, then `await sdk.shutdown()`
+    ([shutting down](../packages/viem/README.md#shutting-down)).
+
+```ts
+import { withHashspan } from '@hashspan/viem';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+import { genkit, z } from 'genkit';
+import { disableGenkitOTelInitialization } from 'genkit/tracing';
+import { createPublicClient, createWalletClient, http, parseEther } from 'viem';
+import { mnemonicToAccount } from 'viem/accounts';
+import { foundry } from 'viem/chains';
+
+// Genkit starts an OpenTelemetry SDK of its own on its first span unless told not to: this process has one.
+disableGenkitOTelInitialization();
+// Exports over OTLP, to http://localhost:4318 unless OTEL_EXPORTER_OTLP_ENDPOINT says otherwise. Start it before
+// Genkit runs anything.
+const sdk = new NodeSDK({ serviceName: 'my-agent' });
+sdk.start();
+
+// Anvil's public test mnemonic: its first account is funded on every Anvil chain.
+const account = mnemonicToAccount('test test test test test test test test test test test junk');
+const transport = http(process.env.RPC_URL ?? 'http://127.0.0.1:8545'); // Anvil
+const hashspan = withHashspan();
+const wallet = createWalletClient({ account, chain: foundry, transport }).extend(hashspan);
+const reader = createPublicClient({ chain: foundry, transport }).extend(hashspan);
+
+const ai = genkit({});
+
+// Genkit runs the tool's function inside the tool's span, so the send and confirm spans become its children.
+const payVendor = ai.defineTool(
+  {
+    name: 'pay_vendor',
+    description: 'Pays the vendor an amount of ETH.',
+    inputSchema: z.object({ amountEth: z.string() }),
+    outputSchema: z.object({ hash: z.string(), status: z.string() }),
+  },
+  async ({ amountEth }) => {
+    const to = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'; // Anvil's second account
+    const hash = await wallet.sendTransaction({ to, value: parseEther(amountEth) });
+    const receipt = await reader.waitForTransactionReceipt({ hash });
+    return { hash, status: receipt.status };
+  },
+);
+
+// A scripted model instead of a provider plugin, so no API key is needed: it asks for the tool once, then answers.
+ai.defineModel({ name: 'scripted' }, async (request) => {
+  const paid = request.messages.some((message) => message.content.some((part) => part.toolResponse));
+  return {
+    message: {
+      role: 'model',
+      content: paid
+        ? [{ text: 'Paid the vendor 0.01 ETH.' }]
+        : [{ toolRequest: { name: 'pay_vendor', ref: 'call_1', input: { amountEth: '0.01' } } }],
+    },
+    finishReason: 'stop',
+  };
+});
+
+const { text } = await ai.generate({
+  model: 'scripted',
+  prompt: 'Pay the vendor 0.01 ETH.',
+  tools: [payVendor],
+});
+console.log(text);
+
+// Before the process exits: hashspan's pending spans first, then the SDK.
+await hashspan.flush();
+await sdk.shutdown();
+```
+
+Known limits with Genkit 1.42; CI checks the first two, with and without the calls they name:
+
+- **Start your SDK first:** without `disableGenkitOTelInitialization()`, when a Genkit span starts before your SDK
+  does, Genkit's own SDK registers the tracer provider, your SDK's registration fails, and none of the process's
+  spans reach your exporters. With your SDK started first, the trace is recorded as above, and Genkit's SDK fails to
+  register and stays idle; with a diag logger set, OpenTelemetry reports
+  `Attempted duplicate registration of API: trace` for it.
+- **An active span of your own:** `generate` starts a trace of its own even when a span is active, such as an HTTP
+  server's span. Call `disableOTelRootSpanDetection()` from `genkit/tracing` at startup to make it a child of the
+  active span.
+- **Genkit's Developer UI:** Genkit sends traces to its Developer UI (`GENKIT_TELEMETRY_SERVER`) only through a span
+  processor of its own SDK, so with this setup the Developer UI receives no spans.
 
 - **LangChain JS and the OpenAI Agents SDK:** OpenInference's instrumentations
   (`@arizeai/openinference-instrumentation-langchain` 4.1.4, `@arizeai/openinference-instrumentation-openai-agents`
