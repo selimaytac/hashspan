@@ -8,6 +8,8 @@ export interface SentTransaction {
   parent: Context;
   /** Set when someone other than the sender pays the transaction's fee, such as a payment's facilitator. */
   feePayer?: typeof BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR;
+  /** Set when the span is a payment span rather than the transaction's `send` span. */
+  payment?: true;
   /** The validated, lower-case address of the token the transaction pays its fee in, from its send. */
   feeAsset?: string;
 }

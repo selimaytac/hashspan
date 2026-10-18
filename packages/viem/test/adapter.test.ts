@@ -266,6 +266,7 @@ describe('robustness', () => {
       throw new Error('tracker bug');
     };
     return {
+      paymentSenders: ['facilitator', 'payer'],
       startSend: () => ({ context: ROOT_CONTEXT, end: boom, fail: boom }),
       startConfirm: () => ({ end: boom, timeout: boom, fail: boom }),
       startPayment: () => ({ end: boom, fail: boom, timeout: boom, link: boom }),

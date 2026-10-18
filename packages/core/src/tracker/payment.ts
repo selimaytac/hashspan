@@ -1,9 +1,10 @@
-// Payments that another party settles on chain (ADR 0013, ADR 0017).
+// Payments that another party settles on chain (ADR 0013, ADR 0017), or that the payer settles itself (ADR 0029).
 import {
   type Attributes,
   type Context,
   context,
   diag,
+  type Link,
   SpanKind,
   type Tracer,
 } from '@opentelemetry/api';
@@ -17,6 +18,11 @@ import {
   ATTR_BLOCKCHAIN_PAYMENT_STATUS,
   ATTR_BLOCKCHAIN_PAYMENT_VERIFIED,
   ATTR_BLOCKCHAIN_TX_HASH,
+  ATTR_MPP_CHALLENGE_ID,
+  ATTR_MPP_INTENT,
+  ATTR_MPP_METHOD,
+  ATTR_MPP_MODE,
+  ATTR_MPP_RESOURCE,
   ATTR_X402_RESOURCE,
   ATTR_X402_SCHEME,
   BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR,
@@ -25,6 +31,8 @@ import {
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_PENDING,
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
   ERROR_TYPE_VALUE_OTHER,
+  MPP_MODE_VALUE_PULL,
+  MPP_MODE_VALUE_PUSH,
 } from '../attributes.js';
 import type { LinkStore } from '../link-store.js';
 import { type AddressFormatter, formatAddressesIn, paymentResourceOf } from '../privacy.js';
@@ -43,6 +51,13 @@ import {
 } from './handles.js';
 import type { SpanRecording } from './spans.js';
 import { ADDRESS, amount, identifier, TX_HASH } from './values.js';
+
+/** The modes of an MPP charge (`mpp.mode`). */
+const MPP_MODES: ReadonlySet<unknown> = new Set([MPP_MODE_VALUE_PUSH, MPP_MODE_VALUE_PULL]);
+/** An MPP challenge id: text of RFC 3986's unreserved characters, as a base64url HMAC is, of bounded length. */
+const MPP_CHALLENGE_ID = /^[A-Za-z0-9._~-]{1,128}$/;
+/** Hex of an address's length, which a server-chosen id could hold: hidden where the address mode hides addresses. */
+const ADDRESS_LIKE = /[0-9a-fA-F]{40}/;
 
 const PAYMENT_STATUSES: ReadonlySet<string> = new Set([
   BLOCKCHAIN_PAYMENT_STATUS_VALUE_SETTLED,
@@ -96,16 +111,47 @@ export function createPaymentSpans({
     if (paid !== undefined) attributes[ATTR_BLOCKCHAIN_PAYMENT_AMOUNT] = paid;
     const scheme = identifier(input.x402?.scheme);
     if (scheme !== undefined) attributes[ATTR_X402_SCHEME] = scheme;
-    const resource = input.x402?.resource;
-    const recorded =
-      typeof resource === 'string' ? paymentResourceOf(resource, paymentResource) : undefined;
-    if (recorded) attributes[ATTR_X402_RESOURCE] = formatAddressesIn(recorded, formatAddress);
+    const resourceOf = (resource: unknown): string | undefined => {
+      const recorded =
+        typeof resource === 'string' ? paymentResourceOf(resource, paymentResource) : undefined;
+      return recorded ? formatAddressesIn(recorded, formatAddress) : undefined;
+    };
+    const x402Resource = resourceOf(input.x402?.resource);
+    if (x402Resource) attributes[ATTR_X402_RESOURCE] = x402Resource;
+    const mpp = input.mpp;
+    const method = identifier(mpp?.method);
+    if (method !== undefined) attributes[ATTR_MPP_METHOD] = method;
+    const intent = identifier(mpp?.intent);
+    if (intent !== undefined) attributes[ATTR_MPP_INTENT] = intent;
+    const mode: unknown = mpp?.mode;
+    if (MPP_MODES.has(mode)) attributes[ATTR_MPP_MODE] = mode as string;
+    const challengeId: unknown = mpp?.challengeId;
+    if (
+      typeof challengeId === 'string' &&
+      MPP_CHALLENGE_ID.test(challengeId) &&
+      !(formatAddress.protectsAddresses && ADDRESS_LIKE.test(challengeId))
+    ) {
+      attributes[ATTR_MPP_CHALLENGE_ID] = challengeId;
+    }
+    const mppResource = resourceOf(mpp?.resource);
+    if (mppResource) attributes[ATTR_MPP_RESOURCE] = mppResource;
+
+    // The payer sends the settlement itself (MPP, ADR 0029), or another party does and pays its fee (ADR 0013).
+    const paidBySender = input.sender === 'payer';
+    // The settlement's hash, when the payer knows it before the settlement is reported: it is recorded from the start.
+    const knownHash =
+      typeof input.hash === 'string' && TX_HASH.test(input.hash) ? input.hash : undefined;
+    const sent = knownHash !== undefined ? links.get(input.chainId, knownHash) : undefined;
+    // The send span of a transaction this tracker sent itself, as a span link that samplers see.
+    const spanLinks: Link[] = sent && !sent.payment ? [{ context: sent.spanContext }] : [];
+    if (knownHash !== undefined) attributes[ATTR_BLOCKCHAIN_TX_HASH] = knownHash;
 
     const span = getTracer().startSpan(
       `payment ${input.chainId}`,
       {
         kind: SpanKind.CLIENT,
         attributes: redact(attributes),
+        links: spanLinks,
         ...(input.startTime !== undefined ? { startTime: input.startTime } : {}),
       },
       parent,
@@ -117,15 +163,17 @@ export function createPaymentSpans({
       if (typeof hash !== 'string' || !TX_HASH.test(hash)) return false;
       // A hash this tracker already links, such as one of its own sends, keeps that link.
       if (!links.get(input.chainId, hash)) {
-        // The facilitator sends the settlement transaction and pays its fee.
         links.set(input.chainId, hash, {
           spanContext: span.spanContext(),
           parent,
-          feePayer: BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR,
+          payment: true,
+          // A facilitator sends the settlement transaction and pays its fee; a payer that sends it is its sender.
+          ...(paidBySender ? {} : { feePayer: BLOCKCHAIN_FEE_PAYER_VALUE_FACILITATOR }),
         });
       }
       return true;
     };
+    if (knownHash !== undefined) linkHash(knownHash);
 
     const recordSettlement = (settlement: PaymentSettlement): void => {
       const status = settlement.status;
@@ -137,7 +185,8 @@ export function createPaymentSpans({
       // payer knew itself (docs/adr/0013-x402-payments.md).
       const settled: Attributes = { [ATTR_BLOCKCHAIN_PAYMENT_STATUS]: status };
       const hash: unknown = settlement.hash;
-      if (linkHash(hash)) {
+      // The payer's own hash, recorded from the start, wins over one the settlement reports (ADR 0029).
+      if (knownHash === undefined && linkHash(hash)) {
         settled[ATTR_BLOCKCHAIN_TX_HASH] = hash;
       }
       if (!knownPayer) setRemoteAddress(settled, ATTR_BLOCKCHAIN_PAYMENT_PAYER, settlement.payer);

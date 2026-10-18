@@ -3,7 +3,9 @@
   "changelog": ["@changesets/changelog-github", { "repo": "selimaytac/hashspan" }],
   "commit": false,
   "fixed": [],
-  "linked": [["@hashspan/*"]],
+  "linked": [
+    ["@hashspan/core", "@hashspan/viem", "@hashspan/cdp", "@hashspan/x402", "@hashspan/example-*"]
+  ],
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",

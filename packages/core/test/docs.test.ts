@@ -564,6 +564,13 @@ describe('package README options', () => {
     expect(options.filter((option) => !readme.includes(`\`${option}\``))).toEqual([]);
   });
 
+  it('name every option the mpp adapter adds', () => {
+    const readme = read('packages/mpp/README.md');
+    const options = optionsOf('packages/mpp/src/index.ts', 'WithHashspanMppOptions');
+    expect(options.length).toBeGreaterThan(0);
+    expect(options.filter((option) => !readme.includes(`\`${option}\``))).toEqual([]);
+  });
+
   it('name every option the cdp adapter adds', () => {
     const readme = read('packages/cdp/README.md');
     const options = optionsOf('packages/cdp/src/index.ts', 'WithHashspanCdpOptions');

@@ -18,6 +18,7 @@ This page collects the setups that were checked; each code block is compiled in 
 | Transactions sent elsewhere | `@hashspan/viem` [`watch()`](../packages/viem/README.md#transactions-sent-elsewhere) | a public client; for a send span, the call recorded with the same tracker | a send span only when you record the call | `packages/viem` tests |
 | Coinbase CDP SDK | `@hashspan/cdp` | a `reader` for confirm spans | CommonJS needs Node.js 22.12 ([install](../packages/cdp/README.md#install)); see [known limits](../packages/cdp/README.md#known-limits) | `packages/cdp` tests |
 | x402 client | `@hashspan/x402` | a `reader` for `verified` | x402 v1 and non-`eip155` networks are not traced ([known limits](../packages/x402/README.md#known-limits)) | `packages/x402` tests |
+| MPP client (mppx) | `@hashspan/mpp` | a `reader` for confirm spans and `verified`; for push, the payer's viem client extended on the same `tracker` ([setup](#machine-payments-protocol-mppx)) | Tempo `charge` only: sessions and paid MCP tools are not traced ([known limits](../packages/mpp/README.md#known-limits)) | `packages/mpp` tests, on Anvil in Tempo mode |
 | AgentKit `ViemWalletProvider` | `@hashspan/viem` | background confirmation | TypeScript needs a cast ([setup](#viemwalletprovider)) | `integrations/` |
 | AgentKit `CdpEvmWalletProvider`, `CdpSmartWalletProvider` | `@hashspan/cdp` on `getClient()` | the provider's public client as `reader` | `configureWithWallet()` itself is not run in CI ([setup](#cdpevmwalletprovider)) | `integrations/` |
 | Other AgentKit wallet providers | `@hashspan/viem` `watch()` | the returned hash | a send span only when you record the call ([setup](#other-wallet-providers)) | the pattern in `packages/viem` tests |
@@ -591,3 +592,27 @@ recorded as a send (`packages/viem/test/api-wallet.test.ts`).
   the same way.
 - **Circle smart contract accounts (ERC-4337):** Circle reports their hash only once the transaction is confirmed;
   this path was not checked.
+
+## Machine Payments Protocol (mppx)
+
+[mppx](https://github.com/wevm/mppx) pays an API's `402 Payment Required` challenge with a Tempo transaction.
+[`@hashspan/mpp`](../packages/mpp/README.md#usage) records each payment as a payment span, with the settlement's
+confirm span through a reader; it supersedes the setup of a traced `getClient` client and a manual `watch()` on the
+receipt's `reference`. What a trace shows depends on who broadcasts the transaction:
+
+| Charge mode | Who broadcasts | Spans, with `@hashspan/mpp` and a reader |
+|---|---|---|
+| `pull` (the default for a private key) | the server, the transaction the payer signed | payment; confirm, linked to the payment span, from the reader |
+| `push` (`mode: 'push'`, or a wallet account) | the payer, through the client mppx's `getClient` returns | payment; send and confirm of the payer's client when it is extended with `@hashspan/viem`'s `withHashspan()`, on the same `tracker`, with the payment span linked to the send span |
+
+1. Extend the payer's viem client with `@hashspan/viem`'s `withHashspan({ tracker })` and pass it to mppx's
+   `tempo({ account, getClient })`, so that a push transaction gets its send span.
+2. Call `withHashspan(mppx, { tracker, reader })` from `@hashspan/mpp` on the client `Mppx.create()` returns, with the
+   same tracker: with two, a push payment gets two confirm spans and two fee samples.
+3. Call `flush()` of both before a short-lived process exits.
+
+The payment's fee is the payer's, and is labelled `sponsor` when the server sponsors it as fee payer, never
+`facilitator`. The README's quick start runs in CI as written, against an mppx server and Anvil in Tempo mode
+(`packages/mpp/test/quick-start.int.test.ts`); the real charges, both modes, sponsored fees and splits, are in
+`packages/mpp/test/charge.int.test.ts`. On Anvil in Tempo mode, mine one block before the first charge: a fresh
+chain's first block fails Tempo's `validAfter` check in the server's simulation.

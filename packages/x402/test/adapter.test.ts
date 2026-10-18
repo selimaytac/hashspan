@@ -294,6 +294,7 @@ describe('withHashspan()', () => {
     const client = testClient();
     withHashspan(client, {
       tracker: {
+        paymentSenders: [],
         startSend: () => {
           throw new Error('broken');
         },

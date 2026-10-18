@@ -7,17 +7,20 @@ flowchart LR
     Viem["viem client"]
     CDP["CDP SDK<br/>(server and smart accounts)"]
     X402["x402 client<br/>(@x402/fetch, axios, mcp)"]
+    MPPX["mppx client<br/>(Mppx.create, fetch)"]
   end
   subgraph Lib["hashspan"]
     VA["@hashspan/viem<br/>capture adapter"]
     CA["@hashspan/cdp<br/>capture adapter"]
     XA["@hashspan/x402<br/>payment hooks"]
+    MA["@hashspan/mpp<br/>payment observers"]
     Core["@hashspan/core<br/>tx lifecycle: send → confirm"]
   end
   Tool --> Viem --> VA
   CDP --> CA
   X402 --> XA
-  VA & CA & XA -- "hash + metadata" --> Core
+  MPPX --> MA
+  VA & CA & XA & MA -- "hash + metadata" --> Core
   Core -- "@opentelemetry/api" --> SDK["User's OTel SDK"] -- OTLP --> BE["Jaeger / Tempo / Langfuse / ..."]
   VA -. "receipts, revert replay (read-only RPC)" .-> Chain[("EVM chain")]
 ```
@@ -28,6 +31,7 @@ flowchart LR
 | viem adapter | Hooks `sendTransaction` / `writeContract` / `waitForTransactionReceipt`, `sendUserOperation` / `waitForUserOperationReceipt` of a bundler client, and `sendCalls` / `waitForCallsStatus` (ADR 0022), via `client.extend()`; background confirmation, `watch()` for transactions sent elsewhere, revert reason decoding by replay, `flush()`; `traceTransport()` records JSON-RPC requests as spans | `packages/viem` |
 | cdp adapter | Wraps a Coinbase CDP client in place: sends of server accounts become send spans, user operations of smart accounts user operation spans (ADR 0021); confirmations through a viem reader and `@hashspan/viem`'s `watch()` | `packages/cdp` |
 | x402 adapter | Registers hooks on an `x402Client`: each payment becomes a `payment` span, as the facilitator, not the agent, sends the settling transaction; confirmations through a viem reader and `@hashspan/viem`'s `watch()`, which also check that the settlement carries the payment (`blockchain.payment.verified`, ADR 0017) | `packages/x402` |
+| mpp adapter | Registers observers on an mppx client: each Tempo charge becomes a `payment` span, as the payer sends (push) or signs (pull) the settling transaction itself; confirmations through a viem reader and `@hashspan/viem`'s `watch()`, which also check that the settlement carries the payment (ADR 0029) | `packages/mpp` |
 | examples | Runnable agent integrations | `examples/` |
 | lab | Local Jaeger (Docker) + project-local Anvil; Prometheus and Grafana with the [dashboards](../dashboards/README.md) | `docker/`, `dashboards/`, `scripts/`, `Makefile` |
 
@@ -58,7 +62,7 @@ method, not by number.
 | A send without `nonce`, or a raw send (viem), through a client whose transport is not an EIP-1193 provider (`custom()`) | one `eth_getTransactionByHash` per send through the sending client, off the call's path, for the nonce and sender a replacement search needs ([ADR 0008 amendment](adr/0008-replaced-transactions.md#amendment-2026-10-18-proposed-a-replacement-viem-did-not-report)) | pass `nonce` |
 | A wait that timed out, for a transaction hashspan sent and knows the nonce of (viem) | at most 13 requests to find a replacement viem did not report: the receipt, the block number, the sender's nonce at up to 9 blocks, one block with its transactions and the replacement's receipt | `checkReplacement: false` |
 | A send on a client without a chain (viem) | one `eth_chainId` per send | give the client a chain |
-| Background confirmation and `watch()` (viem; cdp and x402 confirm through `watch()`) | the receipt polling of one `waitForTransactionReceipt` per transaction | `confirm`, `maxBackgroundConfirmations`, `timeoutMs` |
+| Background confirmation and `watch()` (viem; cdp, x402 and mpp confirm through `watch()`) | the receipt polling of one `waitForTransactionReceipt` per transaction | `confirm`, `maxBackgroundConfirmations`, `timeoutMs` |
 | A reverted transaction (viem, cdp) | one `eth_getTransactionByHash` and one `eth_call` to replay it; one more `eth_call` when the contract was created in the same block ([ADR 0005](adr/0005-revert-reason-replay.md)) | `decodeRevertReason: false` |
 | A wait with `confirmations` above 1 (viem) | one `eth_getTransactionReceipt` after the wait resolved; one `eth_getBlockByNumber` more only when that receipt is missing or in another block ([ADR 0026](adr/0026-receipt-after-several-confirmations.md)) | |
 | A receipt that carries `operatorFeeScalar` or `operatorFeeConstant` (OP Stack after Isthmus, on a chain that charges an operator fee; viem, cdp with a reader) | one `eth_call` to the GasPriceOracle's `getOperatorFee(gasUsed)` at the receipt's block, per transaction ([OP Stack operator fee](../packages/viem/README.md#op-stack-operator-fee)); none for a receipt without the fields | |
@@ -68,6 +72,7 @@ method, not by number.
 | A user operation (viem bundler client) | none | |
 | A user operation of a CDP smart account, with a reader | `eth_getTransactionReceipt` of the bundle transaction, polled until found or `confirmTimeoutMs` ([ADR 0021](adr/0021-user-operations.md)) | no `reader` |
 | An x402 payment with a reader | the settling transaction's receipt; for Permit2 also its transaction, once | no `reader` |
+| An MPP payment with a reader | the settling transaction's receipt, also when the payer's traced client already confirmed it (push on a shared tracker), for the check | no `reader` |
 
 Tests: `packages/viem/test/request-count.int.test.ts`, the request-count tests of
 `packages/viem/test/user-operation.int.test.ts`, `packages/x402/test/settlement.int.test.ts` and
