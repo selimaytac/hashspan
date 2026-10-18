@@ -13,7 +13,7 @@ concurrency: release
 jobs:
   ci:
     name: Checks
-    uses: ./.github/workflows/ci.yml
+    uses: $/.github/workflows/ci.yml
     permissions:
       contents: read
 
