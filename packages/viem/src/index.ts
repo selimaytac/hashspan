@@ -6,6 +6,7 @@ import { addCallBatchActions } from './call-batch.js';
 import { createConfirmation } from './confirm/confirmation.js';
 import { createPending } from './confirm/pending.js';
 import { Recent } from './confirm/recent.js';
+import type { SentTransaction } from './confirm/replacement.js';
 import { durationOr } from './confirm/timing.js';
 import { createWatch } from './confirm/watch.js';
 import { guardTracker } from './safe-tracker.js';
@@ -179,6 +180,8 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   const abis = new Recent<Abi>();
   /** Revert reasons being or already fetched, so concurrent waits for one transaction fetch it once. */
   const revertReasons = new Recent<Promise<string | undefined>>();
+  /** Sender and nonce of recent sends, to find a replacement viem did not report (ADR 0008). */
+  const senders = new Recent<SentTransaction>();
   const { track, flush, settleOnce } = createPending();
   const { recordConfirmation, confirmThrough, confirmPending } = createConfirmation({
     tracker,
@@ -188,6 +191,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     followMultisig: followMultisig !== undefined,
     abis,
     revertReasons,
+    senders,
     track,
     settleOnce,
   });
@@ -226,6 +230,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         tracker,
         confirm,
         abis,
+        senders,
         track,
         recordConfirmation,
         confirmThrough,

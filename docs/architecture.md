@@ -54,7 +54,9 @@ method, not by number.
 
 | Case | Requests added | Option that changes them |
 |---|---|---|
-| A send and its wait, on a client with a chain (viem; also a raw send, whose fields are parsed locally, and a fee paid in a token, whose asset comes from the call or the receipt) | none | |
+| A send that passes `nonce` and its wait, on a client with a chain (viem; also a fee paid in a token, whose asset comes from the call or the receipt) | none | |
+| A send without `nonce`, or a raw send (viem), through a client whose transport is not an EIP-1193 provider (`custom()`) | one `eth_getTransactionByHash` per send through the sending client, off the call's path, for the nonce and sender a replacement search needs ([ADR 0008 amendment](adr/0008-replaced-transactions.md#amendment-2026-10-18-proposed-a-replacement-viem-did-not-report)) | pass `nonce` |
+| A wait that timed out, for a transaction hashspan sent and knows the nonce of (viem) | at most 13 requests to find a replacement viem did not report: the receipt, the block number, the sender's nonce at up to 9 blocks, one block with its transactions and the replacement's receipt | `checkReplacement: false` |
 | A send on a client without a chain (viem) | one `eth_chainId` per send | give the client a chain |
 | Background confirmation and `watch()` (viem; cdp and x402 confirm through `watch()`) | the receipt polling of one `waitForTransactionReceipt` per transaction | `confirm`, `maxBackgroundConfirmations`, `timeoutMs` |
 | A reverted transaction (viem, cdp) | one `eth_getTransactionByHash` and one `eth_call` to replay it; one more `eth_call` when the contract was created in the same block ([ADR 0005](adr/0005-revert-reason-replay.md)) | `decodeRevertReason: false` |
