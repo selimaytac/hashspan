@@ -1,7 +1,7 @@
 {
   "name": "@hashspan/mpp",
   "version": "0.1.0",
-  "description": "MPP adapter for @hashspan/core: traces the payments an AI agent makes with the Machine Payments Protocol (mppx) as payment spans.",
+  "description": "OpenTelemetry instrumentation for MPP payments made with mppx: traces the payments an AI agent makes with the Machine Payments Protocol as payment spans.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",
   "homepage": "https://hashspan.dev",
@@ -15,13 +15,15 @@
   },
   "keywords": [
     "opentelemetry",
-    "tracing",
+    "opentelemetry-instrumentation",
+    "otel",
     "mpp",
     "mppx",
     "tempo",
     "payments",
-    "ai-agents",
-    "observability"
+    "tracing",
+    "observability",
+    "ai-agents"
   ],
   "type": "module",
   "sideEffects": false,
