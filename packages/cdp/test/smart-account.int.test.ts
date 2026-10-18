@@ -189,11 +189,11 @@ describe('CDP smart accounts against a local CDP API and Anvil', () => {
                 target: EMITTER,
                 value: 0n,
                 data: concat([
-                  ...encodeEventTopics({
+                  ...(encodeEventTopics({
                     abi: testEntryPointAbi,
                     eventName: 'UserOperationEvent',
                     args: { userOpHash, sender: SMART_ACCOUNT, paymaster: zeroAddress },
-                  }),
+                  }) as Hex[]),
                   encodeAbiParameters(
                     [
                       { type: 'uint256' },
