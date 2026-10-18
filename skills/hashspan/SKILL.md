@@ -46,6 +46,10 @@ npm install @opentelemetry/sdk-node
 
 ## 3. Start the SDK first
 
+Look first for existing shutdown or signal handling: `process.on('SIGTERM')`, a framework's close hook or a server's
+graceful shutdown. If there is one, call `shutdown()` from it and leave out the signal loop at the end of the file
+below.
+
 Add this file as `instrumentation.ts` next to the entry point, and set `serviceName` to the project's name:
 
 ```ts
@@ -79,6 +83,9 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 - When the code never waits for receipts through a client it extends (no `waitForTransactionReceipt`), replace
   `withHashspan()` with `withHashspan({ confirm: { mode: 'background', timeoutMs: 60_000 } })`, or there are no
   confirm spans ([background confirmation](https://github.com/selimaytac/hashspan/blob/main/packages/viem/README.md#background-confirmation)).
+- Before exporting to a hosted backend, ask the user whether wallet addresses may leave the process. If they may not,
+  or you cannot ask, use `withHashspan({ address: 'hashed' })`; the default records addresses as they are
+  ([options](https://github.com/selimaytac/hashspan/blob/main/packages/core/README.md#options)).
 - An AI agent can be named with the `agent` option; other services leave it out
   ([options](https://github.com/selimaytac/hashspan/blob/main/packages/core/README.md#options)).
 - With an existing SDK setup, keep only the `hashspan` and `shutdown` parts, with that setup's provider in place of
@@ -118,7 +125,8 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
    [local lab](https://github.com/selimaytac/hashspan/blob/main/README.md#local-lab) in a checkout of hashspan, or
    none, with the spans printed in the terminal
    ([console](https://github.com/selimaytac/hashspan/blob/main/docs/backends.md#console-without-a-backend)).
-2. Run the project against a local chain or a testnet, never with a key that holds real funds unless the user asks.
+2. Run the project only against a local chain with Anvil's well-known test accounts, or a testnet the user names.
+   Ask the user before anything signs. Never read `.env` files, key files or secrets.
 3. Check that each transaction shows `send {chainId}` and `confirm {chainId}` spans under the span that was active
    when it was sent; an x402 payment shows `payment {chainId}` and `confirm {chainId}` instead, with no send span
    ([x402](https://github.com/selimaytac/hashspan/blob/main/packages/x402/README.md#usage)). When one is missing, follow
