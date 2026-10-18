@@ -100,10 +100,9 @@ await hashspan.flush();
   an action of its own that calls it, which this setup does not.
 - `createSmartAccountClient(...).extend(withHashspan())` still traces `sendUserOperation` and
   `waitForUserOperationReceipt` when you call them; its `sendTransaction`, `writeContract` and `sendCalls` are then
-  not traced, with a `diag` warning. TypeScript accepts that extension only with a cast, since viem's `extend()`
-  types expect viem's own `sendTransaction`.
+  not traced, with a `diag` warning. The extended client keeps the SDK's types for those actions.
 - ZeroDev's `createKernelAccountClient` builds its client the same way, and adds `sendTransaction` and
-  `writeContract` with `kernelAccountClientActions()`. Extended with `withHashspan()` (with the same cast), its
+  `writeContract` with `kernelAccountClientActions()`. Extended with `withHashspan()`, its
   `sendUserOperation` and `waitForUserOperationReceipt` are traced and its `sendTransaction` and `writeContract` are
   not. `withHashspan()` applied last, as above, is the supported ZeroDev setup. Building the client by hand with
   `withHashspan()` before ZeroDev's actions is not a documented setup, because `createKernelAccountClient` also sets
