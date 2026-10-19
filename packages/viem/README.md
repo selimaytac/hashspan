@@ -491,8 +491,8 @@ const wallet = createWalletClient({
   they can belong to different traces.
 - Needs viem 2.21.25 or later; with an older viem it sends nothing and logs a `diag` warning. To keep a hook of your
   own, call this one from it and return its result.
-- An eRPC setup: [RPC gateways](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/integrations.md#rpc-gateways-erpc).
-  See [ADR 0030](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/adr/0030-trace-context-on-json-rpc-requests.md).
+- An eRPC setup: [RPC gateways](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/integrations.md#rpc-gateways-erpc).
+  See [ADR 0030](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0030-trace-context-on-json-rpc-requests.md).
 
 ## Traced actions
 

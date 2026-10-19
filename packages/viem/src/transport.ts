@@ -217,7 +217,7 @@ let warnedOldViem = false;
  * instrumentation adds a second `traceparent` header after this hook ran. Needs viem 2.21.25 or later, the first whose
  * hook can change the request; with an older viem it adds nothing and logs a `diag` warning once. It never throws into
  * the request: if it fails, the request is sent unchanged. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/adr/0030-trace-context-on-json-rpc-requests.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0030-trace-context-on-json-rpc-requests.md.
  */
 export function propagateTraceContext(): NonNullable<HttpTransportConfig['onFetchRequest']> {
   const hook = (_request: unknown, init?: unknown): Record<string, unknown> | undefined => {
