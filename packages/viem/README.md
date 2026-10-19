@@ -34,8 +34,9 @@ await reader.waitForTransactionReceipt({ hash }); // confirm span, linked to the
 ```
 
 Reuse the same `withHashspan()` result for every client of one agent: the clients then share one tracker, so
-confirmations are linked to their sends even when they happen on a different client. Apply it after other extensions
-([apply it last](#apply-it-last)), and flush it before a short-lived process exits ([shutting down](#shutting-down)).
+confirmations are linked to their sends even when they happen on a different client. Its place among other
+extensions matters ([apply it last](#apply-it-last)), and a short-lived process flushes it before it exits
+([shutting down](#shutting-down)).
 
 ## Traced actions
 
@@ -221,9 +222,10 @@ What each span covers and records, and which bundler actions are traced:
 
 ### Smart account SDKs
 
-The smart account clients of permissionless.js and ZeroDev send a user operation from `sendTransaction`,
-`writeContract` and `sendCalls`, and return the bundle transaction's hash. On the finished client, those calls are not
-traced, with a `diag` warning; for user operation spans from them, apply `withHashspan()` before the SDK's actions.
+The smart account clients of permissionless.js and ZeroDev send a user operation from `sendTransaction` and
+`writeContract` (and, in permissionless, `sendCalls`), and return the bundle transaction's hash. On the finished
+client, those calls are not traced, with a `diag` warning; for user operation spans from them, apply `withHashspan()`
+before the SDK's actions.
 Details: [smart account SDKs](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#smart-account-sdks).
 
 ### User operations sent elsewhere
@@ -272,8 +274,7 @@ const { id } = await wallet.sendCalls({ calls: [{ to, value }] }); // send span
 await wallet.waitForCallsStatus({ id }); // confirm span, linked to the send span
 ```
 
-No fee is recorded for a batch, and `sendCallsSync` is traced from viem 2.45.2. Outcomes, the
-`experimental_fallback` transactions and the rest:
+What each span records, the `experimental_fallback` transactions and the viem releases `sendCallsSync` needs:
 [call batches](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#call-batches-eip-5792).
 
 ## JSON-RPC requests
