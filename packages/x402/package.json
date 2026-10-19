@@ -1,6 +1,6 @@
 {
   "name": "@hashspan/x402",
-  "version": "1.2.1",
+  "version": "1.3.1",
   "description": "OpenTelemetry instrumentation for x402 payments: traces the payments an AI agent makes as payment spans, with whether they settled.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",

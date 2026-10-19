@@ -1,6 +1,6 @@
 /**
  * A confirm span shared by every handle for one transaction. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.2.1/docs/adr/0007-confirmation-ownership.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.3.1/docs/adr/0007-confirmation-ownership.md.
  */
 export interface SharedConfirm {
   /** Handles that have neither ended the span nor withdrawn. */

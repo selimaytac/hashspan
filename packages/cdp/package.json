@@ -1,6 +1,6 @@
 {
   "name": "@hashspan/cdp",
-  "version": "1.2.1",
+  "version": "1.3.1",
   "description": "OpenTelemetry instrumentation for the Coinbase CDP SDK: traces the transactions of CDP server accounts and the user operations of smart accounts.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",
