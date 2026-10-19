@@ -105,8 +105,8 @@ Exit criteria:
   documented (#364)
 - [x] Each adapter validated in at least one real integration, with its findings closed: every setup in
   [integrations](integrations.md) runs in CI, and each adapter sent real transactions and payments on Base Sepolia
-- [x] A first run needs nothing beyond the docs: the [quick start](../README.md#quick-start) `agent.ts`, run as
-  written, gives the trace the README describes, against Anvil in CI (`packages/viem/test/quick-start.int.test.ts`);
+- [x] A first run needs nothing beyond the docs: the [quick start](quick-start.md) `agent.ts`, run as
+  written, gives the trace the page describes, against Anvil in CI (`packages/viem/test/quick-start.int.test.ts`);
   from an empty project with the published packages, the docs lead to a send and a confirm span once with a viem
   client and once with a setup from [integrations](integrations.md) (#242)
 - [x] The published packages smoke-tested on every supported Node.js version (#34)

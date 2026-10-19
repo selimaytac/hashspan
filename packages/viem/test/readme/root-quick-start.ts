@@ -1,6 +1,6 @@
-// Example from README.md.
-// `pnpm typecheck` compiles this file, and docs.test.ts checks that the README shows the region
-// unchanged. The README presents it as a complete file.
+// Example from docs/quick-start.md.
+// `pnpm typecheck` compiles this file, and docs.test.ts checks that the page shows the region
+// unchanged. The page presents it as a complete file.
 
 // #region readme
 import { trace } from '@opentelemetry/api';
