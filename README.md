@@ -3,7 +3,7 @@
 **OpenTelemetry instrumentation for viem, the Coinbase CDP SDK, x402 and MPP.**
 Trace the on-chain transactions and payments your AI agents and services send, inside the traces you already have.
 
-<!-- Demo GIF goes here: a short recording of an agent run and its trace in Jaeger. -->
+<!-- Animated pipeline diagram goes here (dark and light variants in a <picture> element). -->
 
 [![CI](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml/badge.svg)](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml)
 [![npm @hashspan/core](https://img.shields.io/npm/v/@hashspan/core?label=%40hashspan%2Fcore)](https://www.npmjs.com/package/@hashspan/core)
@@ -58,7 +58,7 @@ Full runnable walkthrough, with the SDK setup and a local chain: [docs/quick-sta
 |---|---|
 | viem clients | the snippet above, then [`@hashspan/viem`](packages/viem) |
 | Coinbase CDP SDK server or smart accounts | [`@hashspan/cdp`](packages/cdp) |
-| x402 payments | [`@hashspan/x402`](packages/x402), and the [x402 agent example](examples/x402-agent) |
+| x402 payments | [`@hashspan/x402`](packages/x402), the [x402 agent example](examples/x402-agent) and the [x402 tutorial](https://hashspan.dev/docs/x402-tutorial) |
 | MPP payments made with mppx | [`@hashspan/mpp`](packages/mpp) |
 | A wallet service (Privy, Turnkey, Circle, ...) | [wallet services](docs/integrations.md#wallet-services) |
 | A worker, a wallet backend or a bot, not an agent | [not an agent?](#not-an-agent) |
