@@ -2,11 +2,10 @@
 
 Trace the payments your AI agents make over [x402](https://www.x402.org) with OpenTelemetry.
 
-With x402, an agent pays for an API call by signing an authorization; the API's facilitator then sends the
-settling transaction from its own account. This adapter records each payment as a `payment {chainId}` span inside
-your agent's trace, with what was paid, to whom, for which resource and whether it settled, and, with a reader, a
-linked `confirm {chainId}` span with block, gas and fees. It records no `send` span, since the agent did not send the
-transaction ([ADR 0013](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.2.1/docs/adr/0013-x402-payments.md)).
+With x402, an agent pays for an API call by signing an authorization, and the API's facilitator sends the settling
+transaction from its own account. Each payment becomes a `payment {chainId}` span inside your agent's trace, with
+what was paid, to whom, for which resource and whether it settled, and, with a reader, a linked `confirm {chainId}`
+span with block, gas and fees.
 
 ## Install
 
@@ -50,6 +49,8 @@ it with `x402Client.fromConfig(config)` and pass it to both instead. An `x402MCP
 `paymentClient`. The adapter only registers hooks; it replaces no method, and its hooks never throw and never change
 a payment.
 
+### Hook order and spend controls
+
 Call `withHashspan` before registering hooks of your own (`onBeforePaymentCreation`, `onAfterPaymentCreation`,
 `onPaymentCreationFailure`, `onPaymentResponse`): the client runs them in the order they were registered, and stops at
 the first that recovers a failed payment or a response, so a hook registered earlier can keep hashspan from seeing the
@@ -60,6 +61,8 @@ The client's spend controls (`@x402/core` 2.23 and later) refuse a payment befor
 is not traced ([known limits](#known-limits)). They accept only the scheme's default assets, such as USDC: to pay in
 another token, add it with `client.setSpendControls({ allowedAssets: [{ network, asset }] })`.
 
+### Options
+
 `withHashspan(client, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/x402@1.2.1/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem` but off by default,
 `maxBackgroundConfirmations` as in `@hashspan/viem` (it limits the confirmations through the reader; a payment whose
@@ -69,6 +72,8 @@ Give it the same `tracker` as `@hashspan/viem` or `@hashspan/cdp` to share one t
 `tracker`, the core options are not used. Options are read once, from the object's own enumerable properties: options
 it inherits through a prototype, such as the getters of a class instance, are ignored
 ([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.2.1/docs/adr/0025-untrusted-input.md)).
+
+### Verified settlements
 
 The settlement and its transaction hash come from the server you pay. With a reader, the payment span records
 `blockchain.payment.verified`: `true` when the reported transaction's receipt carries your payment, `false` when it
@@ -87,32 +92,11 @@ when the response came. The revert reason of a reverted settlement, which would 
 chooses, is only recorded with `decodeRevertReason: true`. See
 [ADR 0017](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.2.1/docs/adr/0017-x402-payment-verification.md).
 
+### Shutting down
+
 `flush({ timeoutMs })` (default 10 000 ms) waits for payments still waiting for their response, then for
 confirmations through the reader, and ends what is left as `timeout` (a payment already settled and waiting for its
 receipt check ends as settled, without `verified`). Call it before a short-lived process exits.
-
-## Try it locally
-
-A payment can be made and traced on a local [Anvil](https://getfoundry.sh) chain, with no public facilitator and no
-funds. The [settlement integration test](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.2.1/packages/x402/test/settlement.int.test.ts)
-is the complete recipe: a vitest file that uses the repository's test helpers, to read rather than to copy as is. Take
-from it:
-
-- The token: an EIP-3009 token that you deploy and mint to the paying account, such as the test's
-  [`TestUsd.sol`](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.2.1/packages/x402/test/token/TestUsd.sol) (anyone can mint
-  it; for tests only). The `beforeAll` block deploys and mints it.
-- The paid API, `paidApi()`: a facilitator in your process (`x402Facilitator` from `@x402/core/facilitator`, with
-  `registerExactEvmScheme` from `@x402/evm/exact/facilitator` and `toFacilitatorEvmSigner` from `@x402/evm` for an
-  Anvil account with ether, which sends the settling transaction) and a resource server (`x402ResourceServer` and
-  `x402HTTPResourceServer` from `@x402/core/server`, with `registerExactEvmScheme` from `@x402/evm/exact/server`),
-  served as a function that stands in for `fetch`, so no port is opened. The route's `price` names the token as
-  `asset`, with its EIP-712 domain (`name` and `version`) in `extra`.
-- The paying client, `agentClient()`: as in [usage](#usage), with a reader on Anvil (`foundry` from `viem/chains`) and
-  the token in its [spend controls](#usage). The paying account only signs and needs no ether.
-
-To run your version as a script, see the root
-[quick start](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.2.1/README.md#quick-start) for
-`"type": "module"` and tsx.
 
 ## Recorded
 
@@ -157,6 +141,29 @@ tool call or task spent is the `amount` of each settled payment (the `settled_am
 `blockchain.payment.asset`: amounts of different assets do not add up. The settlement's gas was paid by the
 facilitator, not by the agent. Spans are not an accounting record: a trace that a sampler dropped, or that was not
 exported, misses its payments.
+
+## Try it locally
+
+A payment can be made and traced on a local [Anvil](https://getfoundry.sh) chain, with no public facilitator and no
+funds. The [settlement integration test](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.2.1/packages/x402/test/settlement.int.test.ts)
+is the complete recipe: a vitest file that uses the repository's test helpers, to read rather than to copy as is. Take
+from it:
+
+- The token: an EIP-3009 token that you deploy and mint to the paying account, such as the test's
+  [`TestUsd.sol`](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.2.1/packages/x402/test/token/TestUsd.sol) (anyone can mint
+  it; for tests only). The `beforeAll` block deploys and mints it.
+- The paid API, `paidApi()`: a facilitator in your process (`x402Facilitator` from `@x402/core/facilitator`, with
+  `registerExactEvmScheme` from `@x402/evm/exact/facilitator` and `toFacilitatorEvmSigner` from `@x402/evm` for an
+  Anvil account with ether, which sends the settling transaction) and a resource server (`x402ResourceServer` and
+  `x402HTTPResourceServer` from `@x402/core/server`, with `registerExactEvmScheme` from `@x402/evm/exact/server`),
+  served as a function that stands in for `fetch`, so no port is opened. The route's `price` names the token as
+  `asset`, with its EIP-712 domain (`name` and `version`) in `extra`.
+- The paying client, `agentClient()`: as in [usage](#usage), with a reader on Anvil (`foundry` from `viem/chains`) and
+  the token in its [spend controls](#hook-order-and-spend-controls). The paying account only signs and needs no ether.
+
+To run your version as a script, see the root
+[quick start](https://github.com/selimaytac/hashspan/blob/@hashspan/x402@1.2.1/README.md#quick-start) for
+`"type": "module"` and tsx.
 
 ## Known limits
 
