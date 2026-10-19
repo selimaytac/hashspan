@@ -153,6 +153,12 @@ export interface ReceivedSpan {
   name: string;
   /** `2` is an error. */
   status?: { code?: number };
+  /** As OTLP/JSON encodes them: an `intValue` arrives as a string. */
+  attributes?: {
+    key: string;
+    value: { stringValue?: string; intValue?: string; boolValue?: boolean };
+  }[];
+  links?: { traceId: string; spanId: string }[];
 }
 
 type OtlpTraces = {

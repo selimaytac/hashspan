@@ -200,7 +200,8 @@ make lab-up   # Jaeger UI on http://localhost:16686
 make demo
 ```
 
-See [examples/ai-sdk-agent](examples/ai-sdk-agent).
+See [examples/ai-sdk-agent](examples/ai-sdk-agent). For an agent that also pays an x402 API, with the payment and
+its settlement in the same trace, see [examples/x402-agent](examples/x402-agent).
 
 ## Local lab
 
