@@ -119,6 +119,18 @@ describe('markdown links', () => {
     expect(broken).toEqual([]);
   });
 
+  it('report a repository link whose file or heading is missing', () => {
+    const base = 'https://github.com/selimaytac/hashspan/blob/main';
+    expect(brokenLink('README.md', `${base}/README.md#packages`)).toBeUndefined();
+    expect(brokenLink('README.md', `${base}/README.md#no-such-heading`)).toBe(
+      'no heading for #no-such-heading',
+    );
+    expect(brokenLink('README.md', `${base}/docs/no-such-file.md`)).toBe('no such file');
+    expect(brokenLink('README.md', `${base}/docs/#x`)).toBe(
+      'anchor on a directory without README.md',
+    );
+  });
+
   it('generate GitHub anchors for headings with code and repeated headings', () => {
     expect([...anchors('# `watch()` and `flush()`\n## Notes\n## Notes')]).toEqual([
       'watch-and-flush',
@@ -178,6 +190,20 @@ describe('skills/', () => {
       // Plain text: the frontmatter is not prose, so link or code syntax there would be read as such.
       expect(description).not.toMatch(/[[\]`]/);
       expect(text.split('\n').length).toBeLessThan(500);
+    });
+
+    it(`${file} links into the repository only to files and headings that exist`, () => {
+      // Every URL, also one outside link syntax, since the skill is followed without the repository at hand.
+      const urls = [
+        ...prose(text).matchAll(
+          /https:\/\/github\.com\/selimaytac\/hashspan\/[^\s)>\]]*[^\s).,>\]]/g,
+        ),
+      ].map((m) => m[0]);
+      expect(urls.length).toBeGreaterThan(5);
+      const broken = urls
+        .map((url) => ({ url, problem: brokenLink(file, url) }))
+        .filter(({ problem }) => problem !== undefined);
+      expect(broken).toEqual([]);
     });
 
     it(`${file} links outside its folder only by absolute URL`, () => {
