@@ -25,7 +25,7 @@ exits with code 1. Start a [backend](backends.md), or print the spans in the ter
   ([apply it last](../packages/viem/README.md#apply-it-last)).
 - **User operations or call batches are missing with a tracker you passed yourself.** A tracker from an older
   `@hashspan/core` records only what that core supports; the calls are passed on untraced
-  ([viem options](../packages/viem/README.md#options)).
+  ([viem options](../packages/viem/README.md#usage)).
 - **x402 payments are missing.** x402 v1 payments and networks other than `eip155` are not traced, and a hook of
   your own registered before hashspan's can keep it from seeing the outcome
   ([x402 usage](../packages/x402/README.md#usage), [known limits](../packages/x402/README.md#known-limits)).
@@ -111,7 +111,7 @@ several confirmations, is described under [chain reorganisations](semconv.md#spa
 
 - **The receipt was a flashblocks preconfirmation** (Base) and no sealed receipt came in time, or `flush()` could
   not wait for it: the span has no `effective_gas_price`, `l1_fee` or `fee`
-  ([preconfirmed receipts](viem.md#preconfirmed-receipts-flashblocks)). With `@hashspan/cdp`
+  ([preconfirmed receipts](../packages/viem/README.md#preconfirmed-receipts-flashblocks)). With `@hashspan/cdp`
   and no reader, a preconfirmed receipt from the SDK's wait is recorded the same way
   ([traced calls](../packages/cdp/README.md#traced)).
 - **The receipt has no gas price.** `blockchain.tx.fee` needs `effective_gas_price`
@@ -122,14 +122,14 @@ several confirmations, is described under [chain reorganisations](semconv.md#spa
 ## Revert reason missing from a reverted transaction
 
 - **Decoding is off.** `@hashspan/viem` and `@hashspan/cdp` decode by default; `@hashspan/x402` only with
-  `decodeRevertReason: true` ([revert reasons](viem.md#revert-reasons),
+  `decodeRevertReason: true` ([revert reasons](../packages/viem/README.md#revert-reasons),
   [x402 usage](../packages/x402/README.md#usage)).
 - **The replay could not reproduce it.** The reason comes from replaying the transaction: a provider without
   historical state cannot replay it, earlier transactions in the same block can change the result, and the replay
   has a timeout (10 s by default). It is best effort
-  ([revert reasons](viem.md#revert-reasons)).
+  ([revert reasons](../packages/viem/README.md#revert-reasons)).
 - **A custom error shows as a selector.** Pass the contract's ABI (`writeContract` does, `watch()` takes `abi`) to
-  decode it by name ([revert reasons](viem.md#revert-reasons)).
+  decode it by name ([revert reasons](../packages/viem/README.md#revert-reasons)).
 
 ## Addresses, arguments or error messages missing
 

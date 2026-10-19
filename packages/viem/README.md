@@ -324,13 +324,31 @@ submitted for it. Details:
 
 ## More in the reference
 
-The [`@hashspan/viem` reference](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md) also
-covers [revert reasons](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#revert-reasons),
-[clients without a chain](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#clients-without-a-chain),
-[replaced transactions](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#replaced-transactions),
-[preconfirmed receipts (flashblocks)](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#preconfirmed-receipts-flashblocks),
-the [OP Stack operator fee](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#op-stack-operator-fee)
-and [fees paid in a token](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#fees-paid-in-a-token).
+The [`@hashspan/viem` reference](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md) has the details of these features.
+
+### Revert reasons
+
+A reverted transaction is replayed with `eth_call` to record its decoded revert reason. Details: [revert reasons](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#revert-reasons).
+
+### Clients without a chain
+
+For a client without a `chain`, the adapter asks the node for its chain id alongside each traced call. Details: [clients without a chain](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#clients-without-a-chain).
+
+### Replaced transactions
+
+A sped-up or cancelled transaction is recorded with the receipt of the transaction that replaced it. Details: [replaced transactions](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#replaced-transactions).
+
+### Preconfirmed receipts (flashblocks)
+
+A receipt answered before its block is sealed is completed from the sealed receipt. Details: [preconfirmed receipts (flashblocks)](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#preconfirmed-receipts-flashblocks).
+
+### OP Stack operator fee
+
+On OP Stack chains that charge an operator fee, it is recorded apart from the execution and L1 fees. Details: [OP Stack operator fee](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#op-stack-operator-fee).
+
+### Fees paid in a token
+
+On Celo and Tempo, the token a fee was paid in is recorded with the fee. Details: [fees paid in a token](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/viem.md#fees-paid-in-a-token).
 
 ## Known limits
 
