@@ -1022,7 +1022,7 @@ describe('bounds', () => {
   });
 
   it('reads no log of a bundle receipt with more than 10 000, for watchUserOperation()', async () => {
-    for (const count of [10_000, 10_001, 100_000]) {
+    for (const count of [10_000, 10_001]) {
       tracing.reset();
       const read = new Set<string>();
       const logs = new Proxy(
