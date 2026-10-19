@@ -5,8 +5,10 @@
 // checks where eRPC's server span `Http.ReceivedRequest` of each JSON-RPC request lands:
 // - with the undici instrumentation, in the agent's trace, under the undici `POST` span of the request, which is a
 //   child of hashspan's JSON-RPC span (the double client span of docs/backends.md);
-// - without it (erpc/no-undici.ts, at sample rate 1 so that eRPC records requests without a parent), in traces of
-//   its own. This shows the setup can tell the two apart, so the first result means something.
+// - with propagateTraceContext() instead (readme/erpc-agent-header.ts), in the agent's trace, directly under the
+//   JSON-RPC span of the request, with no `POST` span;
+// - without either (erpc/no-undici.ts, at sample rate 1 so that eRPC records requests without a parent), in traces of
+//   its own. This shows the setup can tell them apart, so the first two results mean something.
 // eRPC is the pinned binary of scripts/install-erpc.sh (`make tools`), on 127.0.0.1 only, with metrics off.
 import { type ChildProcess, execFile, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -237,6 +239,33 @@ describe('eRPC in front of Anvil, with the agent of docs/integrations.md', () =>
       expect(request?.method, parent.name).toBe(parent.name);
     }
     // eRPC's own spans go on below its server span, down to its call to Anvil.
+    expect(
+      received.some(
+        (span) =>
+          span.traceId === tool.traceId && span.name === 'HttpJsonRpcClient.sendSingleRequest',
+      ),
+    ).toBe(true);
+  });
+
+  it('puts eRPC server spans directly under the JSON-RPC span of each request with propagateTraceContext()', {
+    timeout: 90_000,
+  }, async () => {
+    erpc = await startErpc();
+    await runAgent('./readme/erpc-agent-header.ts', erpc.url);
+    const { tool, rpc, spans } = agentSpans();
+    expect(spans.some((span) => span.name === 'POST')).toBe(false);
+    const requestOf = (parent: ReceivedSpan) =>
+      erpcRequests().find(({ server }) => server.parentSpanId === parent.spanId);
+    await waitFor(
+      () => rpc.every((parent) => requestOf(parent)?.method !== undefined),
+      () =>
+        `${rpc.filter((parent) => requestOf(parent)).length} of ${rpc.length} requests in eRPC's spans`,
+    );
+    for (const parent of rpc) {
+      const request = requestOf(parent);
+      expect(request?.server.traceId).toBe(tool.traceId);
+      expect(request?.method, parent.name).toBe(parent.name);
+    }
     expect(
       received.some(
         (span) =>

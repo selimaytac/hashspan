@@ -5,6 +5,7 @@
 ```ts
 
 import { Abi } from 'viem';
+import { HttpTransportConfig } from 'viem';
 import { TracerProvider } from '@opentelemetry/api';
 import { TransactionReceipt } from 'viem';
 import { Transport } from 'viem';
@@ -30,6 +31,9 @@ export interface HashspanExtension {
     flush(options?: FlushOptions): Promise<boolean>;
     watch(client: ViemClientLike, options: WatchOptions): void;
 }
+
+// @public
+export function propagateTraceContext(): NonNullable<HttpTransportConfig["onFetchRequest"]>;
 
 // @public
 export type TracedAction = "sendTransaction" | "writeContract" | "sendTransactionSync" | "writeContractSync" | "sendRawTransaction" | "sendRawTransactionSync" | "waitForTransactionReceipt" | "sendUserOperation" | "waitForUserOperationReceipt" | "sendCalls" | "sendCallsSync" | "waitForCallsStatus";

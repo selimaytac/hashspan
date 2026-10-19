@@ -33,7 +33,7 @@ This page collects the setups that were checked; each code block is compiled in 
 | Wallet services with an EIP-1193 provider (Circle, Fireblocks) | `@hashspan/viem` on a `custom()` transport | a public client for receipts when the provider does not answer reads | Circle smart contract accounts not checked ([setup](#wallet-services)) | the pattern in `packages/viem` tests |
 | Wallet services that send through their API | `@hashspan/viem` `watch()` | a public client; for a send span, the API call recorded with the same tracker | none ([setup](#wallet-services)) | the pattern in `packages/viem` tests |
 | Hardhat 3 scripts and tests (hardhat-viem) | `@hashspan/viem` on the clients of `viem.getPublicClient()` and `viem.getWalletClients()` | pass them as `client` to `deployContract` and `getContractAt` | a deployment gets a confirm span only; Ignition deployments are not traced ([setup](#hardhat-3)) | `integrations/`, on Hardhat's in-process network |
-| eRPC gateway in front of the nodes | `@hashspan/viem` with `traceTransport()` | `@opentelemetry/instrumentation-undici`, so requests carry `traceparent` | two client spans per request; tracing over http needs a `host:port` endpoint ([setup](#rpc-gateways-erpc)) | `integrations/`, eRPC 0.4.0 in front of Anvil |
+| eRPC gateway in front of the nodes | `@hashspan/viem` with `traceTransport()` | `propagateTraceContext()` on viem's `http()`, or `@opentelemetry/instrumentation-undici`, so requests carry `traceparent` | never both; with undici, two client spans per request; tracing over http needs a `host:port` endpoint ([setup](#rpc-gateways-erpc)) | `integrations/`, eRPC 0.4.0 in front of Anvil |
 
 ## Libraries that take a viem client
 
@@ -853,10 +853,11 @@ CI runs the three files above as written, with `hardhat run` and `hardhat test n
 
 [eRPC](https://github.com/erpc/erpc) is a JSON-RPC gateway between an agent and its nodes, with caching, failover
 and its own OpenTelemetry spans. It continues the trace of a request that carries a W3C `traceparent` header.
-hashspan's JSON-RPC spans send no header, so without HTTP instrumentation each request the agent sends starts a trace
-of its own in eRPC. With `@opentelemetry/instrumentation-undici`, which traces Node.js's `fetch` that viem's `http()`
-transport uses, every request carries the header and the trace runs from the agent's `send` span through eRPC to the
-node. Checked with eRPC 0.4.0 and `@opentelemetry/instrumentation-undici` 0.32.0.
+hashspan's JSON-RPC spans send no header unless asked to, so without HTTP instrumentation each request the agent
+sends starts a trace of its own in eRPC. With `@opentelemetry/instrumentation-undici`, which traces Node.js's `fetch`
+that viem's `http()` transport uses, or with `propagateTraceContext()` from `@hashspan/viem`
+([below](#without-http-instrumentation)), every request carries the header and the trace runs from the agent's `send`
+span through eRPC to the node. Checked with eRPC 0.4.0 and `@opentelemetry/instrumentation-undici` 0.32.0.
 
 An eRPC config, `erpc.yaml`, for Anvil on 127.0.0.1:8545 and an OTLP/HTTP collector on 127.0.0.1:4318, started with
 `erpc --require-config --config erpc.yaml` (without a config, `--require-config` stops eRPC from starting with a
@@ -935,13 +936,42 @@ await sdk.shutdown();
 
 The trace shows `pay_vendor` > `send 31337` > `eth_sendRawTransaction` (hashspan) > `POST` (undici) >
 `Http.ReceivedRequest` (eRPC) > ... > `HttpJsonRpcClient.sendSingleRequest` (eRPC's call to the node), and the same
-for each other request. CI runs the agent above as written against eRPC in front of Anvil, with this config, in
-[`integrations/test/erpc.int.test.ts`](../integrations/test/erpc.int.test.ts), and a control without the undici
-instrumentation, whose eRPC spans are in traces of their own. Known limits:
+for each other request.
 
-- **Two client spans per request:** each JSON-RPC span of `traceTransport()` gets the undici `POST` span as a child,
-  and eRPC's server span sits under that one. A span-metrics generator counts both
-  ([span metrics](backends.md#span-metrics-and-http-instrumentation)).
+### Without HTTP instrumentation
+
+`propagateTraceContext()`, a hook for viem's `http()` transport, sends the header from each JSON-RPC span itself
+(viem 2.21.25 or later; see the [viem README](../packages/viem/README.md#trace-context-for-the-provider)). Drop the
+undici instrumentation, import `propagateTraceContext` from `@hashspan/viem`, and change the SDK and the transport of
+`agent.ts` to:
+
+```ts
+// No HTTP instrumentation: the hook sends the `traceparent` header of each JSON-RPC span.
+const sdk = new NodeSDK({ serviceName: 'my-agent' });
+sdk.start();
+
+const transport = traceTransport(
+  http(process.env.RPC_URL ?? 'http://127.0.0.1:4000/main/evm/31337', {
+    onFetchRequest: propagateTraceContext(),
+  }),
+);
+```
+
+The trace then shows `eth_sendRawTransaction` (hashspan) > `Http.ReceivedRequest` (eRPC), with no `POST` span
+between them. The hook sends `traceparent` and `tracestate`, never `baggage`.
+
+CI runs both agents as written against eRPC in front of Anvil, with this config, in
+[`integrations/test/erpc.int.test.ts`](../integrations/test/erpc.int.test.ts), and a control with neither, whose
+eRPC spans are in traces of their own. Known limits:
+
+- **Never both:** use `propagateTraceContext()` or the undici instrumentation, not both. The undici instrumentation
+  adds a second `traceparent` line rather than replacing the first, and a proxy that joins the two into one value
+  makes eRPC start a new trace for every request.
+- **Two client spans per request, with undici:** each JSON-RPC span of `traceTransport()` gets the undici `POST` span
+  as a child, and eRPC's server span sits under that one. A span-metrics generator counts both
+  ([span metrics](backends.md#span-metrics-and-http-instrumentation)). With `propagateTraceContext()` there is one.
+- **Batches:** with `http(url, { batch: true })`, an HTTP request of several JSON-RPC requests gets no header from
+  `propagateTraceContext()`, since its requests can belong to different traces; eRPC traces it on its own.
 - **Tracing endpoint over http:** in eRPC 0.4.0, `tracing.endpoint` with `protocol: http` must be `host:port`. A URL
   with a scheme, and the default endpoint when none is set, export nothing, and the error is logged only at the
   `trace` level ([erpc/erpc#1276](https://github.com/erpc/erpc/issues/1276)).
@@ -954,9 +984,5 @@ instrumentation, whose eRPC spans are in traces of their own. Known limits:
   span of the node call, which is only in the other request's trace, with no link to it. `multiplexing: false` on the
   network gives each request its own call. A cache hit has no node call either.
 - **Baggage:** eRPC passes `tracestate` on to the node, but not `baggage`.
-- **Header from hashspan:** a later release of `@hashspan/viem` is planned to send the header from the JSON-RPC span
-  itself, without the extra `POST` span. Use that option or the undici instrumentation, never both: the undici
-  instrumentation adds a second `traceparent` line rather than replacing the first, and a proxy that joins the two
-  into one value makes eRPC start a new trace for every request.
 - **Other transports:** only HTTP is checked; eRPC does not continue a trace over gRPC, and viem does not send to it
   over gRPC.
