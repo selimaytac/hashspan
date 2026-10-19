@@ -1,6 +1,6 @@
 # 0029. MPP payments as payment spans
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-18
 
 ## Context
@@ -229,10 +229,10 @@ The choices that were open when this record was proposed, as decided above or he
 - **Paid MCP tools:** the implementation pull request tests whether `mppx/mcp/client`'s `McpClient.wrap` fires these
   events. If it does not, paid MCP tools over MPP are a known limit, stated in the README.
 
-## Proposed amendment: what the implementation found (2026-10-18)
+## Amendment (2026-10-18): what the implementation found
 
 The implementation pull request follows the decision above. Where the code showed more than this record says, it
-does the following, proposed here for review before the record is accepted:
+does the following:
 
 - **`payment.failed` is observed only on request.** mppx buffers the error body of a 5xx paid response (at most
   64 KiB and 2 seconds) only when a `payment.failed` observer exists: with one, a longer body comes back cut, with an

@@ -368,7 +368,7 @@ that, such as a host or path segment without `0x`, is not recorded, and such an 
 whole id through the address mode's hash (the same function, so one id has one value on its send and confirm spans),
 and in `off` mode nothing; the batch is still tracked by its id in every mode. `raw` mode records these values as before, and the
 static `agent` option, which is the user's own text, is always recorded as given
-([ADR 0025](adr/0025-untrusted-input.md#amendment-2026-10-18-proposed-values-a-remote-party-chooses)).
+([ADR 0025](adr/0025-untrusted-input.md#amendment-2026-10-18-values-a-remote-party-chooses)).
 
 ## Bounds
 

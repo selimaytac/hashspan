@@ -1,6 +1,6 @@
 # 0030. W3C trace context on JSON-RPC requests, opt-in
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-19
 
 ## Context
