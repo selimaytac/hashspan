@@ -16,6 +16,8 @@ const allowed = new Set([
   'MIT',
   // Weak copyleft, file-level; only the dev dependency lightningcss uses it today.
   'MPL-2.0',
+  // A public-domain dedication; only tweetnacl uses it today, through @x402/hono in examples/x402-agent.
+  'Unlicense',
 ]);
 // SPDX exceptions accepted after `WITH`; an exception outside this list, or one that is not an SPDX exception at
 // all, makes the expression unacceptable until it is reviewed.

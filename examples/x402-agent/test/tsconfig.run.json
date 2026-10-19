@@ -1,0 +1,11 @@
+{
+  "//": "For agent.int.test.ts, which runs src/main.ts with tsx: the workspace packages from their sources, as the vitest config maps them, so that no build is needed first.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@hashspan/core": ["../../../packages/core/src/index.ts"],
+      "@hashspan/viem": ["../../../packages/viem/src/index.ts"],
+      "@hashspan/x402": ["../../../packages/x402/src/index.ts"]
+    }
+  }
+}

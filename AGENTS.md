@@ -46,8 +46,9 @@ before changing there.
 - `packages/x402` → adapter for x402 payments ([AGENTS.md](packages/x402/AGENTS.md))
 - `packages/mpp` → adapter for MPP payments made with mppx, on a 0.x release line of its own
   ([AGENTS.md](packages/mpp/AGENTS.md))
-- `examples/` → runnable integrations: an agent ([ai-sdk-agent](examples/ai-sdk-agent/AGENTS.md)) and a service that is
-  not one ([payout-worker](examples/payout-worker/AGENTS.md))
+- `examples/` → runnable integrations: an agent ([ai-sdk-agent](examples/ai-sdk-agent/AGENTS.md)), an agent that also
+  pays an x402 API ([x402-agent](examples/x402-agent/AGENTS.md)) and a service that is not one
+  ([payout-worker](examples/payout-worker/AGENTS.md))
 - `integrations/` → private tests of the setups in docs/integrations.md with the third-party libraries they name, a
   workspace of its own ([AGENTS.md](integrations/AGENTS.md))
 - `skills/hashspan/SKILL.md` → the Agent Skills skill that instruments a user's project with hashspan; to add
