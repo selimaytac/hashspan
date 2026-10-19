@@ -87,7 +87,7 @@ function endWith(span: Span, error: unknown): void {
  * the OpenTelemetry RPC conventions describe. Used with `withHashspan()`, the requests a transaction makes nest under
  * its `send` span. Records no parameters or results, and of the transport's URL only the host and port. Tracing never
  * changes a request, its result or its error. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0019-json-rpc-spans.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/adr/0019-json-rpc-spans.md.
  */
 export function traceTransport<TTransport extends Transport>(
   transport: TTransport,
@@ -222,7 +222,7 @@ let warnedOldViem = false;
  * instrumentation adds a second `traceparent` header after this hook ran. Needs viem 2.21.25 or later, the first whose
  * hook can change the request; with an older viem it adds nothing and logs a `diag` warning once. It never throws into
  * the request: if it fails, the request is sent unchanged. See
- * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0030-trace-context-on-json-rpc-requests.md.
+ * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/adr/0030-trace-context-on-json-rpc-requests.md.
  */
 export function propagateTraceContext(): NonNullable<HttpTransportConfig['onFetchRequest']> {
   const hook = (_request: unknown, init?: unknown): Record<string, unknown> | undefined => {
