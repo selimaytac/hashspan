@@ -3,7 +3,14 @@
 **OpenTelemetry instrumentation for viem, the Coinbase CDP SDK, x402 and MPP.**
 Trace the on-chain transactions and payments your AI agents and services send, inside the traces you already have.
 
-<!-- Animated pipeline diagram goes here (dark and light variants in a <picture> element). -->
+<a href="https://hashspan.dev">
+<picture>
+  <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/images/pipeline.phone.dark.svg">
+  <source media="(max-width: 600px)" srcset="docs/images/pipeline.phone.light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/pipeline.dark.svg">
+  <img src="docs/images/pipeline.light.svg" width="830" alt="no new dashboard: spans from @hashspan/viem, @hashspan/cdp, @hashspan/x402 and @hashspan/mpp go through the OpenTelemetry SDK to Jaeger, Grafana Tempo, Langfuse, Honeycomb or any OTLP backend.">
+</picture>
+</a>
 
 [![CI](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml/badge.svg)](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml)
 [![npm @hashspan/core](https://img.shields.io/npm/v/@hashspan/core?label=%40hashspan%2Fcore)](https://www.npmjs.com/package/@hashspan/core)
@@ -17,10 +24,14 @@ attached, exported to the backend you already use (Jaeger, Grafana Tempo, Langfu
 **Status:** 1.x, published with npm provenance. The API is stable; span, attribute and metric names can still change
 in a minor release ([change policy](docs/semconv.md#change-policy)).
 
-![An AI SDK agent run in Jaeger: each tool call contains the send and confirm spans of its transaction, and the reverted withdrawal is marked as an error](docs/images/jaeger-trace.png)
+<picture>
+  <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/images/trace.phone.dark.svg">
+  <source media="(max-width: 600px)" srcset="docs/images/trace.phone.light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/trace.dark.svg">
+  <img src="docs/images/trace.light.svg" width="830" alt="Trace 97bf3a6 from a real run on Base Sepolia: invoke_agent, execute_tool pay_vendor with a send span and a successful confirm span in block 48338717, then execute_tool withdraw_from_vault with a send span and a confirm span in block 48338718 reverted with WithdrawalLimitExceeded.">
+</picture>
 
-<sub>The [example agent](examples/ai-sdk-agent) in Jaeger: a vendor payment and a withdrawal that reverts with a
-decoded custom error.</sub>
+<sub>A real run on Base Sepolia with hashspan 1.3.0: [the vendor payment](https://sepolia.basescan.org/tx/0x2e6839c430819054eeafe6a747c4b9446e9d819af4dc650a376555bb7d8d3fa8) and [the reverted withdrawal](https://sepolia.basescan.org/tx/0x66b9776e481c880d196a5685a9ed0dd7ceb2380f8326efcba886617c890d1fb0). How it looks in Jaeger: [screenshot](docs/images/jaeger-trace.png).</sub>
 
 ## Quick start
 
