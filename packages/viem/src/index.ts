@@ -204,7 +204,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   /** Sender and nonce of recent sends, to find a replacement viem did not report (ADR 0008). */
   const senders = new Recent<SentTransaction>();
   const { track, flush, settleOnce } = createPending();
-  const { recordConfirmation, confirmThrough, confirmPending } = createConfirmation({
+  const { startConfirm, recordConfirmation, confirmThrough, confirmPending } = createConfirmation({
     tracker,
     decodeRevertReason,
     revertReasonTimeoutMs,
@@ -253,6 +253,7 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
         abis,
         senders,
         track,
+        startConfirm,
         recordConfirmation,
         confirmThrough,
         confirmPending,

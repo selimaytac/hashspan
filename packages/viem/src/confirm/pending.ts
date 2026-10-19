@@ -22,6 +22,11 @@ export interface PendingConfirmation<H extends AnyConfirmHandle = ConfirmHandle>
   ended: Promise<void>;
   /** How `flush()` ends the underlying handle if it cannot wait any longer; `timeout` until replaced. */
   onAbandon(abandon: (handle: H) => void): void;
+  /**
+   * Calls `listener` right after the underlying handle has ended, by any path, before the call that ended it returns;
+   * at once if it has already ended.
+   */
+  onEnded(listener: () => void): void;
 }
 
 /** The pending work of one `withHashspan()` call, shared by every client extended with it. */
@@ -80,6 +85,14 @@ export function createPending(): Pending {
   /** Wraps `handle` so it ends at most once, and registers it with `flush()` until it has ended. */
   const settleOnce = <H extends AnyConfirmHandle>(handle: H): PendingConfirmation<H> => {
     let settled = false;
+    const listeners: (() => void)[] = [];
+    const notify = (listener: () => void): void => {
+      try {
+        listener();
+      } catch (error) {
+        diag.error(`hashspan: failed to run after a confirm span ended (${errorName(error)})`);
+      }
+    };
     let resolveEnded: () => void = () => {};
     const ended = new Promise<void>((resolve) => {
       resolveEnded = resolve;
@@ -92,6 +105,7 @@ export function createPending(): Pending {
         end();
       } finally {
         resolveEnded();
+        for (const listener of listeners.splice(0)) notify(listener);
       }
     };
     let onAbandon = (underlying: H): void => underlying.timeout();
@@ -106,6 +120,10 @@ export function createPending(): Pending {
       ended,
       onAbandon: (abandonWith) => {
         onAbandon = abandonWith;
+      },
+      onEnded: (listener) => {
+        if (settled) notify(listener);
+        else listeners.push(listener);
       },
     };
   };
