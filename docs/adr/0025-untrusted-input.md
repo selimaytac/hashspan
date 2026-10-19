@@ -1,6 +1,6 @@
 # 0025. Untrusted input: what telemetry reads, and its bounds
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-03
 
 ## Context
@@ -65,7 +65,7 @@ repository itself.
 - Out of scope: the security of the user's own exporter, collector and backend, and of the instrumented libraries
   themselves; vulnerabilities are reported per SECURITY.md.
 
-## Amendment (2026-10-18, proposed): values a remote party chooses
+## Amendment (2026-10-18): values a remote party chooses
 
 Rule 6 says addresses follow the address mode. It was applied to fields that hold an address, and to `0x` hex inside
 free text. A value that a remote party chooses can carry an address in other forms: an identifier such as an x402

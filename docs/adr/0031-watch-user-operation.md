@@ -1,6 +1,6 @@
 # 0031. Confirming a user operation sent elsewhere
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-19
 
 ## Context
