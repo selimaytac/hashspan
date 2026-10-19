@@ -465,6 +465,35 @@ const wallet = createWalletClient({
   `tracerProvider` replaces the global tracer provider.
 - See [ADR 0019](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0019-json-rpc-spans.md).
 
+### Trace context for the provider
+
+The JSON-RPC spans send nothing to the provider. To let an RPC gateway that reads W3C trace context, such as eRPC,
+record its spans in your trace, pass `propagateTraceContext()` as the `onFetchRequest` hook of viem's `http()`
+transport. Each request then carries the `traceparent` header of its JSON-RPC span:
+
+```ts
+const wallet = createWalletClient({
+  account,
+  chain,
+  transport: traceTransport(
+    http('https://rpc.example.com', { onFetchRequest: propagateTraceContext() }),
+  ),
+}).extend(withHashspan());
+```
+
+- Off unless you pass it. It sends `traceparent`, and `tracestate` when the trace has one, never `baggage`; it does
+  not use the global propagator. The trace id, span id and sampled flag reach your provider.
+- Use it or an HTTP instrumentation of `fetch` (such as `@opentelemetry/instrumentation-undici`), never both: the
+  instrumentation adds a second `traceparent` header that the hook cannot see. A request that already has a
+  `traceparent` header keeps it.
+- A request gets a header only inside its JSON-RPC span: wrap the transport in `traceTransport()`, and a method that
+  `methods` leaves out gets none. With `batch: true`, an HTTP request of several JSON-RPC requests gets none, since
+  they can belong to different traces.
+- Needs viem 2.21.25 or later; with an older viem it sends nothing and logs a `diag` warning. To keep a hook of your
+  own, call this one from it and return its result.
+- An eRPC setup: [RPC gateways](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/integrations.md#rpc-gateways-erpc).
+  See [ADR 0030](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/adr/0030-trace-context-on-json-rpc-requests.md).
+
 ## Traced actions
 
 | Action | Span | Recorded |

@@ -24,7 +24,7 @@ import type {
 } from './types.js';
 import { addUserOperationActions } from './user-operation.js';
 
-export { type TraceTransportOptions, traceTransport } from './transport.js';
+export { propagateTraceContext, type TraceTransportOptions, traceTransport } from './transport.js';
 export type {
   BackgroundConfirmOptions,
   FlushOptions,
