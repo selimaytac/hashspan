@@ -128,4 +128,5 @@ hash, status and fee, and `sendCalls` as a call batch (#430): what this ADR says
   documented setup applies `withHashspan()` to the bundler client before the SDK's actions, so the decorator closes
   over the traced client, as for Tempo's actions; its spans are those of this ADR.
 - **Not decided here:** recording a user operation from the bundle transaction's hash an SDK returns (the receipt's
-  `UserOperationEvent` for the sender), for this case and for `watch()` of a bundle hash; that is a new API.
+  `UserOperationEvent` for the sender), for this case and for `watch()` of a bundle hash; that is a new API,
+  proposed in [ADR 0031](0031-watch-user-operation.md) as `watchUserOperation()`.
