@@ -5,7 +5,8 @@ OpenTelemetry instrumentation for viem. Trace the transactions your AI agents, o
 
 A viem client extension that reports to [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/viem@1.3.0/packages/core): each transaction becomes a
 `send {chainId}` span inside the active trace, such as your agent's tool call, a request or a job, and each receipt
-wait a linked `confirm {chainId}` span with status, gas and fees.
+wait a linked `confirm {chainId}` span with status, gas and fees. See also the
+[viem OpenTelemetry guide](https://hashspan.dev/docs/viem-opentelemetry).
 
 ## Install
 
@@ -131,7 +132,8 @@ A receipt only says that a transaction reverted. For reverted transactions the a
 `eth_call` on the previous block's state (and, if that does not revert, as when the contract was created earlier in
 the same block, once more on its own block) and records the decoded reason as `blockchain.tx.revert.reason`:
 `Error(string)` messages, `Panic` codes, and custom errors when the ABI is known (transactions sent with
-`writeContract`), otherwise the error selector.
+`writeContract`), otherwise the error selector. To look up an error message by hand, use the
+[error decoder](https://hashspan.dev/errors/decode).
 
 - Two extra RPC requests per reverted transaction (three when the second replay is needed); none for successful ones.
 - Best effort: the replay can differ when earlier transactions in the same block changed the state, and providers

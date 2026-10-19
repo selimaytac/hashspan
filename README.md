@@ -187,7 +187,7 @@ npx skills add selimaytac/hashspan
 
 CI applies the skill to minimal versions of both examples without hashspan
 ([`skill.int.test.ts`](examples/payout-worker/test/skill.int.test.ts)) and checks their send and confirm spans on
-Anvil.
+Anvil. The website has a [guide for adding hashspan with a coding agent](https://hashspan.dev/docs/build-with-ai).
 
 ## Try it
 
@@ -220,7 +220,7 @@ Grafana dashboards, run the [hashspan-lab](https://github.com/selimaytac/hashspa
 
 ## Documentation
 
-- Website: [hashspan.dev](https://hashspan.dev)
+- Website: [hashspan.dev](https://hashspan.dev) · [viem OpenTelemetry guide](https://hashspan.dev/docs/viem-opentelemetry) · [transaction errors explained](https://hashspan.dev/errors) · [OpenTelemetry attributes lookup](https://hashspan.dev/learn/otel-attributes)
 - [Architecture](docs/architecture.md) · [Semantic conventions](docs/semconv.md) · [Tracing backends](docs/backends.md) · [Integrations](docs/integrations.md) · [Troubleshooting](docs/troubleshooting.md) · [Upstream findings](docs/upstream-findings.md) · [ADRs](docs/adr/) · [Roadmap](docs/roadmap.md)
 - [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Releasing](docs/releasing.md) · [Migrating to 1.0](docs/migrating-to-1.0.md)
 

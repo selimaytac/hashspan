@@ -138,6 +138,8 @@ calls, outcome, status code, atomicity and transaction hashes. On every span: th
 call arguments are recorded only with `recordFunctionArguments`, and error messages only with `errorMessages`.
 Attribute definitions:
 [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/core@1.2.1/docs/semconv.md).
+To look up OpenTelemetry attributes such as `error.type` by name, see the
+[attributes lookup](https://hashspan.dev/learn/otel-attributes).
 
 ## Metrics
 
