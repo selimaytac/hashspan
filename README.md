@@ -1,229 +1,123 @@
 # hashspan
 
-**Trace your AI agents' on-chain transactions with OpenTelemetry.**
+**OpenTelemetry instrumentation for viem, the Coinbase CDP SDK, x402 and MPP.**
+Trace the on-chain transactions and payments your AI agents and services send, inside the traces you already have.
 
-hashspan turns every transaction an agent sends into spans, keyed by the transaction hash, inside the agent's
-own OpenTelemetry trace. It works the same for any TypeScript service that sends EVM transactions through viem, the
-Coinbase CDP SDK or x402, or through a [wallet service](docs/integrations.md#wallet-services): payment and payout
-workers, wallet backends, bots.
+<!-- Demo GIF goes here: a short recording of an agent run and its trace in Jaeger. -->
 
 [![CI](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml/badge.svg)](https://github.com/selimaytac/hashspan/actions/workflows/ci.yml)
 [![npm @hashspan/core](https://img.shields.io/npm/v/@hashspan/core?label=%40hashspan%2Fcore)](https://www.npmjs.com/package/@hashspan/core)
-[![npm @hashspan/viem](https://img.shields.io/npm/v/@hashspan/viem?label=%40hashspan%2Fviem)](https://www.npmjs.com/package/@hashspan/viem)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/selimaytac/hashspan/badge)](https://scorecard.dev/viewer/?uri=github.com/selimaytac/hashspan)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **Status: 1.0.** Published with npm provenance. 1.0 freezes the public API
-> ([ADR 0027](docs/adr/0027-what-1-0-freezes.md)); span, attribute and metric names stay `development` and
-> can change in a minor release under their [change policy](docs/semconv.md#change-policy), so check dashboards and
-> alerts when you upgrade. See the [roadmap](docs/roadmap.md).
+When an agent or a service sends a transaction, its trace usually stops at the call. Whether the transaction was
+mined, reverted, or what it cost lives somewhere else. hashspan closes that gap: each transaction becomes a `send` /
+`confirm` span pair, keyed by the transaction hash, **inside the trace that sent it**, with status, gas and fees
+attached, exported to the backend you already use (Jaeger, Grafana Tempo, Langfuse, Honeycomb, ...).
 
-When an AI agent sends a transaction, the agent trace usually stops at the tool call. Whether the transaction was
-mined, reverted, or what it cost lives somewhere else. hashspan closes that gap: each transaction becomes a
-`send` / `confirm` span pair **inside the agent's own trace**, with status, gas, L2 fees and the agent identity
-attached, and it's exported to the backend you already use (Jaeger, Grafana Tempo, Langfuse, Honeycomb, ...).
+**Status:** 1.x, published with npm provenance. The API is stable; span, attribute and metric names can still change
+in a minor release ([change policy](docs/semconv.md#change-policy)).
 
 ![An AI SDK agent run in Jaeger: each tool call contains the send and confirm spans of its transaction, and the reverted withdrawal is marked as an error](docs/images/jaeger-trace.png)
 
 <sub>The [example agent](examples/ai-sdk-agent) in Jaeger: a vendor payment and a withdrawal that reverts with a
 decoded custom error.</sub>
 
-## Why
-
-- **No new dashboard.** It's a library that emits standard OpenTelemetry spans. Your existing backend is the UI.
-- **Agent-aware, not agent-only.** Transaction spans nest under your framework's agent/tool spans and carry
-  `gen_ai.agent.id`; without an agent, they nest under whatever span is active, such as an HTTP request or a queue
-  job ([not an agent?](#not-an-agent)).
-- **Real cost.** Fees include the L1 data fee on OP-stack chains such as Base; the OP Stack operator fee (Isthmus and
-  later) is recorded apart, on chains that charge one ([semantic conventions](docs/semconv.md#attributes)).
-- **Metrics too.** Send and confirmation latency and fees are also recorded as histograms, and `traceTransport()` can
-  add a span per JSON-RPC request ([semantic conventions](docs/semconv.md)).
-- **Small footprint.** `@hashspan/core` has one peer dependency, `@opentelemetry/api`; `@hashspan/viem` adds `viem`,
-  the library it instruments.
-
-## Safe by design
-
-- **It never signs or broadcasts a transaction** and needs no private key ([principles](docs/architecture.md#principles),
-  [security model](SECURITY.md#security-model)).
-- **Its RPC calls are read-only**: receipts and the replay of a reverted transaction, and only those
-  ([the requests it adds](docs/architecture.md#json-rpc-requests-hashspan-adds)).
-- **Privacy defaults are conservative.** Calldata arguments and error messages are opt-in, and addresses can be hashed
-  or dropped ([ADR 0004](docs/adr/0004-privacy-defaults.md), [ADR 0006](docs/adr/0006-error-privacy.md)). This limits
-  what your backend stores; it is not anonymity, since the transaction hash resolves to the parties on chain
-  ([privacy notes](packages/core#privacy-notes)).
-
-Releases are published from GitHub Actions with npm provenance. Each GitHub release carries `sbom.cdx.json`, a
-CycloneDX SBOM of the lockfile, among its assets ([releasing](docs/releasing.md#every-release)); the badge above is the
-repository's OpenSSF Scorecard.
-
-## Packages
-
-| Package | Purpose | Status |
-|---|---|---|
-| [`@hashspan/core`](packages/core) | Transaction lifecycle tracker | [![npm](https://img.shields.io/npm/v/@hashspan/core?label=)](https://www.npmjs.com/package/@hashspan/core) |
-| [`@hashspan/viem`](packages/viem) | Adapter for [viem](https://viem.sh) clients | [![npm](https://img.shields.io/npm/v/@hashspan/viem?label=)](https://www.npmjs.com/package/@hashspan/viem) |
-| [`@hashspan/cdp`](packages/cdp) | Adapter for Coinbase CDP server and smart accounts | [![npm](https://img.shields.io/npm/v/@hashspan/cdp?label=)](https://www.npmjs.com/package/@hashspan/cdp) |
-| [`@hashspan/x402`](packages/x402) | Adapter for x402 payments | [![npm](https://img.shields.io/npm/v/@hashspan/x402?label=)](https://www.npmjs.com/package/@hashspan/x402) |
-| [`@hashspan/mpp`](packages/mpp) | Adapter for MPP payments made with mppx (0.x, follows mppx's minor lines) | [![npm](https://img.shields.io/npm/v/@hashspan/mpp?label=)](https://www.npmjs.com/package/@hashspan/mpp) |
-
-Install the latest version of every `@hashspan` package you use, or upgrade them together. The packages but
-`@hashspan/mpp` are a linked group ([releasing](docs/releasing.md)): the ones a release changes get one version, and a
-package without changes keeps its own, so the latest versions can differ in their minor until its next release. Each
-adapter requires the `@hashspan/core` of its own release or a later one in the same major (and `@hashspan/cdp`,
-`@hashspan/x402` and `@hashspan/mpp` the `@hashspan/viem` of it), as caret ranges do. A tracker from another core
-release passed as the `tracker` option still works; what it
-does not know is not recorded ([ADR 0014](docs/adr/0014-core-api-boundary.md)). The libraries each package
-instruments are peer dependencies, with the supported ranges in its `package.json`; CI runs the CDP, x402 and MPP
-adapters against the newest SDK releases in their ranges every week, and the x402 and MPP adapters also against the
-oldest. `@hashspan/mpp` is versioned apart, as 0.x, while mppx is 0.x
-([ADR 0029](docs/adr/0029-mpp-payments.md)): it needs `@hashspan/core` 1.2 or later.
-
 ## Quick start
 
-Requires Node.js 22.3 or later. CI also loads the packed packages on Bun 1.x and Deno 2.x (`require()`,
-`import` and a traced send, without a chain); other runtimes are not tested.
+Requires Node.js 22.3 or later.
 
 ```sh
 npm install @hashspan/viem @opentelemetry/api viem
 npm install @opentelemetry/sdk-node   # unless your app already sets up an OpenTelemetry SDK
-npm install -D tsx                    # runs agent.ts below
-anvil                                 # in a second terminal: a local chain
 ```
 
-`anvil` comes with [Foundry](https://getfoundry.sh) and listens on `127.0.0.1:8545`, the URL in `agent.ts` below.
-Start a trace backend too: the [local lab](#local-lab) in a checkout of this repository, or the one-line
-[Jaeger container](docs/backends.md#jaeger) (needs Docker); without one, print the spans in the terminal instead
-([no backend](docs/backends.md#console-without-a-backend)). Then save this file as `agent.ts`:
+With an OpenTelemetry SDK started, extend your viem clients (`account`, `to` and `value` are your own):
 
 ```ts
-import { trace } from '@opentelemetry/api';
-import { NodeSDK } from '@opentelemetry/sdk-node';
-import { createPublicClient, createWalletClient, http, parseEther } from 'viem';
-import { mnemonicToAccount } from 'viem/accounts';
-import { foundry } from 'viem/chains';
+import { createPublicClient, createWalletClient, http } from 'viem';
+import { base } from 'viem/chains';
 import { withHashspan } from '@hashspan/viem';
 
-// Exports over OTLP to http://localhost:4318. Start it before the first transaction.
-const sdk = new NodeSDK({ serviceName: 'my-agent' });
-sdk.start();
-
-// Anvil's public test mnemonic: its first account is funded on every Anvil chain.
-const account = mnemonicToAccount('test test test test test test test test test test test junk');
-const transport = http('http://127.0.0.1:8545');
-
 const hashspan = withHashspan();
-const wallet = createWalletClient({ account, chain: foundry, transport }).extend(hashspan);
-const reader = createPublicClient({ chain: foundry, transport }).extend(hashspan);
+const wallet = createWalletClient({ account, chain: base, transport: http() }).extend(hashspan);
+const reader = createPublicClient({ chain: base, transport: http() }).extend(hashspan);
 
-// Stands in for your agent's tool call: the send and confirm spans become its children.
-await trace.getTracer('my-agent').startActiveSpan('pay_vendor', async (span) => {
-  try {
-    const to = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'; // Anvil's second account
-    const hash = await wallet.sendTransaction({ to, value: parseEther('0.01') });
-    await reader.waitForTransactionReceipt({ hash });
-  } finally {
-    span.end();
-  }
-});
+// In your agent's tool call or your request handler: the spans join its trace.
+const hash = await wallet.sendTransaction({ to, value }); // send span
+await reader.waitForTransactionReceipt({ hash }); // confirm span
 
-// Before the process exits: hashspan's pending spans first, then the SDK.
-await hashspan.flush();
-await sdk.shutdown();
+await hashspan.flush(); // before the process exits
 ```
 
-```sh
-npm pkg set type=module   # agent.ts uses top-level await
-npx tsx agent.ts          # prints nothing on success: the trace is in Jaeger
-```
+Full runnable walkthrough, with the SDK setup and a local chain: [docs/quick-start.md](docs/quick-start.md), or
+[on the website](https://hashspan.dev/docs/quickstart).
 
-- **ES module:** the packages themselves load with both `import` and `require()`; only `agent.ts` needs
-  `"type": "module"`.
-- **Without tsx:** `node agent.ts` runs the file on Node.js 22.18 or later, which strips the types.
-- **Start order:** hashspan gets its tracer and meter from `@opentelemetry/api` when a transaction is sent, so
-  `withHashspan()` and the clients may be created before or after `sdk.start()`. Transactions sent before an SDK is
-  registered are not recorded; spans and metrics start with the first transaction after it. The tracer taken then is
-  kept: a process that replaces the global tracer provider later, as a test may between runs, needs a new
-  `withHashspan()` for the new provider, or the provider passed as `tracerProvider`.
-- **See it** in Jaeger on `http://localhost:16686`: service `my-agent`, trace `pay_vendor`, with the children
-  `send 31337` and `confirm 31337` (the chain id), and the confirm span [linked](docs/backends.md#span-links) to the
-  send span. [Backends](docs/backends.md) lists other setups.
-- **Base Sepolia:** use `baseSepolia` from `viem/chains`, `http()` or your RPC URL, and a funded key from the
-  environment instead: `` privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`) `` from `viem/accounts`.
+## Choose your path
 
-`flush()` matters in any process that exits after its last transaction
-([shutting down](packages/viem/README.md#shutting-down)). See [`@hashspan/viem`](packages/viem) for details and
-[`@hashspan/core`](packages/core) to instrument other send paths.
+| You send with | Start here |
+|---|---|
+| viem clients | the snippet above, then [`@hashspan/viem`](packages/viem) |
+| Coinbase CDP SDK server or smart accounts | [`@hashspan/cdp`](packages/cdp) |
+| x402 payments | [`@hashspan/x402`](packages/x402), and the [x402 agent example](examples/x402-agent) |
+| MPP payments made with mppx | [`@hashspan/mpp`](packages/mpp) |
+| A wallet service (Privy, Turnkey, Circle, ...) | [wallet services](docs/integrations.md#wallet-services) |
+| A worker, a wallet backend or a bot, not an agent | [not an agent?](#not-an-agent) |
+| A coding agent that adds it for you | [with a coding agent](#with-a-coding-agent) |
+| Another send path | [`@hashspan/core`](packages/core) |
+
+## Packages
+
+| Package | Install it when | Status |
+|---|---|---|
+| [`@hashspan/core`](packages/core) | you record another send path yourself; the adapters bring it along | [![npm](https://img.shields.io/npm/v/@hashspan/core?label=)](https://www.npmjs.com/package/@hashspan/core) |
+| [`@hashspan/viem`](packages/viem) | you send with [viem](https://viem.sh) clients ([viem OpenTelemetry guide](https://hashspan.dev/docs/viem-opentelemetry)) | [![npm](https://img.shields.io/npm/v/@hashspan/viem?label=)](https://www.npmjs.com/package/@hashspan/viem) |
+| [`@hashspan/cdp`](packages/cdp) | you send with Coinbase CDP server or smart accounts | [![npm](https://img.shields.io/npm/v/@hashspan/cdp?label=)](https://www.npmjs.com/package/@hashspan/cdp) |
+| [`@hashspan/x402`](packages/x402) | you pay for APIs with x402 ([x402 tutorial](https://hashspan.dev/docs/x402-tutorial)) | [![npm](https://img.shields.io/npm/v/@hashspan/x402?label=)](https://www.npmjs.com/package/@hashspan/x402) |
+| [`@hashspan/mpp`](packages/mpp) | you pay with MPP through mppx (0.x, follows mppx's minor lines) | [![npm](https://img.shields.io/npm/v/@hashspan/mpp?label=)](https://www.npmjs.com/package/@hashspan/mpp) |
+
+Install the latest version of each package you use ([versions](docs/releasing.md#versions)). GitHub releases are
+tagged per package, so "Latest" there is the package released last.
 
 ## Not an agent?
 
-hashspan does not need an agent. In a TypeScript service that sends EVM transactions through viem, the Coinbase CDP
-SDK or x402, or through a wallet service, such as a payment or payout worker, a wallet backend or a bot, the
-[quick start](#quick-start) works as it is: replace the `pay_vendor` span with the span your request handler or job
-already has, and leave out the `agent` option. The `service.name` of your OpenTelemetry resource (the `serviceName`
-in the quick start) tells your services apart. Other libraries, such as ethers, have no adapter, and chains other
-than EVM are not supported.
-
-- **A wallet service sends for you:** [wallet services](docs/integrations.md#wallet-services) shows how each kind
-  of service gets its send and confirm spans.
-- **A worker that does not wait for receipts:**
-  [background confirmation](packages/viem/README.md#background-confirmation).
-- **Latency and fees across many transactions:** the send, confirmation and fee
-  [histograms](docs/semconv.md#metrics), and the limits that matter at volume
-  ([many transactions](packages/viem/README.md#many-transactions)).
-- **A short-lived job:** call `flush()` before it exits ([shutting down](packages/viem/README.md#shutting-down)).
-- **An example:** [examples/payout-worker](examples/payout-worker), a worker that pays out from a queue, confirmed in
-  the background, run against Anvil in CI.
+hashspan does not need one: in a payout worker, a wallet backend or a bot, the spans nest under the request or job
+span you already have ([services that are not agents](docs/integrations.md#services-that-are-not-agents),
+[payout worker example](examples/payout-worker)).
 
 ## With a coding agent
 
-[`skills/hashspan`](skills/hashspan/SKILL.md) is an [Agent Skills](https://agentskills.io/specification) skill: the
-steps a coding agent follows to add hashspan to a TypeScript project that sends with viem, the CDP SDK or x402
-(install, start the SDK first, extend the clients, flush before exit, see the traces). Add it to a project with an
-Agent Skills installer, or point the agent at the file:
-
-```sh
-npx skills add selimaytac/hashspan
-```
-
-CI applies the skill to minimal versions of both examples without hashspan
-([`skill.int.test.ts`](examples/payout-worker/test/skill.int.test.ts)) and checks their send and confirm spans on
-Anvil. The website has a [guide for adding hashspan with a coding agent](https://hashspan.dev/docs/build-with-ai).
-
-## Try it
-
-A runnable AI SDK agent that pays a vendor and hits a reverting vault, traced end to end. It needs no API key and
-runs against a local chain:
-
-```sh
-nvm use && corepack enable pnpm && pnpm install
-make lab-up   # Jaeger UI on http://localhost:16686
-make demo
-```
-
-See [examples/ai-sdk-agent](examples/ai-sdk-agent). For an agent that also pays an x402 API, with the payment and
-its settlement in the same trace, see [examples/x402-agent](examples/x402-agent).
+[`skills/hashspan`](skills/hashspan/SKILL.md) is an [Agent Skills](https://agentskills.io/specification) skill that
+adds hashspan to a TypeScript project, checked in CI: `npx skills add selimaytac/hashspan`. The website has a
+[guide for adding hashspan with a coding agent](https://hashspan.dev/docs/build-with-ai).
 
 ## Local lab
 
-Everything runs locally and can be removed with one command:
+In a checkout of this repository, `make lab-up` starts Jaeger on `http://localhost:16686` and `make demo` runs the
+[example agent](examples/ai-sdk-agent) on a local chain, with no API key ([setup and other targets](CONTRIBUTING.md#local-lab)).
+The full set of scenarios, with Grafana dashboards, is in [hashspan-lab](https://github.com/selimaytac/hashspan-lab).
 
-```sh
-make lab-up      # Jaeger UI on http://localhost:16686, OTLP on :4317/:4318
-make lab-metrics # also Prometheus and Grafana with dashboards/metrics.json on http://localhost:3000
-make anvil       # local EVM chain on :8545 (project-local binary)
-make demo        # run the example agent against a fresh local chain
-make lab-pause   # stop, keep state
-make lab-nuke    # remove containers, images, tools and build output
-```
+## Why
 
-`make demo` here is a quick check of the example agent. For the full set of scenarios on a local chain, with
-Grafana dashboards, run the [hashspan-lab](https://github.com/selimaytac/hashspan-lab) repository.
+- **No new dashboard.** It's a library that emits standard OpenTelemetry spans. Your existing backend is the UI.
+- **Agent-aware, not agent-only.** Transaction spans nest under your framework's agent and tool spans and carry
+  `gen_ai.agent.id`; without an agent, under whatever span is active.
+- **Real cost, and metrics.** Fees include the L1 data fee that L2s such as Base charge; latency and fees are also
+  recorded as histograms ([semantic conventions](docs/semconv.md)).
+- **Small footprint.** `@hashspan/core` has one peer dependency, `@opentelemetry/api`.
+
+## Safe by design
+
+- **It never signs or broadcasts a transaction** and needs no private key ([security model](SECURITY.md#security-model)).
+- **Its RPC calls are read-only** ([the requests it adds](docs/architecture.md#json-rpc-requests-hashspan-adds)).
+- **Privacy defaults are conservative.** Calldata arguments and error messages are opt-in, and addresses can be hashed
+  or dropped ([privacy notes](packages/core#privacy-notes)).
 
 ## Documentation
 
-- Website: [hashspan.dev](https://hashspan.dev) · [viem OpenTelemetry guide](https://hashspan.dev/docs/viem-opentelemetry) · [transaction errors explained](https://hashspan.dev/errors) · [OpenTelemetry attributes lookup](https://hashspan.dev/learn/otel-attributes)
-- [Architecture](docs/architecture.md) · [Semantic conventions](docs/semconv.md) · [Tracing backends](docs/backends.md) · [Integrations](docs/integrations.md) · [Troubleshooting](docs/troubleshooting.md) · [Upstream findings](docs/upstream-findings.md) · [ADRs](docs/adr/) · [Roadmap](docs/roadmap.md)
-- [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Releasing](docs/releasing.md) · [Migrating to 1.0](docs/migrating-to-1.0.md)
+- Website: [hashspan.dev](https://hashspan.dev) · [quick start](https://hashspan.dev/docs/quickstart) · [viem OpenTelemetry guide](https://hashspan.dev/docs/viem-opentelemetry) · [build with AI](https://hashspan.dev/docs/build-with-ai) · [x402 tutorial](https://hashspan.dev/docs/x402-tutorial) · [transaction errors explained](https://hashspan.dev/errors)
+- Start: [docs index](docs/README.md) · [Tracing backends](docs/backends.md) · [Integrations](docs/integrations.md) · [Troubleshooting](docs/troubleshooting.md)
+- Reference: [Semantic conventions](docs/semconv.md) · [Architecture](docs/architecture.md) · [OpenTelemetry attributes lookup](https://hashspan.dev/learn/otel-attributes)
+- Project: [Roadmap](docs/roadmap.md) · [Releasing](docs/releasing.md) · [ADRs](docs/adr/) · [Security](SECURITY.md)
 
 ## Contributing
 

@@ -64,8 +64,22 @@ pnpm test               # unit tests
 pnpm test:integration   # integration tests against Anvil
 ```
 
-Tests import the packages from source, so no build is needed first. To see traces in a UI, run `make lab-up`
-(Jaeger on http://localhost:16686) and `make demo`; `make lab-nuke` removes everything again.
+Tests import the packages from source, so no build is needed first.
+
+### Local lab
+
+Everything runs locally and can be removed with one command:
+
+```sh
+make lab-up      # Jaeger UI on http://localhost:16686, OTLP on :4317/:4318
+make lab-metrics # also Prometheus and Grafana with dashboards/metrics.json on http://localhost:3000
+make anvil       # local EVM chain on :8545 (project-local binary)
+make demo        # run the example agent against a fresh local chain
+make lab-pause   # stop, keep state
+make lab-nuke    # remove containers, images, tools and build output
+```
+
+`make demo` is a quick check of the example agent.
 To run your own agent, or a branch's example, against the full stack with dashboards of
 [hashspan-lab](https://github.com/selimaytac/hashspan-lab#use-the-lab-with-your-own-agent), start the lab there and
 set the environment variables that `pnpm lab connect` prints.

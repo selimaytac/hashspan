@@ -9,6 +9,23 @@ version, while a package without changes keeps its own, so versions can differ b
 outside the group: it is released as 0.x, on versions of its own, while mppx is 0.x
 ([ADR 0029](adr/0029-mpp-payments.md)).
 
+## Versions
+
+Install the latest version of every `@hashspan` package you use, or upgrade them together. Since a package without
+changes keeps its version, the latest versions can differ in their minor until its next release. Each adapter
+requires the `@hashspan/core` of its own release or a later one in the same major (and `@hashspan/cdp`,
+`@hashspan/x402` and `@hashspan/mpp` the `@hashspan/viem` of it), as caret ranges do. A tracker from another core
+release passed as the `tracker` option still works; what it does not know is not recorded
+([ADR 0014](adr/0014-core-api-boundary.md)). `@hashspan/mpp` needs `@hashspan/core` 1.2 or later.
+
+The libraries each package instruments are peer dependencies, with the supported ranges in its `package.json`; CI
+runs the CDP, x402 and MPP adapters against the newest SDK releases in their ranges every week, and the x402 and MPP
+adapters also against the oldest.
+
+GitHub releases are tagged per package (`@hashspan/viem@1.3.0`), so the release GitHub marks "Latest" is the package
+published last, not necessarily the newest of each package; every package's version is on npm and in its
+`CHANGELOG.md`.
+
 ## Every release
 
 1. Merge pull requests with their changesets (`pnpm changeset`) into `main`.
@@ -24,7 +41,7 @@ outside the group: it is released as 0.x, on versions of its own, while mppx is 
    against its last candidate on npm, `x.y.z-rc.N` ([Pre-releases](#pre-releases)): with the lab's `@hashspan/*`
    dependencies set to it, `pnpm lab up` runs every scenario and ends with `pnpm lab conformance`, which checks the
    attributes and metrics against [the semantic conventions](semconv.md); then
-   `pnpm lab first-run --version x.y.z-rc.N` runs the README quick start from the npm packages as a new user does.
+   `pnpm lab first-run --version x.y.z-rc.N` runs the [quick start](quick-start.md) from the npm packages as a new user does.
    The release waits while either fails. A patch release has no candidate: the lab runs after it, in step 7, and a
    failure there is fixed in the next patch.
 5. Run the **Release** workflow again. With no changesets left, it runs the checks, then waits for a maintainer to

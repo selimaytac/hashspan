@@ -1,6 +1,6 @@
-// The README quick start, run as a new user runs it: the `agent.ts` block taken from README.md as it is, started with
-// tsx in a process of its own, exporting over OTLP with the SDK's defaults to a receiver in this file. Only the RPC
-// URL is changed, to this file's Anvil. The README's sentences about the result are what the assertions check.
+// The quick start, run as a new user runs it: the `agent.ts` block taken from docs/quick-start.md as it is, started
+// with tsx in a process of its own, exporting over OTLP with the SDK's defaults to a receiver in this file. Only the
+// RPC URL is changed, to this file's Anvil. The page's sentences about the result are what the assertions check.
 import { execFile } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
@@ -15,14 +15,14 @@ import { type StartedAnvil, startAnvil } from './start-anvil.js';
 const run = promisify(execFile);
 const tsx = createRequire(import.meta.url).resolve('tsx/cli');
 const fixtures = fileURLToPath(new URL('./fixtures/', import.meta.url));
-const README_RPC_URL = "'http://127.0.0.1:8545'";
+const QUICK_START_RPC_URL = "'http://127.0.0.1:8545'";
 
-/** The `ts` block of README.md that starts the SDK: the quick start's `agent.ts`. */
+/** The `ts` block of docs/quick-start.md that starts the SDK: the quick start's `agent.ts`. */
 function quickStartSource(): string {
-  const readme = readFileSync(new URL('../../../README.md', import.meta.url), 'utf8');
-  const blocks = [...readme.matchAll(/```ts\n([\s\S]*?)```/g)].map((match) => match[1] as string);
+  const page = readFileSync(new URL('../../../docs/quick-start.md', import.meta.url), 'utf8');
+  const blocks = [...page.matchAll(/```ts\n([\s\S]*?)```/g)].map((match) => match[1] as string);
   const agent = blocks.filter((block) => block.includes('new NodeSDK('));
-  expect(agent, 'README.md has one ts block that starts the SDK').toHaveLength(1);
+  expect(agent, 'docs/quick-start.md has one ts block that starts the SDK').toHaveLength(1);
   return agent[0] as string;
 }
 
@@ -76,15 +76,17 @@ afterAll(async () => {
   await anvil?.instance.stop();
 });
 
-it('gives the trace the README describes: pay_vendor with send and confirm children, the confirm linked', async () => {
+it('gives the trace the quick start describes: pay_vendor with send and confirm children, the confirm linked', async () => {
   const source = quickStartSource();
-  expect(source.split(README_RPC_URL), 'the quick start names the RPC URL once').toHaveLength(2);
+  expect(source.split(QUICK_START_RPC_URL), 'the quick start names the RPC URL once').toHaveLength(
+    2,
+  );
 
   // Under test/fixtures, so that viem and the OpenTelemetry packages resolve as they do from a user's project.
   const directory = mkdtempSync(join(fixtures, 'quick-start-'));
   try {
     const file = join(directory, 'agent.mts');
-    writeFileSync(file, source.replace(README_RPC_URL, `'${anvil.rpcUrl}'`));
+    writeFileSync(file, source.replace(QUICK_START_RPC_URL, `'${anvil.rpcUrl}'`));
     const { port } = receiver.address() as AddressInfo;
     const { stdout, stderr } = await run(
       process.execPath,

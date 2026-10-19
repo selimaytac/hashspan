@@ -54,9 +54,9 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
   transaction send and confirm paths through it, `test/call-batch-faults.int.test.ts` the call batch paths, and the
   `bundler faults` rows of `test/user-operation.int.test.ts` the bundler methods; `test/fault-checks.ts` holds the
   checks they share with the cdp and x402 fault rows
-- `test/quick-start.int.test.ts` runs the README quick start's `agent.ts`, taken from README.md as it is (only the RPC
-  URL changes), with tsx in a process of its own and checks the trace it exports over OTLP; a change to that block
-  must keep the trace the README describes
+- `test/quick-start.int.test.ts` runs the quick start's `agent.ts`, taken from docs/quick-start.md as it is (only the
+  RPC URL changes), with tsx in a process of its own and checks the trace it exports over OTLP; a change to that block
+  must keep the trace the page describes
 - `test/apply-skill.ts` applies `skills/hashspan/SKILL.md` to a copy of a project without hashspan, with the code taken
   from the skill as it is, and runs it with tsx against an OTLP receiver; used by `examples/*/test/skill.int.test.ts`
 - `.github/workflows/viem-range.yml` runs the viem tests weekly against both ends of the viem peer range; a test that
