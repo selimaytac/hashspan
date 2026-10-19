@@ -3,15 +3,11 @@
 Trace the payments your AI agents make with the [Machine Payments Protocol](https://mpp.dev) (MPP) and its
 TypeScript SDK, [mppx](https://github.com/wevm/mppx), with OpenTelemetry.
 
-With MPP, an API answers `402 Payment Required` with a challenge, and the agent pays it: on Tempo, with a TIP-20
-token transfer that the agent either sends itself (`push`) or signs for the server to broadcast (`pull`). This adapter
-records each payment as a `payment {chainId}` span inside your agent's trace, with what was paid, to whom, in which
-mode, whether it settled and, with a reader, a linked `confirm {chainId}` span with block, gas and fees, and whether
-the transaction carries this payment
-([ADR 0029](https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.1/docs/adr/0029-mpp-payments.md)).
-
-This package is 0.x and follows mppx, which is 0.x too: it supports one mppx minor line at a time (`~0.13.5`), and a
-new line raises that range in a minor release of this package.
+With MPP, an API answers `402 Payment Required` with a challenge, and the agent pays it on Tempo with a TIP-20 token
+transfer that it either sends itself (`push`) or signs for the server to broadcast (`pull`). Each payment becomes a
+`payment {chainId}` span inside your agent's trace, with what was paid, to whom, in which mode and whether it settled,
+and, with a reader, a linked `confirm {chainId}` span with block, gas and fees, and whether the transaction carries
+this payment.
 
 ## Install
 
@@ -66,12 +62,16 @@ Pass the client `Mppx.create()` returns. Every payment made through its `fetch`,
 polyfills (the default), reaches the adapter. The adapter only registers observers with `on()`: it replaces no
 method, and its observers never throw, never return a value and never change a payment.
 
+### Push and pull
+
 With a private key, mppx pays in `pull` mode: it signs the transaction, and the server broadcasts it, so there is no
 send span, and the confirm span comes from the reader. With `mode: 'push'`, or a wallet (JSON-RPC) account, the payer
 sends the transaction itself, through the client `getClient` returns: extend that client with `@hashspan/viem`'s
 `withHashspan()`, as in the example, to record the send span. Give both adapters the same `tracker`: the payment span
 then starts with a link to that send span, and the transaction gets one confirm span. With two trackers, a push payment
 gets two confirm spans and two fee samples for one transaction, and no link between the payment and its send.
+
+### Options
 
 `withHashspan(mppx, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/mpp@0.1.1/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` as in `@hashspan/viem` but off by default,
@@ -84,6 +84,8 @@ with the settlement as the server reported it. With `tracker`, the core options 
 a `diag` warning. Options are read once, from the object's own enumerable properties: options it inherits through a
 prototype, such as the getters of a class instance, are ignored
 ([ADR 0025](https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.1/docs/adr/0025-untrusted-input.md)).
+
+### Verified settlements
 
 The server's `Payment-Receipt` names the settlement's transaction (`reference`). For `push`, and for `pull` without a
 fee payer, the payer knows the transaction's hash before it is sent: the payment span records that hash from its
@@ -101,11 +103,40 @@ another currency (`fundingCurrency`), values that do not validate, or, for a spo
 transaction does not decode, a transaction that cannot be read or one whose sender or nonce fields differ. With a
 reader, the payment span is exported once the receipt is checked; its end time stays when the response came.
 
+### Shutting down
+
 `flush({ timeoutMs })` (default 10 000 ms) waits for paid payments still waiting for an outcome, then for
 confirmations through the reader, and ends what is left as `timeout` (a payment already settled and waiting for its
 receipt check ends as settled, without `verified`). It does not wait for a challenge that was never paid (the client's
 policy refused it, or signing failed): that challenge records nothing and is dropped at its deadline. Call it before
 a short-lived process exits.
+
+## Recorded
+
+| What the client sees | Payment span |
+|---|---|
+| A response with a readable `Payment-Receipt` | `blockchain.payment.status` `settled` and the transaction hash: the payer's own, or for a sponsored pull the receipt's `reference` |
+| A response without a `Payment-Receipt`, or with one that cannot be read | error status, `error.type` `no_settlement` or `_OTHER` |
+| A 5xx answer, or a paid request that failed on the network | by default, as for no outcome below; with a reader, the confirm span of the payer's hash records the transaction. With `observeFailures`: `pending` and the hash, the confirm span resolves it, or for a sponsored pull, whose hash only the receipt names, error status with `error.type` `PaymentOutcomeUnknownError` |
+| Creating the payment failed: the client's policy or spending limits, signing, or a push transaction that failed | by default, nothing. With `observeFailures`: error status, the error's class name as `error.type`, no hash |
+| A challenge the client refused before paying (no method for it, an expired one) | nothing |
+| A zero-amount challenge, answered with a signed proof | nothing, failures included: no value moves |
+| No outcome: a 3xx, a 4xx, or a final 402 after payment | error status, `error.type` `timeout`, once the challenge's `expires` (or, without one, mppx's default validity of 25 s) plus 30 s passed (at most 1 h), when more than 1000 payments are open (the oldest first), or on `flush()`; the payer's own hash stays recorded |
+
+Every payment span records the payer and the chain (from the credential the payer's client wrote), the recipient,
+the asset (the challenge's `currency`), the amount, `mpp.method` (`tempo`), `mpp.intent` (`charge`), `mpp.mode`
+(`push` or `pull`), `mpp.challenge.id` (the id the server chose, which joins your trace to the server's logs and to
+the transfer's memo; on spans only) and the origin of the resource URL as `mpp.resource`, e.g.
+`https://api.example.com`: paths of paid APIs often carry user or account identifiers. The core option
+`paymentResource: 'path'` records the path too (never the query string, fragment or user info), and `'off'` nothing;
+see [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.1/docs/semconv.md).
+
+The settlement's fee is the payer's: its fee sample carries no `blockchain.fee.payer`, or `sponsor` when the server
+paid it as fee payer, never `facilitator`. Count only `settled` payments as paid; a `pending` one is paid once its
+confirm span records the receipt. What a tool call or task spent is the `amount` of each settled payment, per
+`blockchain.payment.asset`: amounts of different assets do not add up. The payment span records the payment, not the
+paid request's status or your tool's outcome; spans are not an accounting record: a trace that a sampler dropped, or
+that was not exported, misses its payments.
 
 ## Failures
 
@@ -136,33 +167,6 @@ that uses the repository's test helpers, to read rather than to copy as is. Take
   `fetch`, so no port is opened. With `feePayer: true`, the server sponsors the fee of pull charges.
 - The paying client: as in [usage](#usage), with a reader on Anvil.
 
-## Recorded
-
-| What the client sees | Payment span |
-|---|---|
-| A response with a readable `Payment-Receipt` | `blockchain.payment.status` `settled` and the transaction hash: the payer's own, or for a sponsored pull the receipt's `reference` |
-| A response without a `Payment-Receipt`, or with one that cannot be read | error status, `error.type` `no_settlement` or `_OTHER` |
-| A 5xx answer, or a paid request that failed on the network | by default, as for no outcome below; with a reader, the confirm span of the payer's hash records the transaction. With `observeFailures`: `pending` and the hash, the confirm span resolves it, or for a sponsored pull, whose hash only the receipt names, error status with `error.type` `PaymentOutcomeUnknownError` |
-| Creating the payment failed: the client's policy or spending limits, signing, or a push transaction that failed | by default, nothing. With `observeFailures`: error status, the error's class name as `error.type`, no hash |
-| A challenge the client refused before paying (no method for it, an expired one) | nothing |
-| A zero-amount challenge, answered with a signed proof | nothing, failures included: no value moves |
-| No outcome: a 3xx, a 4xx, or a final 402 after payment | error status, `error.type` `timeout`, once the challenge's `expires` (or, without one, mppx's default validity of 25 s) plus 30 s passed (at most 1 h), when more than 1000 payments are open (the oldest first), or on `flush()`; the payer's own hash stays recorded |
-
-Every payment span records the payer and the chain (from the credential the payer's client wrote), the recipient,
-the asset (the challenge's `currency`), the amount, `mpp.method` (`tempo`), `mpp.intent` (`charge`), `mpp.mode`
-(`push` or `pull`), `mpp.challenge.id` (the id the server chose, which joins your trace to the server's logs and to
-the transfer's memo; on spans only) and the origin of the resource URL as `mpp.resource`, e.g.
-`https://api.example.com`: paths of paid APIs often carry user or account identifiers. The core option
-`paymentResource: 'path'` records the path too (never the query string, fragment or user info), and `'off'` nothing;
-see [docs/semconv.md](https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.1/docs/semconv.md).
-
-The settlement's fee is the payer's: its fee sample carries no `blockchain.fee.payer`, or `sponsor` when the server
-paid it as fee payer, never `facilitator`. Count only `settled` payments as paid; a `pending` one is paid once its
-confirm span records the receipt. What a tool call or task spent is the `amount` of each settled payment, per
-`blockchain.payment.asset`: amounts of different assets do not add up. The payment span records the payment, not the
-paid request's status or your tool's outcome; spans are not an accounting record: a trace that a sampler dropped, or
-that was not exported, misses its payments.
-
 ## Known limits
 
 - Only Tempo `charge` payments are traced, push and pull. Sessions (payment channels and their vouchers),
@@ -189,6 +193,12 @@ that was not exported, misses its payments.
 - The limits of `@hashspan/viem`'s confirmations and of the core apply to the confirm span
   ([`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/mpp@0.1.1/packages/viem#known-limits),
   [`@hashspan/core`](https://github.com/selimaytac/hashspan/tree/@hashspan/mpp@0.1.1/packages/core#known-limits)).
+
+## Compatibility
+
+This package is 0.x and follows mppx, which is 0.x too: it supports one mppx minor line at a time (see
+[install](#install)), and a new line raises that range in a minor release of this package. The design is in
+[ADR 0029](https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.1/docs/adr/0029-mpp-payments.md).
 
 ## License
 

@@ -116,7 +116,7 @@ describe("viem's wait, as the attribute describes it", () => {
 describe('blockchain.tx.wait.confirmations on Anvil', () => {
   // Before viem 2.57.0 (wevm/viem#5142), concurrent waits for one hash on one client shared the first call's poll and
   // count: waits of 5 and 2 both resolved at depth 5, and a wait of 1 joining a wait of 5 ended the span first and
-  // recorded 1 at depth 5 (the viem README, known limits).
+  // recorded 1 at depth 5 (docs/viem.md, known limits).
   it.skipIf(!viemAtLeast('2.57.0'))(
     'records the count of the wait that ended the span, for concurrent waits of 5 and 2 on one client',
     async () => {

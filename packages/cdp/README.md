@@ -5,9 +5,9 @@ Trace the transactions your AI agents, or any of your services, send with
 OpenTelemetry.
 
 CDP signs and broadcasts transactions through its API, so no RPC client of yours sees them. This adapter wraps a
-`CdpClient` so that each transaction becomes a `send {chainId}` span inside the active trace, such as your agent's
-tool call, a request or a job, and, with a reader, a linked `confirm {chainId}` span with status, gas, fees and
-revert reason, like [`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@1.2.1/packages/viem).
+`CdpClient`: each transaction becomes a `send {chainId}` span inside the active trace and, with a reader, a linked
+`confirm {chainId}` span with status, gas, fees and revert reason, like
+[`@hashspan/viem`](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@1.2.1/packages/viem).
 
 ## Install
 
@@ -47,6 +47,8 @@ network-scoped account, which records a confirm span from the receipt it returns
 `flush({ timeoutMs })` (default 10 000 ms) waits for every confirm span the adapter still has open, from the reader or
 from such a wait, and ends what is left as `timeout` if it cannot wait longer (a user operation CDP already reported
 `complete` ends with what is known). Call it before a short-lived process exits.
+
+### Options
 
 `withHashspan(cdp, options)` accepts the [`@hashspan/core` options](https://github.com/selimaytac/hashspan/tree/@hashspan/cdp@1.2.1/packages/core#options)
 (address mode, agent identity, redaction hook, ...), `decodeRevertReason` and `maxBackgroundConfirmations` as in

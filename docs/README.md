@@ -14,6 +14,7 @@ The website, [hashspan.dev](https://hashspan.dev), has the guides; this folder h
 
 - [Semantic conventions](semconv.md): span, attribute and metric names, and their change policy
 - [Architecture](architecture.md): the packages, the principles and the requests hashspan adds
+- [@hashspan/viem reference](viem.md): how each feature of the viem adapter behaves at its edges
 - Package READMEs: [core](../packages/core), [viem](../packages/viem), [cdp](../packages/cdp),
   [x402](../packages/x402), [mpp](../packages/mpp)
 
