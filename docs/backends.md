@@ -16,7 +16,7 @@ history and out of the repository, for example with `read -rs KEY` before runnin
 ## Console, without a backend
 
 To try hashspan without a backend, let the SDK print each span in the terminal instead of exporting it. `NodeSDK`
-reads the standard variable; with the [quick start](../README.md#quick-start):
+reads the standard variable; with the [quick start](quick-start.md):
 
 ```sh
 OTEL_TRACES_EXPORTER=console npx tsx agent.ts

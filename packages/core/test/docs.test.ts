@@ -126,7 +126,7 @@ describe('markdown links', () => {
       'no heading for #no-such-heading',
     );
     expect(brokenLink('README.md', `${base}/docs/no-such-file.md`)).toBe('no such file');
-    expect(brokenLink('README.md', `${base}/docs/#x`)).toBe(
+    expect(brokenLink('README.md', `${base}/docs/images/#x`)).toBe(
       'anchor on a directory without README.md',
     );
   });

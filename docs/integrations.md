@@ -35,6 +35,26 @@ This page collects the setups that were checked; each code block is compiled in 
 | Hardhat 3 scripts and tests (hardhat-viem) | `@hashspan/viem` on the clients of `viem.getPublicClient()` and `viem.getWalletClients()` | pass them as `client` to `deployContract` and `getContractAt` | a deployment gets a confirm span only; Ignition deployments are not traced ([setup](#hardhat-3)) | `integrations/`, on Hardhat's in-process network |
 | eRPC gateway in front of the nodes | `@hashspan/viem` with `traceTransport()` | `propagateTraceContext()` on viem's `http()`, or `@opentelemetry/instrumentation-undici`, so requests carry `traceparent` | never both; with undici, two client spans per request; tracing over http needs a `host:port` endpoint ([setup](#rpc-gateways-erpc)) | `integrations/`, eRPC 0.4.0 in front of Anvil |
 
+## Services that are not agents
+
+hashspan does not need an agent. In a TypeScript service that sends EVM transactions through viem, the Coinbase CDP
+SDK or x402, or through a wallet service, such as a payment or payout worker, a wallet backend or a bot, the
+[quick start](quick-start.md) works as it is: replace the `pay_vendor` span with the span your request handler or job
+already has, and leave out the `agent` option. The `service.name` of your OpenTelemetry resource (the `serviceName`
+in the quick start) tells your services apart. Other libraries, such as ethers, have no adapter, and chains other
+than EVM are not supported.
+
+- **A wallet service sends for you:** [wallet services](#wallet-services) shows how each kind of service gets its send
+  and confirm spans.
+- **A worker that does not wait for receipts:**
+  [background confirmation](../packages/viem/README.md#background-confirmation).
+- **Latency and fees across many transactions:** the send, confirmation and fee
+  [histograms](semconv.md#metrics), and the limits that matter at volume
+  ([many transactions](../packages/viem/README.md#many-transactions)).
+- **A short-lived job:** call `flush()` before it exits ([shutting down](../packages/viem/README.md#shutting-down)).
+- **An example:** [examples/payout-worker](../examples/payout-worker), a worker that pays out from a queue, confirmed
+  in the background, run against Anvil in CI.
+
 ## Libraries that take a viem client
 
 When a library accepts a viem wallet client, extend the client before you hand it over:
@@ -63,7 +83,7 @@ and return the bundle transaction's hash. Those actions reach the bundler throug
 For user operation spans from `sendTransaction`, `writeContract` and `sendCalls`, build the client that
 `createSmartAccountClient` builds with viem's `createBundlerClient`, and apply `withHashspan()` before
 permissionless's `smartAccountActions`. On Anvil, with the OpenTelemetry SDK started as in the
-[quick start](../README.md#quick-start), where `account` is your permissionless smart account (for example from
+[quick start](quick-start.md), where `account` is your permissionless smart account (for example from
 `toSimpleSmartAccount`) and `bundlerUrl` your bundler's:
 
 ```ts
@@ -125,7 +145,7 @@ without extra code.
 
 The provider sends with the wallet client you give it, and waits for receipts with a public client it creates
 itself, so the setup needs background confirmation. On Anvil, with the OpenTelemetry SDK started as in the
-[quick start](../README.md#quick-start), in an ES module as there (`npm pkg set type=module`), since the file uses
+[quick start](quick-start.md), in an ES module as there (`npm pkg set type=module`), since the file uses
 top-level await:
 
 ```ts
@@ -275,7 +295,7 @@ privacy settings, not hashspan's: see the
   `@mastra/otel-bridge` 1.5.13 on, in [`integrations/test/mastra.int.test.ts`](../integrations/test/mastra.int.test.ts).
   Mastra marks the bridge as experimental. To set it up:
   - Install `@mastra/core @mastra/observability @mastra/otel-bridge zod @opentelemetry/sdk-node` next to the
-    packages of the [quick start](../README.md#quick-start), and `ai` 7 for the scripted model below: it stands in
+    packages of the [quick start](quick-start.md), and `ai` 7 for the scripted model below: it stands in
     for a model provider so the example needs no API key, and an agent with a real model does not need `ai`.
   - Start the Node SDK before the agent runs a tool, give Mastra the bridge, and send from the tool with a client
     extended with `withHashspan()`, as in this `agent.ts`. It runs against Anvil like the quick start, prints the
@@ -377,7 +397,7 @@ await sdk.shutdown();
   provider registered in a process and refuses the others. CI runs the example below as written and the setups of
   the limits against Anvil with a scripted model, from `genkit` 1.42.0 on, in
   [`integrations/test/genkit.int.test.ts`](../integrations/test/genkit.int.test.ts). To set it up:
-  - Install `genkit @opentelemetry/sdk-node` next to the packages of the [quick start](../README.md#quick-start).
+  - Install `genkit @opentelemetry/sdk-node` next to the packages of the [quick start](quick-start.md).
     The scripted model below stands in for a model plugin, so the example needs no API key.
   - Call `disableGenkitOTelInitialization()` and start the Node SDK before Genkit runs anything, and send from the
     tool with a client extended with `withHashspan()`, as in this `agent.ts`. It runs against Anvil like the quick
@@ -572,7 +592,7 @@ process.stdin.once('end', async () => {
 The agent, `mcp-client.ts`, starts the server as a child process and calls the tool inside an active span of its
 own. With Anvil running, run it with `node --import tsx mcp-client.ts` after installing
 `@modelcontextprotocol/client @modelcontextprotocol/server @opentelemetry/sdk-node zod tsx` and the packages of the
-[quick start](../README.md#quick-start). The trace shows `pay_vendor` of the service `my-agent`, with `send 31337`
+[quick start](quick-start.md). The trace shows `pay_vendor` of the service `my-agent`, with `send 31337`
 and `confirm 31337` of the service `wallet-mcp` under it:
 
 ```ts
@@ -730,7 +750,7 @@ Checked with `hardhat` 3.20.0 and, of the plugins of Hardhat's viem project temp
 in-process network. The `viem` helpers of a network connection create new viem clients on every call, and
 `deployContract` and `getContractAt` send with clients of their own unless they get a `client` option. Extend the public client and a wallet client with `withHashspan()`, and pass both as `client` to
 every helper that sends. A script, `scripts/counter.ts`, after installing the packages of the
-[quick start](../README.md#quick-start) in the project, run with `npx hardhat run scripts/counter.ts`:
+[quick start](quick-start.md) in the project, run with `npx hardhat run scripts/counter.ts`:
 
 ```ts
 import { withHashspan } from '@hashspan/viem';
@@ -900,7 +920,7 @@ projects:
 ```
 
 The agent, `agent.ts`, after installing `@opentelemetry/sdk-node @opentelemetry/instrumentation-undici` and the
-packages of the [quick start](../README.md#quick-start), run with `node --import tsx agent.ts`:
+packages of the [quick start](quick-start.md), run with `node --import tsx agent.ts`:
 
 ```ts
 import { traceTransport, withHashspan } from '@hashspan/viem';
