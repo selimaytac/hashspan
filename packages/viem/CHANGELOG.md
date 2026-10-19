@@ -1,5 +1,22 @@
 # @hashspan/viem
 
+## 1.3.0
+
+### Minor Changes
+
+- [#473](https://github.com/selimaytac/hashspan/pull/473) [`c30636d`](https://github.com/selimaytac/hashspan/commit/c30636de49a2cb493cee5d3bc00d63cb1b2dd6ff) Thanks [@selimaytac](https://github.com/selimaytac)! - Add `propagateTraceContext()`, an opt-in `onFetchRequest` hook for viem's `http()` transport: each request sends the W3C `traceparent` (and `tracestate`) of its JSON-RPC span from `traceTransport()`, so an RPC gateway such as eRPC records its spans in the same trace without HTTP instrumentation. It never sends `baggage`, keeps a `traceparent` the request already has, and sends none for an HTTP request of several batched JSON-RPC requests. Needs viem 2.21.25 or later. Use it or an HTTP instrumentation such as undici's, not both.
+
+- [#477](https://github.com/selimaytac/hashspan/pull/477) [`bce1079`](https://github.com/selimaytac/hashspan/commit/bce10791b8b3a9405baa0f6f7934ae64cb61c83f) Thanks [@selimaytac](https://github.com/selimaytac)! - Rename the JSON-RPC span of a request whose method is not a method name, from `_OTHER` to `jsonrpc`, its `rpc.system.name`, as the OpenTelemetry RPC conventions ask (1.39 and later). `rpc.method` stays `_OTHER`, and the `methods` filter of `traceTransport()` is still called with `_OTHER`. A query or alert on the span name `_OTHER` should filter on `rpc.method` `_OTHER` instead, which matches before and after this release. The semantic conventions schema version is `0.5.0-dev`.
+
+- [#476](https://github.com/selimaytac/hashspan/pull/476) [`42c21a3`](https://github.com/selimaytac/hashspan/commit/42c21a3cec191a1fa118f9e4bc498f44d7bd5c79) Thanks [@selimaytac](https://github.com/selimaytac)! - `watchUserOperation(client, options)` on the extension confirms a user operation sent elsewhere, such as by a smart
+  account SDK's `sendTransaction` or a hosted wallet that returns only a hash. With `{ bundleHash, sender, nonce? }`, it
+  reads the bundle transaction's receipt through a client of the chain's node and records the one `UserOperationEvent`
+  of the sender that the called contract or a canonical EntryPoint emitted; no match, several, or a receipt of more than
+  10 000 logs record nothing. With `{ userOpHash }`, it polls `eth_getUserOperationReceipt` through a bundler client and
+  ends as `timeout` when no receipt comes. The confirm span is the user operation's (ADR 0021): its success, cost and
+  paymaster, not the bundle transaction's status and fee. Like `watch()`, it never throws or waits, counts towards
+  `maxBackgroundConfirmations`, and `flush()` awaits it.
+
 ## 1.2.2
 
 ### Patch Changes

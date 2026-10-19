@@ -77,7 +77,7 @@ export function createSendTracing(
   /**
    * Asks a client without a chain for its chain id. Concurrent calls share one request; the answer is not cached,
    * since a wallet can switch networks. Callers never await it before the call they trace
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0009-telemetry-off-the-call-path.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/docs/adr/0009-telemetry-off-the-call-path.md).
    */
   let pendingChainId: Promise<number> | undefined;
   const queryChainId = (): Promise<number> => {
@@ -197,7 +197,7 @@ export function createSendTracing(
       diag.warn(
         `hashspan: ${action} of a smart account is not traced: it sends a user operation through the client the smart ` +
           'account SDK extended. Apply withHashspan() before the SDK actions to trace the operation ' +
-          '(https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/packages/viem/README.md#smart-account-sdks)',
+          '(https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.3.0/packages/viem/README.md#smart-account-sdks)',
       );
     }
     return smart;
