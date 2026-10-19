@@ -13,6 +13,7 @@ API with `@hashspan/x402`. Root rules: [AGENTS.md](../../AGENTS.md).
   exports over OTLP/JSON to `startReceiver()` of `packages/viem/test/apply-skill.ts`: send and confirm spans under
   `execute_tool tip_author`, a settled and verified payment span and its linked confirm span under
   `execute_tool buy_report`, one trace. A change to the trace changes the README's tree too.
-- The `@x402/*` packages are pinned to one minor (`~2.28.0`): `@x402/hono` depends on `@x402/core` `~2.28.0`, and a
-  second copy of core would split the server's and the facilitator's types.
+- The `@x402/*` packages move together: `@x402/hono` depends on `@x402/core` of its own minor, and a second copy of
+  core would split the server's and the facilitator's types. `.github/workflows/x402-sdk.yml` updates them here
+  together with the adapter's, to the newest release, before `pnpm typecheck`.
 - The README's Base Sepolia section is not run in CI and says so; tests never use a public network.

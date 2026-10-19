@@ -38,9 +38,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: ./scripts/install-anvil.sh
       # Within the range in package.json (^2), so a new major is a deliberate change rather than a failing job.
+      # The x402 example too, so that `pnpm typecheck` compiles it against one copy of the SDK, the newest.
       - name: Update the x402 SDK to the newest release in range
         if: matrix.end == 'newest'
-        run: pnpm --filter @hashspan/x402 update @x402/core @x402/fetch @x402/evm
+        run: |
+          pnpm --filter @hashspan/x402 update @x402/core @x402/fetch @x402/evm
+          pnpm --filter @hashspan/example-x402-agent update @x402/core @x402/fetch @x402/evm @x402/hono
       - name: Install the oldest x402 SDK of the peer range
         if: matrix.end == 'oldest'
         run: | # zizmor: ignore[adhoc-packages] installs the floor of the peer range on purpose; not committed
