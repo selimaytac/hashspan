@@ -165,6 +165,18 @@ HTTP request of one JSON-RPC request also carries that span's W3C `traceparent` 
 sends `eth_sendRawTransaction` without retries, so a broadcast that gets an HTTP 429 or 503 fails after one attempt,
 with or without hashspan.
 
+The JSON-RPC conventions (1.44) differ from these spans in two points, on purpose:
+
+- They make `rpc.method` opt-in, since a general-purpose JSON-RPC instrumentation can see any method name; hashspan
+  records it by default. The span is named after the method anyway, so leaving the attribute out would not lower
+  cardinality; a name is recorded only within its [bound](#bounds), and `methods` is the way to choose the methods
+  that get a span, which the conventions ask for.
+- They say that an instrumentation that records `_OTHER` must also record the value it replaced as
+  `rpc.method_original`; hashspan does not. `_OTHER` stands only for a value that is not a method name: one that is
+  not a string, or a string outside the [bound](#bounds) of `rpc.method`. An unknown method that is a method name
+  keeps its name. Such a value has no bound, and may not be a string at all, so it is not recorded
+  ([ADR 0025](adr/0025-untrusted-input.md)).
+
 ## Attributes
 
 | Attribute | Type | Spans | Default | Description |
@@ -368,6 +380,7 @@ of each package check the bounds against the values that split at them.
 |---|---|---|
 | `blockchain.tx.revert.reason` | 1024 characters | its first 1024 characters, followed by `...`; a hex value the cut would split is dropped whole. A reason an adapter already cut this way is kept as it is |
 | `error.type` and `exception.type` from an error's name | 64 characters of `[A-Za-z0-9_.-]` | `_OTHER` |
+| `rpc.method` and the JSON-RPC span name | a letter, then up to 63 characters of `[A-Za-z0-9_]` | `_OTHER`, and the span is named `jsonrpc`; the value is not recorded, not as `rpc.method_original` either |
 | `exception.message` in `sanitized` mode | 256 characters of the first line, sanitized from its first 4096 characters | its first 256 characters, followed by `...`; a hex value the cut would split is dropped whole. Text past the 4096th character of the first line is not recorded (a hex value cut there is recorded as if whole, a URL cut there before its path as `<url>`) |
 | `blockchain.contract.function.arguments` | 4096 characters, nesting depth 32 | the JSON up to the value that crosses 4096 characters, cut there and followed by `...`; a hex value the cut would split is dropped whole; arguments nested deeper are not recorded |
 | `blockchain.contract.function.selector` of `writeContract` | an ABI of 10 000 items and 100 000 copied values; for an overloaded function, 100 000 copied argument values | no selector; past the ABI bound, no ABI is used for telemetry either, so custom errors in the revert reason show as their selector |

@@ -235,6 +235,33 @@ describe('traceTransport', () => {
     expect(filtered).toEqual(['foo_bar', '_OTHER', '_OTHER', '_OTHER']);
   });
 
+  it('bounds a method name at 64 characters and never records the value it replaces with _OTHER', async () => {
+    const inner: Transport = (params) => ({
+      ...custom({ request: async () => '0x2105' })(params),
+      request: (async () => '0x2105') as never,
+    });
+    const { request } = traceTransport(inner)({ chain: base });
+    const longest = `e${'x'.repeat(63)}`;
+
+    await request({ method: longest } as never);
+    await request({ method: `${longest}x` } as never);
+    await request({ method: 'x'.repeat(100_000) } as never);
+    await request({ method: '_eth_chainId' } as never);
+    await request({ method: { toString: () => 'eth_chainId' } } as never);
+
+    const spans = rpcSpans();
+    expect(spans.map((s) => s.attributes['rpc.method'])).toEqual([
+      longest,
+      '_OTHER',
+      '_OTHER',
+      '_OTHER',
+      '_OTHER',
+    ]);
+    // docs/semconv.md, Bounds: the value is not a method name, so it is not recorded, not even as
+    // rpc.method_original.
+    for (const span of spans) expect(span.attributes).not.toHaveProperty('rpc.method_original');
+  });
+
   it('sends untraced when the filter throws', async () => {
     const client = createPublicClient({
       chain: base,
