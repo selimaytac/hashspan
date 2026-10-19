@@ -1,6 +1,6 @@
 # Semantic conventions (draft)
 
-Schema version: `0.4.0-dev` · Stability: **development** for everything below.
+Schema version: `0.5.0-dev` · Stability: **development** for everything below.
 Rationale: [ADR 0003](adr/0003-attribute-namespace.md). Privacy defaults: [ADR 0004](adr/0004-privacy-defaults.md).
 
 ## Spans
@@ -151,7 +151,8 @@ span status description is the recorded
 `exception.message`, if any. See [ADR 0006](adr/0006-error-privacy.md).
 
 **JSON-RPC spans.** With the viem adapter's `traceTransport()`, each provider request is a `CLIENT` span named
-after its method (`_OTHER` for a name that is not a method), following the OpenTelemetry
+after its method, or `jsonrpc`, its `rpc.system.name`, for a name that is not a method (`rpc.method` is then
+`_OTHER`), following the OpenTelemetry
 [JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/rpc/json-rpc.md):
 `rpc.system.name = "jsonrpc"`, `rpc.method`, `jsonrpc.protocol.version`, `server.address` and `server.port`, plus
 `blockchain.chain.id`; on failure, `error.type` and, for a JSON-RPC error, `rpc.response.status_code`. Parameters,

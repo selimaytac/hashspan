@@ -33,7 +33,11 @@ const ATTR_SERVER_ADDRESS = 'server.address';
 const ATTR_SERVER_PORT = 'server.port';
 const ATTR_ERROR_TYPE = 'error.type';
 const ATTR_BLOCKCHAIN_CHAIN_ID = 'blockchain.chain.id';
-/** Method names as JSON-RPC providers define them; anything else is recorded as `_OTHER`, as the conventions say. */
+const RPC_SYSTEM_NAME = 'jsonrpc';
+/**
+ * Method names as JSON-RPC providers define them; anything else is recorded as `_OTHER`, and its span is named
+ * after `rpc.system.name`, as the conventions say.
+ */
 const METHOD = /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/;
 /** Scheme, host and port of an HTTP or WebSocket URL, skipping user info; the path and query are not captured. */
 const SERVER =
@@ -98,7 +102,7 @@ export function traceTransport<TTransport extends Transport>(
       );
       const chainId = params?.chain?.id;
       const base: Attributes = {
-        [ATTR_RPC_SYSTEM_NAME]: 'jsonrpc',
+        [ATTR_RPC_SYSTEM_NAME]: RPC_SYSTEM_NAME,
         [ATTR_JSONRPC_PROTOCOL_VERSION]: '2.0',
         ...serverOf(created.value),
         ...(typeof chainId === 'number' ? { [ATTR_BLOCKCHAIN_CHAIN_ID]: chainId } : {}),
@@ -116,7 +120,8 @@ export function traceTransport<TTransport extends Transport>(
           if (descriptor && !('value' in descriptor)) {
             diag.debug('hashspan: the request method is an accessor; not tracing the request');
           } else if (!options.methods || options.methods(name)) {
-            span = tracer.startSpan(name, {
+            // A request without a method name is named after `rpc.system.name`, as the conventions say.
+            span = tracer.startSpan(name === '_OTHER' ? RPC_SYSTEM_NAME : name, {
               kind: SpanKind.CLIENT,
               attributes: { ...base, [ATTR_RPC_METHOD]: name },
             });

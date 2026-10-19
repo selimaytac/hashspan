@@ -196,7 +196,43 @@ describe('traceTransport', () => {
     await client.getBlockNumber();
     await client.getChainId();
     await client.request({ method: 'not a method' as never }).catch(() => {});
-    expect(rpcSpans().map((s) => s.name)).toEqual(['eth_chainId', '_OTHER']);
+    expect(rpcSpans().map((s) => s.name)).toEqual(['eth_chainId', 'jsonrpc']);
+  });
+
+  it('names the span of a request without a method name jsonrpc, with rpc.method _OTHER', async () => {
+    const filtered: string[] = [];
+    const inner: Transport = (params) => ({
+      ...custom({ request: async () => '0x2105' })(params),
+      request: (async () => '0x2105') as never,
+    });
+    const { request } = traceTransport(inner, {
+      methods: (method) => {
+        filtered.push(method);
+        return true;
+      },
+    })({ chain: base });
+
+    // An unknown method that is a method name keeps its name: there is no list of known methods.
+    await request({ method: 'foo_bar' } as never);
+    // A name that fails the method pattern, a method that is not a string, and none at all.
+    await request({ method: 'eth_chainId; drop' } as never);
+    await request({ method: 7 } as never);
+    await request({} as never);
+    // A method behind an accessor is sent untraced: no span, not even a jsonrpc one.
+    await request({
+      get method() {
+        return 'eth_chainId';
+      },
+    } as never);
+
+    expect(rpcSpans().map((s) => [s.name, s.attributes['rpc.method']])).toEqual([
+      ['foo_bar', 'foo_bar'],
+      ['jsonrpc', '_OTHER'],
+      ['jsonrpc', '_OTHER'],
+      ['jsonrpc', '_OTHER'],
+    ]);
+    // The filter is called with rpc.method, not with the span name.
+    expect(filtered).toEqual(['foo_bar', '_OTHER', '_OTHER', '_OTHER']);
   });
 
   it('sends untraced when the filter throws', async () => {
