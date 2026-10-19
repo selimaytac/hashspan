@@ -13,16 +13,19 @@ import {
   http,
   parseEventLogs,
   RpcRequestError,
+  type WalletClient,
 } from 'viem';
 import {
   createBundlerClient,
   entryPoint07Abi,
   entryPoint07Address,
+  toPackedUserOperation,
+  type UserOperation,
 } from 'viem/account-abstraction';
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withHashspan } from '../src/index.js';
-import { reverterCode } from './entry-point/test-entry-point.js';
+import { reverterCode, testEntryPointAbi } from './entry-point/test-entry-point.js';
 import {
   collectingRejections,
   type Ending,
@@ -41,6 +44,7 @@ import { testBundler } from './test-bundler.js';
 import { installTestEntryPoint, testSmartAccount } from './test-smart-account.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast } from './viem-version.js';
+import { setUp } from './watch-user-operation-setup.js';
 
 const ACCOUNT = '0x00000000000000000000000000000000000A11cE' as const;
 const RECIPIENT = '0x00000000000000000000000000000000000000cc' as const;
@@ -55,6 +59,8 @@ const reader = createPublicClient({ chain: anvil, transport: http(RPC_URL) });
 
 let tracing: TestTracing;
 let bundler: ReturnType<typeof testBundler>;
+/** The account the test bundler sends bundles from. */
+let executor: WalletClient;
 
 beforeAll(async () => {
   await installTestEntryPoint(reader, ACCOUNT);
@@ -62,14 +68,16 @@ beforeAll(async () => {
     method: 'anvil_setCode' as never,
     params: [REVERTER, reverterCode as Hex] as never,
   });
-  const [, executor] = (await createWalletClient({
+  const [, bundlerAccount] = (await createWalletClient({
     chain: anvil,
     transport: http(RPC_URL),
   }).getAddresses()) as [Address, Address];
-  bundler = testBundler(
-    reader,
-    createWalletClient({ account: executor, chain: anvil, transport: http(RPC_URL) }),
-  );
+  executor = createWalletClient({
+    account: bundlerAccount,
+    chain: anvil,
+    transport: http(RPC_URL),
+  });
+  bundler = testBundler(reader, executor);
 });
 afterAll(async () => {
   await instance.stop();
@@ -314,6 +322,216 @@ describe('smart account SDK clients on Anvil', () => {
     );
     expect(tracing.spans()).toEqual([]);
     expect(meters.recorded('blockchain.client.fee')).toEqual([]);
+  });
+});
+
+// A user operation sent elsewhere, confirmed from the hash the sender returned (docs/adr/0031): the bundle hash a smart
+// account SDK's sendTransaction returns, a hosted wallet's bundle or user operation hash.
+describe('watchUserOperation on Anvil', () => {
+  /** The bundle receipt's UserOperationEvent. */
+  const eventOf = async (bundleHash: Hex) => {
+    const bundle = await reader.getTransactionReceipt({ hash: bundleHash });
+    const [event] = parseEventLogs({
+      abi: entryPoint07Abi,
+      eventName: 'UserOperationEvent',
+      logs: bundle.logs,
+    });
+    return event?.args;
+  };
+  const bundlerClient = (account: Awaited<ReturnType<typeof smartAccount>>) =>
+    createBundlerClient({
+      account,
+      client: reader,
+      transport: bundler.transport,
+      pollingInterval: 100,
+    });
+
+  it('records the operation of a bundle hash and sender through a public client', async () => {
+    const account = await smartAccount();
+    const sender = bundlerClient(account);
+    const meters = recordingMeterProvider();
+    const hashspan = withHashspan({ meterProvider: meters.provider });
+    // Sent and awaited untraced, as a wallet in another process does.
+    const userOpHash = await sender.sendUserOperation({ calls: [{ to: RECIPIENT, value: 1n }] });
+    const { receipt } = await sender.waitForUserOperationReceipt({ hash: userOpHash });
+
+    // A public client extended by the same hashspan: the bundle transaction gets no confirm span.
+    const client = createPublicClient({ chain: anvil, transport: http(RPC_URL) }).extend(hashspan);
+    hashspan.watchUserOperation(client, {
+      bundleHash: receipt.transactionHash,
+      sender: account.address,
+    });
+    expect(await hashspan.flush()).toBe(true);
+
+    const event = await eventOf(receipt.transactionHash);
+    expect(tracing.spans().map((span) => span.name)).toEqual(['confirm 31337']);
+    expect(tracing.spanNamed('confirm 31337').attributes).toEqual({
+      'blockchain.system.name': 'evm',
+      'blockchain.chain.id': 31337,
+      'blockchain.operation.name': 'confirm',
+      'blockchain.user_operation.hash': userOpHash,
+      'blockchain.user_operation.success': true,
+      'blockchain.user_operation.gas.used': Number(event?.actualGasUsed),
+      'blockchain.user_operation.gas.cost': event?.actualGasCost.toString(),
+      'blockchain.user_operation.sender': ACCOUNT.toLowerCase(),
+      'blockchain.user_operation.nonce': event?.nonce.toString(),
+      'blockchain.user_operation.entry_point': entryPoint07Address.toLowerCase(),
+      'blockchain.tx.hash': receipt.transactionHash,
+      'blockchain.block.number': Number(receipt.blockNumber),
+    });
+    expect(meters.recorded('blockchain.client.fee')).toEqual([
+      {
+        value: Number(event?.actualGasCost),
+        attributes: expect.objectContaining({ 'blockchain.operation.subject': 'user_operation' }),
+      },
+    ]);
+  });
+
+  it('records the operation of a user operation hash through a bundler client', async () => {
+    const client = bundlerClient(await smartAccount());
+    const hashspan = withHashspan();
+    const userOpHash = await client.sendUserOperation({ calls: [{ to: RECIPIENT, value: 1n }] });
+    // Watched right after the send, before anyone read the operation's receipt.
+    hashspan.watchUserOperation(client, { userOpHash });
+    expect(await hashspan.flush()).toBe(true);
+
+    const bundleHash = bundler.bundles.get(userOpHash.toLowerCase()) as Hex;
+    const event = await eventOf(bundleHash);
+    expect(tracing.spans().map((span) => span.name)).toEqual(['confirm 31337']);
+    expect(tracing.spanNamed('confirm 31337').attributes).toMatchObject({
+      'blockchain.user_operation.hash': userOpHash,
+      'blockchain.user_operation.success': true,
+      'blockchain.user_operation.gas.cost': event?.actualGasCost.toString(),
+      'blockchain.tx.hash': bundleHash,
+    });
+  });
+
+  it('records the operation of the hash an SDK client with withHashspan() applied last returned', async () => {
+    const account = await smartAccount();
+    const hashspan = withHashspan();
+    const client = bundlerClient(account).extend(sdkSmartAccountActions).extend(hashspan);
+
+    const hash = await client.sendTransaction({ to: RECIPIENT, value: 1_000n });
+    hashspan.watchUserOperation(reader, { bundleHash: hash, sender: account.address });
+    expect(await hashspan.flush()).toBe(true);
+
+    const event = await eventOf(hash);
+    expect(tracing.spans().map((span) => span.name)).toEqual(['confirm 31337']);
+    const confirm = tracing.spanNamed('confirm 31337');
+    expect(confirm.attributes).toMatchObject({
+      'blockchain.user_operation.hash': event?.userOpHash,
+      'blockchain.user_operation.success': true,
+      'blockchain.tx.hash': hash,
+    });
+    expect(confirm.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(confirm.attributes['blockchain.tx.fee']).toBeUndefined();
+  });
+
+  it('records a reverted operation in a bundle that succeeded', async () => {
+    const account = await smartAccount();
+    const sender = bundlerClient(account);
+    const hashspan = withHashspan();
+    const userOpHash = await sender.sendUserOperation({
+      calls: [{ to: REVERTER, data: '0x' }],
+      callGasLimit: 500_000n,
+      verificationGasLimit: 200_000n,
+      preVerificationGas: 50_000n,
+    });
+    const { receipt } = await sender.waitForUserOperationReceipt({ hash: userOpHash });
+    hashspan.watchUserOperation(reader, {
+      bundleHash: receipt.transactionHash,
+      sender: account.address,
+    });
+    expect(await hashspan.flush()).toBe(true);
+
+    expect(receipt.status).toBe('success');
+    const confirm = tracing.spanNamed('confirm 31337');
+    expect(confirm.status.code).toBe(SpanStatusCode.ERROR);
+    expect(confirm.attributes).toMatchObject({
+      'blockchain.user_operation.hash': userOpHash,
+      'blockchain.user_operation.success': false,
+      'error.type': 'reverted',
+    });
+  });
+
+  it('records nothing for two operations of the sender in one bundle, and one by its nonce', async () => {
+    const account = await smartAccount();
+    const sender = bundlerClient(account);
+    // Two operations under different nonce keys, put into one handleOps transaction.
+    const packed = [];
+    for (const key of [11n, 12n]) {
+      const prepared = (await sender.prepareUserOperation({
+        calls: [{ to: RECIPIENT, value: 1n }],
+        nonce: await account.getNonce({ key }),
+        callGasLimit: 500_000n,
+        verificationGasLimit: 200_000n,
+        preVerificationGas: 50_000n,
+      })) as UserOperation<'0.7'>;
+      packed.push(
+        toPackedUserOperation({
+          ...prepared,
+          signature: await account.signUserOperation(prepared),
+        }),
+      );
+    }
+    const bundleHash = await executor.writeContract({
+      address: entryPoint07Address,
+      abi: testEntryPointAbi,
+      functionName: 'handleOps',
+      args: [packed, executor.account?.address as Address],
+      account: executor.account as never,
+      chain: anvil,
+      gas: 5_000_000n,
+    });
+    const bundle = await reader.waitForTransactionReceipt({ hash: bundleHash });
+    const events = parseEventLogs({
+      abi: entryPoint07Abi,
+      eventName: 'UserOperationEvent',
+      logs: bundle.logs,
+    });
+    expect(events).toHaveLength(2);
+
+    const hashspan = withHashspan();
+    hashspan.watchUserOperation(reader, { bundleHash, sender: account.address });
+    expect(await hashspan.flush()).toBe(true);
+    expect(tracing.spans()).toEqual([]);
+
+    const second = events[1]?.args;
+    hashspan.watchUserOperation(reader, {
+      bundleHash,
+      sender: account.address,
+      nonce: second?.nonce,
+    });
+    expect(await hashspan.flush()).toBe(true);
+    expect(tracing.spanNamed('confirm 31337').attributes).toMatchObject({
+      'blockchain.user_operation.hash': second?.userOpHash,
+      'blockchain.user_operation.nonce': second?.nonce.toString(),
+    });
+  });
+
+  it('runs the README block as written', async () => {
+    const account = await smartAccount();
+    const client = bundlerClient(account);
+    const userOpHash = await client.sendUserOperation({ calls: [{ to: RECIPIENT, value: 1n }] });
+    const { receipt } = await client.waitForUserOperationReceipt({ hash: userOpHash });
+    setUp({
+      chain: anvil,
+      rpcUrl: RPC_URL,
+      bundler: client,
+      hash: receipt.transactionHash,
+      smartAccountAddress: account.address,
+      userOpHash,
+    });
+
+    await import('./readme/watch-user-operation.js');
+
+    // Both watches name one operation: one confirm span (docs/adr/0007).
+    expect(tracing.spans().map((span) => span.name)).toEqual(['confirm 31337']);
+    expect(tracing.spanNamed('confirm 31337').attributes).toMatchObject({
+      'blockchain.user_operation.hash': userOpHash,
+      'blockchain.user_operation.success': true,
+      'blockchain.tx.hash': receipt.transactionHash,
+    });
   });
 });
 
