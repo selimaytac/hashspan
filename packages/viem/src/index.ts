@@ -8,6 +8,7 @@ import { createPending } from './confirm/pending.js';
 import { Recent } from './confirm/recent.js';
 import type { SentTransaction } from './confirm/replacement.js';
 import { durationOr } from './confirm/timing.js';
+import { createUserOperationWatch } from './confirm/user-operation-watch.js';
 import { createWatch } from './confirm/watch.js';
 import { guardTracker } from './safe-tracker.js';
 import { createSendTracing } from './send.js';
@@ -19,6 +20,7 @@ import type {
   TracedAction,
   ViemClientLike,
   WatchOptions,
+  WatchUserOperationOptions,
 } from './types.js';
 import { addUserOperationActions } from './user-operation.js';
 
@@ -29,6 +31,9 @@ export type {
   TracedAction,
   ViemClientLike,
   WatchOptions,
+  WatchUserOperationByHashOptions,
+  WatchUserOperationInBundleOptions,
+  WatchUserOperationOptions,
 } from './types.js';
 
 /**
@@ -58,9 +63,9 @@ export interface WithHashspanOptions extends TxTrackerOptions {
    */
   decodeRevertReason?: boolean | { timeoutMs?: number | undefined } | undefined;
   /**
-   * Most background confirmations (`confirm: { mode: 'background' }` and `watch()`) polling at once. A transaction
-   * sent while that many are polling gets no background confirm span, and a `diag` warning is logged; waits of the
-   * caller are not counted and always traced. Default: 256. See
+   * Most background confirmations (`confirm: { mode: 'background' }`, `watch()` and `watchUserOperation()`) polling
+   * at once. A transaction sent while that many are polling gets no background confirm span, and a `diag` warning is
+   * logged; waits of the caller are not counted and always traced. Default: 256. See
    * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0018-background-confirmation-limit.md.
    */
   maxBackgroundConfirmations?: number | undefined;
@@ -121,6 +126,16 @@ export interface HashspanExtension {
    * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0012-cdp-adapter.md.
    */
   watch(client: ViemClientLike, options: WatchOptions): void;
+  /**
+   * Confirms a user operation sent outside the extended clients (for example by a smart account SDK or a hosted
+   * wallet that returns only a hash) through `client`, in the background: the user operation's confirm span with its
+   * outcome, cost and paymaster, not the bundle transaction's status and fee, linked to the send span when the same
+   * tracker recorded one. With `userOpHash`, `client` must be a bundler client; with `bundleHash` and `sender`, a
+   * client of the chain's node, and exactly one `UserOperationEvent` of the sender in the bundle receipt is recorded.
+   * Never throws and never waits; `flush()` awaits it. See
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0031-watch-user-operation.md.
+   */
+  watchUserOperation(client: ViemClientLike, options: WatchUserOperationOptions): void;
 }
 
 /** The `timeoutMs` of the `decodeRevertReason` option, read from an own data property and never throwing. */
@@ -204,19 +219,26 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
   /** Sender and nonce of recent sends, to find a replacement viem did not report (ADR 0008). */
   const senders = new Recent<SentTransaction>();
   const { track, flush, settleOnce } = createPending();
-  const { startConfirm, recordConfirmation, confirmThrough, confirmPending } = createConfirmation({
+  const { startConfirm, recordConfirmation, confirmThrough, confirmPending, reserveBackground } =
+    createConfirmation({
+      tracker,
+      decodeRevertReason,
+      revertReasonTimeoutMs,
+      maxBackgroundConfirmations,
+      followMultisig: followMultisig !== undefined,
+      abis,
+      revertReasons,
+      senders,
+      track,
+      settleOnce,
+    });
+  const watch = createWatch({ abis, confirmThrough, track });
+  const watchUserOperation = createUserOperationWatch({
     tracker,
-    decodeRevertReason,
-    revertReasonTimeoutMs,
-    maxBackgroundConfirmations,
-    followMultisig: followMultisig !== undefined,
-    abis,
-    revertReasons,
-    senders,
     track,
     settleOnce,
+    reserveBackground,
   });
-  const watch = createWatch({ abis, confirmThrough, track });
 
   const extension = (client: ViemClientLike & Partial<Record<TracedAction, AnyAction>>) => {
     const sending = createSendTracing(client, track);
@@ -278,5 +300,5 @@ export function withHashspan(options: WithHashspanOptions = {}): HashspanExtensi
     return actions;
   };
 
-  return Object.assign(extension, { flush, watch }) as HashspanExtension;
+  return Object.assign(extension, { flush, watch, watchUserOperation }) as HashspanExtension;
 }

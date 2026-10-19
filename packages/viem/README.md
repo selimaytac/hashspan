@@ -43,7 +43,7 @@ agent identity, redaction hook) plus:
 | `tracker` | new tracker | A tracker from `createTxTracker()`, to share one between adapters; the core options then configure nothing, since they are the tracker's. A tracker from an older `@hashspan/core` records only what that core supports: user operations and call batches are then passed on untraced |
 | `confirm` | none | `{ mode: 'background', timeoutMs? }` confirms every sent transaction without an explicit wait |
 | `decodeRevertReason` | `true` | Replay reverted transactions to record their revert reason; `{ timeoutMs }` bounds the replay (default 10 000 ms) |
-| `maxBackgroundConfirmations` | `256` | Most background confirmations (background mode and `watch()`) polling at once; see [Background confirmation](#background-confirmation) |
+| `maxBackgroundConfirmations` | `256` | Most background confirmations (background mode, `watch()` and `watchUserOperation()`) polling at once; see [Background confirmation](#background-confirmation) |
 | `followMultisigOperations` | off | `true` or `{ timeoutMs? }` (default 120 000 ms): after a pending receipt of a Tempo multisig operation, wait for the transaction submitted for it; see [Tempo transactions](#tempo-transactions) |
 
 Options are read once, from the object's own enumerable properties: options it inherits through a prototype, such as
@@ -273,8 +273,8 @@ const wallet = createWalletClient({ account, chain, transport: http() }).extend(
   again, until `timeoutMs`: the span ends as `timeout` only if no receipt came, and a provider that keeps failing
   holds the confirmation (and its place under `maxBackgroundConfirmations`) until then. Your own waits are passed on
   unchanged, including these errors.
-- At most `maxBackgroundConfirmations` (default 256) background confirmations, including those of `watch()`, poll at
-  once. A transaction sent while that many are polling gets no background confirm span, and a `diag` warning is
+- At most `maxBackgroundConfirmations` (default 256) background confirmations, including those of `watch()` and
+  `watchUserOperation()`, poll at once. A transaction sent while that many are polling gets no background confirm span, and a `diag` warning is
   logged; `0` turns background confirmation off. Your own waits are not counted. See
   [ADR 0018](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0018-background-confirmation-limit.md).
 - In serverless runtimes that freeze after the response, background confirmations may not complete.
@@ -334,7 +334,8 @@ await bundler.waitForUserOperationReceipt({ hash }); // confirm span, linked to 
 - The chain id is the bundler client's, which `createBundlerClient` takes from its `client`; without one, the spans
   are recorded once the bundler answered `eth_chainId`, as for [clients without a chain](#clients-without-a-chain).
 - Only these two bundler actions are traced; viem calls the others from inside them. Background confirmation and
-  `watch()` cover transactions only: a user operation gets a confirm span when you wait for its receipt.
+  `watch()` cover transactions only: a user operation gets a confirm span when you wait for its receipt, or from
+  [`watchUserOperation()`](#user-operations-sent-elsewhere).
 
 ### Smart account SDKs
 
@@ -351,7 +352,51 @@ hash, so `withHashspan()` applied to the finished client does not see the operat
   `createBundlerClient(...).extend(withHashspan()).extend(smartAccountActions)` with permissionless
   ([setup](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/integrations.md#smart-account-sdks)).
   The returned hash is the bundle transaction's: a wait for it on a traced client records the bundle transaction,
-  not the operation.
+  not the operation. `watchUserOperation()` with that hash and the smart account's address records the operation
+  ([below](#user-operations-sent-elsewhere)).
+
+### User operations sent elsewhere
+
+When a smart account SDK or a wallet sends a user operation for you and returns only a hash, `watchUserOperation()`
+records the operation's confirm span from it, in the background: its success, gas used and cost, nonce and
+paymaster, and the bundle transaction's hash and block, as for a wait, linked to a send span recorded by the same
+tracker. `watch()` on the same hash would record the bundle transaction instead.
+
+```ts
+import { createPublicClient, http } from 'viem';
+import { withHashspan } from '@hashspan/viem';
+
+const hashspan = withHashspan();
+const reader = createPublicClient({ chain, transport: http(rpcUrl) });
+
+// The bundle transaction's hash a wallet or an SDK returned, and the smart account that sent the operation:
+hashspan.watchUserOperation(reader, { bundleHash: hash, sender: smartAccountAddress });
+
+// Or the user operation hash, through a bundler client (createBundlerClient):
+hashspan.watchUserOperation(bundler, { userOpHash });
+
+// Before a short-lived process exits:
+await hashspan.flush();
+```
+
+- **With `bundleHash` and `sender`**, a client of the chain's node, such as a public client, reads the bundle receipt
+  (`eth_getTransactionReceipt`; a bundler client would ask its bundler), and the operation is its one `UserOperationEvent` with that `sender` topic, emitted by the contract the bundle
+  transaction called or by a canonical EntryPoint (0.6 to 0.9); events of other contracts do not count. Give `nonce`
+  when the sender can have more than one operation in a bundle: with several matches and no nonce, nothing is
+  recorded. Give `userOpHash` too when you know it, and the event must carry it. No match, a receipt of more than
+  10 000 logs, or no receipt by `timeoutMs` record nothing, with a `diag` message: the operation's hash, which keys
+  its span, is only known from the event. A user operation hash given as `bundleHash` has no transaction receipt: it
+  is polled until `timeoutMs`, in a slot of `maxBackgroundConfirmations`, and records nothing.
+- **With `userOpHash` alone**, the client must be a bundler client (one with viem's bundler actions, such as
+  `createBundlerClient`'s or a smart account SDK's); it is polled with `eth_getUserOperationReceipt`. Any other client
+  records nothing and gets no request. No receipt by `timeoutMs` ends the span as `timeout`.
+- Options as for `watch()`: `chainId` (defaults to the client's chain, or for a bundler client to that of its
+  `client`) and `timeoutMs` (default 120 000 ms). It counts as one of the `maxBackgroundConfirmations`, sends its
+  requests with the client's `request`, not its actions, so a client extended by `withHashspan()` records no
+  confirm span of the bundle transaction, never throws or waits, and `flush()` awaits it.
+- There is no send span unless you record the call that sends with the same tracker. Revert reasons are recorded
+  only from a bundler's receipt
+  ([ADR 0031](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0031-watch-user-operation.md)).
 
 ## Call batches (EIP-5792)
 
@@ -446,8 +491,8 @@ const wallet = createWalletClient({
   they can belong to different traces.
 - Needs viem 2.21.25 or later; with an older viem it sends nothing and logs a `diag` warning. To keep a hook of your
   own, call this one from it and return its result.
-- An eRPC setup: [RPC gateways](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/integrations.md#rpc-gateways-erpc).
-  See [ADR 0030](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/adr/0030-trace-context-on-json-rpc-requests.md).
+- An eRPC setup: [RPC gateways](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/integrations.md#rpc-gateways-erpc).
+  See [ADR 0030](https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0030-trace-context-on-json-rpc-requests.md).
 
 ## Traced actions
 
@@ -514,8 +559,11 @@ actions to trace their user operations ([smart account SDKs](#smart-account-sdks
 - Only waits are traced: polling `getTransactionReceipt` or `getCallsStatus` yourself records nothing
   ([call batches](#call-batches-eip-5792)).
 - Background confirmation and `watch()` cover transactions only: a user operation or a call batch gets a confirm span
-  only from your own wait ([smart accounts](#smart-accounts-erc-4337), [call batches](#call-batches-eip-5792)).
-  `watch()` on a bundle transaction's hash records the bundle transaction, not the operations in it.
+  only from your own wait ([smart accounts](#smart-accounts-erc-4337), [call batches](#call-batches-eip-5792)), or
+  for a user operation from `watchUserOperation()`. `watch()` on a bundle transaction's hash records the bundle
+  transaction, not the operations in it; `watchUserOperation()` records one operation of it, and nothing when the
+  sender has several there without a nonce given
+  ([user operations sent elsewhere](#user-operations-sent-elsewhere)).
 - A smart account SDK's `sendTransaction`, `writeContract` and `sendCalls` are not traced on a client extended after
   the SDK's actions ([smart account SDKs](#smart-account-sdks)).
 - `sendCallsSync` is traced from viem 2.45.2, and call batches record no fee

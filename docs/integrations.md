@@ -11,7 +11,7 @@ This page collects the setups that were checked; each code block is compiled in 
 | Setup | Use | Extra setup | Known limits | Runs in CI |
 |---|---|---|---|---|
 | viem wallet and public clients | `@hashspan/viem` [`withHashspan()`](../packages/viem/README.md#usage) | apply it last; one result per agent | a library that calls viem's actions as functions is not traced ([below](#libraries-that-take-a-viem-client)) | `packages/viem` tests |
-| viem bundler client (ERC-4337) | `@hashspan/viem` | a tracker from `@hashspan/core` 0.8 or later | no background confirmation or `watch()` for user operations ([smart accounts](../packages/viem/README.md#smart-accounts-erc-4337)) | `packages/viem` tests, a real bundler in CI only |
+| viem bundler client (ERC-4337) | `@hashspan/viem` | a tracker from `@hashspan/core` 0.8 or later | no background confirmation or `watch()` for user operations; [`watchUserOperation()`](../packages/viem/README.md#user-operations-sent-elsewhere) for one sent elsewhere ([smart accounts](../packages/viem/README.md#smart-accounts-erc-4337)) | `packages/viem` tests, a real bundler in CI only |
 | permissionless.js smart account client | `@hashspan/viem` | build the client with `withHashspan()` before `smartAccountActions` | applied last, only `sendUserOperation` and `waitForUserOperationReceipt` are traced ([setup](#smart-account-sdks)) | `integrations/`, with a stand-in account |
 | ZeroDev Kernel account client | `@hashspan/viem` | none | only `sendUserOperation` and `waitForUserOperationReceipt` are traced; `sendTransaction` and `writeContract` are not ([setup](#smart-account-sdks)) | `integrations/`, with a stand-in account |
 | EIP-5792 wallet (`sendCalls`) | `@hashspan/viem` | none | no fees on the batch; `getCallsStatus` is not traced ([call batches](../packages/viem/README.md#call-batches-eip-5792)) | `packages/viem` tests |
@@ -28,7 +28,7 @@ This page collects the setups that were checked; each code block is compiled in 
 | LangChain JS, OpenAI Agents SDK (OpenInference) | `@hashspan/viem` | run tools in an active span of your own | tool spans are not active ([setup](#agent-frameworks)) | `integrations/` |
 | MCP server tools (stdio) | `@hashspan/viem` in the server | the agent's trace context in each request's `_meta`: OpenInference's MCP instrumentation (v1 SDK) or a few lines of your own (v2 SDK) | without it, the server's spans start a trace of their own; pass the `OTEL_*` settings to the server ([setup](#mcp-servers)) | `integrations/` |
 | ElizaOS `plugin-evm` | none | none | not traced: it creates its own wallet client ([details](#agent-frameworks)) | no |
-| Coinbase Agentic Wallets (`awal`, payments MCP) | none | none | not traced: sends run as smart account user operations in a Coinbase-hosted page inside awal's own app; `watch()` on the returned hash records the bundle transaction, not the account's operation | no |
+| Coinbase Agentic Wallets (`awal`, payments MCP) | `@hashspan/viem` [`watchUserOperation()`](../packages/viem/README.md#user-operations-sent-elsewhere) on the returned hash, not tested with awal | the smart account's address and a public client of the chain; a bundler client for a user operation hash | sends run as smart account user operations in a Coinbase-hosted page inside awal's own app, so there is no send span. The returned `transactionHash` is the bundle's when awal had one, else the user operation's, and does not say which: as `bundleHash` with the account as `sender`, it records the operation whose `UserOperationEvent` a canonical EntryPoint or the called contract emitted; a user operation hash given this way finds no receipt and records nothing after `timeoutMs` (default 120 s), polling until then. As `userOpHash`, it needs a bundler. `watch()` on it records the bundle transaction | no |
 | Wallet services with a viem account (Turnkey, Privy) | `@hashspan/viem` | none | none ([setup](#wallet-services)) | as viem clients |
 | Wallet services with an EIP-1193 provider (Circle, Fireblocks) | `@hashspan/viem` on a `custom()` transport | a public client for receipts when the provider does not answer reads | Circle smart contract accounts not checked ([setup](#wallet-services)) | the pattern in `packages/viem` tests |
 | Wallet services that send through their API | `@hashspan/viem` `watch()` | a public client; for a send span, the API call recorded with the same tracker | none ([setup](#wallet-services)) | the pattern in `packages/viem` tests |
@@ -107,6 +107,11 @@ await hashspan.flush();
   not. `withHashspan()` applied last, as above, is the supported ZeroDev setup. Building the client by hand with
   `withHashspan()` before ZeroDev's actions is not a documented setup, because `createKernelAccountClient` also sets
   ZeroDev's fee estimate and an EIP-7702 authorization step.
+- For the bundle hash that `sendTransaction` returns on a client extended last,
+  `hashspan.watchUserOperation(client, { bundleHash: hash, sender: account.address })`, with the public client above,
+  records the operation's confirm span, without a send span
+  ([user operations sent elsewhere](../packages/viem/README.md#user-operations-sent-elsewhere)). The `packages/viem`
+  tests check this with a copy of the SDKs' `sendTransaction`, not with the SDKs themselves.
 - In CI, both SDKs run with a stand-in smart account on a stand-in EntryPoint, since Kernel's and SimpleAccount's
   contracts are not available to the tests; the user operation spans themselves are also checked through a real
   bundler ([smart accounts](../packages/viem/README.md#smart-accounts-erc-4337)).

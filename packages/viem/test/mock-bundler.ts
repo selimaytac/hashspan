@@ -1,4 +1,13 @@
-import { createPublicClient, custom, encodeFunctionResult, RpcRequestError } from 'viem';
+import {
+  createPublicClient,
+  custom,
+  encodeAbiParameters,
+  encodeEventTopics,
+  encodeFunctionResult,
+  type Hex,
+  RpcRequestError,
+  zeroAddress,
+} from 'viem';
 import {
   entryPoint07Abi,
   entryPoint07Address,
@@ -129,3 +138,37 @@ export const GAS = {
   paymasterVerificationGasLimit: 0n,
   paymasterPostOpGasLimit: 0n,
 } as const;
+
+/** A `UserOperationEvent` log as a node returns it. */
+export function userOperationEventLog({
+  address = entryPoint07Address.toLowerCase(),
+  userOpHash = USER_OP_HASH as Hex,
+  sender = SENDER as string,
+  paymaster = zeroAddress as string,
+  nonce = NONCE,
+  success = true,
+  actualGasCost = 1_000n,
+  actualGasUsed = 500n,
+}: {
+  address?: string;
+  userOpHash?: Hex;
+  sender?: string;
+  paymaster?: string;
+  nonce?: bigint;
+  success?: boolean;
+  actualGasCost?: bigint;
+  actualGasUsed?: bigint;
+} = {}): { address: string; topics: Hex[]; data: Hex } {
+  return {
+    address,
+    topics: encodeEventTopics({
+      abi: entryPoint07Abi,
+      eventName: 'UserOperationEvent',
+      args: { userOpHash, sender: sender as Hex, paymaster: paymaster as Hex },
+    }) as Hex[],
+    data: encodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'bool' }, { type: 'uint256' }, { type: 'uint256' }],
+      [nonce, success, actualGasCost, actualGasUsed],
+    ),
+  };
+}

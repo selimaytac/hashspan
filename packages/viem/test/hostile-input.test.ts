@@ -12,7 +12,7 @@ import {
   serializeTransaction,
   type Transport,
 } from 'viem';
-import { createBundlerClient } from 'viem/account-abstraction';
+import { createBundlerClient, entryPoint07Address } from 'viem/account-abstraction';
 import { base, baseSepolia } from 'viem/chains';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -45,8 +45,10 @@ import {
   GAS,
   type MockBundlerOptions,
   mockBundler,
+  SENDER,
   stubAccount,
   USER_OP_HASH,
+  userOperationEventLog,
 } from './mock-bundler.js';
 import { FROM, HASH, type MockOptions, mockTransport, TO } from './mock-transport.js';
 import { viemAtLeast, viemHasAction } from './viem-version.js';
@@ -262,6 +264,13 @@ const RAW = {
     maxPriorityFeePerGas: 1n,
   }),
 };
+/** A bundle transaction's receipt with one `UserOperationEvent` of `SENDER`, for watchUserOperation(). */
+const BUNDLE_RECEIPT = {
+  to: entryPoint07Address.toLowerCase(),
+  logs: [userOperationEventLog()],
+};
+/** watchUserOperation() of the operation in `BUNDLE_RECEIPT`, whose transaction hash is the mock's `HASH`. */
+const IN_BUNDLE = { bundleHash: HASH, sender: SENDER, timeoutMs: WAIT_MS };
 /** A Tempo multisig relay's answer to a sync send below quorum, as viem passes it on without its Tempo formatter. */
 const PENDING = {
   status: 'pending',
@@ -694,6 +703,114 @@ const ROWS: Row[] = [
       requests: () => [],
     }),
   },
+  // watchUserOperation() (ADR 0031): its options, its client, and the receipts it reads from a node and a bundler.
+  ...['bundleHash', 'sender', 'nonce', 'userOpHash', 'chainId', 'timeoutMs'].map(
+    (key): Row => ({
+      name: `watchUserOperation options.${key}`,
+      untraced: false,
+      scenario: (value, hashspan) => {
+        const { client, mock } = reader(undefined, { receipt: BUNDLE_RECEIPT });
+        return {
+          call: () => hashspan?.watchUserOperation(client, { ...IN_BUNDLE, [key]: value } as never),
+          requests: () => mock.requests,
+        };
+      },
+    }),
+  ),
+  ...['userOpHash', 'chainId', 'timeoutMs'].map(
+    (key): Row => ({
+      name: `watchUserOperation options.${key} with a bundler`,
+      untraced: false,
+      scenario: async (value, hashspan) => {
+        const { client, requests } = await bundler(undefined);
+        return {
+          call: () =>
+            hashspan?.watchUserOperation(client, {
+              userOpHash: USER_OP_HASH,
+              timeoutMs: WAIT_MS,
+              [key]: value,
+            } as never),
+          requests,
+        };
+      },
+    }),
+  ),
+  {
+    name: 'watchUserOperation options',
+    untraced: false,
+    scenario: (value, hashspan) => {
+      const { client, mock } = reader(undefined, { receipt: BUNDLE_RECEIPT });
+      return {
+        call: () => hashspan?.watchUserOperation(client, value as never),
+        requests: () => mock.requests,
+      };
+    },
+  },
+  {
+    name: 'watchUserOperation client',
+    untraced: false,
+    scenario: (value, hashspan) => ({
+      call: () => hashspan?.watchUserOperation(value as never, IN_BUNDLE),
+      requests: () => [],
+    }),
+  },
+  ...['transactionHash', 'to', 'logs', 'blockNumber'].map(
+    (field): Row => ({
+      name: `node receipt of watchUserOperation ${field}`,
+      untraced: false,
+      scenario: (value, hashspan) => {
+        const { client, mock } = reader(undefined, {
+          receipt: { ...BUNDLE_RECEIPT, [field]: value },
+        });
+        return {
+          call: () => hashspan?.watchUserOperation(client, IN_BUNDLE),
+          requests: () => mock.requests,
+        };
+      },
+    }),
+  ),
+  ...['address', 'topics', 'data'].map(
+    (field): Row => ({
+      name: `node receipt of watchUserOperation logs[0].${field}`,
+      untraced: false,
+      scenario: (value, hashspan) => {
+        const { client, mock } = reader(undefined, {
+          receipt: { ...BUNDLE_RECEIPT, logs: [{ ...userOperationEventLog(), [field]: value }] },
+        });
+        return {
+          call: () => hashspan?.watchUserOperation(client, IN_BUNDLE),
+          requests: () => mock.requests,
+        };
+      },
+    }),
+  ),
+  ...[
+    'userOpHash',
+    'success',
+    'actualGasCost',
+    'actualGasUsed',
+    'sender',
+    'nonce',
+    'paymaster',
+    'entryPoint',
+    'reason',
+    'receipt',
+  ].map(
+    (field): Row => ({
+      name: `bundler receipt of watchUserOperation ${field}`,
+      untraced: false,
+      scenario: async (value, hashspan) => {
+        const { client, requests } = await bundler(undefined, {
+          receipt: { [field]: value, ...(field === 'reason' ? { success: false } : {}) },
+        });
+        return {
+          call: () =>
+            hashspan?.watchUserOperation(client, { userOpHash: USER_OP_HASH, timeoutMs: WAIT_MS }),
+          requests,
+        };
+      },
+    }),
+  ),
   {
     name: 'flush options',
     untraced: false,
@@ -901,6 +1018,28 @@ describe('bounds', () => {
       const recorded = await revertReason(long(length));
       expect(typeof recorded).toBe('string');
       expect((recorded as string).length).toBeLessThanOrEqual(BOUNDS.revertReason + 3);
+    }
+  });
+
+  it('reads no log of a bundle receipt with more than 10 000, for watchUserOperation()', async () => {
+    for (const count of [10_000, 10_001]) {
+      tracing.reset();
+      const read = new Set<string>();
+      const logs = new Proxy(
+        Array.from({ length: count }, () => userOperationEventLog({ sender: TO })),
+        {
+          getOwnPropertyDescriptor(target, key) {
+            if (typeof key === 'string' && /^\d+$/.test(key)) read.add(key);
+            return Reflect.getOwnPropertyDescriptor(target, key);
+          },
+        },
+      );
+      const hashspan = withHashspan();
+      const { client } = reader(undefined, { receipt: { ...BUNDLE_RECEIPT, logs } });
+      hashspan.watchUserOperation(client, IN_BUNDLE);
+      await hashspan.flush({ timeoutMs: 3_000 });
+      expect(read.size).toBe(count <= 10_000 ? count : 0);
+      expect(tracing.spans()).toEqual([]);
     }
   });
 
