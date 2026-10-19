@@ -385,7 +385,8 @@ await hashspan.flush();
   when the sender can have more than one operation in a bundle: with several matches and no nonce, nothing is
   recorded. Give `userOpHash` too when you know it, and the event must carry it. No match, a receipt of more than
   10 000 logs, or no receipt by `timeoutMs` record nothing, with a `diag` message: the operation's hash, which keys
-  its span, is only known from the event.
+  its span, is only known from the event. A user operation hash given as `bundleHash` has no transaction receipt: it
+  is polled until `timeoutMs`, in a slot of `maxBackgroundConfirmations`, and records nothing.
 - **With `userOpHash` alone**, the client must be a bundler client (one with viem's bundler actions, such as
   `createBundlerClient`'s or a smart account SDK's); it is polled with `eth_getUserOperationReceipt`. Any other client
   records nothing and gets no request. No receipt by `timeoutMs` ends the span as `timeout`.
