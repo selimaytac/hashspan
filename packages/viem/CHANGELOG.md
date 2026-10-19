@@ -1,5 +1,28 @@
 # @hashspan/viem
 
+## 1.2.2
+
+### Patch Changes
+
+- [#474](https://github.com/selimaytac/hashspan/pull/474) [`cd37093`](https://github.com/selimaytac/hashspan/commit/cd3709354aea59ef4a9434ff07ec35ba5bc7b48f) Thanks [@selimaytac](https://github.com/selimaytac)! - The replacement search after a timed-out wait also finds a replacement mined in the first blocks of a chain when viem
+  is older than 2.29.1. Those releases send a nonce read at block 0 as a read at the latest block (wevm/viem#3629). On a
+  chain younger than the search window, such as a local devnet, the search then missed the block that took the nonce,
+  and the confirm span kept `error.type` `timeout`. The adapter now sends that read with the block number itself.
+
+- [#472](https://github.com/selimaytac/hashspan/pull/472) [`d1fd5ca`](https://github.com/selimaytac/hashspan/commit/d1fd5cae82db017d31dcb27f7d5707e22cea3e32) Thanks [@selimaytac](https://github.com/selimaytac)! - `createSmartAccountClient(...).extend(withHashspan())` on a permissionless.js smart account client type-checks without
+  a cast. The extension's return type leaves out an action whose type the client's `extend()` does not accept from an
+  extension, such as the SDK's own `sendTransaction`, so the extended client keeps the SDK's types for it. The types for
+  viem's own clients are unchanged.
+
+- [#474](https://github.com/selimaytac/hashspan/pull/474) [`cd37093`](https://github.com/selimaytac/hashspan/commit/cd3709354aea59ef4a9434ff07ec35ba5bc7b48f) Thanks [@selimaytac](https://github.com/selimaytac)! - A wait that times out keeps its timeout when a new wait for the same transaction starts during the replacement search.
+  Since 1.1.1, after a `waitForTransactionReceipt` timed out, the adapter looks for a replacement viem did not report,
+  and the timed-out wait's confirm span stayed open while it looked. A retry that started then joined that span, and
+  its receipt ended it as `success` at the retry's end: the timeout was lost. The retry's confirm span now starts once
+  the timed-out span has ended, at the time the wait gave up, with `error.type` `timeout`, or as `replaced` when the
+  search found a replacement. The retry then gets a span of its own, with its own start and outcome, as
+  docs/semconv.md describes for a retry after a timeout; after a replacement it adds none, as after any receipt. Waits
+  that started before the timeout still share one span.
+
 ## 1.2.1
 
 ### Patch Changes

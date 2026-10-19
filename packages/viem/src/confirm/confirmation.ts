@@ -1,7 +1,14 @@
 // Confirming a transaction through a client: the receipt, a sealed receipt after a preconfirmation, the receipt of a
 // wait for several confirmations read again, the revert reason, background confirmation within its limit, and the
 // wait that follows a pending receipt of a sync send.
-import type { ConfirmHandle, ReceiptLike, TxTracker } from '@hashspan/core';
+import type {
+  ConfirmHandle,
+  ConfirmInput,
+  EndOptions,
+  FailOptions,
+  ReceiptLike,
+  TxTracker,
+} from '@hashspan/core';
 import { type Context, context, diag, type TimeInput } from '@opentelemetry/api';
 import { type Abi, type TransactionReceipt, WaitForTransactionReceiptTimeoutError } from 'viem';
 import {
@@ -59,7 +66,7 @@ const PENDING_RECEIPT: ReceiptLike = { status: 'pending', blockNumber: 0, gasUse
 /**
  * For a caller's wait with `confirmations` above 1: its receipt is read again once the wait resolved, for at most
  * `timeoutMs`, the wait's own timeout
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/adr/0026-receipt-after-several-confirmations.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0026-receipt-after-several-confirmations.md).
  */
 export interface RecheckOptions {
   timeoutMs: number;
@@ -85,6 +92,12 @@ export interface ConfirmationOptions {
 }
 
 export interface Confirmation {
+  /**
+   * Starts a wait's confirm span, as `tracker.startConfirm` does. While the replacement search of an earlier wait for
+   * the same transaction that timed out is running, the span starts once that wait's span has ended, with this
+   * wait's start, parent and outcome, so that the wait neither joins nor ends the span that timed out.
+   */
+  startConfirm(input: ConfirmInput, parent?: Context): ConfirmHandle;
   /**
    * Records the outcome of `wait` on `waitingHandle`; never rejects. Resolves as soon as the handle has ended,
    * including when a flush that gave up ended it, so the tracked work drains.
@@ -147,6 +160,79 @@ export function createConfirmation({
   track,
   settleOnce,
 }: ConfirmationOptions): Confirmation {
+  /**
+   * Replacement searches running after a wait timed out, per transaction key: each ends when the span of the wait
+   * that timed out has ended, by any path.
+   */
+  const searches = new Map<string, Set<Search>>();
+  /** Registers a search for `key` that ends when `confirmation` has ended. */
+  const searchUntil = (key: string, confirmation: PendingConfirmation): void => {
+    const search = new Search();
+    let running = searches.get(key);
+    if (!running) {
+      running = new Set();
+      searches.set(key, running);
+    }
+    running.add(search);
+    confirmation.onEnded(() => {
+      running.delete(search);
+      if (running.size === 0 && searches.get(key) === running) searches.delete(key);
+      search.end();
+    });
+  };
+
+  const startConfirm: Confirmation['startConfirm'] = (input, parent) => {
+    const running =
+      typeof input.hash === 'string'
+        ? searches.get(confirmKey(input.chainId, input.hash))
+        : undefined;
+    // Joining now would make this wait's outcome that of the wait that timed out: its receipt would end that span as
+    // a success, and the timeout would be lost.
+    if (!running) return tracker.startConfirm(input, parent);
+    return startAfter([...running], input, parent, context.active());
+  };
+
+  /**
+   * A confirm handle whose span starts once each of `running` ended, with the start, options, parent and active context
+   * of the call that made it: the first of `end`, `timeout` and `fail` called before then is applied once the span
+   * started, with the time it was called.
+   */
+  const startAfter = (
+    running: Search[],
+    input: ConfirmInput,
+    parent: Context | undefined,
+    active: Context,
+  ): ConfirmHandle => {
+    const started = { ...input, startTime: input.startTime ?? new Date() };
+    let underlying: ConfirmHandle | undefined;
+    let outcome: ((handle: ConfirmHandle) => void) | undefined;
+    let left = running.length;
+    const start = (): void => {
+      if (--left > 0) return;
+      underlying = context.with(active, () => tracker.startConfirm(started, parent));
+      outcome?.(underlying);
+    };
+    for (const search of running) search.whenEnded(start);
+    const settle = (apply: (handle: ConfirmHandle) => void): void => {
+      if (underlying) apply(underlying);
+      else outcome ??= apply;
+    };
+    return {
+      end: (receipt, options) => {
+        const at = stamped(options);
+        settle((handle) => handle.end(receipt, at));
+      },
+      timeout: (options) => {
+        const at = stamped(options);
+        settle((handle) => handle.timeout(at));
+      },
+      fail: (error, options) => {
+        const at = stamped(options);
+        settle((handle) => handle.fail(error, at));
+      },
+    };
+  };
+
   /** Background confirmations polling now, and whether the limit was reported since the count was last below it. */
   let backgroundCount = 0;
   let limitReported = false;
@@ -208,14 +294,14 @@ export function createConfirmation({
   /**
    * Ends `handle` from the outcome of `wait`; never rejects. The tracker joins handles for one transaction into one
    * confirm span
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/adr/0007-confirmation-ownership.md) and
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0007-confirmation-ownership.md) and
    * attributes the receipt of a replacing transaction to that transaction
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/adr/0008-replaced-transactions.md). For
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0008-replaced-transactions.md). For
    * reverted receipts, the span ends after the revert reason was fetched with `client`. For a preconfirmed receipt, it
    * ends with the sealed receipt, read with `client` until `deadline` at the latest
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/adr/0024-sealed-receipt-fees.md). With
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0024-sealed-receipt-fees.md). With
    * `recheck`, the receipt of the transaction itself is read again first, and the span records what the chain holds
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/adr/0026-receipt-after-several-confirmations.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0026-receipt-after-several-confirmations.md).
    */
   const recordReceipt = async (
     chainId: number,
@@ -253,6 +339,8 @@ export function createConfirmation({
         const timedOutAt = endTimeOf() ?? new Date();
         endTimeOf = () => timedOutAt;
         confirmation.onAbandon((underlying) => underlying.timeout({ endTime: timedOutAt }));
+        // A wait for this transaction that starts during the search gets a span of its own once this one ended.
+        searchUntil(confirmKey(chainId, hash), confirmation);
         const found = await within(
           findReplacement(client, hash, sent),
           REPLACEMENT_SEARCH_TIMEOUT_MS,
@@ -407,7 +495,7 @@ export function createConfirmation({
   /**
    * Records the outcome of `wait` on `waitingHandle`; never rejects. Resolves as soon as the handle has ended,
    * including when a flush that gave up ended it
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.1/docs/adr/0010-flush-before-shutdown.md), so the
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/viem@1.2.2/docs/adr/0010-flush-before-shutdown.md), so the
    * tracked work drains.
    */
   const recordConfirmation = (
@@ -495,7 +583,7 @@ export function createConfirmation({
     }
     if (atLimit()) return false;
     // The poll below passes viem no count: it waits for one confirmation.
-    const handle = tracker.startConfirm({ chainId, hash, confirmations: 1 });
+    const handle = startConfirm({ chainId, hash, confirmations: 1 });
     const capture: ReplacementCapture = { detect: detectsReplacement(undefined, client) };
     const waitMs = durationOr(timeoutMs, DEFAULT_BACKGROUND_TIMEOUT_MS);
     const background = backgroundClientOf(client);
@@ -546,7 +634,7 @@ export function createConfirmation({
     timeoutMs,
     { parent, startTime, returnedAt },
   ) => {
-    const handle = context.with(parent, () => tracker.startConfirm({ chainId, hash, startTime }));
+    const handle = context.with(parent, () => startConfirm({ chainId, hash, startTime }));
     // The call is the caller's own wait, recorded as without the option; only the follow is over the limit (ADR 0018).
     if (atLimit()) {
       handle.end(PENDING_RECEIPT, { endTime: returnedAt });
@@ -592,5 +680,33 @@ export function createConfirmation({
 
   const reserveBackground = (): (() => void) | undefined => (atLimit() ? undefined : occupy());
 
-  return { recordConfirmation, confirmThrough, confirmPending, reserveBackground };
+  return { startConfirm, recordConfirmation, confirmThrough, confirmPending, reserveBackground };
+}
+
+/** A replacement search after a timed-out wait, until the span of that wait ended. */
+class Search {
+  private listeners: (() => void)[] | undefined = [];
+
+  /** Calls `listener` once the search ended; at once if it has. */
+  whenEnded(listener: () => void): void {
+    if (this.listeners) this.listeners.push(listener);
+    else listener();
+  }
+
+  end(): void {
+    const listeners = this.listeners ?? [];
+    this.listeners = undefined;
+    for (const listener of listeners) {
+      try {
+        listener();
+      } catch (error) {
+        diag.error(`hashspan: failed to start a confirm span (${errorName(error)})`);
+      }
+    }
+  }
+}
+
+/** `options` with the time of the call as its end time, unless it names one. */
+function stamped<T extends EndOptions | FailOptions>(options: T | undefined): T {
+  return { ...options, endTime: options?.endTime ?? new Date() } as T;
 }

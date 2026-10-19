@@ -44,6 +44,8 @@ interface ChainOptions {
   /** How many `eth_getTransactionByHash` requests fail first. */
   failedReads?: number;
   hangOn?: string[];
+  /** Methods whose requests wait until `release()`; `held` resolves at the first of them. */
+  holdOn?: string[];
 }
 
 /**
@@ -59,7 +61,18 @@ function chain({
   failNonceAt,
   knownFor = 0,
   failedReads = 0,
+  holdOn = [],
 }: ChainOptions = {}) {
+  /** Whether HASH itself was mined, in block 995, as when a nonce gap before it is filled; a block follows then. */
+  const awaited = { mined: false };
+  let reached: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  let release: () => void = () => {};
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   let failures = 0;
   let reads = 0;
   const requests: { method: string; params: unknown[] }[] = [];
@@ -88,6 +101,10 @@ function chain({
     async request({ method, params = [] }: { method: string; params?: unknown[] }) {
       requests.push({ method, params });
       if (hangOn.includes(method)) return new Promise(() => {});
+      if (holdOn.includes(method)) {
+        reached();
+        await released;
+      }
       if (failOn.includes(method)) {
         throw new RpcRequestError({
           body: {},
@@ -102,7 +119,8 @@ function chain({
         case 'eth_sendRawTransaction':
           return HASH;
         case 'eth_blockNumber':
-          return hex(latest);
+          // The block after the one that took HASH, so that a wait already polling sees a new one.
+          return hex(awaited.mined ? latest + 1 : latest);
         case 'eth_getTransactionByHash':
           if (failures++ < failedReads) {
             throw new RpcRequestError({
@@ -110,6 +128,15 @@ function chain({
               error: { code: -32602, message: 'mock: read failed' },
               url: 'mock',
             });
+          }
+          if (awaited.mined && String(params[0]).toLowerCase() === HASH) {
+            return {
+              ...minedTransaction,
+              hash: HASH,
+              to: TO,
+              value: '0x1',
+              blockNumber: hex(995),
+            };
           }
           if (String(params[0]).toLowerCase() !== HASH || reads++ >= knownFor) return null;
           return {
@@ -159,12 +186,15 @@ function chain({
           };
         }
         case 'eth_getTransactionReceipt': {
-          if (String(params[0]).toLowerCase() !== takenBy.toLowerCase()) return null;
+          const minedAwaited = awaited.mined && String(params[0]).toLowerCase() === HASH;
+          if (!minedAwaited && String(params[0]).toLowerCase() !== takenBy.toLowerCase()) {
+            return null;
+          }
           return {
-            transactionHash: takenBy,
+            transactionHash: minedAwaited ? HASH : takenBy,
             transactionIndex: '0x0',
             blockHash: `0x${'ee'.repeat(32)}`,
-            blockNumber: hex(takenAt ?? 0),
+            blockNumber: hex(minedAwaited ? 995 : (takenAt ?? 0)),
             from: FROM,
             to: FROM,
             cumulativeGasUsed: '0x5208',
@@ -192,7 +222,16 @@ function chain({
     requests.filter(
       (r) => r.method === 'eth_getTransactionCount' || r.method === 'eth_getBlockByNumber',
     );
-  return { transport, eip1193: custom(provider), requests, searched, reads: reads_ };
+  return {
+    transport,
+    eip1193: custom(provider),
+    requests,
+    searched,
+    reads: reads_,
+    awaited,
+    held,
+    release,
+  };
 }
 
 function clients(transport: ReturnType<typeof chain>['transport'], hashspan = withHashspan()) {
@@ -252,6 +291,19 @@ describe('a replacement viem did not report', () => {
     await sendAndTimeOut(clients(mock.transport));
     expect(confirmOf(HASH)?.attributes['blockchain.tx.replacement.hash']).toBe(MINED);
     expect(confirmOf(MINED)?.attributes['blockchain.block.number']).toBe(0);
+  });
+
+  it('reads the nonce at block 0 of a chain shorter than the window', async () => {
+    // Taken in block 1: the search reads the nonce at block 0, which viem before 2.29.1 sends as `latest`.
+    const mock = chain({ latest: 5, takenAt: 1 });
+    await sendAndTimeOut(clients(mock.transport));
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.replacement.hash']).toBe(MINED);
+    expect(confirmOf(MINED)?.attributes['blockchain.block.number']).toBe(1);
+    expect(
+      mock
+        .searched()
+        .filter((r) => r.method === 'eth_getTransactionCount' && r.params[1] === '0x0'),
+    ).toHaveLength(1);
   });
 
   it('finds it in the newest block of the window', async () => {
@@ -519,5 +571,126 @@ describe('a timeout that stays a timeout', () => {
     timedOut();
     const [seconds, nanos] = confirmOf(HASH)?.endTime ?? [0, 0];
     expect(seconds * 1_000 + nanos / 1e6).toBeLessThanOrEqual(rejectedAt + 1);
+  });
+});
+
+const confirmsOf = (hash: string) =>
+  tracing
+    .spans()
+    .filter((s) => s.name === 'confirm 8453' && s.attributes['blockchain.tx.hash'] === hash)
+    .sort((a, b) => ms(a.startTime) - ms(b.startTime));
+const ms = ([seconds, nanos]: [number, number]) => seconds * 1_000 + nanos / 1e6;
+
+// docs/semconv.md, "One confirm span per transaction and tracker": a timeout ends the span when the wait that timed
+// out was the last one running, and a retry after it gets a span of its own, also while the search runs.
+describe('a wait for the same transaction while the search runs', () => {
+  /** Sends HASH, waits until viem times out, and resolves once the search after it is held at its nonce read. */
+  async function timeOutAndSearch(mock: ReturnType<typeof chain>) {
+    const setup = clients(mock.transport);
+    const hash = await setup.wallet.sendTransaction({
+      to: TO,
+      value: 1n,
+      nonce: NONCE,
+      gas: 21_000n,
+    });
+    await expect(
+      setup.reader.waitForTransactionReceipt({ hash, timeout: 100, retryDelay: 1 }),
+    ).rejects.toThrow(expect.objectContaining({ name: 'WaitForTransactionReceiptTimeoutError' }));
+    const gaveUpAt = Date.now();
+    await mock.held;
+    return { ...setup, hash, gaveUpAt };
+  }
+
+  it('keeps the timeout and gives a retry that gets the receipt a span of its own', async () => {
+    // The nonce is not taken by another transaction: no replacement.
+    const mock = chain({ takenAt: null, holdOn: ['eth_getTransactionCount'] });
+    const { reader, hashspan, hash, gaveUpAt } = await timeOutAndSearch(mock);
+    const retryStart = Date.now();
+    mock.awaited.mined = true;
+    const receipt = await reader.waitForTransactionReceipt({ hash, retryDelay: 1 });
+    expect(receipt.transactionHash).toBe(HASH);
+    const resolvedAt = Date.now();
+    // The retry's span waits for the search; its outcome is kept until then.
+    expect(confirmsOf(HASH)).toHaveLength(0);
+    mock.release();
+    expect(await hashspan.flush({ timeoutMs: 5_000 })).toBe(true);
+
+    const spans = confirmsOf(HASH);
+    expect(spans).toHaveLength(2);
+    const [timedOut, retried] = spans as [(typeof spans)[0], (typeof spans)[0]];
+    expect(timedOut.attributes['error.type']).toBe('timeout');
+    expect(timedOut.attributes['blockchain.tx.status']).toBeUndefined();
+    expect(ms(timedOut.endTime)).toBeLessThanOrEqual(gaveUpAt + 1);
+    expect(retried.attributes).toMatchObject({
+      'blockchain.tx.status': 'success',
+      'blockchain.block.number': 995,
+    });
+    expect(retried.attributes['error.type']).toBeUndefined();
+    // The retry's own start and end, not the search's.
+    expect(ms(retried.startTime)).toBeGreaterThanOrEqual(retryStart - 1);
+    expect(ms(retried.endTime)).toBeLessThanOrEqual(resolvedAt + 1);
+  });
+
+  it('keeps the replacement the search found, and the retry adds no span', async () => {
+    const mock = chain({ holdOn: ['eth_getTransactionCount'] });
+    const { reader, hashspan, hash } = await timeOutAndSearch(mock);
+    // The retry times out as well: the node no longer knows HASH.
+    await expect(
+      reader.waitForTransactionReceipt({ hash, timeout: 100, retryDelay: 1 }),
+    ).rejects.toThrow(expect.objectContaining({ name: 'WaitForTransactionReceiptTimeoutError' }));
+    mock.release();
+    expect(await hashspan.flush({ timeoutMs: 5_000 })).toBe(true);
+
+    // After the receipt of the replacement, a later wait adds no span, as after any receipt.
+    expect(confirmsOf(HASH)).toHaveLength(1);
+    expect(confirmOf(HASH)?.attributes).toMatchObject({
+      'blockchain.tx.status': 'replaced',
+      'blockchain.tx.replacement.hash': MINED,
+    });
+    expect(confirmOf(HASH)?.attributes['error.type']).toBeUndefined();
+    expect(confirmsOf(MINED)).toHaveLength(1);
+    expect(confirmOf(MINED)?.attributes['blockchain.tx.status']).toBe('success');
+  });
+
+  it('still shares one span among waits that started before the timeout', async () => {
+    const mock = chain({ takenAt: null, holdOn: ['eth_getTransactionCount'] });
+    const { hashspan, wallet, reader } = clients(mock.transport);
+    const hash = await wallet.sendTransaction({ to: TO, value: 1n, nonce: NONCE, gas: 21_000n });
+    // Another client: viem joins waits of one client for one hash into one poll, with the first wait's timeout.
+    const other = createPublicClient({
+      chain: base,
+      transport: mock.transport,
+      pollingInterval: 10,
+    }).extend(hashspan);
+    const longer = other.waitForTransactionReceipt({ hash, retryDelay: 1 });
+    await expect(
+      reader.waitForTransactionReceipt({ hash, timeout: 100, retryDelay: 1 }),
+    ).rejects.toThrow(expect.objectContaining({ name: 'WaitForTransactionReceiptTimeoutError' }));
+    await mock.held;
+    mock.awaited.mined = true;
+    expect((await longer).transactionHash).toBe(HASH);
+    // The receipt of the wait still running ends the span they share.
+    expect(confirmsOf(HASH)).toHaveLength(1);
+    mock.release();
+    expect(await hashspan.flush({ timeoutMs: 5_000 })).toBe(true);
+
+    expect(confirmsOf(HASH)).toHaveLength(1);
+    expect(confirmOf(HASH)?.attributes['blockchain.tx.status']).toBe('success');
+    expect(confirmOf(HASH)?.attributes['error.type']).toBeUndefined();
+  });
+
+  it('records both spans when a flush gives up during the search', async () => {
+    const mock = chain({ takenAt: null, holdOn: ['eth_getTransactionCount'] });
+    const { reader, hashspan, hash, gaveUpAt } = await timeOutAndSearch(mock);
+    mock.awaited.mined = true;
+    await reader.waitForTransactionReceipt({ hash, retryDelay: 1 });
+    expect(await hashspan.flush({ timeoutMs: 300 })).toBe(false);
+
+    const spans = confirmsOf(HASH);
+    expect(spans).toHaveLength(2);
+    expect(spans[0]?.attributes['error.type']).toBe('timeout');
+    expect(ms(spans[0]?.endTime ?? [0, 0])).toBeLessThanOrEqual(gaveUpAt + 1);
+    expect(spans[1]?.attributes['blockchain.tx.status']).toBe('success');
+    mock.release();
   });
 });
