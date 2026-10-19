@@ -1,5 +1,14 @@
 # @hashspan/viem
 
+## 1.3.1
+
+### Patch Changes
+
+- [#491](https://github.com/selimaytac/hashspan/pull/491) [`c48e486`](https://github.com/selimaytac/hashspan/commit/c48e4860b24a9f4839b2053e6d0de2ccbe7dfdfb) Thanks [@selimaytac](https://github.com/selimaytac)! - README reordered for its first screen: what the package records, install, then a minimal example. The details of
+  `@hashspan/viem` moved to a reference page linked from its README. No code changed.
+- Updated dependencies [[`c48e486`](https://github.com/selimaytac/hashspan/commit/c48e4860b24a9f4839b2053e6d0de2ccbe7dfdfb)]:
+  - @hashspan/core@1.3.1
+
 ## 1.3.0
 
 ### Minor Changes

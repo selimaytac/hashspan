@@ -1,6 +1,6 @@
 {
   "name": "@hashspan/mpp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OpenTelemetry instrumentation for MPP payments made with mppx: traces the payments an AI agent makes with the Machine Payments Protocol as payment spans.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",

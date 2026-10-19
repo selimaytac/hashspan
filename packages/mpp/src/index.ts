@@ -18,7 +18,7 @@ import { decodeEventLog, fromRlp, keccak256, parseAbi, stringToBytes } from 'vie
  * Options of {@link withHashspan}: those of `@hashspan/viem`'s `withHashspan()` except `confirm`, and the reader to
  * confirm settlements with. They are read once, from the object's own enumerable properties; options it inherits
  * through a prototype, such as the getters of a class instance, are ignored
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.1/docs/adr/0025-untrusted-input.md).
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.2/docs/adr/0025-untrusted-input.md).
  */
 export interface WithHashspanMppOptions extends Omit<ViemOptions, 'confirm'> {
   /**
@@ -32,7 +32,7 @@ export interface WithHashspanMppOptions extends Omit<ViemOptions, 'confirm'> {
   /**
    * Replay reverted settlements to record their revert reason, as in `@hashspan/viem`. Default: false: a pull
    * settlement is broadcast by the server you pay. See
-   * https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.1/docs/adr/0029-mpp-payments.md.
+   * https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.2/docs/adr/0029-mpp-payments.md.
    */
   decodeRevertReason?: ViemOptions['decodeRevertReason'];
   /**
@@ -42,7 +42,7 @@ export interface WithHashspanMppOptions extends Omit<ViemOptions, 'confirm'> {
    * 2 seconds: a longer body reaches you cut, with an `Mppx-Body-Truncated: true` header, and a body whose stream fails
    * makes `fetch` reject. Without it, nothing changes what you get: such payments end as `timeout`, keeping the payer's
    * hash, and with a reader the confirm span records the transaction
-   * (https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.1/docs/adr/0029-mpp-payments.md).
+   * (https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.2/docs/adr/0029-mpp-payments.md).
    */
   observeFailures?: boolean | undefined;
 }
@@ -54,7 +54,7 @@ export interface HashspanMpp {
    * confirmations through the reader), so their spans are ended before the OpenTelemetry SDK shuts down; a challenge
    * that was never paid is not waited for. Resolves true
    * when all of it finished, false on timeout (default 10 000 ms), ending payment spans still open as `timeout`; never
-   * rejects. See https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.1/docs/adr/0010-flush-before-shutdown.md.
+   * rejects. See https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.2/docs/adr/0010-flush-before-shutdown.md.
    */
   flush(options?: FlushOptions): Promise<boolean>;
 }
@@ -707,7 +707,7 @@ interface Payment {
 
 /**
  * Traces the payments an mppx client makes, as `payment` spans
- * (https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.1/docs/adr/0029-mpp-payments.md). It registers observers with
+ * (https://github.com/selimaytac/hashspan/blob/@hashspan/mpp@0.1.2/docs/adr/0029-mpp-payments.md). It registers observers with
  * `on()` on the client `Mppx.create()` from `mppx/client` returns, which every payment made through its `fetch`, or the
  * global `fetch` it polyfills, reaches. Call it once per client: a second call returns the first handle, ignores its
  * options and logs a `diag` warning. Its observers never throw, never return a value and never change a payment.
