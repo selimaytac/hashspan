@@ -20,7 +20,13 @@ outside the group: it is released as 0.x, on versions of its own, while mppx is 
    needs no approval: only the job that publishes to npm runs in the `npm` environment.
 3. Review that pull request (versions, `CHANGELOG.md`, the release-tag links) and merge it once its CI is green; opened
    by a maintainer, it gets the usual checks.
-4. Run the **Release** workflow again. With no changesets left, it runs the checks, then waits for a maintainer to
+4. Run the [hashspan-lab](https://github.com/selimaytac/hashspan-lab) against the version about to be released,
+   published first as a candidate under the `rc` dist-tag ([Pre-releases](#pre-releases)):
+   `pnpm lab first-run --version rc` runs the README quick start from the npm packages as a new user does, and
+   `pnpm lab up`, with the lab's `@hashspan/*` dependencies set to the candidate, runs every scenario and ends with
+   `pnpm lab conformance`, which checks the attributes and metrics against [the semantic conventions](semconv.md).
+   The release waits while either fails.
+5. Run the **Release** workflow again. With no changesets left, it runs the checks, then waits for a maintainer to
    approve the `npm` environment deployment (Actions run page, Review deployments). Once approved, it publishes the new
    versions to npm, pushes the git tags and creates the GitHub releases.
 
@@ -30,11 +36,13 @@ outside the group: it is released as 0.x, on versions of its own, while mppx is 
    then installs every published version into an empty project and imports it (`scripts/check-published.mjs`); if
    that fails, the run fails. It runs apart from the publish job, with read-only permissions, since installing runs
    the code of every dependency.
-5. Check the result: `npm view @hashspan/core` shows the version, and the npm page shows the provenance badge.
+6. Check the result: `npm view @hashspan/core` shows the version, and the npm page shows the provenance badge.
    After the run, the [SBOM workflow](../.github/workflows/sbom.yml) attaches `sbom.cdx.json`, a CycloneDX SBOM of
    the root workspace's lockfile, to each new GitHub release. The test-only trees of `integrations/` and
    `scripts/bundler/`, which no package ships or builds with, are left out. To attach it to an earlier release, run
    that workflow by hand with one of its tags.
+7. Set the lab's `@hashspan/*` dependencies to the released versions and check that `pnpm lab up` passes: the hashspan
+   docs link the lab, so it must work with the latest release.
 
 To try the publish script without npm, run it against a local registry such as Verdaccio, in a clone with the
 versions raised and `publishConfig.provenance` set to `false` (provenance needs CI): set `npm_config_registry` and a
