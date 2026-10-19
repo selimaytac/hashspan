@@ -153,7 +153,7 @@ span status description is the recorded
 **JSON-RPC spans.** With the viem adapter's `traceTransport()`, each provider request is a `CLIENT` span named
 after its method, or `jsonrpc`, its `rpc.system.name`, for a name that is not a method (`rpc.method` is then
 `_OTHER`), following the OpenTelemetry
-[JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/main/docs/rpc/json-rpc.md):
+[JSON-RPC conventions](https://github.com/open-telemetry/semantic-conventions/blob/v1.44.0/docs/rpc/json-rpc.md):
 `rpc.system.name = "jsonrpc"`, `rpc.method`, `jsonrpc.protocol.version`, `server.address` and `server.port`, plus
 `blockchain.chain.id`; on failure, `error.type` and, for a JSON-RPC error, `rpc.response.status_code`. Parameters,
 results, the URL path and error messages are not recorded; the host is recorded as it is, and these spans do not
