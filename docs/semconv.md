@@ -380,7 +380,8 @@ of each package check the bounds against the values that split at them.
 | MPP payments waiting for an outcome, counted from their challenge | 1000 per `withHashspan()` | the oldest payment ends as `timeout`; one not started yet records nothing |
 | MPP challenge ids the adapter correlates events by | 1024 characters | the payment is not traced |
 | MPP credential and `Payment-Receipt` header the adapter decodes | 65 536 and 4096 characters | the payment is traced without what they carry: no mode or payer's hash, or no settlement (`_OTHER`) |
-| Background confirmations polling at once | 256 per `withHashspan()` (`maxBackgroundConfirmations`) | the transaction gets no background confirm span; a `diag` warning is logged |
+| Background confirmations polling at once | 256 per `withHashspan()` (`maxBackgroundConfirmations`) | the transaction gets no background confirm span, and a `watchUserOperation()` records nothing; a `diag` warning is logged |
+| Logs of a bundle receipt that `watchUserOperation()` searches for the operation's `UserOperationEvent` | 10 000 | no log is read: nothing is recorded ([ADR 0031](adr/0031-watch-user-operation.md)) |
 | Sent transactions, user operations and call batches kept for links | 10 000 each, for 10 minutes (`maxTrackedTransactions`, `linkTtlMs`) | the oldest is forgotten: its confirm span has no link |
 
 ## Change policy

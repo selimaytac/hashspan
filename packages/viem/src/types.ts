@@ -74,3 +74,59 @@ export interface WatchOptions {
    */
   onReceipt?: ((receipt: TransactionReceipt | undefined) => void) | undefined;
 }
+
+/**
+ * Options of `watchUserOperation()`: a user operation known by its hash, confirmed through a bundler client
+ * (`eth_getUserOperationReceipt`).
+ */
+export interface WatchUserOperationByHashOptions {
+  /** The user operation hash. */
+  userOpHash: string;
+  /** Not given with a user operation hash alone; see {@link WatchUserOperationInBundleOptions}. */
+  bundleHash?: undefined;
+  /** Not given with a user operation hash alone. */
+  sender?: undefined;
+  /** Not given with a user operation hash alone. */
+  nonce?: undefined;
+  /**
+   * EIP-155 chain id; defaults to the client's chain, or to the chain of the client a bundler client was created
+   * with. Without either, the client is asked with `eth_chainId`; when it differs, nothing is recorded and a `diag`
+   * warning is logged.
+   */
+  chainId?: number | undefined;
+  /** How long to poll for the receipt before the confirm span ends as `timeout`. Default: 120 000 ms. */
+  timeoutMs?: number | undefined;
+}
+
+/**
+ * Options of `watchUserOperation()`: a user operation known by the hash of the bundle transaction that included it and
+ * by its smart account, found in that transaction's receipt (`eth_getTransactionReceipt`) by its `UserOperationEvent`.
+ */
+export interface WatchUserOperationInBundleOptions {
+  /** Hash of the bundle transaction, such as the hash a smart account SDK's `sendTransaction` returns. */
+  bundleHash: string;
+  /** Address of the smart account that sent the operation. */
+  sender: string;
+  /**
+   * The operation's nonce, to tell apart several operations of the sender in one bundle: without it, a bundle with
+   * more than one records nothing. A bigint, a safe integer, or a decimal or `0x` hex string.
+   */
+  nonce?: bigint | number | string | undefined;
+  /** The user operation hash, when it is known as well: the event must then carry it. */
+  userOpHash?: string | undefined;
+  /**
+   * EIP-155 chain id; defaults to the client's chain. Without either, the client is asked with `eth_chainId`; when it
+   * differs, nothing is recorded and a `diag` warning is logged.
+   */
+  chainId?: number | undefined;
+  /**
+   * How long to poll for the bundle receipt. Default: 120 000 ms. The operation's hash comes from the receipt, so
+   * when none came in time, nothing is recorded.
+   */
+  timeoutMs?: number | undefined;
+}
+
+/** Options of `watchUserOperation()`: the user operation to confirm, by its hash or in its bundle transaction. */
+export type WatchUserOperationOptions =
+  | WatchUserOperationByHashOptions
+  | WatchUserOperationInBundleOptions;

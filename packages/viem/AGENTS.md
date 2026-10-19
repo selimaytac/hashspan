@@ -30,6 +30,11 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
   - Background confirmation must never delay or fail the user's call, and nothing the telemetry needs is awaited
     before the call it traces (ADR 0009).
   - Work that outlives a traced call must be passed to `track()`, so `flush()` can await it (ADR 0010).
+- `watchUserOperation(client, options)` (`src/confirm/user-operation-watch.ts`, ADR 0031) confirms a user operation
+  sent elsewhere: from a `userOpHash` through a bundler client, or from a bundle hash and sender by the one matching
+  `UserOperationEvent` (`src/confirm/user-operation-event.ts`, a copy of `@hashspan/cdp`'s matcher, kept equal by
+  `test/user-operation-event.test.ts`); it reads with `client.request`, never with an action, and takes a slot of the
+  background limit (`reserveBackground()` of `confirmation.ts`)
 - `watch(client, { hash })` on the extension confirms a transaction sent elsewhere (a wallet API, another library);
   `@hashspan/cdp` and `@hashspan/x402` confirm through it
 - `src/safe-tracker.ts` wraps the tracker so that no tracker, including a user-provided one, can throw into a call

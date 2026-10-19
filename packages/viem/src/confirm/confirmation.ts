@@ -127,6 +127,12 @@ export interface Confirmation {
     timeoutMs: number,
     call: { parent: Context; startTime: Date; returnedAt: Date },
   ): void;
+  /**
+   * Takes a slot of the background limit for a confirmation that polls outside this module (`watchUserOperation()`),
+   * and returns the function that gives it back; undefined, with the limit's warning, when
+   * `maxBackgroundConfirmations` are already polling.
+   */
+  reserveBackground(): (() => void) | undefined;
 }
 
 export function createConfirmation({
@@ -584,5 +590,7 @@ export function createConfirmation({
     );
   };
 
-  return { recordConfirmation, confirmThrough, confirmPending };
+  const reserveBackground = (): (() => void) | undefined => (atLimit() ? undefined : occupy());
+
+  return { recordConfirmation, confirmThrough, confirmPending, reserveBackground };
 }

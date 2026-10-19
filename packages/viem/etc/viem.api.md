@@ -29,6 +29,7 @@ export interface HashspanExtension {
     } ? TArguments extends [(client: never) => infer TAccepted] ? { [K in Extract<keyof TClient, TracedAction>]: K extends keyof TAccepted ? TClient[K] extends TAccepted[K] ? never : K : never; }[Extract<keyof TClient, TracedAction>] : never : never>>;
     flush(options?: FlushOptions): Promise<boolean>;
     watch(client: ViemClientLike, options: WatchOptions): void;
+    watchUserOperation(client: ViemClientLike, options: WatchUserOperationOptions): void;
 }
 
 // @public
@@ -63,6 +64,29 @@ export interface WatchOptions {
     onReceipt?: ((receipt: TransactionReceipt | undefined) => void) | undefined;
     timeoutMs?: number | undefined;
 }
+
+// @public
+export interface WatchUserOperationByHashOptions {
+    bundleHash?: undefined;
+    chainId?: number | undefined;
+    nonce?: undefined;
+    sender?: undefined;
+    timeoutMs?: number | undefined;
+    userOpHash: string;
+}
+
+// @public
+export interface WatchUserOperationInBundleOptions {
+    bundleHash: string;
+    chainId?: number | undefined;
+    nonce?: bigint | number | string | undefined;
+    sender: string;
+    timeoutMs?: number | undefined;
+    userOpHash?: string | undefined;
+}
+
+// @public
+export type WatchUserOperationOptions = WatchUserOperationByHashOptions | WatchUserOperationInBundleOptions;
 
 // @public
 export function withHashspan(options?: WithHashspanOptions): HashspanExtension;
