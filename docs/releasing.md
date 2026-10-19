@@ -20,12 +20,11 @@ outside the group: it is released as 0.x, on versions of its own, while mppx is 
    needs no approval: only the job that publishes to npm runs in the `npm` environment.
 3. Review that pull request (versions, `CHANGELOG.md`, the release-tag links) and merge it once its CI is green; opened
    by a maintainer, it gets the usual checks.
-4. Run the [hashspan-lab](https://github.com/selimaytac/hashspan-lab) against the version about to be released,
-   published first as a candidate under the `rc` dist-tag ([Pre-releases](#pre-releases)):
-   `pnpm lab first-run --version rc` runs the README quick start from the npm packages as a new user does, and
-   `pnpm lab up`, with the lab's `@hashspan/*` dependencies set to the candidate, runs every scenario and ends with
-   `pnpm lab conformance`, which checks the attributes and metrics against [the semantic conventions](semconv.md).
-   The release waits while either fails.
+4. For a release on `latest`, run the [hashspan-lab](https://github.com/selimaytac/hashspan-lab) against its last
+   candidate on npm, `x.y.z-rc.N` ([Pre-releases](#pre-releases)): with the lab's `@hashspan/*` dependencies set to
+   it, `pnpm lab up` runs every scenario and ends with `pnpm lab conformance`, which checks the attributes and
+   metrics against [the semantic conventions](semconv.md); then `pnpm lab first-run --version x.y.z-rc.N` runs the
+   README quick start from the npm packages as a new user does. The release waits while either fails.
 5. Run the **Release** workflow again. With no changesets left, it runs the checks, then waits for a maintainer to
    approve the `npm` environment deployment (Actions run page, Review deployments). Once approved, it publishes the new
    versions to npm, pushes the git tags and creates the GitHub releases.
