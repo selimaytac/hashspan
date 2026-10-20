@@ -21,10 +21,11 @@ another service, triggers becomes a `send` / `confirm` span pair under its own t
 - Package checks: `pnpm check:packages` (publint and arethetypeswrong on the built packages; runs in CI)
 - API reports: `pnpm api:check` (API Extractor on the built declarations; fails when they differ from the committed
   `packages/*/etc/*.api.md` or an export lacks a doc comment; runs in CI); `pnpm api:update` rewrites the reports
-- Smoke test: `pnpm smoke:packages` (packs the five packages, installs the tarballs with their peer dependencies into an
-  empty project and checks `require()`, `import` and `hashed` address mode on the current Node.js; CI runs it on the
-  lowest `engines.node`, the latest 22.x and the latest 24.x, and with `--runtime bun|deno` on Bun and Deno; needs
-  the npm registry, no chain)
+- Smoke test: `pnpm smoke:packages` (packs the six packages, installs the tarballs with their peer dependencies into an
+  empty project and checks `require()`, `import` and `hashed` address mode on the current Node.js, and one injected
+  fault of `@hashspan/faults`; CI runs it on the lowest `engines.node`, the latest 22.x and the latest 24.x, and with
+  `--runtime bun|deno` on Bun and Deno, where the Node.js-only faults check is skipped; needs the npm registry, no
+  chain)
 - Local lab: `make lab-up` (Jaeger), `make anvil` (local chain), `make demo` (example agent), `make lab-pause`,
   `make lab-nuke`
 Run lint, typecheck and tests before proposing a change.
@@ -46,6 +47,8 @@ before changing there.
 - `packages/x402` → adapter for x402 payments ([AGENTS.md](packages/x402/AGENTS.md))
 - `packages/mpp` → adapter for MPP payments made with mppx, on a 0.x release line of its own
   ([AGENTS.md](packages/mpp/AGENTS.md))
+- `packages/faults` → JSON-RPC fault proxy for tests, used by the adapters' fault tests, on a 0.x release line of its
+  own ([AGENTS.md](packages/faults/AGENTS.md))
 - `examples/` → runnable integrations: an agent ([ai-sdk-agent](examples/ai-sdk-agent/AGENTS.md)), an agent that also
   pays an x402 API ([x402-agent](examples/x402-agent/AGENTS.md)) and a service that is not one
   ([payout-worker](examples/payout-worker/AGENTS.md))
@@ -67,7 +70,7 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 ## Conventions
 - Language: all code, comments, docs, commits and PRs in English.
 - Commits: Conventional Commits `<type>(<scope>): <description>`, subject ≤ 72 chars. Scopes: `core`, `viem`, `cdp`,
-  `x402`, `mpp`, `examples`, `docs`, `ci`, `lab`.
+  `x402`, `mpp`, `faults`, `examples`, `docs`, `ci`, `lab`.
 - Small, focused PRs; one concern per PR; update tests and docs with the change.
 - Pick open issues by their priority label, `priority: P0` first: a P0 comes before work in progress
   ([CONTRIBUTING.md](CONTRIBUTING.md#priority-labels)). Link the issue in the PR (`Closes #123`).
@@ -84,7 +87,8 @@ See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv
 - Only `@opentelemetry/api` and the instrumented library may be peer dependencies of published packages; an adapter
   may also peer-depend on a library its API takes values from (`@hashspan/cdp` on `viem`, for the `reader`).
 - `src/` must not use Node.js-only APIs at import time (it is type-checked without Node types via `tsconfig.json`;
-  tests use `tsconfig.test.json`). Exported functions need explicit return types (`isolatedDeclarations`).
+  tests use `tsconfig.test.json`), except in `packages/faults`, a Node.js test tool that imports `node:http`.
+  Exported functions need explicit return types (`isolatedDeclarations`).
 - Package versions live in `package.json`; `src/version.ts` is synced by `pnpm version-packages`; don't edit it.
 - Docs are checked by `packages/core/test/docs.test.ts` (links and anchors, ADR index, package table, scopes, Node
   versions, code examples) and `semconv-doc.test.ts`. Each `ts` block in a markdown file is the `#region readme` of a

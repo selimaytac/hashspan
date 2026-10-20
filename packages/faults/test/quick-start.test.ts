@@ -24,9 +24,9 @@ it('runs the README quick start', async () => {
   const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
   await import('./readme/quick-start.js');
   expect(log.mock.calls).toEqual([
-    ['block', 1n],
-    ['failed', 'HttpRequestError'],
-    ['block', 2n],
+    [200, '{"jsonrpc":"2.0","id":1,"result":"0x1"}'],
+    [429, 'injected fault'],
+    [200, '{"jsonrpc":"2.0","id":3,"result":"0x2"}'],
     [{ eth_blockNumber: 3 }],
   ]);
   // The rate-limited request never reached the node.

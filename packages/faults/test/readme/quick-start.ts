@@ -6,19 +6,19 @@ const nodeUrl = process.env.FAULTS_QUICK_START_NODE ?? 'http://127.0.0.1:8545';
 
 // #region readme
 import { startFaultProxy } from '@hashspan/faults';
-import { createPublicClient, http } from 'viem';
 
 // In front of a local node, such as Anvil on http://127.0.0.1:8545.
 const proxy = await startFaultProxy(nodeUrl);
-const client = createPublicClient({ cacheTime: 0, transport: http(proxy.url, { retryCount: 0 }) });
 
 // The second eth_blockNumber gets a rate limit; the others reach the node.
 proxy.set({ eth_blockNumber: { fault: { kind: 'http', status: 429 }, after: 1, times: 1 } });
-for (let i = 0; i < 3; i++) {
-  await client.getBlockNumber().then(
-    (block) => console.log('block', block),
-    (error: Error) => console.log('failed', error.name), // HttpRequestError
-  );
+for (let id = 1; id <= 3; id++) {
+  const response = await fetch(proxy.url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id, method: 'eth_blockNumber', params: [] }),
+  });
+  console.log(response.status, await response.text()); // 200 {"jsonrpc":"2.0","id":1,"result":"0x..."}, 429 ...
 }
 console.log(proxy.requests()); // { eth_blockNumber: 3 }
 

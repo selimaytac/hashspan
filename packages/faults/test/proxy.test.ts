@@ -193,24 +193,22 @@ describe('1. the upstream check', () => {
     await expect(startFaultProxy(upstream)).rejects.toThrow(/upstream/);
   });
 
-  it.each([
-    'http://anvil:8545',
-    'https://rpc.example.com',
-    'http://10.0.0.1:8545',
-  ])('accepts %s with allowRemoteUpstream: true', async (upstream) => {
-    const proxy = await proxyTo(upstream, { allowRemoteUpstream: true });
-    expect(proxy.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-  });
+  it.each(['http://anvil:8545', 'https://rpc.example.com', 'http://10.0.0.1:8545'])(
+    'accepts %s with allowRemoteUpstream: true',
+    async (upstream) => {
+      const proxy = await proxyTo(upstream, { allowRemoteUpstream: true });
+      expect(proxy.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    },
+  );
 
-  it.each([
-    'ws://anvil:8545',
-    'file:///etc/hosts',
-    'not a url',
-  ])('refuses %s with allowRemoteUpstream: true too', async (upstream) => {
-    await expect(startFaultProxy(upstream, { allowRemoteUpstream: true })).rejects.toThrow(
-      /upstream/,
-    );
-  });
+  it.each(['ws://anvil:8545', 'file:///etc/hosts', 'not a url'])(
+    'refuses %s with allowRemoteUpstream: true too',
+    async (upstream) => {
+      await expect(startFaultProxy(upstream, { allowRemoteUpstream: true })).rejects.toThrow(
+        /upstream/,
+      );
+    },
+  );
 
   it('refuses a remote upstream with allowRemoteUpstream: false', async () => {
     await expect(
@@ -266,11 +264,15 @@ describe('3. the listen address', () => {
     expect(hostname).toBe('127.0.0.1');
     expect(await canConnect('127.0.0.1', Number(port))).toBe(true);
     expect(await canConnect('::1', Number(port))).toBe(false);
+    // The machine's own IPv4 addresses, if it has any besides loopback.
     const external = Object.values(networkInterfaces())
       .flat()
-      .filter((address) => address !== undefined && !address.internal)
+      .filter((address) => address?.family === 'IPv4' && !address.internal)
       .map((address) => address?.address ?? '');
-    for (const address of external) expect(await canConnect(address, Number(port))).toBe(false);
+    const reachable = await Promise.all(
+      external.map((address) => canConnect(address, Number(port))),
+    );
+    expect(reachable.filter(Boolean)).toEqual([]);
   });
 });
 
@@ -490,7 +492,10 @@ describe('5. the kinds of faults', () => {
     proxy.set({ eth_call: { kind: 'http', status: 429 } });
     const batch = `[${request('eth_call', 1)}]`;
     const answer = await post(proxy, batch);
-    expect(answer).toMatchObject({ status: 200, text: '[{"jsonrpc":"2.0","id":1,"result":"0x1"}]' });
+    expect(answer).toMatchObject({
+      status: 200,
+      text: '[{"jsonrpc":"2.0","id":1,"result":"0x1"}]',
+    });
     expect(node.received.map(({ body }) => body)).toEqual([batch]);
     expect(proxy.requests()).toEqual({});
   });
