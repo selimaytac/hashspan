@@ -5,11 +5,10 @@
 
 ## Context
 
-hashspan's integration tests put an HTTP proxy between a viem client and Anvil and make chosen JSON-RPC methods
-fail: `packages/viem/test/fault-proxy.ts`. The `rpc-faults` tests of viem, cdp, x402 and mpp, the cdp smart account
-and x402 settlement tests and the viem user operation and call batch tests import it, together with the span checks
-of `packages/viem/test/fault-checks.ts`. The hashspan lab keeps a smaller copy of the proxy for its `faults`
-scenario, which runs against a local Anvil. Two copies drift, and neither can be used outside these repositories.
+hashspan's tests put an HTTP proxy between a viem client and Anvil and make chosen JSON-RPC methods fail:
+`packages/viem/test/fault-proxy.ts`. Tests of all four adapters import it, most together with the span checks of
+`packages/viem/test/fault-checks.ts`. [hashspan-lab](https://github.com/selimaytac/hashspan-lab) keeps a smaller
+copy of the proxy for its `faults` scenario, which runs against a local Anvil. Two copies drift, and neither can be used outside these repositories.
 
 The same proxy is useful to anyone who tests an EVM client library, a node, a bundler or a facilitator: a real HTTP
 server exercises the client's own transport, retry and backoff, which a mocked transport does not. Testing other
@@ -94,7 +93,8 @@ other hashspan package, so a core release never moves it and it never moves the 
   including a compose service name such as `anvil`, needs the opt-in. Only `http:` and `https:` upstreams are
   accepted.
 - It sends at most one upstream request per client request: no retries, no fan-out, no repetition, no rate or
-  concurrency settings. Load generation is out of scope, with or without the opt-in.
+  concurrency settings. Redirects are never followed: a 3xx answer of the upstream goes back to the client as it
+  is, so a loopback upstream cannot send the request on to another host. Load generation is out of scope, with or without the opt-in.
 - Each rule has a unit test, written before the code (point 8).
 
 **4. Fault model: today's kinds, the lab's needs, a short list for later.**
@@ -133,7 +133,8 @@ OpenTelemetry SDK and check hashspan's own span endings, which a user of the pro
 
 - hashspan: the test files import `@hashspan/faults`, resolved from source by an alias in `vitest.config.ts` as the
   other packages are, and `packages/viem/test/fault-proxy.ts` is removed. `fault-checks.ts` imports the types
-  from the package. Each adapter that uses it gets it as a `workspace:*` dev dependency.
+  from the package. Each adapter that uses it gets it as a `workspace:*` dev dependency, and the `AGENTS.md` files
+  of viem, cdp, x402 and mpp, which name the old file, are updated in the same change.
 - The lab: one change replaces its copy with the published package, pinned to an exact version as its other
   hashspan dependencies are: `fail(method, fault, times)` becomes `set({ [method]: { fault, times } })`, `clear()`
   becomes `set({})`, and `{ kind: 'status', status }` becomes `{ kind: 'http', status }`. Its upstream is a local
@@ -165,12 +166,14 @@ publisher and the token lockdown.
 1. the upstream check: `127.0.0.1`, another address of `127.0.0.0/8`, `[::1]` and `localhost` are accepted; a
    public address, a private address, a hostname and a non-HTTP URL are refused; `allowRemoteUpstream: true`
    accepts a hostname;
-2. the proxy listens on `127.0.0.1` only;
-3. exactly one upstream request per client request, for every kind that calls the node;
-4. each kind of point 4, with `after` and `times`, and the first matching rule of several;
-5. `requests()` with and without a method, and both restarting on `set()`;
-6. a node answer that is not JSON under `result` or `previous` is answered with 502, and the proxy keeps serving;
-7. `stop()` closes hanging connections; a port that cannot be bound rejects.
+2. a loopback upstream that answers with a redirect to a second local server: the client gets the redirect, and the
+   second server receives nothing;
+3. the proxy listens on `127.0.0.1` only;
+4. exactly one upstream request per client request, for every kind that calls the node;
+5. each kind of point 4, with `after` and `times`, and the first matching rule of several;
+6. `requests()` with and without a method, and both restarting on `set()`;
+7. a node answer that is not JSON under `result` or `previous` is answered with 502, and the proxy keeps serving;
+8. `stop()` closes hanging connections; a port that cannot be bound rejects.
 
 The existing integration tests then run on the package unchanged, which checks the migration.
 
