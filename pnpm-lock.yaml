@@ -233,6 +233,9 @@ importers:
       '@coinbase/cdp-sdk':
         specifier: ^1.57.1
         version: 1.57.1(@x402/core@2.28.0)(@x402/evm@2.28.0(typescript@7.0.2))(@x402/extensions@2.28.0(typescript@7.0.2))(typescript@7.0.2)
+      '@hashspan/faults':
+        specifier: workspace:*
+        version: link:../faults
       '@opentelemetry/api':
         specifier: ^1.9.1
         version: 1.9.1
@@ -267,6 +270,8 @@ importers:
         specifier: ^4.10.2
         version: 4.10.2
 
+  packages/faults: {}
+
   packages/mpp:
     dependencies:
       '@hashspan/core':
@@ -276,6 +281,9 @@ importers:
         specifier: workspace:^
         version: link:../viem
     devDependencies:
+      '@hashspan/faults':
+        specifier: workspace:*
+        version: link:../faults
       '@opentelemetry/api':
         specifier: ^1.9.1
         version: 1.9.1
@@ -301,6 +309,9 @@ importers:
         specifier: workspace:^
         version: link:../core
     devDependencies:
+      '@hashspan/faults':
+        specifier: workspace:*
+        version: link:../faults
       '@opentelemetry/api':
         specifier: ^1.9.1
         version: 1.9.1
@@ -332,6 +343,9 @@ importers:
         specifier: workspace:^
         version: link:../viem
     devDependencies:
+      '@hashspan/faults':
+        specifier: workspace:*
+        version: link:../faults
       '@opentelemetry/api':
         specifier: ^1.9.1
         version: 1.9.1

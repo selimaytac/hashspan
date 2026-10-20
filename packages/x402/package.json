@@ -61,6 +61,7 @@
     "viem": "^2.21.0"
   },
   "devDependencies": {
+    "@hashspan/faults": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/sdk-trace-base": "^2.11.0",
     "@opentelemetry/sdk-trace-node": "^2.11.0",

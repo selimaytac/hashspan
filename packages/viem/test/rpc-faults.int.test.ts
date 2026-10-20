@@ -1,6 +1,6 @@
 // RPC faults on the transaction send and confirm paths of the viem adapter (sendTransaction, writeContract, the
 // caller's waitForTransactionReceipt, background confirmation, watch()), injected by a proxy in front of Anvil
-// (`fault-proxy.ts`). Call batches are in `call-batch-faults.int.test.ts`, the bundler methods of user operations in
+// (`@hashspan/faults`). Call batches are in `call-batch-faults.int.test.ts`, the bundler methods of user operations in
 // `user-operation.int.test.ts`. For each fault and path it checks that:
 // 1. the caller's call returns or throws as it does on a client without hashspan;
 // 2. the span ends with the status and `error.type` of docs/semconv.md (Span status);
@@ -8,6 +8,8 @@
 // 4. pending work ends (`flush()` resolves true), a background slot is released, and metrics count the call once.
 // Each row pins how the span ends today. A row whose ending is a defect also has an `it.fails` test with the ending
 // it should have, tagged with its issue (`// finding: #<issue>`); fixing the defect turns it into `it`.
+
+import { type Fault, type FaultProxy, type FaultRule, startFaultProxy } from '@hashspan/faults';
 import {
   type Attributes,
   type Histogram,
@@ -27,7 +29,6 @@ import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
 import { SEND_ERROR_TYPES } from './fault-checks.js';
-import { type Fault, type FaultProxy, type FaultRule, startFaultProxy } from './fault-proxy.js';
 import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast } from './viem-version.js';

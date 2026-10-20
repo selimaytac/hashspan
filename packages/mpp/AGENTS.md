@@ -20,7 +20,7 @@ Adapter for MPP payments made with mppx (ADR 0029). Root rules: [AGENTS.md](../.
   not the payer's signed one (no verdict), a 4xx and a 5xx after payment;
   `test/quick-start.int.test.ts` runs the README's quick start (`test/readme/quick-start.ts`) against it;
   `.github/workflows/mppx-sdk.yml` runs the tests weekly against both ends of the mppx peer range
-- `test/rpc-faults.int.test.ts` puts the reader behind the viem tests' fault proxy (`../viem/test/fault-proxy.ts`)
+- `test/rpc-faults.int.test.ts` puts the reader behind the fault proxy `@hashspan/faults` (`../faults`)
   while a real settlement is confirmed and checked
 - `test/hostile-input.test.ts` applies the hostile-input table (`../core/test/hostile.ts`, ADR 0025) to the observers,
   with hostile challenges, credentials, receipt headers, response copies, errors and receipts, and to the options and

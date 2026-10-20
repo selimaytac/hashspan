@@ -1,3 +1,4 @@
+import { type FaultProxy, startFaultProxy } from '@hashspan/faults';
 import { type Attributes, type MeterProvider, SpanStatusCode } from '@opentelemetry/api';
 import { x402Client } from '@x402/core/client';
 import { x402Facilitator } from '@x402/core/facilitator';
@@ -25,7 +26,6 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { collectingRejections, type Faults, faultsOn } from '../../viem/test/fault-checks.js';
-import { type FaultProxy, startFaultProxy } from '../../viem/test/fault-proxy.js';
 import { startAnvil } from '../../viem/test/start-anvil.js';
 import { withHashspan } from '../src/index.js';
 import { testUsdAbi, testUsdBytecode } from './token/test-usd.js';

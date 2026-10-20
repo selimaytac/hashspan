@@ -4,17 +4,13 @@
 // authorization, so `blockchain.payment.verified` is not checked here (see settlement.int.test.ts). For each fault:
 // the paid request returns as it does untraced, the payment span keeps its settlement, the confirm span ends as
 // `watch()`'s does, nothing is left pending and no rejection is unhandled.
+
+import { type Fault, type FaultProxy, type FaultRule, startFaultProxy } from '@hashspan/faults';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { wrapFetchWithPayment } from '@x402/fetch';
 import { type Address, createPublicClient, createWalletClient, type Hex, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import {
-  type Fault,
-  type FaultProxy,
-  type FaultRule,
-  startFaultProxy,
-} from '../../viem/test/fault-proxy.js';
 import { startAnvil } from '../../viem/test/start-anvil.js';
 import { withHashspan } from '../src/index.js';
 import { paidApi, settledWith, testClient } from './fake-x402.js';

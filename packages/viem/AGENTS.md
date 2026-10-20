@@ -49,9 +49,9 @@ Capture adapter for viem clients. Root rules: [AGENTS.md](../../AGENTS.md).
   SDK adds to a bundler client, so the SDKs themselves run only in `integrations/`; every
   Anvil test starts its own Anvil at module level with `startAnvil()` (`test/start-anvil.ts`), on a port the OS
   assigns as Anvil binds it, not with `test/free-port.ts`, whose port another process can take before Anvil binds it
-- `test/fault-proxy.ts` an HTTP proxy in front of Anvil that injects RPC faults per JSON-RPC method (timeouts, HTTP
-  errors, JSON-RPC errors, resets, rewritten or mixed-up results); `test/rpc-faults.int.test.ts` runs the
-  transaction send and confirm paths through it, `test/call-batch-faults.int.test.ts` the call batch paths, and the
+- `test/rpc-faults.int.test.ts` runs the transaction send and confirm paths through the fault proxy
+  `@hashspan/faults` (`../faults`) in front of Anvil, which injects RPC faults per JSON-RPC method (timeouts, HTTP
+  errors, JSON-RPC errors, resets, rewritten or mixed-up results), `test/call-batch-faults.int.test.ts` the call batch paths, and the
   `bundler faults` rows of `test/user-operation.int.test.ts` the bundler methods; `test/fault-checks.ts` holds the
   checks they share with the cdp and x402 fault rows
 - `test/quick-start.int.test.ts` runs the quick start's `agent.ts`, taken from docs/quick-start.md as it is (only the

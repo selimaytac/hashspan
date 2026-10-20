@@ -3,17 +3,13 @@
 // the check of `blockchain.payment.verified`, through the reader and `watch()`, see the faults. For each fault: the
 // paid request returns as it does untraced, the payment span keeps its settlement and gets a verdict only from a
 // receipt it read, the confirm span ends as `watch()`'s does, nothing is left pending and no rejection is unhandled.
+
+import { type Fault, type FaultProxy, type FaultRule, startFaultProxy } from '@hashspan/faults';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { Mppx, tempo } from 'mppx/client';
 import { createPublicClient, http } from 'viem';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { collectingRejections } from '../../viem/test/fault-checks.js';
-import {
-  type Fault,
-  type FaultProxy,
-  type FaultRule,
-  startFaultProxy,
-} from '../../viem/test/fault-proxy.js';
 import { withHashspan } from '../src/index.js';
 import {
   CONFIRM_SPAN,
