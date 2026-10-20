@@ -8,7 +8,8 @@
 hashspan's tests put an HTTP proxy between a viem client and Anvil and make chosen JSON-RPC methods fail:
 `packages/viem/test/fault-proxy.ts`. Tests of all four adapters import it, most together with the span checks of
 `packages/viem/test/fault-checks.ts`. [hashspan-lab](https://github.com/selimaytac/hashspan-lab) keeps a smaller
-copy of the proxy for its `faults` scenario, which runs against a local Anvil. Two copies drift, and neither can be used outside these repositories.
+copy of the proxy for its `faults` scenario, which runs against a local Anvil. Two copies drift, and neither can be
+used outside these repositories.
 
 The same proxy is useful to anyone who tests an EVM client library, a node, a bundler or a facilitator: a real HTTP
 server exercises the client's own transport, retry and backoff, which a mocked transport does not. Testing other
@@ -94,7 +95,8 @@ other hashspan package, so a core release never moves it and it never moves the 
   accepted.
 - It sends at most one upstream request per client request: no retries, no fan-out, no repetition, no rate or
   concurrency settings. Redirects are never followed: a 3xx answer of the upstream goes back to the client as it
-  is, so a loopback upstream cannot send the request on to another host. Load generation is out of scope, with or without the opt-in.
+  is, so a loopback upstream cannot send the request on to another host. Load generation is out of scope, with or
+  without the opt-in.
 - Each rule has a unit test, written before the code (point 8).
 
 **4. Fault model: today's kinds, the lab's needs, a short list for later.**
@@ -102,13 +104,14 @@ other hashspan package, so a core release never moves it and it never moves the 
 Version 1 has the six kinds of today, unchanged in name and meaning, so the existing tests move without edits to
 their rules: `hang`, `http`, `rpc-error`, `reset`, `result`, `previous`. The lab's `status` maps to `http`. The
 lab's reset, which destroys the socket before any byte, is a different fault from ours, which sends part of a body:
-it gets its own kind, `drop`, named now and added first after version 1 (below), and `reset` keeps its meaning.
+it gets its own kind, `drop`, in version 1 too, since the lab's scenario needs it to move to the package, and
+`reset` keeps its meaning.
 
 `requests()` without an argument returns every method's count as a record, and `requests(method)` stays.
 
 Deferred, in this order:
 
-1. `drop`, and `latency` (a delay before the node's answer is passed on);
+1. `latency` (a delay before the node's answer is passed on);
 2. faults on single requests of a JSON-RPC batch; until then a batch is passed on untouched;
 3. a scenario file format, with named result built-ins (a receipt that stays `null`, a preconfirmed receipt that is
    later sealed with other values, a chain id that changes) in place of closures;
@@ -137,8 +140,9 @@ OpenTelemetry SDK and check hashspan's own span endings, which a user of the pro
   of viem, cdp, x402 and mpp, which name the old file, are updated in the same change.
 - The lab: one change replaces its copy with the published package, pinned to an exact version as its other
   hashspan dependencies are: `fail(method, fault, times)` becomes `set({ [method]: { fault, times } })`, `clear()`
-  becomes `set({})`, and `{ kind: 'status', status }` becomes `{ kind: 'http', status }`. Its upstream is a local
-  Anvil on `127.0.0.1`, so the loopback check does not affect it. Its `faults` scenario is run again after the change.
+  becomes `set({})`, `{ kind: 'status', status }` becomes `{ kind: 'http', status }` and its reset becomes
+  `{ kind: 'drop' }`. Its upstream is a local Anvil on `127.0.0.1`, so the loopback check does not affect it. Its
+  `faults` scenario is run again after the change.
 
 **7. Repository work of the implementation.** Adding `packages/faults/package.json` makes these checks fail until
 each is done, so the first implementation change does all of them:
@@ -153,6 +157,7 @@ each is done, so the first implementation change does all of them:
 - the API Extractor report `packages/faults/etc/faults.api.md`, publint and arethetypeswrong;
 - `faults` in the package list of `scripts/smoke-packages.mjs`, with a check of its own (start the proxy in front
   of a small local server, pass one request on, inject one `rpc-error`), since the existing checks are about spans;
+  on Node.js only: the Bun and Deno runs skip it, as the package supports Node.js alone;
 - `docs/releasing.md`: the package is outside the linked group, as `@hashspan/mpp`;
 - a changeset for 0.1.0.
 
@@ -184,5 +189,5 @@ The existing integration tests then run on the package unchanged, which checks t
   AGENTS.md.
 - A new 0.x release line to maintain, and a new npm name that needs the maintainer's one-time setup.
 - A remote upstream needs a deliberate opt-in, and the tool has no load features even then.
-- Batch faults, latency, a scenario file and a CLI come in later minor releases of the 0.x line, each with its own
+- Latency, batch faults, a scenario file and a CLI come in later minor releases of the 0.x line, each with its own
   tests; reorgs and replacements stay with the node.
