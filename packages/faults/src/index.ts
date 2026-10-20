@@ -8,8 +8,8 @@ import type { Socket } from 'node:net';
  * - `hang`: never answers, like an unresponsive provider; the client's own timeout ends the request.
  * - `http`: answers with this HTTP status and no JSON-RPC body, such as 429 for a rate limit.
  * - `rpc-error`: answers with a JSON-RPC error, such as -32005 (limit exceeded) or -32603 (internal error).
- * - `reset`: sends the headers and part of the body, then resets the connection.
- * - `drop`: closes the connection before sending any byte.
+ * - `reset`: resets the connection (a TCP RST) before any byte of the answer reaches the client.
+ * - `drop`: closes the connection (a TCP FIN) before sending any byte.
  * - `result`: answers with `result(nodeResult, call)` in place of the node's result, such as a receipt that stays
  *   `null`, a malformed block or a chain id that changes between calls (`call` counts this method's requests since
  *   the last `set()`, from 1).
@@ -210,7 +210,10 @@ export async function startFaultProxy(
         return;
       case 'reset':
         response.writeHead(200, { 'content-type': 'application/json', 'content-length': '1000' });
-        response.write('{"jsonrpc":"2.0","id":', () => response.socket?.resetAndDestroy());
+        // The headers and the partial body are still corked in the socket when it is reset, so the client gets an RST
+        // and no byte: the fault the adapters' fault tests were pinned against (see this package's AGENTS.md).
+        response.write('{"jsonrpc":"2.0","id":');
+        response.socket?.resetAndDestroy();
         return;
       case 'drop':
         request.socket.destroy();

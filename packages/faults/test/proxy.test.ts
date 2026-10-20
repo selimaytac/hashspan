@@ -371,24 +371,29 @@ describe('5. the kinds of faults', () => {
     expect(JSON.parse(text)).toMatchObject({ id: null, error: { code: -32005 } });
   });
 
-  it('reset sends the headers and part of the body, then resets the connection', async () => {
+  // The headers and the partial body that `reset` writes are still corked in the socket when it is reset, so no byte
+  // reaches the client: as in the proxy the adapters' fault tests were written against.
+  it('reset resets the connection (RST) before any byte', async () => {
     const node = await startStandIn();
     const proxy = await proxyTo(node.url);
     proxy.set({ eth_call: { kind: 'reset' } });
-    const { bytes } = await rawExchange(proxy.url, request('eth_call'));
-    expect(bytes).toMatch(/^HTTP\/1\.1 200 /);
-    expect(bytes).toMatch(/content-length: 1000/i);
-    const body = bytes.slice(bytes.indexOf('\r\n\r\n') + 4);
-    expect(body.length).toBeGreaterThan(0);
-    expect(body.length).toBeLessThan(1000);
+    for (let i = 0; i < 10; i++) {
+      const { bytes, error } = await rawExchange(proxy.url, request('eth_call'));
+      expect(bytes).toBe('');
+      expect(error?.code).toBe('ECONNRESET');
+    }
     await expect(post(proxy, request('eth_call'))).rejects.toThrow();
   });
 
-  it('drop closes the connection before any byte', async () => {
+  it('drop closes the connection (FIN) before any byte, without a reset', async () => {
     const node = await startStandIn();
     const proxy = await proxyTo(node.url);
     proxy.set({ eth_call: { kind: 'drop' } });
-    expect((await rawExchange(proxy.url, request('eth_call'))).bytes).toBe('');
+    for (let i = 0; i < 10; i++) {
+      const { bytes, error } = await rawExchange(proxy.url, request('eth_call'));
+      expect(bytes).toBe('');
+      expect(error).toBeUndefined();
+    }
     await expect(post(proxy, request('eth_call'))).rejects.toThrow();
   });
 

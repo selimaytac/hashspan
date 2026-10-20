@@ -59,8 +59,8 @@ as it is, and with viem's retries on you test them.
 | `{ kind: 'hang' }` | no answer; its own timeout ends the request | no |
 | `{ kind: 'http', status }` | that HTTP status without a JSON-RPC body, such as 429 | no |
 | `{ kind: 'rpc-error', code, message? }` | a JSON-RPC error with the request's id, such as -32005 | no |
-| `{ kind: 'reset' }` | the headers and part of the body, then a connection reset | no |
-| `{ kind: 'drop' }` | the connection closed before any byte | no |
+| `{ kind: 'reset' }` | a connection reset (TCP RST) before any byte of the answer | no |
+| `{ kind: 'drop' }` | the connection closed (TCP FIN) before any byte | no |
 | `{ kind: 'result', result }` | the node's result replaced by `result(nodeResult, call)` | once |
 | `{ kind: 'previous' }` | the result of this method's previous request, as a load balancer that mixes up answers | once |
 
