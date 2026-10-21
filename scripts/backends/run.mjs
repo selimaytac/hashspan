@@ -137,9 +137,16 @@ async function main() {
       };
     }
   } finally {
-    await docker(['rm', '--force', container]).catch(() => {});
-    for (const v of volumesOf(name, def)) await docker(['volume', 'rm', v.name]).catch(() => {});
-    if (!args.includes('--keep-image')) await docker(['image', 'rm', image]).catch(() => {});
+    // A failed removal is reported, so nothing of the run stays behind unnoticed.
+    const remove = (what) =>
+      docker(what).catch((e) =>
+        console.error(`could not run docker ${what.join(' ')}: ${String(e?.stderr ?? e).trim()}`),
+      );
+    await remove(['rm', '--force', container]);
+    for (const v of volumesOf(name, def)) await remove(['volume', 'rm', v.name]);
+    // An image pulled by digest has no tag locally; it is removed by its repository and digest.
+    const local = def.digest ? `${def.image.replace(/:[^/:]+$/, '')}@${def.digest}` : def.image;
+    if (!args.includes('--keep-image')) await remove(['image', 'rm', local]);
   }
   const result = buildResult({
     corpus: { id: CORPUS_ID, sha256: corpusHash() },

@@ -3,6 +3,7 @@
 // and no host data: no paths, host or user names, addresses other than 127.0.0.1, or times beyond the run date.
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { CORPUS_ID } from './corpus.mjs';
 import { diffMetrics, diffSpans, exercised, groupDifferences } from './diff.mjs';
 
 /** Version of the result format. */
@@ -12,7 +13,12 @@ export const SCHEMA = 1;
 export const RESULTS_DIR = 'docs/backends/results';
 
 /** File name of a backend version's result. */
-export const resultFile = (backend, version) => `${backend}@${version}.json`;
+/**
+ * File name of a backend version's result: `<backend>@<version>.json` for the matrix's own corpus, with the corpus id
+ * before `.json` for any other, so a run of the matrix never overwrites a result of another corpus.
+ */
+export const resultFile = (backend, version, corpus = CORPUS_ID) =>
+  corpus === CORPUS_ID ? `${backend}@${version}.json` : `${backend}@${version}.${corpus}.json`;
 
 /** The trace part of a result for one transport. */
 export function traceResult(expected, received, status) {
@@ -78,7 +84,10 @@ export function writeResult(root, result, extra = []) {
   const text = resultText(result);
   const problems = hostDataProblems(text, extra);
   if (problems.length) throw new Error(`result not written, it holds ${problems.join(', ')}`);
-  const path = join(RESULTS_DIR, resultFile(result.backend.name, result.backend.version));
+  const path = join(
+    RESULTS_DIR,
+    resultFile(result.backend.name, result.backend.version, result.corpus.id),
+  );
   writeFileSync(join(root, path), text);
   return path;
 }

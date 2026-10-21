@@ -123,7 +123,7 @@ describe('backend matrix results', () => {
   it.each(files)('%s is named after its backend and version and holds no host data', (file) => {
     const text = readFileSync(join(root, RESULTS_DIR, file), 'utf8');
     const result = JSON.parse(text);
-    expect(resultFile(result.backend.name, result.backend.version)).toBe(file);
+    expect(resultFile(result.backend.name, result.backend.version, result.corpus.id)).toBe(file);
     expect(result.schema).toBe(1);
     expect(result.runDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(text).toBe(resultText(result));
@@ -133,7 +133,11 @@ describe('backend matrix results', () => {
   it('seeds the five E7 backends with what the diff computes from the recorded spans', () => {
     for (const name of Object.keys(E7_BACKENDS)) {
       const result = e7Result(root, name);
-      const file = join(root, RESULTS_DIR, resultFile(name, result.backend.version));
+      const file = join(
+        root,
+        RESULTS_DIR,
+        resultFile(name, result.backend.version, result.corpus.id),
+      );
       expect(readFileSync(file, 'utf8'), 'run `node scripts/backends/seed-e7.mjs`').toBe(
         resultText(result),
       );
@@ -141,6 +145,14 @@ describe('backend matrix results', () => {
       expect(result.runDate).toBe('2026-10-18');
       expect(Object.keys(result.transports)).toEqual(['http/protobuf']);
     }
+  });
+
+  it('names a result of another corpus apart, so a run of the matrix keeps the E7 seed of the same version', () => {
+    expect(resultFile('aspire', '13.6.1')).toBe('aspire@13.6.1.json');
+    expect(resultFile('aspire', '13.6.1', 'synthetic-1')).toBe('aspire@13.6.1.json');
+    expect(resultFile('aspire', '13.6.1', 'e7-hashspan-1.1.0-anvil')).toBe(
+      'aspire@13.6.1.e7-hashspan-1.1.0-anvil.json',
+    );
   });
 
   it('keeps host data out of the E7 fixtures', () => {
