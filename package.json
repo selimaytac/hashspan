@@ -29,6 +29,7 @@
     "api:check": "pnpm build && pnpm -r --filter \"./packages/*\" exec api-extractor run",
     "api:update": "pnpm build && pnpm -r --filter \"./packages/*\" exec api-extractor run --local",
     "backends:table": "node scripts/backends/table.mjs",
+    "bundlers:table": "node scripts/bundlers/table.mjs",
     "facilitators:table": "node scripts/facilitators/table.mjs",
     "nodes:table": "node scripts/nodes/table.mjs"
   },
@@ -46,6 +47,7 @@
     "@x402/core": "^2.28.0",
     "@x402/evm": "^2.28.0",
     "@x402/fetch": "^2.28.0",
+    "permissionless": "0.5.0",
     "publint": "^0.3.25",
     "tsdown": "^0.23.0",
     "tsx": "^4.23.15",

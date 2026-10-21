@@ -26,6 +26,8 @@ The website, [hashspan.dev](https://hashspan.dev), has the guides; this folder h
 - [Upstream findings](upstream-findings.md): bugs found in dependencies and what hashspan does about them
 - [x402 facilitator conformance matrix](facilitators.md): the same payments sent to several facilitators on a local
   chain, compared with the spec and with each other
+- [ERC-4337 bundler matrix](bundlers.md): the same user operations sent to several bundlers on a local chain,
+  compared with ERC-7769, with the chain and with each other
 - [Dev-node matrix](nodes.md): the same transactions and JSON-RPC calls sent to Anvil, Hardhat, Reth and Geth, compared
   with the execution-apis spec and with each other
 - [Migrating to 1.0](migrating-to-1.0.md)
