@@ -8,6 +8,7 @@ export default defineConfig({
       '@hashspan/viem': new URL('./packages/viem/src/index.ts', import.meta.url).pathname,
       // For the README quick start of @hashspan/mpp, which a test runs as written.
       '@hashspan/mpp': new URL('./packages/mpp/src/index.ts', import.meta.url).pathname,
+      '@hashspan/faults': new URL('./packages/faults/src/index.ts', import.meta.url).pathname,
     },
   },
   test: {

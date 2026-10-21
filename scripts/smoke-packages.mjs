@@ -1,6 +1,7 @@
-// Smoke test of the published packages: packs @hashspan/core, viem, cdp, x402 and mpp (`pnpm pack`), installs the tarballs
-// and their peer dependencies into an empty project, and loads each with `require()` and `import` under the Node.js
-// that runs the checks, or under Bun or Deno. No chain and no network beyond the npm registry install.
+// Smoke test of the published packages: packs @hashspan/core, viem, cdp, x402, mpp and faults (`pnpm pack`), installs
+// the tarballs and their peer dependencies into an empty project, and loads each with `require()` and `import` under
+// the Node.js that runs the checks, or under Bun or Deno; @hashspan/faults supports Node.js only, so Bun and Deno skip
+// it. No chain and no network beyond the npm registry install.
 //
 //   node scripts/smoke-packages.mjs                 pack, install and check with the current Node.js
 //   node scripts/smoke-packages.mjs --matrix        print the Node.js versions CI checks, as JSON
@@ -18,7 +19,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(import.meta.url), '../..');
-const packageNames = ['core', 'viem', 'cdp', 'x402', 'mpp'];
+const packageNames = ['core', 'viem', 'cdp', 'x402', 'mpp', 'faults'];
 const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
 const manifests = packageNames.map((name) =>
   readJson(join(root, 'packages', name, 'package.json')),
@@ -177,6 +178,49 @@ const { Mppx, tempo } = await import('mppx/client');
   assertHashed(span, core.ATTR_BLOCKCHAIN_PAYMENT_PAYER, FROM);
 }
 
+// The fault proxy in front of a local stand-in for the node: one request passed on, one JSON-RPC error injected.
+if (typeof Bun === 'undefined' && typeof Deno === 'undefined') {
+  const faults = await load_('@hashspan/faults');
+  const { createServer } = await load('node:http');
+  let nodeRequests = 0;
+  const node = createServer((request, response) => {
+    let body = '';
+    request.on('data', (chunk) => { body += chunk; });
+    request.on('end', () => {
+      nodeRequests++;
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ jsonrpc: '2.0', id: JSON.parse(body).id, result: '0x1' }));
+    });
+  });
+  await new Promise((resolve) => node.listen(0, '127.0.0.1', resolve));
+  const proxy = await faults.startFaultProxy('http://127.0.0.1:' + node.address().port);
+  try {
+    const rpc = async (id) => {
+      const response = await fetch(proxy.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id, method: 'eth_blockNumber', params: [] }),
+      });
+      return response.json();
+    };
+    assert.deepEqual(await rpc(1), { jsonrpc: '2.0', id: 1, result: '0x1' });
+    proxy.set({ eth_blockNumber: { kind: 'rpc-error', code: -32005 } });
+    assert.deepEqual(await rpc(2), {
+      jsonrpc: '2.0',
+      id: 2,
+      error: { code: -32005, message: 'injected fault' },
+    });
+    assert.equal(proxy.requests('eth_blockNumber'), 1);
+    assert.equal(nodeRequests, 1, 'the injected fault never reached the node');
+    await assert.rejects(faults.startFaultProxy('http://example.com'), /not loopback/);
+  } finally {
+    await proxy.stop();
+    await new Promise((resolve) => node.close(resolve));
+  }
+} else {
+  console.error('skipped @hashspan/faults: it supports Node.js only');
+}
+
 const runtime =
   typeof Bun !== 'undefined' ? 'Bun ' + Bun.version
   : typeof Deno !== 'undefined' ? 'Deno ' + Deno.version.deno
@@ -273,7 +317,9 @@ function check(dir, runtime) {
       `require() and import export different names:\n${JSON.stringify(cjs.keys)}\n${JSON.stringify(esm.keys)}`,
     );
   }
-  console.log(`ok: require() and import of ${packageNames.length} packages on ${esm.runtime}`);
+  console.log(
+    `ok: require() and import of ${Object.keys(esm.keys).length} packages on ${esm.runtime}`,
+  );
 }
 
 const args = process.argv.slice(2);

@@ -4,16 +4,12 @@
 // ends as `watch()`'s does, nothing is left pending and no rejection is unhandled. A network-scoped account without a
 // reader waits through the SDK's own client instead, on the stand-in API's node, which a second stand-in points at the
 // proxy.
+
+import { type Fault, type FaultProxy, type FaultRule, startFaultProxy } from '@hashspan/faults';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { type Address, createPublicClient, createWalletClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  type Fault,
-  type FaultProxy,
-  type FaultRule,
-  startFaultProxy,
-} from '../../viem/test/fault-proxy.js';
 import { startAnvil } from '../../viem/test/start-anvil.js';
 import { withHashspan } from '../src/index.js';
 import { startMockCdpApi, throwawayCredentials } from './mock-cdp-api.js';

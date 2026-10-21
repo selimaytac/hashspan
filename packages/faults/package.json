@@ -1,0 +1,61 @@
+{
+  "name": "@hashspan/faults",
+  "version": "0.0.0",
+  "description": "A JSON-RPC fault proxy for tests: puts an HTTP proxy between an EVM client and a local node and makes chosen methods hang, fail, reset or answer wrong.",
+  "license": "Apache-2.0",
+  "author": "Selim Aytac",
+  "homepage": "https://hashspan.dev",
+  "bugs": {
+    "url": "https://github.com/selimaytac/hashspan/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/selimaytac/hashspan.git",
+    "directory": "packages/faults"
+  },
+  "keywords": [
+    "json-rpc",
+    "fault-injection",
+    "chaos-testing",
+    "proxy",
+    "testing",
+    "ethereum",
+    "evm",
+    "anvil",
+    "viem"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+  },
+  "engines": {
+    "node": ">=22.3.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

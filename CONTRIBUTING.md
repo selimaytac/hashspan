@@ -107,7 +107,8 @@ that touch `packages/` or `integrations/`.
 - **One concern per PR**, linked to its issue (`Closes #123`).
 - **Title in [Conventional Commits](https://www.conventionalcommits.org/) form**, for example
   `feat(viem): trace sendRawTransaction`. PRs are squash-merged, so the title becomes the commit message. Scopes:
-  `core`, `viem`, `cdp`, `x402`, `mpp`, `examples`, `docs`, `ci`, `lab`; keep it under 72 characters.
+  `core`, `viem`, `cdp`, `x402`, `mpp`, `faults`, `examples`, `docs`, `ci`, `lab`; keep it under 72
+  characters.
 - **Changeset for user-visible changes**: run `pnpm changeset`, pick the packages and the bump type, and commit the
   generated file. Docs, test and CI changes don't need one.
 - **Span and attribute names are a public contract**: changing them needs an update to

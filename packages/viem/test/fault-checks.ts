@@ -1,6 +1,8 @@
 // The checks every RPC fault row makes (issue #290): the caller's outcome compared with a client without hashspan,
 // unhandled rejections, how a span ended, and the metric samples recorded. Shared by the `*faults*.int.test.ts`
-// files of the adapters; the faults themselves come from `fault-proxy.ts`.
+// files of the adapters; the faults themselves come from `@hashspan/faults`.
+
+import type { Fault, FaultRule } from '@hashspan/faults';
 import {
   type Attributes,
   type Histogram,
@@ -9,7 +11,6 @@ import {
 } from '@opentelemetry/api';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { expect } from 'vitest';
-import type { Fault, FaultRule } from './fault-proxy.js';
 
 export type Faults = Record<string, Fault | FaultRule | FaultRule[]>;
 

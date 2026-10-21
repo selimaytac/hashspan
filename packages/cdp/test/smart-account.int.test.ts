@@ -3,6 +3,8 @@
 // on Anvil. What is real: the SDK's smart account methods and waits, the v0.7 user operation hash, the bundle
 // transactions and their `UserOperationEvent` logs, which the reader reads. What is not: CDP's bundler and
 // paymaster, signature validation and gas accounting (docs/adr/0021, Implementation notes).
+
+import { type FaultProxy, startFaultProxy } from '@hashspan/faults';
 import { SpanStatusCode } from '@opentelemetry/api';
 import {
   type Address,
@@ -28,7 +30,6 @@ import {
   testEntryPointCode,
 } from '../../viem/test/entry-point/test-entry-point.js';
 import { collectingRejections, type Faults, faultsOn } from '../../viem/test/fault-checks.js';
-import { type FaultProxy, startFaultProxy } from '../../viem/test/fault-proxy.js';
 import { startAnvil } from '../../viem/test/start-anvil.js';
 import { withHashspan } from '../src/index.js';
 import { startMockCdpApi, throwawayCredentials } from './mock-cdp-api.js';

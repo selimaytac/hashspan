@@ -3,6 +3,8 @@
 // background. Anvil has no `wallet_*` methods: a stand-in wallet answers them, in front of the fault proxy. Each row
 // makes the checks of `rpc-faults.int.test.ts` (fault-checks.ts): the caller's outcome is the one of a client without
 // hashspan, no unhandled rejection, `flush()` resolves true, the spans end as pinned and metrics count each call once.
+
+import { type FaultProxy, startFaultProxy } from '@hashspan/faults';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { type Address, createWalletClient, custom, type Hex, http, RpcRequestError } from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
@@ -24,7 +26,6 @@ import {
   succeeded,
   TIMEOUT,
 } from './fault-checks.js';
-import { type FaultProxy, startFaultProxy } from './fault-proxy.js';
 import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast, viemHasAction } from './viem-version.js';

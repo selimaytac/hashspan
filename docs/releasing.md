@@ -7,7 +7,8 @@ OIDC token, npm adds a provenance attestation, and no npm token exists anywhere.
 `x402` and the examples form a linked group (`.changeset/config.json`): the packages released together get one
 version, while a package without changes keeps its own, so versions can differ between packages. `@hashspan/mpp` is
 outside the group: it is released as 0.x, on versions of its own, while mppx is 0.x
-([ADR 0029](adr/0029-mpp-payments.md)).
+([ADR 0029](adr/0029-mpp-payments.md)). `@hashspan/faults` is outside it too: a test tool that depends on no other
+hashspan package, released as 0.x while its fault model settles ([ADR 0032](adr/0032-json-rpc-fault-proxy.md)).
 
 ## Versions
 
@@ -82,7 +83,7 @@ last release on `latest` and a candidate is installed with `@rc`. Every changese
 candidate. `pnpm changeset pre exit` in a pull request of its own ends pre mode; the next Version Packages pull
 request then releases `x.y.z` on `latest`. Pre mode reads every workspace package named `@hashspan/*`, the private
 ones too, so each has a `version` in its `package.json` (the examples have `0.0.0`; `docs.test.ts` checks it).
-`@hashspan/mpp`, outside the linked group, gets candidates of its own 0.x version.
+`@hashspan/mpp` and `@hashspan/faults`, outside the linked group, get candidates of their own 0.x versions.
 
 ## One-time setup
 
@@ -130,6 +131,7 @@ npm trust github @hashspan/viem --repo selimaytac/hashspan --file release.yml --
 npm trust github @hashspan/cdp --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust github @hashspan/x402 --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust github @hashspan/mpp --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
+npm trust github @hashspan/faults --repo selimaytac/hashspan --file release.yml --env npm --allow-publish
 npm trust list @hashspan/core
 npm logout
 ```
