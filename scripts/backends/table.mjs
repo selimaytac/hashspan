@@ -25,6 +25,20 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /** Cells of one transport's trace result. */
 function traceCells(t) {
+  // A transport the backend refused stored nothing, so only that is said; the other cells would compare nothing.
+  if (t.status < 200 || t.status >= 300) {
+    const none = '-';
+    return {
+      spans: `refused (${t.status})`,
+      kind: none,
+      status: none,
+      types: none,
+      names: none,
+      events: none,
+      links: none,
+      resource: none,
+    };
+  }
   const s = t.summary;
   const x = t.exercised;
   const spans = [

@@ -81,7 +81,7 @@ export const backends = {
     version: '2.22.0',
     image: 'jaegertracing/jaeger:2.22.0',
     digest: null,
-    tested: false,
+    tested: true,
     ports: [4318, 16686],
     ready: ['http://127.0.0.1:16686/'],
     otlp: {
@@ -124,7 +124,13 @@ export const backends = {
     tested: true,
     // 18888 serves the UI and the telemetry API, 18890 takes OTLP over HTTP.
     ports: [18888, { host: 4318, container: 18890 }],
-    env: { DASHBOARD__FRONTEND__AUTHMODE: 'Unsecured', DASHBOARD__OTLP__AUTHMODE: 'Unsecured' },
+    // The telemetry API has an auth mode of its own: without `DASHBOARD__API__AUTHMODE` it answers 401 and asks for an
+    // `x-api-key` header.
+    env: {
+      DASHBOARD__FRONTEND__AUTHMODE: 'Unsecured',
+      DASHBOARD__OTLP__AUTHMODE: 'Unsecured',
+      DASHBOARD__API__AUTHMODE: 'Unsecured',
+    },
     ready: ['http://127.0.0.1:18888/'],
     otlp: {
       traces: 'http://127.0.0.1:4318/v1/traces',
@@ -194,8 +200,9 @@ export const backends = {
     image: 'hyperdx/hyperdx-local:2.41.0',
     digest: 'sha256:9236f043e8ad0a7cb87df1875850898c69439ef26f870ce10dcf49b79d09c16b',
     tested: true,
-    ports: [4318, 8123],
-    ready: ['http://127.0.0.1:8123/ping'],
+    ports: [4318, 8123, 13133],
+    // ClickHouse answers a few seconds before the collector takes OTLP; 13133 is the collector's health check.
+    ready: ['http://127.0.0.1:8123/ping', 'http://127.0.0.1:13133/'],
     otlp: {
       traces: 'http://127.0.0.1:4318/v1/traces',
       metrics: 'http://127.0.0.1:4318/v1/metrics',
@@ -253,7 +260,7 @@ export const backends = {
     version: '20.21.1',
     image: 'arizephoenix/phoenix:20.21.1',
     digest: 'sha256:4a58a611389459514a936960d306776b976ed66c96649cef834bbc683ae5b4ab',
-    tested: false,
+    tested: true,
     ports: [6006],
     env: {
       PHOENIX_WORKING_DIR: '/mnt/data',

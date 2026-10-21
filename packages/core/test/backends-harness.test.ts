@@ -100,9 +100,20 @@ describe('backend matrix definitions', () => {
     expect(backends['otel-lgtm'].env.GF_ANALYTICS_REPORTING_ENABLED).toBe('false');
   });
 
+  it('opens the Aspire telemetry API, which has an auth mode of its own', () => {
+    expect(backends.aspire.env.DASHBOARD__API__AUTHMODE).toBe('Unsecured');
+  });
+
+  it('waits for the HyperDX collector, not only for ClickHouse', () => {
+    expect(backends.hyperdx.ready).toContain('http://127.0.0.1:13133/');
+    expect(values(dockerArgs('hyperdx', backends.hyperdx), '--publish')).toContain(
+      '127.0.0.1:13133:13133',
+    );
+  });
+
   it('marks the read-backs not yet run against their backend', () => {
     const untested = runnable.filter(([, def]) => !def.tested).map(([name]) => name);
-    expect(untested).toEqual(['jaeger', 'phoenix']);
+    expect(untested).toEqual([]);
   });
 
   it('refuses a trace id that is not hex before it reaches a query', async () => {
@@ -130,20 +141,15 @@ describe('backend matrix results', () => {
     expect(hostDataProblems(text)).toEqual([]);
   });
 
-  it('seeds the five E7 backends with what the diff computes from the recorded spans', () => {
+  it('keeps no E7 seed row for a backend that has a synthetic-1 row', () => {
+    const results = files.map((f) => JSON.parse(readFileSync(join(root, RESULTS_DIR, f), 'utf8')));
+    const synthetic = new Set(
+      results.filter((r) => r.corpus.id === 'synthetic-1').map((r) => r.backend.name),
+    );
+    const seeded = results.filter((r) => r.corpus.id !== 'synthetic-1').map((r) => r.backend.name);
+    expect(seeded.filter((name) => synthetic.has(name))).toEqual([]);
     for (const name of Object.keys(E7_BACKENDS)) {
-      const result = e7Result(root, name);
-      const file = join(
-        root,
-        RESULTS_DIR,
-        resultFile(name, result.backend.version, result.corpus.id),
-      );
-      expect(readFileSync(file, 'utf8'), 'run `node scripts/backends/seed-e7.mjs`').toBe(
-        resultText(result),
-      );
-      expect(result.corpus.id).toBe('e7-hashspan-1.1.0-anvil');
-      expect(result.runDate).toBe('2026-10-18');
-      expect(Object.keys(result.transports)).toEqual(['http/protobuf']);
+      expect(e7Result(root, name).corpus.id).toBe('e7-hashspan-1.1.0-anvil');
     }
   });
 
@@ -183,19 +189,32 @@ describe('backend matrix results', () => {
     ).toThrow('runDate');
   });
 
-  it('generates a table that says when no synthetic result exists yet', () => {
+  it('generates the table from the synthetic-1 runs', () => {
     expect(table([])).toBe('No results yet: the first lab run of the matrix writes them.');
     const results = files.map((file) => ({
       file,
       result: JSON.parse(readFileSync(join(root, RESULTS_DIR, file), 'utf8')),
     }));
     const text = table(results);
-    expect(text).toContain(
-      '| MLflow 3.17.1 | `e7-hashspan-1.1.0-anvil` | all kept | **dropped** |',
-    );
+    expect(text).toContain('| MLflow 3.17.1 | `synthetic-1` | all kept | **dropped** |');
     expect(text).toContain('**dots become underscores**');
-    expect(text.split('\n').filter((l) => l.includes('**strings** (number sent)'))).toHaveLength(3);
-    expect(text).toContain('No backend has a `synthetic-1` result yet');
+    // Aspire, HyperDX and OpenObserve return every attribute as a string, as in E7.
+    expect(
+      text.split('\n').filter((l) => l.includes('**strings** (array, boolean, number sent)')),
+    ).toHaveLength(3);
+    expect(text).not.toContain('No backend has a `synthetic-1` result yet');
+  });
+
+  it('says only "refused" for a transport the backend refused', () => {
+    const file = files[0] as string;
+    const result = JSON.parse(readFileSync(join(root, RESULTS_DIR, file), 'utf8'));
+    const [name, t] = Object.entries(result.transports)[0] as [string, { traces: object }];
+    const refused = {
+      ...result,
+      transports: { [name]: { ...t, traces: { ...t.traces, status: 415 } } },
+    };
+    const row = table([{ file, result: refused }]).split('\n')[2] as string;
+    expect(row).toContain('| refused (415) | - | - | - | - | - | - | - |');
   });
 
   it('escapes backslashes and pipes in table cells', () => {

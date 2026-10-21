@@ -177,7 +177,7 @@ describe('backend matrix diff', () => {
     expect(diffSpans([span], []).summary).toMatchObject({ missing: 1, resourceDiff: null });
   });
 
-  it('compares links as a set and events in order', () => {
+  it('compares links as a set and events by name, in any order', () => {
     const two = {
       ...span,
       links: [span.links[0], { traceId: 'a'.repeat(32), spanId: 'c'.repeat(16), attributes: {} }],
@@ -186,6 +186,23 @@ describe('backend matrix diff', () => {
     expect(diffSpans([two], [reversed]).summary.linkDiff).toBe(0);
     expect(diffSpans([two], [span]).summary.linkDiff).toBe(1);
     expect(diffSpans([span], [{ ...span, events: [] }]).summary.eventDiff).toBe(1);
+    const events = [
+      { name: 'receipt', attributes: { block: 12 } },
+      { name: 'exception', attributes: { 'exception.type': 'E' } },
+    ];
+    const sent = { ...span, events };
+    expect(diffSpans([sent], [{ ...sent, events: [...events].reverse() }]).summary).toMatchObject({
+      eventDiff: 0,
+      eventAttrDiff: 0,
+    });
+    const changed = [events[1], { name: 'receipt', attributes: { block: '12' } }];
+    expect(diffSpans([sent], [{ ...sent, events: changed }]).summary.eventAttrDiff).toBe(1);
+  });
+
+  it('counts an array written as a JSON array of strings as stringified', () => {
+    const sent = { ...span, attributes: { a: [1, 2], b: [true, false], c: ['x'] } };
+    const got = { ...sent, attributes: { a: '["1","2"]', b: '["true","false"]', c: '["x"]' } };
+    expect(diffSpans([sent], [got]).summary).toMatchObject({ attrTypeDiff: 3, attrStringified: 3 });
   });
 
   it('leaves resource and scope unchecked when the backend does not return them', () => {
@@ -390,5 +407,44 @@ describe('backend matrix normalizers', () => {
     };
     const { summary } = diffSpans([confirm], fromPhoenix([item]));
     expect(summary).toMatchObject({ kindDiff: 0, attrTypeDiff: 0, eventDiff: 0, linkDiff: 1 });
+  });
+
+  it('reads Phoenix attribute values, which list every snake-case field and set one', () => {
+    // The shape Phoenix 20.21.1 returned in the first lab run.
+    const value = (field: string, v: unknown) => ({
+      array_value: null,
+      bool_value: null,
+      bytes_value: null,
+      double_value: null,
+      int_value: null,
+      kvlist_value: null,
+      string_value: null,
+      [field]: v,
+    });
+    const [span] = fromPhoenix([
+      {
+        trace_id: 'a'.repeat(32),
+        span_id: 'b'.repeat(16),
+        name: 'send',
+        kind: 'SPAN_KIND_INTERNAL',
+        status: { code: 0, message: null },
+        attributes: [
+          { key: 's', value: value('string_value', 'evm') },
+          { key: 'i', value: value('int_value', 31337) },
+          { key: 'd', value: value('double_value', 1.5) },
+          { key: 'f', value: value('bool_value', false) },
+          {
+            key: 'a',
+            value: value('array_value', {
+              values: [value('int_value', 1), value('int_value', 2)],
+            }),
+          },
+        ],
+        events: [{ name: 'receipt', attributes: [{ key: 'n', value: value('int_value', 12) }] }],
+        links: null,
+      },
+    ]);
+    expect(span?.attributes).toEqual({ s: 'evm', i: 31337, d: 1.5, f: false, a: [1, 2] });
+    expect(span?.events).toEqual([{ name: 'receipt', attributes: { n: 12 } }]);
   });
 });
