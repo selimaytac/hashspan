@@ -33,11 +33,41 @@ export function sanitize(text) {
  * `success` and `errorReason`, whether a `transaction` came back (`present` or `empty`, never the hash), and an error
  * text. `failure` is `timeout` when the harness gave up waiting.
  */
-export function observeCall(status, body, failure) {
+export function observeCall(status, body, failure, path) {
   if (failure === 'timeout') return { timeout: true };
   const out = { status };
   if (failure !== undefined) out.error = sanitize(failure);
-  if (body === null || typeof body !== 'object') return out;
+  if (body !== null && typeof body === 'object') readBody(out, body);
+  return withErrorReason(out, path);
+}
+
+/** A reason code at the start of an error text: snake case, then `:` or the end (`settlement_pending: ...`). */
+const REASON_IN_ERROR = /^([a-z][a-z0-9]*(?:_[a-z0-9]+)+)(?::|$)/;
+
+/**
+ * A server that answers a failed verify or settle with a non-2xx status and the reason only in its error text (the Go
+ * e2e facilitator: `500 {"error":"invalid_exact_evm_payload_authorization_valid_before: ..."}`) is read as that
+ * reason, so its reason rows compare with the others; the status stays its own field.
+ */
+function withErrorReason(out, path) {
+  const failed = out.status !== undefined && (out.status < 200 || out.status >= 300);
+  const code = typeof out.error === 'string' ? REASON_IN_ERROR.exec(out.error)?.[1] : undefined;
+  if (!failed || code === undefined) return out;
+  if (path === 'verify' && out.isValid === undefined) {
+    out.isValid = false;
+    out.invalidReason ??= code;
+    out.reasonFrom = 'error-body';
+  }
+  if (path === 'settle' && out.success === undefined) {
+    out.success = false;
+    out.errorReason ??= code;
+    out.reasonFrom = 'error-body';
+  }
+  return out;
+}
+
+/** The VerifyResponse or SettleResponse fields of an answer body, and its error text. */
+function readBody(out, body) {
   if (typeof body.isValid === 'boolean') out.isValid = body.isValid;
   if (typeof body.invalidReason === 'string') out.invalidReason = sanitize(body.invalidReason);
   if (typeof body.success === 'boolean') out.success = body.success;
@@ -49,7 +79,6 @@ export function observeCall(status, body, failure) {
       out.error = sanitize(typeof body[key] === 'string' ? body[key] : JSON.stringify(body[key]));
     }
   }
-  return out;
 }
 
 /** The value of an expectation's field in an observation: a step's field, or an effect (`effect.payTo`). */
@@ -131,9 +160,12 @@ export function checkInvariants(observed, { amount, known = [] }) {
   const afterPass = BigInt(observed.effect.afterPass ?? observed.effect.afterRetry);
   const price = BigInt(amount);
   const mined = afterSettle >= price;
-  const pending = settle?.errorReason === 'settlement_pending';
+  const isPending = (call) => call?.errorReason === 'settlement_pending';
+  const pending = isPending(settle);
   const failedAfterTransfer =
     !settledNow(settle) && mined && !(pending && settle.transaction === 'present');
+  // A transfer that mines after an answer of settlement_pending is the outcome that answer announced.
+  const lateButAnnounced = isPending(retry) || (pending && retry?.timeout === true);
   const mark = (id, holds, item) => ({
     id,
     holds,
@@ -145,9 +177,12 @@ export function checkInvariants(observed, { amount, known = [] }) {
       !(settledNow(settle) && !mined) && !(settledNow(retry) && afterRetry < price),
     ),
     mark('no-failure-after-transfer', !failedAfterTransfer, known[0]),
-    mark('pending-carries-transaction', !(pending && settle.transaction !== 'present')),
+    mark(
+      'pending-carries-transaction',
+      [settle, retry].every((call) => !isPending(call) || call.transaction === 'present'),
+    ),
     mark('moves-once', afterRetry <= price && afterPass <= price),
-    mark('no-late-transfer', afterPass === afterRetry),
+    mark('no-late-transfer', afterPass === afterRetry || lateButAnnounced),
   ];
 }
 

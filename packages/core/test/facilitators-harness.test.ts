@@ -20,7 +20,9 @@ import {
   MEMORY,
   PREFIX,
   proxyArgs,
+  SETTLE_MARGIN_MS,
   secretEnv,
+  settleTimeoutOf,
   targets,
   wave,
   X402_COMMIT,
@@ -201,6 +203,20 @@ describe('facilitator matrix images', () => {
       expect(lines.join('\n')).not.toMatch(/PRIVATE_KEY|0x[0-9a-f]{64}/i);
     },
   );
+
+  it('waits for a settle as long as the target waits for its receipt, plus a margin, with the source named', () => {
+    for (const [, def] of runnable) {
+      expect(def.receiptWait.ms).toBeGreaterThan(0);
+      expect(def.receiptWait.source).toMatch(/^(e2e|python|go|typescript)\/\S+:\d+/);
+      expect(settleTimeoutOf(def)).toBe(def.receiptWait.ms + SETTLE_MARGIN_MS);
+    }
+    expect(SETTLE_MARGIN_MS).toBeGreaterThanOrEqual(10_000);
+    expect(Object.fromEntries(runnable.map(([name, def]) => [name, def.receiptWait.ms]))).toEqual({
+      typescript: 180_000,
+      go: 30_000,
+      python: 120_000,
+    });
+  });
 
   it('builds the TypeScript facilitator with the tools node-gyp needs, without the legacy packages', () => {
     expect(read('docker/typescript.Dockerfile')).toMatch(/^FROM node:22-bookworm$/m);

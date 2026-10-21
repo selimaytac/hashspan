@@ -16,6 +16,7 @@ import {
   CORPUS_FILE,
   corpusText,
   EXPIRY_LIMIT,
+  expectationsOf,
   FLOWS,
   NETWORK,
   PAY_TO,
@@ -58,6 +59,17 @@ const payloads = (corpus: { cases: Case[] }) =>
   corpus.cases.map((c) => ({ id: c.id, payload: c.paymentPayload }));
 
 describe('facilitator corpus', () => {
+  it('adds one unspecified status row per call to every case', () => {
+    for (const c of CASES) {
+      const steps = c.steps ?? ['verify', 'settle'];
+      const rows = expectationsOf(c).filter((e: { field: string }) => e.field === 'status');
+      expect(rows).toEqual(
+        steps.map((_: string, step: number) => ({ step, field: 'status', kind: 'unspecified' })),
+      );
+      expect(expectationsOf(c).slice(0, c.expect.length)).toEqual(c.expect);
+    }
+  });
+
   it('is the committed file the generator writes at the fixed past time', async () => {
     expect(
       corpusText(await buildCorpus()),

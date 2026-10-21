@@ -57,6 +57,12 @@ export const targets = {
     // From e2e/facilitators/typescript/package.json (`start`) and the e2e CI job (.github/workflows/e2e_tests.yml):
     // pnpm install and build in typescript/, pnpm install in e2e/, Node.js 22.
     start: { command: 'tsx index.ts', verified: false },
+    // How long the facilitator waits for a settle receipt; the harness waits that long plus SETTLE_MARGIN_MS.
+    receiptWait: {
+      ms: 180_000,
+      source:
+        'e2e/facilitators/typescript/index.ts:492-493 (viem waitForTransactionReceipt with no timeout: its default 180_000)',
+    },
     known: [],
   },
   go: {
@@ -77,6 +83,11 @@ export const targets = {
     chainId: { from: 'eth_chainId over the RPC', source: 'e2e/facilitators/go/main.go:99' },
     // e2e/setup.sh builds a Go component with `go mod tidy` and `go build`; Go 1.24 as in the e2e CI job.
     start: { command: 'go build, then the binary', verified: false },
+    receiptWait: {
+      ms: 30_000,
+      source:
+        'e2e/facilitators/go/main.go:369-383 (30 polls of TransactionReceipt, one second apart; no timeout per poll)',
+    },
     known: [],
   },
   python: {
@@ -101,6 +112,11 @@ export const targets = {
     // e2e/setup.sh runs `uv sync` for a Python component; main.py starts uvicorn on 0.0.0.0:$PORT; Python 3.10 as in
     // the e2e CI job.
     start: { command: 'uv run python main.py', verified: false },
+    receiptWait: {
+      ms: 120_000,
+      source:
+        'python/x402/mechanisms/evm/signers.py:38 (_DEFAULT_CONFIRMATION_TIMEOUT_SECONDS = 120; e2e/facilitators/python/main.py:124 keeps it)',
+    },
     known: [],
   },
   'x402-rs': {
@@ -124,6 +140,12 @@ export const targets = {
     known: ['qntx#73'],
   },
 };
+
+/** What the harness waits beyond a target's own receipt wait before it counts a settle as timed out. */
+export const SETTLE_MARGIN_MS = 30_000;
+
+/** How long the harness waits for a target's settle answer: its receipt wait plus the margin. */
+export const settleTimeoutOf = (def) => def.receiptWait.ms + SETTLE_MARGIN_MS;
 
 /** The targets of one wave, as `[name, definition]` pairs. */
 export const wave = (n) => Object.entries(targets).filter(([, def]) => def.wave === n);

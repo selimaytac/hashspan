@@ -11,6 +11,12 @@ Wave 1 is the three facilitators of the x402 repository's end-to-end suite at on
 ([`targets.mjs`](../scripts/facilitators/targets.mjs)): `e2e/facilitators/typescript`, `go` and `python` at
 `faa1c694`. Wave 2, x402-rs and qntx/facilitator, is listed there and not run yet.
 
+Each wave-1 target is an HTTP server of the e2e suite around that language's x402 SDK. The verify and settle logic,
+and so the reason codes, come from the SDK; the HTTP envelope (the status code, and whether a failure comes as a
+VerifyResponse or SettleResponse body or as an error text) and the RPC signer come from the e2e server. A row about
+the envelope, such as a 500 for a failed verify or for an unregistered network, describes that e2e server, not the
+SDK library.
+
 Every target talks to the same chain: Anvil with chain id 84532, with Permit2, the x402 Permit2 proxies, the
 batch-settlement contracts and Multicall3 installed at their canonical addresses and an EIP-3009 test token ([`chain.mjs`](../scripts/facilitators/chain.mjs)). All keys are Anvil's well-known test keys.
 
@@ -36,13 +42,18 @@ Those payloads are never written to a file, and a result holds no payload or sig
 A run has two passes:
 
 1. Conformance: it reads `/supported` first. A case of a scheme the target does not offer is `unsupported`, which is
-   not a failure. Then it sends every other case, `/verify` before `/settle`, and reads the token balances.
+   not a failure. Then it sends every other case, `/verify` before `/settle`, and reads the token balances. The HTTP
+   status of each call is a row of its own, `unspecified`: the spec gives the response bodies and leaves their HTTP
+   status to the transport. An answer with a non-2xx status whose error text starts with a reason code
+   (`settlement_pending: ...`) is read as that reason, so its reason rows compare with the other targets'.
 2. Faults: the valid case of each scheme again, with one fault of
    [`@hashspan/faults`](../packages/faults/README.md) on the facilitator's `eth_sendRawTransaction` or
    `eth_getTransactionReceipt` (hang, reset, drop, truncate, a JSON-RPC error), then the same settle again. The
    invariants: no success without a mined transfer, no failure after one (unless it is `settlement_pending` with the
-   transaction), funds never move twice, and nothing mines after the case. Each fault case pays a receiver of its
-   own, so a transfer that mines later counts for the case it belongs to.
+   transaction), funds never move twice, and nothing mines after the case unless an answer announced it as
+   `settlement_pending`. Each fault case pays a receiver of its own, so a transfer that mines later counts for the case
+   it belongs to. The harness waits for a settle as long as the target waits for its receipt, plus 30 seconds; each
+   target entry records that wait with its source line.
 
 ## How a run is isolated
 
