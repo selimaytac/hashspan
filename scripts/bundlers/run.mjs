@@ -32,6 +32,7 @@ import {
   checkExpectations,
   checkInvariants,
   logTail,
+  shouldRetryStart,
   usableEntryPoints,
 } from './diff.mjs';
 import { FAULT_CASE, FAULT_SALT_BASE, FAULT_STEPS, faultScenarios } from './faults.mjs';
@@ -92,31 +93,48 @@ async function startPair(name, def, images, scenario) {
     30_000,
     'the faults proxy',
   );
-  await docker(bundlerArgs(name, def, url, images.target), secretEnv(def));
-  let listed;
-  try {
-    await waitFor(
-      async () => {
-        const { body } = await rpc(bundlerUrl(def), 'eth_supportedEntryPoints', [], 5000);
-        listed = body?.result;
-        return Array.isArray(listed);
-      },
-      START_TIMEOUT_MS,
-      `${name} on ${bundlerUrl(def)}`,
-    );
-  } catch (error) {
-    // The container is removed below and at the end of the run, so its last lines go into the error first.
-    const logs = await docker(['logs', containerOf(name)]).catch(() => ({
-      stdout: '',
-      stderr: '',
-    }));
-    const tail = logTail(`${logs.stdout}\n${logs.stderr}`);
+  for (let attempt = 1; ; attempt++) {
+    await docker(bundlerArgs(name, def, url, images.target), secretEnv(def));
+    const started = await waitForBundler(name, def);
+    if (started.listed) return started.listed;
     await docker(['rm', '--force', containerOf(name)]).catch(() => {});
+    if (shouldRetryStart(started.tail) && attempt < START_ATTEMPTS) {
+      await sleep(START_RETRY_MS);
+      continue;
+    }
     throw new Error(
-      `${error.message}${tail ? `\nlast lines of ${containerOf(name)}:\n${tail}` : ''}`,
+      `not ready: ${name} on ${bundlerUrl(def)}${started.tail ? `\nlast lines of ${containerOf(name)}:\n${started.tail}` : ''}`,
     );
   }
-  return listed;
+}
+
+/** How often a bundler is started again when its port is still held by the one before, and how long apart. */
+const START_ATTEMPTS = 8;
+const START_RETRY_MS = 15_000;
+
+/**
+ * Waits until the bundler lists its EntryPoints, or until it exits or START_TIMEOUT_MS passed; then returns its last
+ * log lines, read before the run removes the container.
+ */
+async function waitForBundler(name, def) {
+  const deadline = Date.now() + START_TIMEOUT_MS;
+  for (;;) {
+    const { body } = await rpc(bundlerUrl(def), 'eth_supportedEntryPoints', [], 5000).catch(
+      () => ({}),
+    );
+    if (Array.isArray(body?.result)) return { listed: body.result };
+    const running = await docker(['inspect', '--format', '{{.State.Running}}', containerOf(name)])
+      .then(({ stdout }) => stdout.trim() === 'true')
+      .catch(() => false);
+    if (!running || Date.now() > deadline) {
+      const logs = await docker(['logs', containerOf(name)]).catch(() => ({
+        stdout: '',
+        stderr: '',
+      }));
+      return { tail: logTail(`${logs.stdout}\n${logs.stderr}`) };
+    }
+    await sleep(1000);
+  }
 }
 
 /** Applies the proxy's rules, now that the bundler is ready. */

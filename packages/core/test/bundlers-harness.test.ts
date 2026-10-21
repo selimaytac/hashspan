@@ -319,7 +319,11 @@ describe('bundler matrix images', () => {
     const dockerfile = read('docker/alto.Dockerfile');
     expect(dockerfile).toMatch(/^FROM node:22-bookworm$/m);
     expect(dockerfile).toContain('ENV NODE_OPTIONS=--max-old-space-size=4096');
-    expect(dockerfile).toContain('--filter @pimlico/alto... --workspace-concurrency=1');
+    expect(dockerfile).toContain('RUN pnpm install --frozen-lockfile --filter @pimlico/alto...\n');
+    expect(dockerfile).toContain(
+      'RUN pnpm --filter @pimlico/alto --workspace-concurrency=1 run build',
+    );
+    expect(dockerfile).not.toMatch(/pnpm install[^\n]*--workspace-concurrency/);
     expect(dockerfile.match(/^RUN forge build /gm)).toHaveLength(9);
     // Only Alto's package and the manifests its frozen lockfile needs; not the e2e tests or the deployer.
     expect(targets.alto.archive).toEqual([

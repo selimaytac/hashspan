@@ -14,6 +14,12 @@ const DATETIME = /\d{4}-\d{2}-\d{2}T[\d:.]+Z?/g;
 const WORD = /\bbugs?\b/i;
 const MAX_TEXT = 200;
 
+/**
+ * Whether a bundler that did not start should be started again: its port was still held by the one before it in the
+ * shared namespace (Voltaire binds without reusing an address in TIME_WAIT).
+ */
+export const shouldRetryStart = (tail) => /address already in use/i.test(String(tail ?? ''));
+
 /** The last `n` non-empty lines of a container's output, sanitized, for an error that says why it did not start. */
 export function logTail(text, n = 20) {
   return String(text ?? '')

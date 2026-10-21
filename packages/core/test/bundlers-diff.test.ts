@@ -18,6 +18,7 @@ import {
   observeReadBack,
   paymasterForm,
   sanitize,
+  shouldRetryStart,
   summarize,
   usableEntryPoints,
 } from '../../../scripts/bundlers/diff.mjs';
@@ -140,6 +141,18 @@ describe('observed answers', () => {
     expect(logTail(log)).toBe('starting\nloaded <path>\nerror: bad flag --rpc_url');
     expect(logTail(log, 1)).toBe('error: bad flag --rpc_url');
     expect(logTail(undefined)).toBe('');
+  });
+
+  it('starts a bundler again only when its port was still in use', () => {
+    expect(
+      shouldRetryStart(
+        'CRITICAL Bind failed. [Errno 98] Address already in use for RPC url <address> and port 4337',
+      ),
+    ).toBe(true);
+    expect(shouldRetryStart('Voltaire: error: You must specify either --bundler_secret')).toBe(
+      false,
+    );
+    expect(shouldRetryStart(undefined)).toBe(false);
   });
 
   it('shows a revert reason as its decoded text or selector, never the bytes', () => {
