@@ -13,6 +13,7 @@ import {
   candidates,
   causesOf,
   KNOWN,
+  KNOWN_ROWS,
   namesWrongCause,
   REFERENCES,
   recordedRow,
@@ -496,7 +497,7 @@ describe('tables', () => {
     expect(cell('a|b\\c\nd')).toBe('a\\|b\\\\c d');
   });
 
-  it('show each node, each row with the expected column, and mark spec differences, known items and candidates', () => {
+  it('show each node, each row with the expected column, and mark spec differences, known items and rows that differ from the references', () => {
     const anvil = resultOf(
       'anvil',
       [
@@ -576,13 +577,13 @@ describe('tables', () => {
     ]);
     const lines = text.split('\n');
     expect(lines[0]).toBe(
-      '| Node | Version | Chain id | Spec rows matched | Spec differences | Known upstream | Candidates | Unspecified rows | By design | Unsupported flows | Failed flows | Run |',
+      '| Node | Version | Chain id | Spec rows matched | Spec differences | Known upstream | Differ from references | Unspecified rows | By design | Unsupported flows | Failed flows | Run |',
     );
     expect(lines[2]).toBe(
       '| anvil | `1.0.0` | 1337 | 1 of 1 | 0 | 1 | 1 | 2 | 1 | 1 | 0 | [2026-10-21](nodes/results/anvil@1.0.0.json) |',
     );
     expect(text).toContain(
-      '| `invalid-input` | nonce too low | code | *unspecified* | **`-32003`** (candidate: code) | `-32000` |',
+      '| `invalid-input` | nonce too low | code | *unspecified* | **`-32003`** (differs: code) | `-32000` |',
     );
     // Same cause in other words: recorded, never a candidate; the pipe of the message is escaped.
     expect(text).toContain(
@@ -600,5 +601,35 @@ describe('tables', () => {
       '| `anvil-tempo` | receipt | extension fields | *by design: tempo* | `feePayer, feeToken` |',
     );
     expect(text).not.toMatch(/\bbugs?\b/i);
+  });
+});
+
+describe('dev-node table labels', () => {
+  const committed = () =>
+    readdirSync(join(root, RESULTS_DIR))
+      .filter((f) => f.endsWith('.json'))
+      .sort()
+      .map((file) => ({
+        file,
+        result: JSON.parse(readFileSync(join(root, RESULTS_DIR, file), 'utf8')),
+      }));
+
+  it('names its columns without a judgement', () => {
+    const header =
+      table(committed())
+        .split('\n')
+        .find((l) => l.startsWith('| Node |')) ?? '';
+    expect(header).toContain('Differ from references');
+    expect(header).not.toMatch(/candidate|bug|wrong|broken|incorrect|fail(s|ure)? to|violat/i);
+    expect(table(committed())).not.toMatch(/\(candidate:/);
+  });
+
+  it('shows the upstream mark of a known row instead of a difference', () => {
+    const text = table(committed());
+    for (const k of KNOWN_ROWS) {
+      expect(text).toContain(`(known: ${k.known})`);
+    }
+    const hardhat = text.split('\n').find((l) => l.startsWith('| Hardhat (EDR) |')) ?? '';
+    expect(hardhat).toBeTruthy();
   });
 });
