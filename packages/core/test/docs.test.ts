@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { DOC, render, START } from '../../../scripts/backends/table.mjs';
 
 // Checks that the docs agree with the repository, so they cannot drift unnoticed. docs/semconv.md is checked
 // against the attribute keys in semconv-doc.test.ts.
@@ -389,6 +390,12 @@ describe('repository docs', () => {
     )?.[1];
     expect(lab).toBeDefined();
     expect(documented).toBe(lab);
+  });
+
+  it('shows in docs/backends.md the Compatibility table generated from docs/backends/results', () => {
+    const doc = read(DOC);
+    expect(doc).toContain(START);
+    expect(doc, 'run `pnpm backends:table`').toBe(render(root));
   });
 });
 

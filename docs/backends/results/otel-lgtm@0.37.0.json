@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "corpus": {
+    "id": "e7-hashspan-1.1.0-anvil",
+    "sha256": "ad099b4a4c935d17811a6606a6c48dc123bde194a91f41aeb813122dc0015a66"
+  },
+  "harness": {
+    "commit": null,
+    "source": "experiment E7, recomputed from its recorded spans with diff.mjs"
+  },
+  "backend": {
+    "name": "otel-lgtm",
+    "title": "grafana/otel-lgtm (Tempo)",
+    "version": "0.37.0",
+    "image": "grafana/otel-lgtm:0.37.0",
+    "digest": "sha256:57b5ab1ca6619beb180174e2fccce04762470750669d043f544b4726d0582d07",
+    "readApi": "Tempo `/api/v2/traces/{id}`, Prometheus query API"
+  },
+  "runDate": "2026-10-18",
+  "transports": {
+    "http/protobuf": {
+      "traces": {
+        "summary": {
+          "spans": 66,
+          "missing": 0,
+          "extraSpans": 0,
+          "nameDiff": 0,
+          "kindDiff": 0,
+          "parentDiff": 0,
+          "statusDiff": 0,
+          "attrMissing": 0,
+          "attrNameDiff": 0,
+          "attrTypeDiff": 0,
+          "attrStringified": 0,
+          "attrValueDiff": 0,
+          "attrExtra": 0,
+          "eventDiff": 0,
+          "eventAttrDiff": 0,
+          "linkDiff": 0,
+          "linkAttrDiff": 0,
+          "resourceDiff": null,
+          "scopeDiff": null
+        },
+        "exercised": {
+          "attributeTypes": [
+            "number",
+            "string"
+          ],
+          "statusMessage": false,
+          "eventAttributes": true,
+          "links": 8,
+          "crossTraceLinks": 1,
+          "linkAttributes": false,
+          "resource": false,
+          "scope": false
+        },
+        "differences": []
+      },
+      "metrics": {
+        "read": true,
+        "metrics": 3,
+        "differences": []
+      }
+    }
+  },
+  "notes": [
+    "Tempo 3.1.0 and Prometheus 3.15.0 inside"
+  ]
+}

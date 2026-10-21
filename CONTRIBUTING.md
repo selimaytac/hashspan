@@ -79,6 +79,9 @@ make lab-pause   # stop, keep state
 make lab-nuke    # remove containers, images, tools and build output
 ```
 
+The Compatibility table of [docs/backends.md](docs/backends.md#compatibility) comes from
+`node scripts/backends/run.mjs <backend>`, which runs one backend in Docker, and `pnpm backends:table`.
+
 `make demo` is a quick check of the example agent.
 To run your own agent, or a branch's example, against the full stack with dashboards of
 [hashspan-lab](https://github.com/selimaytac/hashspan-lab#use-the-lab-with-your-own-agent), start the lab there and

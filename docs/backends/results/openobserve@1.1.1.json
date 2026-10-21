@@ -1,0 +1,456 @@
+{
+  "schema": 1,
+  "corpus": {
+    "id": "e7-hashspan-1.1.0-anvil",
+    "sha256": "1e79d5d361b47c00b27f796111f7e055036c620474782846d6dea9c588a4eafe"
+  },
+  "harness": {
+    "commit": null,
+    "source": "experiment E7, recomputed from its recorded spans with diff.mjs"
+  },
+  "backend": {
+    "name": "openobserve",
+    "title": "OpenObserve",
+    "version": "1.1.1",
+    "image": "openobserve/openobserve:v1.1.1",
+    "digest": "sha256:dae91bc1f9d4c11db54e924d8d25bac7f6c50e080a8f06fc90d9468eaab81b67",
+    "readApi": "SQL search `/api/default/_search?type=traces`, PromQL"
+  },
+  "runDate": "2026-10-18",
+  "transports": {
+    "http/protobuf": {
+      "traces": {
+        "summary": {
+          "spans": 66,
+          "missing": 0,
+          "extraSpans": 0,
+          "nameDiff": 0,
+          "kindDiff": 0,
+          "parentDiff": 0,
+          "statusDiff": 0,
+          "attrMissing": 0,
+          "attrNameDiff": 406,
+          "attrTypeDiff": 123,
+          "attrStringified": 123,
+          "attrValueDiff": 0,
+          "attrExtra": 92,
+          "eventDiff": 0,
+          "eventAttrDiff": 0,
+          "linkDiff": 0,
+          "linkAttrDiff": 0,
+          "resourceDiff": null,
+          "scopeDiff": null
+        },
+        "exercised": {
+          "attributeTypes": [
+            "number",
+            "string"
+          ],
+          "statusMessage": false,
+          "eventAttributes": true,
+          "links": 8,
+          "crossTraceLinks": 1,
+          "linkAttributes": false,
+          "resource": false,
+          "scope": false
+        },
+        "differences": [
+          {
+            "check": "attrExtra",
+            "detail": "infer_peer_key",
+            "count": 46,
+            "spans": [
+              "eth_blockNumber",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "eth_getBlockByNumber",
+              "eth_getTransactionByHash",
+              "eth_getTransactionCount",
+              "eth_getTransactionReceipt",
+              "eth_maxPriorityFeePerGas",
+              "eth_sendRawTransaction"
+            ]
+          },
+          {
+            "check": "attrExtra",
+            "detail": "infer_peer_port",
+            "count": 46,
+            "spans": [
+              "eth_blockNumber",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "eth_getBlockByNumber",
+              "eth_getTransactionByHash",
+              "eth_getTransactionCount",
+              "eth_getTransactionReceipt",
+              "eth_maxPriorityFeePerGas",
+              "eth_sendRawTransaction"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.block.number -> blockchain_block_number",
+            "count": 5,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.chain.id -> blockchain_chain_id",
+            "count": 59,
+            "spans": [
+              "confirm 31337",
+              "eth_blockNumber",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "eth_getBlockByNumber",
+              "eth_getTransactionByHash",
+              "eth_getTransactionCount",
+              "eth_getTransactionReceipt",
+              "eth_maxPriorityFeePerGas",
+              "eth_sendRawTransaction",
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.operation.name -> blockchain_operation_name",
+            "count": 13,
+            "spans": [
+              "confirm 31337",
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.system.name -> blockchain_system_name",
+            "count": 13,
+            "spans": [
+              "confirm 31337",
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.effective_gas_price -> blockchain_tx_effective_gas_price",
+            "count": 5,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.fee -> blockchain_tx_fee",
+            "count": 5,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.from -> blockchain_tx_from",
+            "count": 7,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.gas.used -> blockchain_tx_gas_used",
+            "count": 5,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.hash -> blockchain_tx_hash",
+            "count": 12,
+            "spans": [
+              "confirm 31337",
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.nonce -> blockchain_tx_nonce",
+            "count": 2,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.replacement.hash -> blockchain_tx_replacement_hash",
+            "count": 1,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.replacement.reason -> blockchain_tx_replacement_reason",
+            "count": 1,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.revert.reason -> blockchain_tx_revert_reason",
+            "count": 1,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.status -> blockchain_tx_status",
+            "count": 6,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.to -> blockchain_tx_to",
+            "count": 7,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.value -> blockchain_tx_value",
+            "count": 6,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "blockchain.tx.wait.confirmations -> blockchain_tx_wait_confirmations",
+            "count": 6,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "e7.run.id -> e7_run_id",
+            "count": 7,
+            "spans": [
+              "e7 background",
+              "e7 foreground",
+              "e7 replacement",
+              "e7 revert",
+              "e7 send-failure",
+              "e7 watch",
+              "e7 watch-send"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "e7.scenario -> e7_scenario",
+            "count": 7,
+            "spans": [
+              "e7 background",
+              "e7 foreground",
+              "e7 replacement",
+              "e7 revert",
+              "e7 send-failure",
+              "e7 watch",
+              "e7 watch-send"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "error.type -> error_type",
+            "count": 5,
+            "spans": [
+              "confirm 31337",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "jsonrpc.protocol.version -> jsonrpc_protocol_version",
+            "count": 46,
+            "spans": [
+              "eth_blockNumber",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "eth_getBlockByNumber",
+              "eth_getTransactionByHash",
+              "eth_getTransactionCount",
+              "eth_getTransactionReceipt",
+              "eth_maxPriorityFeePerGas",
+              "eth_sendRawTransaction"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "rpc.method -> rpc_method",
+            "count": 46,
+            "spans": [
+              "eth_blockNumber",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "eth_getBlockByNumber",
+              "eth_getTransactionByHash",
+              "eth_getTransactionCount",
+              "eth_getTransactionReceipt",
+              "eth_maxPriorityFeePerGas",
+              "eth_sendRawTransaction"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "rpc.response.status_code -> rpc_response_status_code",
+            "count": 3,
+            "spans": [
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "rpc.system.name -> rpc_system_name",
+            "count": 46,
+            "spans": [
+              "eth_blockNumber",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "eth_getBlockByNumber",
+              "eth_getTransactionByHash",
+              "eth_getTransactionCount",
+              "eth_getTransactionReceipt",
+              "eth_maxPriorityFeePerGas",
+              "eth_sendRawTransaction"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "server.address -> server_address",
+            "count": 46,
+            "spans": [
+              "eth_blockNumber",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "eth_getBlockByNumber",
+              "eth_getTransactionByHash",
+              "eth_getTransactionCount",
+              "eth_getTransactionReceipt",
+              "eth_maxPriorityFeePerGas",
+              "eth_sendRawTransaction"
+            ]
+          },
+          {
+            "check": "attrNameDiff",
+            "detail": "server.port -> server_port",
+            "count": 46,
+            "spans": [
+              "eth_blockNumber",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "eth_getBlockByNumber",
+              "eth_getTransactionByHash",
+              "eth_getTransactionCount",
+              "eth_getTransactionReceipt",
+              "eth_maxPriorityFeePerGas",
+              "eth_sendRawTransaction"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "blockchain.block.number: number -> string",
+            "count": 5,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "blockchain.chain.id: number -> string",
+            "count": 59,
+            "spans": [
+              "confirm 31337",
+              "eth_blockNumber",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "eth_getBlockByNumber",
+              "eth_getTransactionByHash",
+              "eth_getTransactionCount",
+              "eth_getTransactionReceipt",
+              "eth_maxPriorityFeePerGas",
+              "eth_sendRawTransaction",
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "blockchain.tx.gas.used: number -> string",
+            "count": 5,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "blockchain.tx.nonce: number -> string",
+            "count": 2,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "blockchain.tx.wait.confirmations: number -> string",
+            "count": 6,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "server.port: number -> string",
+            "count": 46,
+            "spans": [
+              "eth_blockNumber",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "eth_getBlockByNumber",
+              "eth_getTransactionByHash",
+              "eth_getTransactionCount",
+              "eth_getTransactionReceipt",
+              "eth_maxPriorityFeePerGas",
+              "eth_sendRawTransaction"
+            ]
+          }
+        ]
+      },
+      "metrics": {
+        "note": "series named without `_seconds`, such as `blockchain_client_send_duration_count`",
+        "read": true,
+        "metrics": 3,
+        "differences": []
+      }
+    }
+  },
+  "notes": []
+}
