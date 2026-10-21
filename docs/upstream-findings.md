@@ -28,3 +28,11 @@ hashspan's integration tests run Anvil from Foundry, pinned in [install-anvil.sh
 |---|---|---|---|---|---|
 | Concurrent `eth_sendTransaction` calls from one unlocked account got the same nonce | [foundry-rs/foundry#17354](https://github.com/foundry-rs/foundry/issues/17354) | [#17356](https://github.com/foundry-rs/foundry/pull/17356) | nightly builds after 1.8.5; no stable release yet | The parallel agents test sends from one account per tool call ([parallel-agents.int.test.ts](../examples/ai-sdk-agent/test/parallel-agents.int.test.ts)) | The Anvil pin is a release with the fix |
 | `anvil --celo` did not accept CIP-64 (`0x7b`) fee currency transactions, and `eth_fillTransaction` dropped `feeCurrency` | [foundry-rs/foundry#17462](https://github.com/foundry-rs/foundry/issues/17462) | [#17481](https://github.com/foundry-rs/foundry/pull/17481) (fee charged in the native currency) | nightly builds after 1.8.5; no stable release yet | The Celo fee currency path is tested with mocked receipts only ([fee-models.test.ts](../packages/viem/test/fee-models.test.ts)) | Nothing to remove; with the fix in the Anvil pin, the path can also be tested on Anvil |
+
+## Hardhat (EDR)
+
+Found by running hashspan against Hardhat's simulated networks; hashspan does not depend on Hardhat.
+
+| Finding | Issue | Fix | Released in | In hashspan | Can go when |
+|---|---|---|---|---|---|
+| With the OP chain type, the genesis `L1Block` contract packed `baseFeeScalar` and `blobBaseFeeScalar` at the wrong offsets of slot 3, so both read 0 and every receipt's `l1Fee` was 0; found when hashspan's `blockchain.tx.l1_fee` came out as 0 on Hardhat's OP network | [NomicFoundation/edr#1829](https://github.com/NomicFoundation/edr/issues/1829) | [#1846](https://github.com/NomicFoundation/edr/pull/1846) | `@nomicfoundation/edr` 0.24.0 | Nothing: hashspan records the `l1Fee` the node returns | Nothing to remove |
