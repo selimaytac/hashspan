@@ -11,13 +11,13 @@ import { observeCall } from './diff.mjs';
  */
 export const CALL_TIMEOUT_MS = 120_000;
 
-/** POSTs one call and reduces the answer. */
-export async function call(facilitatorUrl, path, body, timeoutMs = CALL_TIMEOUT_MS) {
+/** POSTs one call, with the target's auth headers if it has any, and reduces the answer. */
+export async function call(facilitatorUrl, path, body, timeoutMs = CALL_TIMEOUT_MS, headers = {}) {
   let response;
   try {
     response = await fetch(`${facilitatorUrl}/${path}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...headers },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -43,13 +43,13 @@ export async function call(facilitatorUrl, path, body, timeoutMs = CALL_TIMEOUT_
 /** Runs a built case's calls; returns the observation that checkExpectations() reads. */
 export async function runCase(
   built,
-  { facilitatorUrl, rpcUrl, settleTimeoutMs = CALL_TIMEOUT_MS },
+  { facilitatorUrl, rpcUrl, settleTimeoutMs = CALL_TIMEOUT_MS, headers = {} },
 ) {
   const before = await readBalances(rpcUrl);
   const steps = [];
   for (const path of built.steps) {
     const timeout = path === 'settle' ? settleTimeoutMs : CALL_TIMEOUT_MS;
-    steps.push(await call(facilitatorUrl, path, bodyOf(built, path), timeout));
+    steps.push(await call(facilitatorUrl, path, bodyOf(built, path), timeout, headers));
   }
   const after = await readBalances(rpcUrl);
   return { steps, effect: moved(before, after) };
@@ -62,14 +62,16 @@ export async function runCase(
  */
 export async function runFaultCase(
   built,
-  { facilitatorUrl, rpcUrl, settleTimeoutMs = CALL_TIMEOUT_MS },
+  { facilitatorUrl, rpcUrl, settleTimeoutMs = CALL_TIMEOUT_MS, headers = {} },
 ) {
   const receiver = built.paymentRequirements.payTo;
   const settle = bodyOf(built, 'settle');
-  const steps = [await call(facilitatorUrl, 'verify', bodyOf(built, 'verify'))];
-  steps.push(await call(facilitatorUrl, 'settle', settle, settleTimeoutMs));
+  const steps = [
+    await call(facilitatorUrl, 'verify', bodyOf(built, 'verify'), CALL_TIMEOUT_MS, headers),
+  ];
+  steps.push(await call(facilitatorUrl, 'settle', settle, settleTimeoutMs, headers));
   const afterSettle = await balanceOf(rpcUrl, receiver);
-  steps.push(await call(facilitatorUrl, 'settle', settle, settleTimeoutMs));
+  steps.push(await call(facilitatorUrl, 'settle', settle, settleTimeoutMs, headers));
   const afterRetry = await balanceOf(rpcUrl, receiver);
   return { steps, effect: { afterSettle, afterRetry } };
 }

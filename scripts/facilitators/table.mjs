@@ -28,6 +28,17 @@ export function readResults(root) {
 const cell = (text) => String(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 const code = (value) => `\`${value}\``;
 
+/**
+ * A target's name in the tables: its title, and for a run of another ref than the pinned commit, which one, so a pull
+ * request head sits next to the pinned commit as a row of its own.
+ */
+export function targetLabel(target) {
+  if (!target.ref) return target.title;
+  return target.pr
+    ? `${target.title} (PR #${target.pr} head)`
+    : `${target.title} (ref ${target.ref})`;
+}
+
 /** Cells of one target's row. */
 function targetRow(r, file) {
   const s = summarize(r.conformance);
@@ -35,7 +46,7 @@ function targetRow(r, file) {
   const holding = invariants.filter((i) => i.holds).length;
   const knownFaults = invariants.filter((i) => !i.holds && i.known).length;
   return [
-    r.target.title,
+    targetLabel(r.target),
     code(r.target.commit.slice(0, 8)),
     r.supported.length ? r.supported.join(', ') : 'none',
     `${s.matched} of ${s.spec}`,
@@ -106,7 +117,12 @@ export function table(results) {
     ...results.map(({ file, result }) => line(targetRow(result, file))),
     '',
   ];
-  const head = ['Case', 'Field', 'Spec', ...results.map(({ result }) => result.target.title)];
+  const head = [
+    'Case',
+    'Field',
+    'Spec',
+    ...results.map(({ result }) => targetLabel(result.target)),
+  ];
   lines.push(line(head), `|${head.map(() => '---').join('|')}|`);
   for (const row of caseRows(results)) {
     if (row.field === undefined) {

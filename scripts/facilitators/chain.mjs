@@ -1,6 +1,7 @@
 // Sets a fresh Anvil up for the facilitator matrix, as hashspan's x402 tests do: Permit2, the x402 Permit2 proxies,
 // the batch-settlement contracts and Multicall3 from the runtime code those tests install (copied from Base Sepolia,
-// packages/x402/test/{permit2,batch-settlement}/contracts.ts) at their canonical addresses, and TestUsd, an EIP-3009
+// packages/x402/test/{permit2,batch-settlement}/contracts.ts) at their canonical addresses, a stub at the EIP-6492
+// validator's address (x402-rs checks it holds code), and TestUsd, an EIP-3009
 // token (packages/x402/test/token), as the deployer's first contract. Every payer but the unfunded one gets FUNDS,
 // and the payer gives Permit2 an allowance once.
 import { createPublicClient, createTestClient, createWalletClient, http, maxUint256 } from 'viem';
@@ -36,20 +37,33 @@ export const chainOf = (rpcUrl) => ({
 /** The accounts that get tokens. */
 const FUNDED = ['payer', 'batchRefund', 'batchFlush', 'batchDynamic'];
 
+/**
+ * Where the EIP-6492 validator sits on public chains. x402-rs checks at its start that this address holds code
+ * (crates/chains/x402-chain-eip155/src/chain/provider.rs:38-44, 446-459 at v2.0.2) and calls it only for an EIP-6492
+ * signature, which the corpus has none of; so a stub that reverts stands in for it.
+ */
+export const VALIDATOR_6492_ADDRESS = '0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B';
+/** PUSH1 0, PUSH1 0, REVERT: any call to the stub reverts. */
+export const VALIDATOR_6492_STUB = '0x60006000fd';
+
+/** The runtime code installed with anvil_setCode, as `[address, code]` pairs. */
+export const CONTRACTS = [
+  [PERMIT2_ADDRESS, PERMIT2_CODE],
+  [EXACT_PROXY_ADDRESS, EXACT_PROXY_CODE],
+  [UPTO_PROXY_ADDRESS, UPTO_PROXY_CODE],
+  [BATCH_SETTLEMENT_ADDRESS, BATCH_SETTLEMENT_CODE],
+  [ERC3009_DEPOSIT_COLLECTOR_ADDRESS, ERC3009_DEPOSIT_COLLECTOR_CODE],
+  [MULTICALL3_ADDRESS, MULTICALL3_CODE],
+  [VALIDATOR_6492_ADDRESS, VALIDATOR_6492_STUB],
+];
+
 /** Installs the contracts and funds the payers on a fresh Anvil; returns the token address. */
 export async function setupChain(rpcUrl) {
   const chain = chainOf(rpcUrl);
   const transport = http(rpcUrl);
   const node = createTestClient({ chain, mode: 'anvil', transport });
   const reader = createPublicClient({ chain, transport });
-  for (const [address, bytecode] of [
-    [PERMIT2_ADDRESS, PERMIT2_CODE],
-    [EXACT_PROXY_ADDRESS, EXACT_PROXY_CODE],
-    [UPTO_PROXY_ADDRESS, UPTO_PROXY_CODE],
-    [BATCH_SETTLEMENT_ADDRESS, BATCH_SETTLEMENT_CODE],
-    [ERC3009_DEPOSIT_COLLECTOR_ADDRESS, ERC3009_DEPOSIT_COLLECTOR_CODE],
-    [MULTICALL3_ADDRESS, MULTICALL3_CODE],
-  ]) {
+  for (const [address, bytecode] of CONTRACTS) {
     await node.setCode({ address, bytecode });
   }
   // Anvil's accounts are unlocked on the node, so each sends by address.

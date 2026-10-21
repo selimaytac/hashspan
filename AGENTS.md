@@ -30,7 +30,7 @@ another service, triggers becomes a `send` / `confirm` span pair under its own t
   `make lab-nuke`
 - Backend matrix: `node scripts/backends/run.mjs <backend>` (needs Docker; writes `docs/backends/results/`), then
   `pnpm backends:table` regenerates the Compatibility table of docs/backends.md, which docs.test.ts checks
-- Facilitator matrix: `node scripts/facilitators/run.mjs <target>` (needs Docker; writes
+- Facilitator matrix: `node scripts/facilitators/run.mjs <target> [--ref pull/<n>/head]` (needs Docker; writes
   `docs/facilitators/results/`), then `pnpm facilitators:table` regenerates the tables of docs/facilitators.md;
   `node scripts/facilitators/corpus.mjs --write` regenerates its corpus
 - Dev-node matrix: `node scripts/nodes/run.mjs <node>` (Anvil and Hardhat as local processes, Reth and Geth in Docker;
