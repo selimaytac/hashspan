@@ -197,4 +197,13 @@ describe('backend matrix results', () => {
     expect(text.split('\n').filter((l) => l.includes('**strings** (number sent)'))).toHaveLength(3);
     expect(text).toContain('No backend has a `synthetic-1` result yet');
   });
+
+  it('escapes backslashes and pipes in table cells', () => {
+    const [file] = files;
+    const result = JSON.parse(readFileSync(join(root, RESULTS_DIR, file), 'utf8'));
+    const text = table([
+      { file, result: { ...result, backend: { ...result.backend, title: 'a\\|b' } } },
+    ]);
+    expect(text).toContain('a\\\\\\|b');
+  });
 });

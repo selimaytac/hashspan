@@ -121,7 +121,7 @@ function cellsOf(result) {
 /** The markdown table of a list of results. */
 export function table(results) {
   if (results.length === 0) return 'No results yet: the first lab run of the matrix writes them.';
-  const cell = (text) => String(text).replace(/\|/g, '\\|');
+  const cell = (text) => String(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
   const lines = [
     `| ${COLUMNS.map(([h]) => h).join(' | ')} |`,
     `|${COLUMNS.map(() => '---').join('|')}|`,
