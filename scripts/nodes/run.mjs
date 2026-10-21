@@ -19,7 +19,7 @@ import { modesOf } from './chain-modes.mjs';
 import { accountAt, FUNDING, ROLES, runFlows } from './flows.mjs';
 import { probe } from './probes.mjs';
 import { buildResult, resultFile, resultText, writeResult } from './result.mjs';
-import { client } from './rpc.mjs';
+import { client, sanitize } from './rpc.mjs';
 import { loadSpec } from './schemas.mjs';
 import { fundFromFaucet, genesisOf } from './setup.mjs';
 import {
@@ -299,7 +299,7 @@ async function main() {
           );
         } catch (error) {
           entry.status = 'failed';
-          entry.error = String(error?.shortMessage ?? error?.message ?? error).slice(0, 200);
+          entry.error = sanitize(error?.shortMessage ?? error?.message ?? error);
         } finally {
           await fresh.stop();
         }

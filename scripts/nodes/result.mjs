@@ -61,7 +61,9 @@ const WORD = /\bbugs?\b/i;
  * (results describe what was returned or stored). Empty when there is none.
  */
 export function resultProblems(text, extra = []) {
-  const problems = hostDataProblems(text, extra);
+  // 0.0.0.0 is the address a Docker node binds inside its container (its port is published on 127.0.0.1 only), as
+  // the recorded start command shows; it names no host.
+  const problems = hostDataProblems(text, extra).filter((p) => p !== 'the address 0.0.0.0');
   if (LONG_HEX.test(text)) problems.push('a hash, key or raw transaction');
   if (UNIX_TIME.test(text)) problems.push('a Unix time');
   if (WORD.test(text)) problems.push('the word bug');

@@ -84,10 +84,10 @@ export const recordedRow = ({ flow, call, field, got, cause }) => ({
 /**
  * An expectation row where the spec is silent: `expected` comes from an upstream item (`upstream`, a regression row)
  * or from what a real chain returned (a chain-mode row). `known` is set when the pinned version is known not to have
- * the fix yet.
- * @param {{ flow: string, call: string, field: string, expected: unknown, got: unknown, upstream?: string, known?: string }} row
+ * the fix yet; `detail` is what else the row shows (recorded with it, not compared on its own).
+ * @param {{ flow: string, call: string, field: string, expected: unknown, got: unknown, upstream?: string, known?: string, detail?: unknown }} row
  */
-export function regressionRow({ flow, call, field, expected, got, upstream, known }) {
+export function regressionRow({ flow, call, field, expected, got, upstream, known, detail }) {
   checkKnown(upstream);
   checkKnown(known);
   const outcome = same(got, expected) ? 'match' : 'difference';
@@ -99,6 +99,7 @@ export function regressionRow({ flow, call, field, expected, got, upstream, know
     expected,
     got,
     ...(upstream === undefined ? {} : { upstream }),
+    ...(detail === undefined ? {} : { detail }),
     outcome,
     ...(outcome === 'difference' && known !== undefined ? { known } : {}),
   };
@@ -195,11 +196,17 @@ const rowKey = (r) => `${r.flow}\u0000${r.call}\u0000${r.field}`;
 /** The field names of a field list (`name:kind`), and each name's kind. */
 const kindsOf = (fields) => new Map(fields.map((f) => f.split(':')).map(([k, v]) => [k, v]));
 
+/** The top-level properties a schema row names as forbidden extras (`/ additionalProperties <name> (...)`). */
+const extraProperties = (schemaRow) =>
+  Array.isArray(schemaRow?.got)
+    ? schemaRow.got.flatMap((v) => /^\/(?:\d+)? ?additionalProperties (\S+)/.exec(v)?.[1] ?? [])
+    : [];
+
 /**
  * Why one recorded row is a candidate, given the reference nodes' rows for it, or undefined when it is not. `refs` are
- * the `got` values of the references that ran it.
+ * the `got` values of the references that ran it; `forbidden` the fields a reference adds that the spec forbids.
  */
-export function candidateReason(row, refs) {
+export function candidateReason(row, refs, forbidden = []) {
   if (row.kind === 'unspecified' && row.expected !== undefined) {
     return row.outcome === 'difference' && !row.known ? 'value' : undefined;
   }
@@ -213,8 +220,10 @@ export function candidateReason(row, refs) {
   if (row.field === 'code') return 'code';
   if (row.field === 'fields' && Array.isArray(row.got) && Array.isArray(ref)) {
     const got = kindsOf(row.got);
-    // Only a missing field or one of another kind; an extra field alone is recorded.
+    // Only a missing field or one of another kind; an extra field alone is recorded, and a field the spec forbids
+    // that a reference adds is not missing on a node that keeps to the spec.
     for (const [name, kind] of kindsOf(ref)) {
+      if (forbidden.includes(name)) continue;
       if (!got.has(name) || got.get(name) !== kind) return 'field';
     }
     return undefined;
@@ -245,12 +254,15 @@ export function candidates(results) {
       for (const f of [...(r.flows ?? []), ...(r.chainModes ?? [])]) {
         if (f.status !== 'run') continue;
         for (const row of f.checks ?? []) {
-          const values = refs
-            .filter((ref) => ref !== r)
+          const others = refs.filter((ref) => ref !== r);
+          const values = others
             .map((ref) => index.get(ref).get(rowKey(row)))
             .filter((c) => c?.outcome === 'recorded')
             .map((c) => c.got);
-          const reason = candidateReason(row, values);
+          const forbidden = others.flatMap((ref) =>
+            extraProperties(index.get(ref).get(rowKey({ ...row, field: 'schema' }))),
+          );
+          const reason = candidateReason(row, values, forbidden);
           if (reason) out.push({ flow: row.flow, call: row.call, field: row.field, reason });
         }
       }

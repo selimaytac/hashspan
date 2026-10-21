@@ -40,6 +40,7 @@ import {
 } from '../../../scripts/nodes/rpc.mjs';
 import { loadSpec } from '../../../scripts/nodes/schemas.mjs';
 import { cell, DOC, END, START, table } from '../../../scripts/nodes/table.mjs';
+import { dockerArgs, targets } from '../../../scripts/nodes/targets.mjs';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const spec = loadSpec(root);
@@ -284,6 +285,56 @@ describe('candidate rule', () => {
     ).toBeUndefined();
   });
 
+  it('does not count as missing a field the spec forbids that a reference adds', () => {
+    const rows = (fields: string[], schema: string | string[]) => [
+      specRow({
+        flow: 'legacy',
+        call: 'receipt',
+        field: 'schema',
+        ref: 'r',
+        expected: 'valid',
+        got: schema,
+      }),
+      recordedRow({ flow: 'legacy', call: 'receipt', field: 'fields', got: fields }),
+    ];
+    const spec = ['blockHash:hash32', 'status:quantity'];
+    const geth = resultOf('geth', [
+      flow(
+        'legacy',
+        rows(
+          [...spec, 'blockTimestamp:quantity'],
+          ['/ additionalProperties blockTimestamp (string)'],
+        ),
+      ),
+    ]);
+    const hardhat = resultOf('hardhat', [flow('legacy', rows(spec, 'valid'))]);
+    expect(candidates([hardhat, geth]).get(hardhat)).toEqual([]);
+    // A field the spec allows and the node lacks is still one.
+    const short = resultOf('hardhat', [flow('legacy', rows(['blockHash:hash32'], 'valid'))]);
+    expect(candidates([short, geth]).get(short)).toEqual([
+      { flow: 'legacy', call: 'receipt', field: 'fields', reason: 'field' },
+    ]);
+  });
+
+  it('keeps the errors of the concurrent sends in their regression row, not as a second difference', () => {
+    const row = regressionRow({
+      flow: 'concurrent-send',
+      call: 'sends',
+      field: 'distinct nonces',
+      expected: 5,
+      got: 4,
+      upstream: 'foundry#17354',
+      known: 'foundry#17354',
+      detail: ['transaction already imported'],
+    });
+    expect(row.detail).toEqual(['transaction already imported']);
+    const anvil = resultOf('anvil', [flow('concurrent-send', [row])]);
+    const geth = resultOf('geth', [
+      flow('concurrent-send', [{ ...row, got: 5, outcome: 'match', known: undefined, detail: [] }]),
+    ]);
+    expect(candidates([anvil, geth]).get(anvil)).toEqual([]);
+  });
+
   it('compares each node with Geth and Reth, and a reference with the other reference only', () => {
     const geth = resultOf('geth', [flow('invalid-input', [code(-32000)])]);
     const reth = resultOf('reth', [flow('invalid-input', [code(-32003)])]);
@@ -381,6 +432,25 @@ describe('result files', () => {
     expect(RESULTS_DIR).toBe('docs/nodes/results');
     expect(() => resultOf('anvil', [], { runDate: '2026-10-21T10:00:00Z' })).toThrow('date');
   });
+
+  it.each(['reth', 'geth'])(
+    'accept the start command a %s run records, with its in-container bind address',
+    (name) => {
+      const result = resultOf(name, [], {
+        node: {
+          name,
+          title: name,
+          version: targets[name].version,
+          image: targets[name].image,
+          digest: targets[name].digest,
+          start: { command: `docker ${dockerArgs(name, targets[name]).join(' ')}`, verified: true },
+        },
+      });
+      expect(resultText(result)).toContain('0.0.0.0');
+      expect(resultProblems(resultText(result))).toEqual([]);
+      expect(resultProblems(`${resultText(result)} 10.0.0.1`)).toEqual(['the address 10.0.0.1']);
+    },
+  );
 
   it('refuse host data, hashes, Unix times and the word bug', () => {
     const clean = resultText(resultOf('anvil', [flow('legacy', [code(-32000)])]));

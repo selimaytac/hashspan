@@ -665,11 +665,6 @@ export const FLOWS = [
         const tx = await ctx.rpc.call('eth_getTransactionByHash', [a.result]);
         if (tx.result?.nonce !== undefined) nonces.push(tx.result.nonce);
       }
-      r.recorded({
-        call: 'sends',
-        field: 'errors',
-        got: answers.filter((a) => a.error).map((a) => errorOf(a.error).message),
-      });
       r.regression({
         call: 'sends',
         field: 'distinct nonces',
@@ -677,6 +672,8 @@ export const FLOWS = [
         got: new Set(nonces).size,
         upstream: 'foundry#17354',
         known: ctx.node.known?.includes('foundry#17354') ? 'foundry#17354' : undefined,
+        // The errors of the sends belong to this row, so they are not a second difference of their own.
+        detail: answers.filter((a) => a.error).map((a) => errorOf(a.error).message),
       });
     },
   },
