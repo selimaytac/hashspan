@@ -70,8 +70,9 @@ describe('facilitator matrix targets', () => {
       expect(def.rpc.env).toBe('EVM_RPC_URL');
       // Each falls back to a public Base Sepolia RPC when the variable is unset, so the harness always sets it.
       expect(def.rpc.fallback).toMatch(/Base Sepolia/);
-      expect(def.rpc.source).toMatch(
-        new RegExp(`^${def.path.replace(/\//g, '\\/')}/(index\\.ts|main\\.go|main\\.py):\\d+`),
+      expect(def.rpc.source.startsWith(`${def.path}/`)).toBe(true);
+      expect(def.rpc.source.slice(def.path.length + 1)).toMatch(
+        /^(index\.ts|main\.go|main\.py):\d+/,
       );
       expect(def.rpc.checkedAt).toBe(X402_COMMIT);
       expect(def.chainId.source).toMatch(/^e2e\/facilitators\//);
