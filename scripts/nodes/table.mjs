@@ -1,6 +1,6 @@
 // Generates the tables of docs/nodes.md from the result files, between its two marker comments: one row per node, one
 // row per compared field of each flow with every node's value, and the chain-mode rows. A cell says what the node
-// returned or stored; a candidate is marked with its reason for the gate to look at.
+// returned or stored; a row that differs from the references is marked with its reason for the gate to look at.
 // Usage: node scripts/nodes/table.mjs          (rewrites the tables, `pnpm nodes:table`)
 //        node scripts/nodes/table.mjs --check  (fails when the committed tables differ)
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -38,7 +38,7 @@ const NODE_COLUMNS = [
   'Spec rows matched',
   'Spec differences',
   'Known upstream',
-  'Candidates',
+  'Differ from references',
   'Unspecified rows',
   'By design',
   'Unsupported flows',
@@ -57,8 +57,8 @@ function nodeRow({ file, result }, found) {
     result.genesis?.chainId ?? '-',
     `${s.matched} of ${s.spec}`,
     s.differences,
-    s.known,
-    found.length,
+    s.known + found.filter((c) => c.known).length,
+    found.filter((c) => !c.known).length,
     s.recorded,
     s.byDesign,
     s.unsupported,
@@ -122,11 +122,13 @@ function valueCell(result, group, row, found, common) {
       : code(show(check.got));
   if (row.field === 'fields') value = code(value);
   const candidate = found.find((c) => key(c) === key(row));
+  const differs = (c) =>
+    c.known ? `**${value}** (known: ${c.known})` : `**${value}** (differs: ${c.reason})`;
   if (check.outcome === 'spec-difference' || check.outcome === 'difference') {
     if (check.known) return `**${value}** (known: ${check.known})`;
-    return candidate ? `**${value}** (candidate: ${candidate.reason})` : `**${value}**`;
+    return candidate ? differs(candidate) : `**${value}**`;
   }
-  if (candidate) return `**${value}** (candidate: ${candidate.reason})`;
+  if (candidate) return differs(candidate);
   if (check.upstream && check.outcome === 'match')
     return `${value} (${check.upstream}: fixed here)`;
   return value;

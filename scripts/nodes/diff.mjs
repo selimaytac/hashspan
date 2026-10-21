@@ -232,6 +232,26 @@ export function candidateReason(row, refs, forbidden = []) {
 }
 
 /**
+ * Rows of one node that an upstream item already describes, so the table shows its mark instead of a difference
+ * from the references; `known` names the item, with "by design" where its maintainers said so.
+ */
+export const KNOWN_ROWS = [
+  {
+    node: 'hardhat',
+    flow: 'estimate-gas',
+    call: 'transfer',
+    field: 'value',
+    known: 'edr#542, by design',
+  },
+  { node: 'hardhat', flow: 'fee-history', call: 'feeHistory', field: 'fields', known: 'edr#390' },
+];
+
+const knownRow = (node, row) =>
+  KNOWN_ROWS.find(
+    (k) => k.node === node && k.flow === row.flow && k.call === row.call && k.field === row.field,
+  )?.known;
+
+/**
  * The candidates of a set of results, by result: the rows the gate looks at, each with its reason (`code`, `field`,
  * `value`, `cause`). A reference node is compared with the other reference only.
  */
@@ -263,7 +283,15 @@ export function candidates(results) {
             extraProperties(index.get(ref).get(rowKey({ ...row, field: 'schema' }))),
           );
           const reason = candidateReason(row, values, forbidden);
-          if (reason) out.push({ flow: row.flow, call: row.call, field: row.field, reason });
+          if (!reason) continue;
+          const known = knownRow(r.node.name, row);
+          out.push({
+            flow: row.flow,
+            call: row.call,
+            field: row.field,
+            reason,
+            ...(known ? { known } : {}),
+          });
         }
       }
       return [r, out];
