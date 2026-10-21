@@ -24,7 +24,7 @@ import {
   ZERO_COMMITMENT,
 } from '../../../scripts/nodes/flows.mjs';
 import { forkFeatures, methodStatus, NOT_FOUND } from '../../../scripts/nodes/probes.mjs';
-import { clientOf } from '../../../scripts/nodes/setup.mjs';
+import { clientOf, fundFromFaucet } from '../../../scripts/nodes/setup.mjs';
 import {
   ANVIL_RELEASE,
   anvilArgs,
@@ -396,5 +396,22 @@ describe('chain modes', () => {
       '--chain-id',
       '42220',
     ]);
+  });
+});
+
+describe('faucet funding', () => {
+  const rpcWith = (receipt: object) => ({
+    call: async (method: string) =>
+      method === 'eth_accounts' ? { result: ['0x1'] } : { result: `0x${'a'.repeat(64)}` },
+    receipt: async () => receipt,
+  });
+
+  it('names why a funding transaction did not succeed', async () => {
+    await expect(
+      fundFromFaucet(rpcWith({ error: { code: 'timeout', message: 'no receipt' } }), ['0x2'], 1n),
+    ).rejects.toThrow('a funding transaction did not succeed: no receipt');
+    await expect(
+      fundFromFaucet(rpcWith({ result: { status: '0x0' } }), ['0x2'], 1n),
+    ).rejects.toThrow('a funding transaction did not succeed: status 0x0');
   });
 });

@@ -1,0 +1,1931 @@
+{
+  "schema": 1,
+  "harness": {
+    "commit": "da5c20d438c3701a4c8956d96e80553b48e131a4"
+  },
+  "spec": {
+    "repo": "https://github.com/ethereum/execution-apis",
+    "commit": "16caee274b0d4fb7a0316f294029adac88a75a09"
+  },
+  "node": {
+    "name": "anvil",
+    "title": "Anvil",
+    "version": "1.8.5",
+    "source": "https://github.com/foundry-rs/foundry",
+    "known": [
+      "foundry#17354",
+      "foundry#17462"
+    ],
+    "tag": "v1.8.5",
+    "commit": "51a52c59cffd940f76eddd0b4bb1791aa4b5ac7f",
+    "start": {
+      "command": "anvil --host 127.0.0.1 --port 18555",
+      "verified": true
+    }
+  },
+  "runDate": "2026-10-21",
+  "genesis": {
+    "chainId": 31337,
+    "gasLimit": "0x1c9c380",
+    "baseFeePerGas": "0x3b9aca00",
+    "coinbase": "zero address",
+    "timestamp": "quantity",
+    "headerFields": [
+      "baseFeePerGas",
+      "blobGasUsed",
+      "difficulty",
+      "excessBlobGas",
+      "extraData",
+      "gasLimit",
+      "gasUsed",
+      "hash",
+      "logsBloom",
+      "miner",
+      "mixHash",
+      "nonce",
+      "number",
+      "parentBeaconBlockRoot",
+      "parentHash",
+      "receiptsRoot",
+      "requestsHash",
+      "sha3Uncles",
+      "size",
+      "stateRoot",
+      "timestamp",
+      "totalDifficulty",
+      "transactions",
+      "transactionsRoot",
+      "uncles",
+      "withdrawals",
+      "withdrawalsRoot"
+    ],
+    "client": "anvil/v1.8.5",
+    "signsFor": 10,
+    "firstAccountBalance": "0x21e19e0c9bab2400000"
+  },
+  "setup": [],
+  "probes": {
+    "eth_simulateV1": "supported",
+    "debug_traceTransaction": "supported",
+    "eth_getBlockReceipts": "supported",
+    "eip7702": "supported",
+    "eip4844": "supported",
+    "eth_sendTransaction": "supported"
+  },
+  "flows": [
+    {
+      "flow": "deploy",
+      "status": "run",
+      "calls": [
+        {
+          "call": "send",
+          "method": "eth_sendRawTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "send",
+          "method": "eth_getTransactionReceipt",
+          "answer": "result"
+        },
+        {
+          "call": "code",
+          "method": "eth_getCode",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "deploy",
+          "call": "receipt",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getTransactionReceipt result",
+          "expected": "valid",
+          "got": [
+            "/ additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "deploy",
+          "call": "receipt",
+          "field": "type",
+          "kind": "spec",
+          "ref": "receipt.yaml type",
+          "expected": "0x2",
+          "got": "0x2",
+          "outcome": "match"
+        },
+        {
+          "flow": "deploy",
+          "call": "receipt",
+          "field": "status",
+          "kind": "spec",
+          "ref": "receipt.yaml status (1 success, 0 failure)",
+          "expected": "0x1",
+          "got": "0x1",
+          "outcome": "match"
+        },
+        {
+          "flow": "deploy",
+          "call": "receipt",
+          "field": "gasUsed",
+          "kind": "unspecified",
+          "got": "0x1a26a",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "deploy",
+          "call": "receipt",
+          "field": "logs",
+          "kind": "unspecified",
+          "got": 0,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "deploy",
+          "call": "receipt",
+          "field": "contractAddress",
+          "kind": "unspecified",
+          "got": "present",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "deploy",
+          "call": "receipt",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:number",
+            "contractAddress:address",
+            "cumulativeGasUsed:quantity",
+            "effectiveGasPrice:quantity",
+            "from:address",
+            "gasUsed:quantity",
+            "logs:array",
+            "logsBloom:bytes256",
+            "status:quantity",
+            "to:null",
+            "transactionHash:hash32",
+            "transactionIndex:quantity",
+            "type:quantity"
+          ],
+          "outcome": "recorded"
+        },
+        {
+          "flow": "deploy",
+          "call": "code",
+          "field": "runtime",
+          "kind": "unspecified",
+          "got": "as deployed",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "legacy",
+      "status": "run",
+      "calls": [
+        {
+          "call": "send",
+          "method": "eth_sendRawTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "send",
+          "method": "eth_getTransactionReceipt",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "legacy",
+          "call": "send",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_sendRawTransaction result",
+          "expected": "valid",
+          "got": "valid",
+          "outcome": "match"
+        },
+        {
+          "flow": "legacy",
+          "call": "receipt",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getTransactionReceipt result",
+          "expected": "valid",
+          "got": [
+            "/ additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "legacy",
+          "call": "receipt",
+          "field": "type",
+          "kind": "spec",
+          "ref": "receipt.yaml type",
+          "expected": "0x0",
+          "got": "0x0",
+          "outcome": "match"
+        },
+        {
+          "flow": "legacy",
+          "call": "receipt",
+          "field": "status",
+          "kind": "spec",
+          "ref": "receipt.yaml status (1 success, 0 failure)",
+          "expected": "0x1",
+          "got": "0x1",
+          "outcome": "match"
+        },
+        {
+          "flow": "legacy",
+          "call": "receipt",
+          "field": "gasUsed",
+          "kind": "unspecified",
+          "got": "0x5208",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "legacy",
+          "call": "receipt",
+          "field": "logs",
+          "kind": "unspecified",
+          "got": 0,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "legacy",
+          "call": "receipt",
+          "field": "contractAddress",
+          "kind": "unspecified",
+          "got": "null",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "legacy",
+          "call": "receipt",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:number",
+            "contractAddress:null",
+            "cumulativeGasUsed:quantity",
+            "effectiveGasPrice:quantity",
+            "from:address",
+            "gasUsed:quantity",
+            "logs:array",
+            "logsBloom:bytes256",
+            "status:quantity",
+            "to:address",
+            "transactionHash:hash32",
+            "transactionIndex:quantity",
+            "type:quantity"
+          ],
+          "outcome": "recorded"
+        },
+        {
+          "flow": "legacy",
+          "call": "receipt",
+          "field": "effectiveGasPrice",
+          "kind": "spec",
+          "ref": "receipt.yaml effectiveGasPrice formula",
+          "expected": "formula holds",
+          "got": "formula holds",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "flow": "eip2930",
+      "status": "run",
+      "calls": [
+        {
+          "call": "send",
+          "method": "eth_sendRawTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "send",
+          "method": "eth_getTransactionReceipt",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "eip2930",
+          "call": "send",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_sendRawTransaction result",
+          "expected": "valid",
+          "got": "valid",
+          "outcome": "match"
+        },
+        {
+          "flow": "eip2930",
+          "call": "receipt",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getTransactionReceipt result",
+          "expected": "valid",
+          "got": [
+            "/ additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "eip2930",
+          "call": "receipt",
+          "field": "type",
+          "kind": "spec",
+          "ref": "receipt.yaml type",
+          "expected": "0x1",
+          "got": "0x1",
+          "outcome": "match"
+        },
+        {
+          "flow": "eip2930",
+          "call": "receipt",
+          "field": "status",
+          "kind": "spec",
+          "ref": "receipt.yaml status (1 success, 0 failure)",
+          "expected": "0x1",
+          "got": "0x1",
+          "outcome": "match"
+        },
+        {
+          "flow": "eip2930",
+          "call": "receipt",
+          "field": "gasUsed",
+          "kind": "unspecified",
+          "got": "0x5b68",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip2930",
+          "call": "receipt",
+          "field": "logs",
+          "kind": "unspecified",
+          "got": 0,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip2930",
+          "call": "receipt",
+          "field": "contractAddress",
+          "kind": "unspecified",
+          "got": "null",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip2930",
+          "call": "receipt",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:number",
+            "contractAddress:null",
+            "cumulativeGasUsed:quantity",
+            "effectiveGasPrice:quantity",
+            "from:address",
+            "gasUsed:quantity",
+            "logs:array",
+            "logsBloom:bytes256",
+            "status:quantity",
+            "to:address",
+            "transactionHash:hash32",
+            "transactionIndex:quantity",
+            "type:quantity"
+          ],
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip2930",
+          "call": "receipt",
+          "field": "effectiveGasPrice",
+          "kind": "spec",
+          "ref": "receipt.yaml effectiveGasPrice formula",
+          "expected": "formula holds",
+          "got": "formula holds",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "flow": "eip1559",
+      "status": "run",
+      "calls": [
+        {
+          "call": "send",
+          "method": "eth_sendRawTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "send",
+          "method": "eth_getTransactionReceipt",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "eip1559",
+          "call": "send",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_sendRawTransaction result",
+          "expected": "valid",
+          "got": "valid",
+          "outcome": "match"
+        },
+        {
+          "flow": "eip1559",
+          "call": "receipt",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getTransactionReceipt result",
+          "expected": "valid",
+          "got": [
+            "/ additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "eip1559",
+          "call": "receipt",
+          "field": "type",
+          "kind": "spec",
+          "ref": "receipt.yaml type",
+          "expected": "0x2",
+          "got": "0x2",
+          "outcome": "match"
+        },
+        {
+          "flow": "eip1559",
+          "call": "receipt",
+          "field": "status",
+          "kind": "spec",
+          "ref": "receipt.yaml status (1 success, 0 failure)",
+          "expected": "0x1",
+          "got": "0x1",
+          "outcome": "match"
+        },
+        {
+          "flow": "eip1559",
+          "call": "receipt",
+          "field": "gasUsed",
+          "kind": "unspecified",
+          "got": "0x5208",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip1559",
+          "call": "receipt",
+          "field": "logs",
+          "kind": "unspecified",
+          "got": 0,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip1559",
+          "call": "receipt",
+          "field": "contractAddress",
+          "kind": "unspecified",
+          "got": "null",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip1559",
+          "call": "receipt",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:number",
+            "contractAddress:null",
+            "cumulativeGasUsed:quantity",
+            "effectiveGasPrice:quantity",
+            "from:address",
+            "gasUsed:quantity",
+            "logs:array",
+            "logsBloom:bytes256",
+            "status:quantity",
+            "to:address",
+            "transactionHash:hash32",
+            "transactionIndex:quantity",
+            "type:quantity"
+          ],
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip1559",
+          "call": "receipt",
+          "field": "effectiveGasPrice",
+          "kind": "spec",
+          "ref": "receipt.yaml effectiveGasPrice formula",
+          "expected": "formula holds",
+          "got": "formula holds",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "flow": "logs",
+      "status": "run",
+      "calls": [
+        {
+          "call": "emit",
+          "method": "eth_sendRawTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "emit",
+          "method": "eth_getTransactionReceipt",
+          "answer": "result"
+        },
+        {
+          "call": "getLogs",
+          "method": "eth_getLogs",
+          "answer": "result"
+        },
+        {
+          "call": "newFilter",
+          "method": "eth_newFilter",
+          "answer": "result"
+        },
+        {
+          "call": "getFilterLogs",
+          "method": "eth_getFilterLogs",
+          "answer": "result"
+        },
+        {
+          "call": "uninstallFilter",
+          "method": "eth_uninstallFilter",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "logs",
+          "call": "emit receipt",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getTransactionReceipt result",
+          "expected": "valid",
+          "got": [
+            "/ additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "logs",
+          "call": "emit receipt",
+          "field": "type",
+          "kind": "spec",
+          "ref": "receipt.yaml type",
+          "expected": "0x2",
+          "got": "0x2",
+          "outcome": "match"
+        },
+        {
+          "flow": "logs",
+          "call": "emit receipt",
+          "field": "status",
+          "kind": "spec",
+          "ref": "receipt.yaml status (1 success, 0 failure)",
+          "expected": "0x1",
+          "got": "0x1",
+          "outcome": "match"
+        },
+        {
+          "flow": "logs",
+          "call": "emit receipt",
+          "field": "gasUsed",
+          "kind": "unspecified",
+          "got": "0x563e",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "logs",
+          "call": "emit receipt",
+          "field": "logs",
+          "kind": "unspecified",
+          "got": 1,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "logs",
+          "call": "emit receipt",
+          "field": "contractAddress",
+          "kind": "unspecified",
+          "got": "null",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "logs",
+          "call": "emit receipt",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:number",
+            "contractAddress:null",
+            "cumulativeGasUsed:quantity",
+            "effectiveGasPrice:quantity",
+            "from:address",
+            "gasUsed:quantity",
+            "logs:array",
+            "logsBloom:bytes256",
+            "status:quantity",
+            "to:address",
+            "transactionHash:hash32",
+            "transactionIndex:quantity",
+            "type:quantity"
+          ],
+          "outcome": "recorded"
+        },
+        {
+          "flow": "logs",
+          "call": "emit receipt",
+          "field": "topic",
+          "kind": "unspecified",
+          "got": "Ping(uint256)",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "logs",
+          "call": "getLogs",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getLogs result",
+          "expected": "valid",
+          "got": "valid",
+          "outcome": "match"
+        },
+        {
+          "flow": "logs",
+          "call": "getLogs",
+          "field": "count",
+          "kind": "unspecified",
+          "got": 1,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "logs",
+          "call": "getLogs",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "address:address",
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:quantity",
+            "data:hash32",
+            "logIndex:quantity",
+            "removed:boolean",
+            "topics:array",
+            "transactionHash:hash32",
+            "transactionIndex:quantity"
+          ],
+          "outcome": "recorded"
+        },
+        {
+          "flow": "logs",
+          "call": "newFilter",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_newFilter result",
+          "expected": "valid",
+          "got": "valid",
+          "outcome": "match"
+        },
+        {
+          "flow": "logs",
+          "call": "getFilterLogs",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getFilterLogs result",
+          "expected": "valid",
+          "got": "valid",
+          "outcome": "match"
+        },
+        {
+          "flow": "logs",
+          "call": "getFilterLogs",
+          "field": "count",
+          "kind": "unspecified",
+          "got": 1,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "logs",
+          "call": "uninstallFilter",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_uninstallFilter result",
+          "expected": "valid",
+          "got": "valid",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "flow": "revert-reason",
+      "status": "run",
+      "calls": [
+        {
+          "call": "call",
+          "method": "eth_call",
+          "answer": "error"
+        },
+        {
+          "call": "estimateGas",
+          "method": "eth_estimateGas",
+          "answer": "error"
+        },
+        {
+          "call": "send",
+          "method": "eth_sendRawTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "send",
+          "method": "eth_getTransactionReceipt",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "revert-reason",
+          "call": "call",
+          "field": "code",
+          "kind": "spec",
+          "ref": "execution-apis eth_call errors (3 execution reverted)",
+          "expected": 3,
+          "got": 3,
+          "outcome": "match"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "call",
+          "field": "message",
+          "kind": "unspecified",
+          "got": "execution reverted: nope",
+          "outcome": "recorded",
+          "cause": "revert"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "call",
+          "field": "data",
+          "kind": "spec",
+          "ref": "execution-apis eth_call errors (raw EVM revert data)",
+          "expected": "0x08c379a0",
+          "got": "0x08c379a0",
+          "outcome": "match"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "estimateGas",
+          "field": "code",
+          "kind": "spec",
+          "ref": "execution-apis eth_estimateGas errors (3 execution reverted)",
+          "expected": 3,
+          "got": 3,
+          "outcome": "match"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "estimateGas",
+          "field": "message",
+          "kind": "unspecified",
+          "got": "execution reverted: nope",
+          "outcome": "recorded",
+          "cause": "revert"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "estimateGas",
+          "field": "data",
+          "kind": "spec",
+          "ref": "execution-apis eth_estimateGas errors (raw EVM revert data)",
+          "expected": "0x08c379a0",
+          "got": "0x08c379a0",
+          "outcome": "match"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "send receipt",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getTransactionReceipt result",
+          "expected": "valid",
+          "got": [
+            "/ additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "send receipt",
+          "field": "type",
+          "kind": "spec",
+          "ref": "receipt.yaml type",
+          "expected": "0x2",
+          "got": "0x2",
+          "outcome": "match"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "send receipt",
+          "field": "status",
+          "kind": "spec",
+          "ref": "receipt.yaml status (1 success, 0 failure)",
+          "expected": "0x0",
+          "got": "0x0",
+          "outcome": "match"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "send receipt",
+          "field": "gasUsed",
+          "kind": "unspecified",
+          "got": "0x527b",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "send receipt",
+          "field": "logs",
+          "kind": "unspecified",
+          "got": 0,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "send receipt",
+          "field": "contractAddress",
+          "kind": "unspecified",
+          "got": "null",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "revert-reason",
+          "call": "send receipt",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:number",
+            "contractAddress:null",
+            "cumulativeGasUsed:quantity",
+            "effectiveGasPrice:quantity",
+            "from:address",
+            "gasUsed:quantity",
+            "logs:array",
+            "logsBloom:bytes256",
+            "status:quantity",
+            "to:address",
+            "transactionHash:hash32",
+            "transactionIndex:quantity",
+            "type:quantity"
+          ],
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "custom-error",
+      "status": "run",
+      "calls": [
+        {
+          "call": "call",
+          "method": "eth_call",
+          "answer": "error"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "custom-error",
+          "call": "call",
+          "field": "code",
+          "kind": "spec",
+          "ref": "execution-apis eth_call errors (3 execution reverted)",
+          "expected": 3,
+          "got": 3,
+          "outcome": "match"
+        },
+        {
+          "flow": "custom-error",
+          "call": "call",
+          "field": "message",
+          "kind": "unspecified",
+          "got": "execution reverted: custom error 0xcb362b34:",
+          "outcome": "recorded",
+          "cause": "revert"
+        },
+        {
+          "flow": "custom-error",
+          "call": "call",
+          "field": "data",
+          "kind": "spec",
+          "ref": "execution-apis eth_call errors (raw EVM revert data)",
+          "expected": "0xcb362b34",
+          "got": "0xcb362b34",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "flow": "out-of-gas",
+      "status": "run",
+      "calls": [
+        {
+          "call": "send",
+          "method": "eth_sendRawTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "send",
+          "method": "eth_getTransactionReceipt",
+          "answer": "result"
+        },
+        {
+          "call": "estimateGas",
+          "method": "eth_estimateGas",
+          "answer": "error"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "out-of-gas",
+          "call": "send receipt",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getTransactionReceipt result",
+          "expected": "valid",
+          "got": [
+            "/ additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "out-of-gas",
+          "call": "send receipt",
+          "field": "type",
+          "kind": "spec",
+          "ref": "receipt.yaml type",
+          "expected": "0x2",
+          "got": "0x2",
+          "outcome": "match"
+        },
+        {
+          "flow": "out-of-gas",
+          "call": "send receipt",
+          "field": "status",
+          "kind": "spec",
+          "ref": "receipt.yaml status (1 success, 0 failure)",
+          "expected": "0x0",
+          "got": "0x0",
+          "outcome": "match"
+        },
+        {
+          "flow": "out-of-gas",
+          "call": "send receipt",
+          "field": "gasUsed",
+          "kind": "unspecified",
+          "got": "0xc350",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "out-of-gas",
+          "call": "send receipt",
+          "field": "logs",
+          "kind": "unspecified",
+          "got": 0,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "out-of-gas",
+          "call": "send receipt",
+          "field": "contractAddress",
+          "kind": "unspecified",
+          "got": "null",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "out-of-gas",
+          "call": "send receipt",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:number",
+            "contractAddress:null",
+            "cumulativeGasUsed:quantity",
+            "effectiveGasPrice:quantity",
+            "from:address",
+            "gasUsed:quantity",
+            "logs:array",
+            "logsBloom:bytes256",
+            "status:quantity",
+            "to:address",
+            "transactionHash:hash32",
+            "transactionIndex:quantity",
+            "type:quantity"
+          ],
+          "outcome": "recorded"
+        },
+        {
+          "flow": "out-of-gas",
+          "call": "send receipt",
+          "field": "all gas used",
+          "kind": "unspecified",
+          "got": "yes",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "out-of-gas",
+          "call": "estimateGas",
+          "field": "code",
+          "kind": "unspecified",
+          "got": -32003,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "out-of-gas",
+          "call": "estimateGas",
+          "field": "message",
+          "kind": "unspecified",
+          "got": "Out of gas: gas required exceeds allowance: 100000",
+          "outcome": "recorded",
+          "cause": "gas"
+        },
+        {
+          "flow": "out-of-gas",
+          "call": "estimateGas",
+          "field": "data",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "estimate-gas",
+      "status": "run",
+      "calls": [
+        {
+          "call": "transfer",
+          "method": "eth_estimateGas",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "estimate-gas",
+          "call": "transfer",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_estimateGas result",
+          "expected": "valid",
+          "got": "valid",
+          "outcome": "match"
+        },
+        {
+          "flow": "estimate-gas",
+          "call": "transfer",
+          "field": "value",
+          "kind": "unspecified",
+          "got": "0x5208",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "fee-history",
+      "status": "run",
+      "calls": [
+        {
+          "call": "feeHistory",
+          "method": "eth_feeHistory",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "fee-history",
+          "call": "feeHistory",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_feeHistory result",
+          "expected": "valid",
+          "got": "valid",
+          "outcome": "match"
+        },
+        {
+          "flow": "fee-history",
+          "call": "feeHistory",
+          "field": "baseFeePerGas length",
+          "kind": "spec",
+          "ref": "fee_market.yaml baseFeePerGas (includes the next block)",
+          "expected": "blocks + 1",
+          "got": "blocks + 1",
+          "outcome": "match"
+        },
+        {
+          "flow": "fee-history",
+          "call": "feeHistory",
+          "field": "reward length",
+          "kind": "spec",
+          "ref": "fee_market.yaml reward (one entry per block of the range)",
+          "expected": "blocks",
+          "got": "blocks",
+          "outcome": "match"
+        },
+        {
+          "flow": "fee-history",
+          "call": "feeHistory",
+          "field": "blocks",
+          "kind": "unspecified",
+          "got": 4,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "fee-history",
+          "call": "feeHistory",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "baseFeePerBlobGas:array",
+            "baseFeePerGas:array",
+            "blobGasUsedRatio:array",
+            "gasUsedRatio:array",
+            "oldestBlock:quantity",
+            "reward:array"
+          ],
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "block-receipts",
+      "status": "run",
+      "calls": [
+        {
+          "call": "blockReceipts",
+          "method": "eth_getBlockReceipts",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "block-receipts",
+          "call": "blockReceipts",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getBlockReceipts result",
+          "expected": "valid",
+          "got": [
+            "/0 additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "block-receipts",
+          "call": "blockReceipts",
+          "field": "count",
+          "kind": "unspecified",
+          "got": 1,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "block-receipts",
+          "call": "blockReceipts",
+          "field": "same as eth_getTransactionReceipt",
+          "kind": "unspecified",
+          "got": "yes",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "simulate",
+      "status": "run",
+      "calls": [
+        {
+          "call": "simulate",
+          "method": "eth_simulateV1",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "simulate",
+          "call": "simulate",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_simulateV1 result",
+          "expected": "valid",
+          "got": "valid",
+          "outcome": "match"
+        },
+        {
+          "flow": "simulate",
+          "call": "simulate",
+          "field": "call status",
+          "kind": "unspecified",
+          "got": "0x1",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "trace",
+      "status": "run",
+      "calls": [
+        {
+          "call": "trace",
+          "method": "debug_traceTransaction",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "trace",
+          "call": "trace",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis debug_traceTransaction result",
+          "expected": "valid",
+          "got": "valid",
+          "outcome": "match"
+        },
+        {
+          "flow": "trace",
+          "call": "trace",
+          "field": "gas",
+          "kind": "unspecified",
+          "got": 21000,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "trace",
+          "call": "trace",
+          "field": "failed",
+          "kind": "unspecified",
+          "got": false,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "trace",
+          "call": "trace",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "failed:boolean",
+            "gas:number",
+            "returnValue:bytes0",
+            "structLogs:array"
+          ],
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "eip7702",
+      "status": "run",
+      "calls": [
+        {
+          "call": "send",
+          "method": "eth_sendRawTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "send",
+          "method": "eth_getTransactionReceipt",
+          "answer": "result"
+        },
+        {
+          "call": "code",
+          "method": "eth_getCode",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "eip7702",
+          "call": "receipt",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getTransactionReceipt result",
+          "expected": "valid",
+          "got": [
+            "/ additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "eip7702",
+          "call": "receipt",
+          "field": "type",
+          "kind": "spec",
+          "ref": "receipt.yaml type",
+          "expected": "0x4",
+          "got": "0x4",
+          "outcome": "match"
+        },
+        {
+          "flow": "eip7702",
+          "call": "receipt",
+          "field": "status",
+          "kind": "spec",
+          "ref": "receipt.yaml status (1 success, 0 failure)",
+          "expected": "0x1",
+          "got": "0x1",
+          "outcome": "match"
+        },
+        {
+          "flow": "eip7702",
+          "call": "receipt",
+          "field": "gasUsed",
+          "kind": "unspecified",
+          "got": "0x931f",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip7702",
+          "call": "receipt",
+          "field": "logs",
+          "kind": "unspecified",
+          "got": 1,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip7702",
+          "call": "receipt",
+          "field": "contractAddress",
+          "kind": "unspecified",
+          "got": "null",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip7702",
+          "call": "receipt",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:number",
+            "contractAddress:null",
+            "cumulativeGasUsed:quantity",
+            "effectiveGasPrice:quantity",
+            "from:address",
+            "gasUsed:quantity",
+            "logs:array",
+            "logsBloom:bytes256",
+            "status:quantity",
+            "to:address",
+            "transactionHash:hash32",
+            "transactionIndex:quantity",
+            "type:quantity"
+          ],
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip7702",
+          "call": "code",
+          "field": "delegation",
+          "kind": "unspecified",
+          "got": "to the contract",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "eip4844",
+      "status": "run",
+      "calls": [
+        {
+          "call": "send v1",
+          "method": "eth_sendRawTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "send v1",
+          "method": "eth_getTransactionReceipt",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "eip4844",
+          "call": "send",
+          "field": "wrapper accepted",
+          "kind": "unspecified",
+          "got": "v1",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip4844",
+          "call": "receipt",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getTransactionReceipt result",
+          "expected": "valid",
+          "got": [
+            "/ additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "eip4844",
+          "call": "receipt",
+          "field": "type",
+          "kind": "spec",
+          "ref": "receipt.yaml type",
+          "expected": "0x3",
+          "got": "0x3",
+          "outcome": "match"
+        },
+        {
+          "flow": "eip4844",
+          "call": "receipt",
+          "field": "status",
+          "kind": "spec",
+          "ref": "receipt.yaml status (1 success, 0 failure)",
+          "expected": "0x1",
+          "got": "0x1",
+          "outcome": "match"
+        },
+        {
+          "flow": "eip4844",
+          "call": "receipt",
+          "field": "gasUsed",
+          "kind": "unspecified",
+          "got": "0x5208",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip4844",
+          "call": "receipt",
+          "field": "logs",
+          "kind": "unspecified",
+          "got": 0,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip4844",
+          "call": "receipt",
+          "field": "contractAddress",
+          "kind": "unspecified",
+          "got": "null",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip4844",
+          "call": "receipt",
+          "field": "blobGasUsed",
+          "kind": "unspecified",
+          "got": "0x20000",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "eip4844",
+          "call": "receipt",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "blobGasPrice:quantity",
+            "blobGasUsed:quantity",
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:number",
+            "contractAddress:null",
+            "cumulativeGasUsed:quantity",
+            "effectiveGasPrice:quantity",
+            "from:address",
+            "gasUsed:quantity",
+            "logs:array",
+            "logsBloom:bytes256",
+            "status:quantity",
+            "to:address",
+            "transactionHash:hash32",
+            "transactionIndex:quantity",
+            "type:quantity"
+          ],
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "invalid-input",
+      "status": "run",
+      "calls": [
+        {
+          "call": "nonce too low",
+          "method": "eth_sendRawTransaction",
+          "answer": "error"
+        },
+        {
+          "call": "underpriced",
+          "method": "eth_sendRawTransaction",
+          "answer": "error"
+        },
+        {
+          "call": "bad params",
+          "method": "eth_getBalance",
+          "answer": "error"
+        },
+        {
+          "call": "unknown method",
+          "method": "hashspan_unknownMethod",
+          "answer": "error"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "invalid-input",
+          "call": "nonce too low",
+          "field": "code",
+          "kind": "unspecified",
+          "got": -32003,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "nonce too low",
+          "field": "code in error groups",
+          "kind": "spec",
+          "ref": "execution-apis eth_sendRawTransaction error-groups",
+          "expected": "listed",
+          "got": "listed",
+          "outcome": "match"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "nonce too low",
+          "field": "message",
+          "kind": "unspecified",
+          "got": "nonce too low",
+          "outcome": "recorded",
+          "cause": "nonce"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "nonce too low",
+          "field": "data",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "underpriced",
+          "field": "code",
+          "kind": "unspecified",
+          "got": -32003,
+          "outcome": "recorded"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "underpriced",
+          "field": "code in error groups",
+          "kind": "spec",
+          "ref": "execution-apis eth_sendRawTransaction error-groups",
+          "expected": "listed",
+          "got": "listed",
+          "outcome": "match"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "underpriced",
+          "field": "message",
+          "kind": "unspecified",
+          "got": "max fee per gas less than block base fee",
+          "outcome": "recorded",
+          "cause": "fee"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "underpriced",
+          "field": "data",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "bad params",
+          "field": "code",
+          "kind": "spec",
+          "ref": "rpc-standard-errors.yaml (-32602 Invalid params)",
+          "expected": -32602,
+          "got": -32602,
+          "outcome": "match"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "bad params",
+          "field": "message",
+          "kind": "unspecified",
+          "got": "invalid string length",
+          "outcome": "recorded",
+          "cause": "params"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "bad params",
+          "field": "data",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "unknown method",
+          "field": "code",
+          "kind": "spec",
+          "ref": "rpc-standard-errors.yaml (-32601 Method not found)",
+          "expected": -32601,
+          "got": -32601,
+          "outcome": "match"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "unknown method",
+          "field": "message",
+          "kind": "unspecified",
+          "got": "Method not found",
+          "outcome": "recorded",
+          "cause": "method"
+        },
+        {
+          "flow": "invalid-input",
+          "call": "unknown method",
+          "field": "data",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "concurrent-send",
+      "status": "run",
+      "calls": [
+        {
+          "call": "send 0",
+          "method": "eth_sendTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "send 1",
+          "method": "eth_sendTransaction",
+          "answer": "error"
+        },
+        {
+          "call": "send 2",
+          "method": "eth_sendTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "send 3",
+          "method": "eth_sendTransaction",
+          "answer": "result"
+        },
+        {
+          "call": "send 4",
+          "method": "eth_sendTransaction",
+          "answer": "result"
+        }
+      ],
+      "checks": [
+        {
+          "flow": "concurrent-send",
+          "call": "sends",
+          "field": "distinct nonces",
+          "kind": "unspecified",
+          "expected": 5,
+          "got": 4,
+          "upstream": "foundry#17354",
+          "detail": [
+            "transaction already imported"
+          ],
+          "outcome": "difference",
+          "known": "foundry#17354"
+        }
+      ]
+    }
+  ],
+  "chainModes": [
+    {
+      "flow": "anvil-optimism",
+      "mode": "optimism",
+      "start": {
+        "args": [
+          "--network",
+          "optimism",
+          "--chain-id",
+          "10"
+        ]
+      },
+      "reference": {
+        "source": "E2: Anvil -n optimism stores no L1 data fee; a real OP receipt was not recorded",
+        "shape": {
+          "receiptFields": [
+            "l1BaseFeeScalar",
+            "l1BlobBaseFee",
+            "l1BlobBaseFeeScalar",
+            "l1Fee",
+            "l1GasPrice",
+            "l1GasUsed",
+            "operatorFeeConstant",
+            "operatorFeeScalar"
+          ]
+        }
+      },
+      "status": "run",
+      "checks": [
+        {
+          "flow": "anvil-optimism",
+          "call": "receipt",
+          "field": "L1 fee fields",
+          "kind": "by-design",
+          "mode": "optimism",
+          "got": [],
+          "outcome": "by-design"
+        },
+        {
+          "flow": "anvil-optimism",
+          "call": "receipt",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getTransactionReceipt result",
+          "expected": "valid",
+          "got": [
+            "/ additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "anvil-optimism",
+          "call": "receipt",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:number",
+            "contractAddress:null",
+            "cumulativeGasUsed:quantity",
+            "effectiveGasPrice:quantity",
+            "from:address",
+            "gasUsed:quantity",
+            "logs:array",
+            "logsBloom:bytes256",
+            "status:quantity",
+            "to:address",
+            "transactionHash:hash32",
+            "transactionIndex:quantity",
+            "type:quantity"
+          ],
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "anvil-tempo",
+      "mode": "tempo",
+      "start": {
+        "args": [
+          "--network",
+          "tempo"
+        ]
+      },
+      "reference": {
+        "source": "E2: a Tempo mainnet receipt of a 0x2 transaction carries feeToken and feePayer",
+        "shape": {
+          "type": "0x2",
+          "receiptFields": [
+            "feePayer",
+            "feeToken"
+          ]
+        }
+      },
+      "status": "run",
+      "checks": [
+        {
+          "flow": "anvil-tempo",
+          "call": "receipt",
+          "field": "fee fields on 0x2",
+          "kind": "unspecified",
+          "expected": [
+            "feePayer",
+            "feeToken"
+          ],
+          "got": [
+            "feePayer",
+            "feeToken"
+          ],
+          "outcome": "match"
+        },
+        {
+          "flow": "anvil-tempo",
+          "call": "receipt",
+          "field": "schema",
+          "kind": "spec",
+          "ref": "execution-apis eth_getTransactionReceipt result",
+          "expected": "valid",
+          "got": [
+            "/ additionalProperties blockTimestamp (number)"
+          ],
+          "outcome": "spec-difference"
+        },
+        {
+          "flow": "anvil-tempo",
+          "call": "receipt",
+          "field": "extension fields",
+          "kind": "by-design",
+          "mode": "tempo",
+          "got": [
+            "feePayer",
+            "feeToken"
+          ],
+          "outcome": "by-design"
+        },
+        {
+          "flow": "anvil-tempo",
+          "call": "receipt",
+          "field": "fields",
+          "kind": "unspecified",
+          "got": [
+            "blockHash:hash32",
+            "blockNumber:quantity",
+            "blockTimestamp:number",
+            "contractAddress:null",
+            "cumulativeGasUsed:quantity",
+            "effectiveGasPrice:quantity",
+            "feePayer:address",
+            "feeToken:address",
+            "from:address",
+            "gasUsed:quantity",
+            "logs:array",
+            "logsBloom:bytes256",
+            "status:quantity",
+            "to:address",
+            "transactionHash:hash32",
+            "transactionIndex:quantity",
+            "type:quantity"
+          ],
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "flow": "anvil-celo",
+      "mode": "celo",
+      "start": {
+        "args": [
+          "--celo",
+          "--chain-id",
+          "42220"
+        ]
+      },
+      "reference": {
+        "source": "E2: Celo mainnet eth_fillTransaction with a fee currency returns a 0x7b (CIP-64) transaction",
+        "shape": {
+          "type": "0x7b"
+        }
+      },
+      "status": "run",
+      "checks": [
+        {
+          "flow": "anvil-celo",
+          "call": "send 0x7b",
+          "field": "receipt type",
+          "kind": "unspecified",
+          "expected": "0x7b",
+          "got": "refused (-32602)",
+          "upstream": "foundry#17462",
+          "outcome": "difference",
+          "known": "foundry#17462"
+        }
+      ]
+    }
+  ],
+  "notes": []
+}

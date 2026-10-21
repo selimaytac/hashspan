@@ -50,7 +50,12 @@ export async function fundFromFaucet(rpc, addresses, value) {
     ]);
     if (sent.error) throw new Error(`funding failed: ${sanitize(sent.error.message)}`);
     const receipt = await rpc.receipt(sent.result);
-    if (receipt.result?.status !== '0x1') throw new Error('a funding transaction did not succeed');
+    if (receipt.result?.status !== '0x1') {
+      const why = receipt.error
+        ? sanitize(String(receipt.error.message))
+        : `status ${receipt.result?.status}`;
+      throw new Error(`a funding transaction did not succeed: ${why}`);
+    }
   }
   return {
     step: 'fund from faucet',
