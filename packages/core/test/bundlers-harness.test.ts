@@ -155,14 +155,15 @@ describe('bundler matrix targets', () => {
   );
 
   it.each(runnable)(
-    '%s runs its containers removable, named e16-, with 2 GiB, and no host path',
+    '%s runs its containers removable (the bundler removed by the run), named e16-, with 2 GiB, and no host path',
     (name) => {
       expect(PREFIX).toBe('e16-');
       expect(MEMORY).toBe('2g');
       for (const { role, args } of allArgs(name)) {
-        expect({ role, start: args.slice(0, 3) }).toEqual({
+        // The bundler keeps its log after an exit at start; run.mjs removes it explicitly.
+        expect({ role, start: args.slice(0, role === 'bundler' ? 2 : 3) }).toEqual({
           role,
-          start: ['run', '--detach', '--rm'],
+          start: role === 'bundler' ? ['run', '--detach'] : ['run', '--detach', '--rm'],
         });
         expect(values(args, '--name')[0]).toMatch(/^e16-[a-z0-9-]+$/);
         expect(args).toContain(`--memory=${MEMORY}`);

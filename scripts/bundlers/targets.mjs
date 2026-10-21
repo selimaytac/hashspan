@@ -299,10 +299,11 @@ export function bundlerArgs(name, def, rpcUrl, image = imageOf(name, def.commit 
   if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(rpcUrl)) {
     throw new Error('the bundler node is the proxy on 127.0.0.1 inside the namespace');
   }
+  // No --rm: a bundler that exits at start would take its log with it. run.mjs removes the container after each pair
+  // and at the end of the run, and reads its last lines first when it did not start.
   return [
     'run',
     '--detach',
-    '--rm',
     '--name',
     containerOf(name),
     '--network',

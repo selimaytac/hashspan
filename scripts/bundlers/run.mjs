@@ -105,12 +105,13 @@ async function startPair(name, def, images, scenario) {
       `${name} on ${bundlerUrl(def)}`,
     );
   } catch (error) {
-    // The container is removed with --rm, so its last lines go into the error before they are gone.
+    // The container is removed below and at the end of the run, so its last lines go into the error first.
     const logs = await docker(['logs', containerOf(name)]).catch(() => ({
       stdout: '',
       stderr: '',
     }));
     const tail = logTail(`${logs.stdout}\n${logs.stderr}`);
+    await docker(['rm', '--force', containerOf(name)]).catch(() => {});
     throw new Error(
       `${error.message}${tail ? `\nlast lines of ${containerOf(name)}:\n${tail}` : ''}`,
     );
