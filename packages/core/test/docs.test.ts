@@ -3,6 +3,11 @@ import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DOC, render, START } from '../../../scripts/backends/table.mjs';
 import {
+  DOC as BUNDLERS_DOC,
+  START as BUNDLERS_START,
+  render as renderBundlers,
+} from '../../../scripts/bundlers/table.mjs';
+import {
   DOC as FACILITATORS_DOC,
   START as FACILITATORS_START,
   render as renderFacilitators,
@@ -406,6 +411,12 @@ describe('repository docs', () => {
     const doc = read(DOC);
     expect(doc).toContain(START);
     expect(doc, 'run `pnpm backends:table`').toBe(render(root));
+  });
+
+  it('shows in docs/bundlers.md the tables generated from docs/bundlers/results', () => {
+    const doc = read(BUNDLERS_DOC);
+    expect(doc).toContain(BUNDLERS_START);
+    expect(doc, 'run `pnpm bundlers:table`').toBe(renderBundlers(root));
   });
 
   it('shows in docs/facilitators.md the tables generated from docs/facilitators/results', () => {

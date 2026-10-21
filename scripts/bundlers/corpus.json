@@ -1,0 +1,983 @@
+{
+  "id": "erc4337-v07-anvil-1",
+  "chainId": 1337,
+  "entryPoint": "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+  "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+  "ercsCommit": "a431a3fb66c1f31fa5394893003f7b9bb61c54bf",
+  "cases": [
+    {
+      "id": "plain-op",
+      "entryPoint": "0.7",
+      "note": "deploys its account and sends 1 wei",
+      "steps": [
+        {
+          "call": "estimate",
+          "op": "main"
+        },
+        {
+          "call": "send",
+          "op": "main"
+        },
+        {
+          "call": "wait",
+          "op": "main"
+        }
+      ],
+      "ops": {
+        "main": {
+          "hash": "0x72da34352c37d0ca42507c13a2a6e9f82d7ada9a9e3534041ad40904e11a835f",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000000000000000000000000000000000000000000001",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0xE35b1E23D30eE88b357AB51f10E75b02bcFa7ae6",
+            "signature": "0x58ff33cd12b30bd761c7ce8c0a71050a8958e5d526c0a432be58a70d31b5cc730728daf3e0df9faeca788863988ca1e4f00fa68cd20d4be50f672d128c589b0b1c",
+            "verificationGasLimit": "0x927c0"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "estimate.fields",
+          "kind": "spec",
+          "value": "complete",
+          "ref": "erc-7769.md:201-207@a431a3fb"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:66@a431a3fb"
+        },
+        {
+          "step": 2,
+          "field": "included",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:247-260@a431a3fb"
+        },
+        {
+          "step": 2,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "value": "complete",
+          "ref": "erc-7769.md:247-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:247-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.success",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:256@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:258@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "value": "whole-bundle",
+          "ref": "erc-7769.md:259-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:228-229@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "when": "included"
+        }
+      ]
+    },
+    {
+      "id": "batch-calls",
+      "entryPoint": "0.7",
+      "note": "one operation with two calls (executeBatch), as sendCalls builds it",
+      "steps": [
+        {
+          "call": "send",
+          "op": "main"
+        },
+        {
+          "call": "wait",
+          "op": "main"
+        }
+      ],
+      "ops": {
+        "main": {
+          "hash": "0x3d26990ae20fa60dfe0cdf115983276c5f9263049fb37048ea6bebcc9f23e483",
+          "userOperation": {
+            "callData": "0x47e1da2a000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000cc00000000000000000000000000000000000000000000000000000000000000cc00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000000000000000000000000000000000000000000002",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x0630D1E3A9775a11663bA147746d63cbc1BAcBb5",
+            "signature": "0x46b12ec2236ea37bad621566ef447381ca4acde11c6bf5587502849b0e7323b4116acd7086a6977516b38b92f3b8ccf5526133e911843b4f03ca8977cbdd6c861b",
+            "verificationGasLimit": "0x927c0"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:66@a431a3fb"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:247-260@a431a3fb"
+        },
+        {
+          "step": 1,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "value": "complete",
+          "ref": "erc-7769.md:247-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 1,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:247-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 1,
+          "field": "receipt.success",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:256@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 1,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:258@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 1,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "value": "whole-bundle",
+          "ref": "erc-7769.md:259-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 1,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:228-229@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 1,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "when": "included"
+        },
+        {
+          "step": 1,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "when": "included"
+        }
+      ]
+    },
+    {
+      "id": "two-senders",
+      "entryPoint": "0.7",
+      "note": "two operations sent back to back, which a bundler may put in one bundle (hashspan#431)",
+      "steps": [
+        {
+          "call": "send",
+          "op": "first"
+        },
+        {
+          "call": "send",
+          "op": "second"
+        },
+        {
+          "call": "wait",
+          "op": "first"
+        },
+        {
+          "call": "wait",
+          "op": "second"
+        }
+      ],
+      "ops": {
+        "first": {
+          "hash": "0xeb0165d1ba8bd59b94869deda77ba331fdf436bcd55958cc14b7667fd727d6e3",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000000000000000000000000000000000000000000003",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x3CF0F2453559A8d8B104E842480C01Ca5cF6c549",
+            "signature": "0x89ed2eb62cbee02daf8422bc352c781e56b71cdd55605f4a36d77e939862e91347c5a1e6cbcb569bbf951cdb16df714b6aab06500767f5f19aec214d95725b1b1b",
+            "verificationGasLimit": "0x927c0"
+          }
+        },
+        "second": {
+          "hash": "0x25c361b83d3283c0a8eb2b7c3c607b7e036f2a966b328374c05f045408eebaaf",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000000000000000000000000000000000000000000004",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x5E764d682b87F3191FB57E630AE68733D2b15a6C",
+            "signature": "0x0ce1d5e59ad780499d6a43d55b3d5075910040a574d1171b444c3465b74da2e344913965dc853012e90f5944a98e13620297617df07d6292dc9d34cebf04dd8e1c",
+            "verificationGasLimit": "0x927c0"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:66@a431a3fb"
+        },
+        {
+          "step": 2,
+          "field": "included",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:247-260@a431a3fb"
+        },
+        {
+          "step": 2,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "value": "complete",
+          "ref": "erc-7769.md:247-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:247-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.success",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:256@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:258@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "value": "whole-bundle",
+          "ref": "erc-7769.md:259-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:228-229@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "when": "included"
+        },
+        {
+          "step": 2,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "when": "included"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:66@a431a3fb"
+        },
+        {
+          "step": 3,
+          "field": "included",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:247-260@a431a3fb"
+        },
+        {
+          "step": 3,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "value": "complete",
+          "ref": "erc-7769.md:247-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 3,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:247-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 3,
+          "field": "receipt.success",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:256@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 3,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:258@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 3,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "value": "whole-bundle",
+          "ref": "erc-7769.md:259-260@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 3,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:228-229@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 3,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "when": "included"
+        },
+        {
+          "step": 3,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "when": "included"
+        },
+        {
+          "field": "effect.sameBundle",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "execution-revert",
+      "entryPoint": "0.7",
+      "note": "validation passes, the call reverts with Error(\"boom\")",
+      "steps": [
+        {
+          "call": "send",
+          "op": "main"
+        },
+        {
+          "call": "wait",
+          "op": "main"
+        }
+      ],
+      "ops": {
+        "main": {
+          "hash": "0x714e9126b25f3c45fb711d4f1a4440d19d1895226bc66fde87cba6bc1b3455b5",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000a1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000000000000000000000000000000000000000000005",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x031Bf3Dca4D59f8421ddA95ff8c4612c62cB6548",
+            "signature": "0x780c5854aa5649b31d5ae9a2c366afb0f0accd2dcf99ac9d845e83c6b91859d97166b9e78279fd3d30f0d3ee4b4f5a545c773e7b3461ecebf02a5cd24573c1271b",
+            "verificationGasLimit": "0x927c0"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "receipt.success",
+          "kind": "spec",
+          "value": false,
+          "ref": "erc-7769.md:256@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 1,
+          "field": "receipt.reason",
+          "kind": "spec",
+          "value": "Error(boom)",
+          "ref": "erc-7769.md:257@a431a3fb",
+          "when": "included"
+        },
+        {
+          "step": 1,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:247-260@a431a3fb",
+          "when": "included"
+        }
+      ]
+    },
+    {
+      "id": "bad-signature",
+      "entryPoint": "0.7",
+      "note": "signed by another key: the account returns SIG_VALIDATION_FAILED",
+      "steps": [
+        {
+          "call": "send",
+          "op": "main"
+        }
+      ],
+      "ops": {
+        "main": {
+          "hash": "0x2d1c33518e902c253cac7bc5beea902ab41bc6c35183a5e7fdbee0bc6e3fcf97",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000000000000000000000000000000000000000000006",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0xc8332B5C43dabf32D63F5A1b4865f6bE467BDd82",
+            "signature": "0x41ffd9e55d9f8de1284428eabb18fde869f5289dfe2103f5b1adf8d8e336246e7cadc755dc30a0f087e8cb9faaef30a96374fa1e07f23a40c18a8c2185ffaf4b1c",
+            "verificationGasLimit": "0x927c0"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "value": false,
+          "ref": "erc-7769.md:67@a431a3fb"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "value": -32507,
+          "ref": "erc-7769.md:86@a431a3fb"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "validation-revert",
+      "entryPoint": "0.7",
+      "note": "a two-byte signature: the account reverts in ECDSA.recover, AA23",
+      "steps": [
+        {
+          "call": "send",
+          "op": "main"
+        }
+      ],
+      "ops": {
+        "main": {
+          "hash": "0x4740f58a80d3d00756cc5ac9c6b3d4628b747addae7eb29686c422ef8e799d18",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000000000000000000000000000000000000000000007",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x3BD9468107211E5BA99E8813A3330D5677D397d4",
+            "signature": "0x1234",
+            "verificationGasLimit": "0x927c0"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "value": false,
+          "ref": "erc-7769.md:67@a431a3fb"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "value": -32500,
+          "ref": "erc-7769.md:70-72@a431a3fb"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "spec",
+          "value": "AA23",
+          "ref": "erc-7769.md:70-72@a431a3fb"
+        }
+      ]
+    },
+    {
+      "id": "insufficient-prefund",
+      "entryPoint": "0.7",
+      "note": "the sender has no funds and there is no paymaster, AA21",
+      "steps": [
+        {
+          "call": "send",
+          "op": "main"
+        }
+      ],
+      "ops": {
+        "main": {
+          "hash": "0x6f3634a1c7cdf4259308700742a12607764432d9c1e61e8119b210ace5662300",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000000000000000000000000000000000000000000008",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x63d16db1D1C0e2f0f8693E8bC8206B1bACaE05a5",
+            "signature": "0xd21fa1362e059719dd7f1e5b2ef0e5210975e16256f129b7478584c9f5b8e3391706f34bdaf48e793d72e1c48937b1f45ea15f124fb1e2e895ab221aeb75fcd61b",
+            "verificationGasLimit": "0x927c0"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "value": false,
+          "ref": "erc-7769.md:67@a431a3fb"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "value": -32500,
+          "ref": "erc-7769.md:70-72@a431a3fb"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "spec",
+          "value": "AA21",
+          "ref": "erc-7769.md:70-72@a431a3fb"
+        }
+      ]
+    },
+    {
+      "id": "low-verification-gas",
+      "entryPoint": "0.7",
+      "note": "a verification gas limit too low to deploy the account; ERC-7769 names -32602 for invalid fields and -32500 for a failed simulateValidation, not which applies",
+      "steps": [
+        {
+          "call": "send",
+          "op": "main"
+        }
+      ],
+      "ops": {
+        "main": {
+          "hash": "0x36911beaa7d505e5ec8eea5b3158cac966b2f5f10b138c042fcd6a3113a74a34",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc0000000000000000000000000000000000000000000000000000000000000009",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x9Fc1d7e91A9c1CB95502A8B1d217c3B2cE06422d",
+            "signature": "0xe8f433f835429f007056d935a5b571eea14cb347c46a9f99560181f1180dcbc44d25a8d52cba5587c80e624d7d0a9fc47aace94cf417d374575cf0fa873188a41b",
+            "verificationGasLimit": "0x4e20"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "value": false,
+          "ref": "erc-7769.md:67@a431a3fb"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "nonce-reuse",
+      "entryPoint": "0.7",
+      "note": "a second operation with the nonce the first one used, AA25",
+      "steps": [
+        {
+          "call": "send",
+          "op": "first"
+        },
+        {
+          "call": "wait",
+          "op": "first"
+        },
+        {
+          "call": "send",
+          "op": "reuse"
+        }
+      ],
+      "ops": {
+        "first": {
+          "hash": "0x080b656b2465d33a2d1cc78c687d0471fd9f80ebffe82c5d0abeb5fc8ba63bae",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc000000000000000000000000000000000000000000000000000000000000000a",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x1322f01b4a7420Cad8D3E1981336aff53A4e6885",
+            "signature": "0x2d668a5837810c66b41549fbc8d8ba7b5309b17c9e7f3f80af552cd4d7984f0e0561fb44756db93c576b9fba678303cc41deef6162d6d4e362f0d477763b5b2e1c",
+            "verificationGasLimit": "0x927c0"
+          }
+        },
+        "reuse": {
+          "hash": "0xbd6b5b8b5a71e3564e552bfeec2f852f4e90d7b46a3ed2b1bd3c2b36dffb1ae0",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x1322f01b4a7420Cad8D3E1981336aff53A4e6885",
+            "signature": "0x046b7a5d1b06075e9e7f89be7dc96d101899d289924396a700fe27c47bdf063d328507b1ecb5c70d6f40879736e04bac90304b244f8a552b4a1d248ac4788bb41c",
+            "verificationGasLimit": "0x927c0"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:66@a431a3fb"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "spec",
+          "value": true,
+          "ref": "erc-7769.md:247-260@a431a3fb"
+        },
+        {
+          "step": 2,
+          "field": "accepted",
+          "kind": "spec",
+          "value": false,
+          "ref": "erc-7769.md:67@a431a3fb"
+        },
+        {
+          "step": 2,
+          "field": "code",
+          "kind": "spec",
+          "value": -32500,
+          "ref": "erc-7769.md:70-72@a431a3fb"
+        },
+        {
+          "step": 2,
+          "field": "aa",
+          "kind": "spec",
+          "value": "AA25",
+          "ref": "erc-7769.md:70-72@a431a3fb"
+        }
+      ]
+    },
+    {
+      "id": "nonce-gap",
+      "entryPoint": "0.7",
+      "note": "nonce 1 on an account that has not used 0; a bundler may queue it rather than reject it",
+      "steps": [
+        {
+          "call": "send",
+          "op": "main"
+        }
+      ],
+      "ops": {
+        "main": {
+          "hash": "0xbfd61601c1b71fb75836aeb500986494721b7d6d3c4cab5a84b5dbd16d2e21f3",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc000000000000000000000000000000000000000000000000000000000000000b",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x1",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x8359863719aaB8CBfD36cF62fd7B4A74b5d1625f",
+            "signature": "0xd38e0d18c007b87f7a7cf65f31f9a5bc5d8da2b9f5c4fbfae817be359b59c6b94435e254e08eeec3704512014fbf8c10d4c6f43a0533b9925c7a6efc5d5f92fb1b",
+            "verificationGasLimit": "0x927c0"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "replacement",
+      "entryPoint": "0.7",
+      "note": "the same sender and nonce again with 50 percent higher fees, sent right after the first",
+      "steps": [
+        {
+          "call": "send",
+          "op": "first"
+        },
+        {
+          "call": "send",
+          "op": "replacement"
+        },
+        {
+          "call": "wait",
+          "op": "replacement"
+        },
+        {
+          "call": "wait",
+          "op": "first"
+        }
+      ],
+      "ops": {
+        "first": {
+          "hash": "0x41641ca3e726b4494d2ac6bc10eec8eee6bd8c032766f72ddff0253f71229bf0",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc000000000000000000000000000000000000000000000000000000000000000c",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x06Db79CDBCF3e9b70D622dfb2490E933b230aDE4",
+            "signature": "0x248f0c505556773a47c8c4d8dba54339d7660d7d80b1782e078949e9dc9a06f06507aa0f7d43d74c996018ef1f51e11029a3f2aa8a93b5803bdf85b2ae997bf61b",
+            "verificationGasLimit": "0x927c0"
+          }
+        },
+        "replacement": {
+          "hash": "0xba17c342ab0ce866e99bca215c79d597e4fbbb8987be576cd9384db35a6ff9b5",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc000000000000000000000000000000000000000000000000000000000000000c",
+            "maxFeePerGas": "0x6fc23ac00",
+            "maxPriorityFeePerGas": "0xb2d05e00",
+            "nonce": "0x0",
+            "preVerificationGas": "0x186a0",
+            "sender": "0x06Db79CDBCF3e9b70D622dfb2490E933b230aDE4",
+            "signature": "0x2c7bffe0042ec7babb61615d6e10ae494e9233fbed4441664dd8a626a803eea61f8bbb0527ba4659cc4e90dfaea74c43106025992b71e5847dae1669c5bab2bf1c",
+            "verificationGasLimit": "0x927c0"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "code",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.landed",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "pre-verification-gas-out-of-range",
+      "entryPoint": "0.7",
+      "note": "a preVerificationGas of 2^128, reported in rundler#1354 to panic the RPC handler of Rundler 0.11.0",
+      "steps": [
+        {
+          "call": "send",
+          "op": "main"
+        }
+      ],
+      "ops": {
+        "main": {
+          "hash": "0x77e7d5cb500fe579122dd96deb3e8f204085600d8b4a883c115e5edc665e0833",
+          "userOperation": {
+            "callData": "0xb61d27f600000000000000000000000000000000000000000000000000000000000000cc000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000",
+            "callGasLimit": "0x186a0",
+            "factory": "0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985",
+            "factoryData": "0x5fbfb9cf0000000000000000000000003c44cdddb6a900fa2b585dd299e03d12fa4293bc000000000000000000000000000000000000000000000000000000000000000d",
+            "maxFeePerGas": "0x4a817c800",
+            "maxPriorityFeePerGas": "0x77359400",
+            "nonce": "0x0",
+            "preVerificationGas": "0x100000000000000000000000000000000",
+            "sender": "0x1220afB1795abF57F5B4E38f58a9Ba38e425EB20",
+            "signature": "0xbe200d8ec07821fb39c0920ad901d44313f6bf52892504b382c1fe0e128490400aa5a4a109f6d9d5fd965967fcf0a8fdfb045dcc0531c8936f96dad27d2e70851b",
+            "verificationGasLimit": "0x927c0"
+          }
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "answer",
+          "kind": "spec",
+          "value": "error",
+          "ref": "erc-7769.md:67@a431a3fb",
+          "known": "rundler#1354"
+        },
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "value": false,
+          "ref": "erc-7769.md:67@a431a3fb"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified"
+        }
+      ]
+    }
+  ]
+}
