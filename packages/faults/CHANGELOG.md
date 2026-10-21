@@ -1,5 +1,14 @@
 # @hashspan/faults
 
+## 0.2.0
+
+### Minor Changes
+
+- [#501](https://github.com/selimaytac/hashspan/pull/501) [`cf98a51`](https://github.com/selimaytac/hashspan/commit/cf98a51f673c1a6f767d9ea82cb20ee252154258) Thanks [@selimaytac](https://github.com/selimaytac)! - Add the fault kind `truncate` (ADR 0032): the proxy sends the headers, with a `content-length` larger than what
+  follows, and part of the body, then resets the connection, so the client gets those bytes and then a reset, a
+  response cut off mid-body. The reset follows a few milliseconds after the bytes were written, which keeps it from
+  being lost on a keep-alive connection that has carried many exchanges. Like `reset`, it never reaches the node.
+
 ## 0.1.0
 
 ### Minor Changes
