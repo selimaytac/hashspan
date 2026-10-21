@@ -202,6 +202,13 @@ describe('facilitator matrix images', () => {
     },
   );
 
+  it('builds the TypeScript facilitator with the tools node-gyp needs, without the legacy packages', () => {
+    expect(read('docker/typescript.Dockerfile')).toMatch(/^FROM node:22-bookworm$/m);
+    expect(read('docker/typescript.Dockerfile')).toContain(
+      "turbo run build --concurrency=1 --filter='!./packages/legacy/*'",
+    );
+  });
+
   it('runs the proxy runner from the built faults package, with remote upstreams left refused', () => {
     const dockerfile = read('docker/faults.Dockerfile');
     expect(dockerfile).toMatch(/COPY node_modules\/@hashspan\/faults /);
