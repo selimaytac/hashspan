@@ -192,5 +192,5 @@ The existing integration tests then run on the package unchanged, which checks t
   AGENTS.md.
 - A new 0.x release line to maintain, and a new npm name that needs the maintainer's one-time setup.
 - A remote upstream needs a deliberate opt-in, and the tool has no load features even then.
-- A partial-body reset, latency, batch faults, a scenario file and a CLI come in later minor releases of the 0.x line, each with its own
-  tests; reorgs and replacements stay with the node.
+- A partial-body reset, latency, batch faults, a scenario file and a CLI come in later minor releases of the 0.x
+  line, each with its own tests; reorgs and replacements stay with the node.
