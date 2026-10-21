@@ -5,7 +5,7 @@
     "sha256": "870649972378d07df930987b575d57d5654195e635470213a49a7f6bc42105e8"
   },
   "harness": {
-    "commit": "c8c884c35eb30188f6c611c8da1f9639fc99abdb"
+    "commit": "20c162f47cbf7e24a3399e7a9ad94f538013cb28"
   },
   "target": {
     "name": "typescript",
@@ -19,6 +19,11 @@
       "source": "e2e/facilitators/typescript/index.ts:151, 447-453",
       "checkedAt": "faa1c694c66a3732aaabbce93bdae140e521a67d"
     },
+    "receiptWait": {
+      "ms": 180000,
+      "source": "e2e/facilitators/typescript/index.ts:492-493 (viem waitForTransactionReceipt with no timeout: its default 180_000)"
+    },
+    "settleTimeoutMs": 210000,
     "start": {
       "command": "tsx index.ts",
       "verified": true
@@ -37,7 +42,7 @@
     "upto"
   ],
   "egress": {
-    "conformanceRequests": 168,
+    "conformanceRequests": 165,
     "faultCasesWithoutRequests": 0
   },
   "conformance": [
@@ -104,6 +109,20 @@
           "expected": "-10000",
           "got": "-10000",
           "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -168,6 +187,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
           "outcome": "recorded"
         }
       ]
@@ -234,6 +267,20 @@
           "kind": "unspecified",
           "got": "0",
           "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -298,6 +345,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
           "outcome": "recorded"
         }
       ]
@@ -364,6 +425,20 @@
           "kind": "unspecified",
           "got": "0",
           "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -428,6 +503,20 @@
           "kind": "unspecified",
           "got": "0",
           "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -490,6 +579,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
           "outcome": "recorded"
         }
       ]
@@ -556,6 +659,20 @@
           "kind": "unspecified",
           "got": "0",
           "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -620,6 +737,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
           "outcome": "recorded"
         }
       ]
@@ -712,6 +843,34 @@
           "expected": "10000",
           "got": "10000",
           "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 2,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 3,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -778,6 +937,20 @@
           "expected": "-10000",
           "got": "-10000",
           "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -841,6 +1014,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
           "outcome": "recorded"
         }
       ]
@@ -908,6 +1095,20 @@
           "expected": "-4000",
           "got": "-4000",
           "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -968,6 +1169,20 @@
           "expected": "0",
           "got": "0",
           "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -1023,6 +1238,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
           "outcome": "recorded"
         }
       ]
@@ -1689,7 +1918,7 @@
           {
             "status": 200,
             "success": false,
-            "errorReason": "invalid_exact_evm_transaction_failed: The request took too long to respond.\n\nURL: http://127.0.0.1:35931/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
+            "errorReason": "invalid_exact_evm_transaction_failed: The request took too long to respond.\n\nURL: http://127.0.0.1:41963/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
             "transaction": "empty"
           },
           {
@@ -1739,7 +1968,7 @@
           {
             "status": 200,
             "success": false,
-            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:37321/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
+            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:45485/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
             "transaction": "empty"
           },
           {
@@ -1789,7 +2018,7 @@
           {
             "status": 200,
             "success": false,
-            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:34157/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
+            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:46003/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
             "transaction": "empty"
           },
           {
@@ -1839,7 +2068,7 @@
           {
             "status": 200,
             "success": false,
-            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:46007/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
+            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:41065/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
             "transaction": "empty"
           },
           {
@@ -2184,7 +2413,7 @@
           {
             "status": 200,
             "success": false,
-            "errorReason": "invalid_exact_evm_transaction_failed: The request took too long to respond.\n\nURL: http://127.0.0.1:33451/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
+            "errorReason": "invalid_exact_evm_transaction_failed: The request took too long to respond.\n\nURL: http://127.0.0.1:37019/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
             "transaction": "empty"
           },
           {
@@ -2234,7 +2463,7 @@
           {
             "status": 200,
             "success": false,
-            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:43903/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
+            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:41811/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
             "transaction": "empty"
           },
           {
@@ -2284,7 +2513,7 @@
           {
             "status": 200,
             "success": false,
-            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:35291/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
+            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:38297/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
             "transaction": "empty"
           },
           {
@@ -2334,7 +2563,7 @@
           {
             "status": 200,
             "success": false,
-            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:36185/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
+            "errorReason": "invalid_exact_evm_transaction_failed: HTTP request failed.\n\nURL: http://127.0.0.1:40201/\nRequest body: {\"method\":\"eth_sendRawTransaction\",\"params\":[\"<hex>",
             "transaction": "empty"
           },
           {

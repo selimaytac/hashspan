@@ -98,9 +98,9 @@ value. A spec difference is in bold. A cell says what the facilitator returned o
 
 | Target | Commit | Schemes offered | Spec rows matched | Spec differences | Known upstream | Unspecified rows | Unsupported cases | Fault invariants | RPC requests seen | Run |
 |---|---|---|---|---|---|---|---|---|---|---|
-| x402 e2e facilitator (Go) | `faa1c694` | auth-capture, batch-settlement, exact, upto | 20 of 40 | 19 | 1 | 44 | 0 | 144 of 150 hold | 98 | [2026-10-21](facilitators/results/go@faa1c694.json) |
-| x402 e2e facilitator (Python) | `faa1c694` | batch-settlement, exact, upto | 38 of 40 | 1 | 1 | 44 | 0 | 147 of 150 hold | 222 | [2026-10-21](facilitators/results/python@faa1c694.json) |
-| x402 e2e facilitator (TypeScript) | `faa1c694` | auth-capture, batch-settlement, exact, upto | 35 of 40 | 4 | 1 | 44 | 0 | 150 of 150 hold | 168 | [2026-10-21](facilitators/results/typescript@faa1c694.json) |
+| x402 e2e facilitator (Go) | `faa1c694` | auth-capture, batch-settlement, exact, upto | 35 of 40 | 4 | 1 | 76 | 0 | 144 of 150 hold | 98 | [2026-10-21](facilitators/results/go@faa1c694.json) |
+| x402 e2e facilitator (Python) | `faa1c694` | batch-settlement, exact, upto | 38 of 40 | 1 | 1 | 76 | 0 | 150 of 150 hold | 222 | [2026-10-21](facilitators/results/python@faa1c694.json) |
+| x402 e2e facilitator (TypeScript) | `faa1c694` | auth-capture, batch-settlement, exact, upto | 35 of 40 | 4 | 1 | 76 | 0 | 150 of 150 hold | 165 | [2026-10-21](facilitators/results/typescript@faa1c694.json) |
 
 | Case | Field | Spec | x402 e2e facilitator (Go) | x402 e2e facilitator (Python) | x402 e2e facilitator (TypeScript) |
 |---|---|---|---|---|---|
@@ -109,76 +109,108 @@ value. A spec difference is in bold. A cell says what the facilitator returned o
 | `exact-eip3009-valid` | transaction (step 1) | `present` | `present` | `present` | `present` |
 | `exact-eip3009-valid` | effect.payTo | `10000` | `10000` | `10000` | `10000` |
 | `exact-eip3009-valid` | effect.payer | `-10000` | `-10000` | `-10000` | `-10000` |
-| `exact-eip3009-expired` | isValid (step 0) | `false` | **`absent`** | `false` | `false` |
-| `exact-eip3009-expired` | invalidReason (step 0) | `invalid_exact_evm_payload_authorization_valid_before` | **`absent`** | `invalid_exact_evm_payload_authorization_valid_before` | `invalid_exact_evm_payload_authorization_valid_before` |
+| `exact-eip3009-valid` | status (step 0) | *unspecified* | `200` | `200` | `200` |
+| `exact-eip3009-valid` | status (step 1) | *unspecified* | `200` | `200` | `200` |
+| `exact-eip3009-expired` | isValid (step 0) | `false` | `false` | `false` | `false` |
+| `exact-eip3009-expired` | invalidReason (step 0) | `invalid_exact_evm_payload_authorization_valid_before` | `invalid_exact_evm_payload_authorization_valid_before` | `invalid_exact_evm_payload_authorization_valid_before` | `invalid_exact_evm_payload_authorization_valid_before` |
 | `exact-eip3009-expired` | success (step 1) | *unspecified* | `absent` | `false` | `false` |
 | `exact-eip3009-expired` | errorReason (step 1) | *unspecified* | `absent` | `invalid_exact_evm_payload_authorization_valid_before` | `Payment must be verified before settlement` |
 | `exact-eip3009-expired` | effect.payTo | *unspecified* | `0` | `0` | `0` |
-| `exact-eip3009-not-yet-valid` | isValid (step 0) | `false` | **`absent`** | `false` | `false` |
-| `exact-eip3009-not-yet-valid` | invalidReason (step 0) | `invalid_exact_evm_payload_authorization_valid_after` | **`absent`** | `invalid_exact_evm_payload_authorization_valid_after` | `invalid_exact_evm_payload_authorization_valid_after` |
+| `exact-eip3009-expired` | status (step 0) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-expired` | status (step 1) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-not-yet-valid` | isValid (step 0) | `false` | `false` | `false` | `false` |
+| `exact-eip3009-not-yet-valid` | invalidReason (step 0) | `invalid_exact_evm_payload_authorization_valid_after` | `invalid_exact_evm_payload_authorization_valid_after` | `invalid_exact_evm_payload_authorization_valid_after` | `invalid_exact_evm_payload_authorization_valid_after` |
 | `exact-eip3009-not-yet-valid` | success (step 1) | *unspecified* | `absent` | `false` | `false` |
 | `exact-eip3009-not-yet-valid` | errorReason (step 1) | *unspecified* | `absent` | `invalid_exact_evm_payload_authorization_valid_after` | `Payment must be verified before settlement` |
 | `exact-eip3009-not-yet-valid` | effect.payTo | *unspecified* | `0` | `0` | `0` |
-| `exact-eip3009-amount-mismatch` | isValid (step 0) | `false` | **`absent`** | `false` | `false` |
-| `exact-eip3009-amount-mismatch` | invalidReason (step 0) | `invalid_exact_evm_payload_authorization_value_mismatch` | **`absent`** | `invalid_exact_evm_payload_authorization_value_mismatch` | `invalid_exact_evm_payload_authorization_value_mismatch` |
+| `exact-eip3009-not-yet-valid` | status (step 0) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-not-yet-valid` | status (step 1) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-amount-mismatch` | isValid (step 0) | `false` | `false` | `false` | `false` |
+| `exact-eip3009-amount-mismatch` | invalidReason (step 0) | `invalid_exact_evm_payload_authorization_value_mismatch` | `invalid_exact_evm_payload_authorization_value_mismatch` | `invalid_exact_evm_payload_authorization_value_mismatch` | `invalid_exact_evm_payload_authorization_value_mismatch` |
 | `exact-eip3009-amount-mismatch` | success (step 1) | *unspecified* | `absent` | `false` | `false` |
 | `exact-eip3009-amount-mismatch` | errorReason (step 1) | *unspecified* | `absent` | `invalid_exact_evm_payload_authorization_value_mismatch` | `Payment must be verified before settlement` |
 | `exact-eip3009-amount-mismatch` | effect.payTo | *unspecified* | `0` | `0` | `0` |
-| `exact-eip3009-recipient-mismatch` | isValid (step 0) | `false` | **`absent`** | `false` | `false` |
-| `exact-eip3009-recipient-mismatch` | invalidReason (step 0) | `invalid_exact_evm_payload_recipient_mismatch` | **`absent`** | `invalid_exact_evm_payload_recipient_mismatch` | **`invalid_exact_evm_recipient_mismatch`** |
+| `exact-eip3009-amount-mismatch` | status (step 0) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-amount-mismatch` | status (step 1) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-recipient-mismatch` | isValid (step 0) | `false` | `false` | `false` | `false` |
+| `exact-eip3009-recipient-mismatch` | invalidReason (step 0) | `invalid_exact_evm_payload_recipient_mismatch` | **`invalid_exact_evm_recipient_mismatch`** | `invalid_exact_evm_payload_recipient_mismatch` | **`invalid_exact_evm_recipient_mismatch`** |
 | `exact-eip3009-recipient-mismatch` | success (step 1) | *unspecified* | `absent` | `false` | `false` |
 | `exact-eip3009-recipient-mismatch` | errorReason (step 1) | *unspecified* | `absent` | `invalid_exact_evm_payload_recipient_mismatch` | `Payment must be verified before settlement` |
 | `exact-eip3009-recipient-mismatch` | effect.payTo | *unspecified* | `0` | `0` | `0` |
-| `exact-eip3009-wrong-asset` | isValid (step 0) | `false` | **`absent`** | `false` | `false` |
-| `exact-eip3009-wrong-asset` | invalidReason (step 0) | *unspecified* | `absent` | `invalid_exact_evm_payload_signature` | `invalid_exact_evm_signature` |
+| `exact-eip3009-recipient-mismatch` | status (step 0) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-recipient-mismatch` | status (step 1) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-wrong-asset` | isValid (step 0) | `false` | `false` | `false` | `false` |
+| `exact-eip3009-wrong-asset` | invalidReason (step 0) | *unspecified* | `invalid_exact_evm_signature` | `invalid_exact_evm_payload_signature` | `invalid_exact_evm_signature` |
 | `exact-eip3009-wrong-asset` | success (step 1) | *unspecified* | `absent` | `false` | `false` |
 | `exact-eip3009-wrong-asset` | errorReason (step 1) | *unspecified* | `absent` | `invalid_exact_evm_payload_signature` | `Payment must be verified before settlement` |
 | `exact-eip3009-wrong-asset` | effect.payTo | *unspecified* | `0` | `0` | `0` |
-| `exact-eip3009-wrong-network` | isValid (step 0) | `false` | **`absent`** | `false` | **`absent`** |
-| `exact-eip3009-wrong-network` | invalidReason (step 0) | *unspecified* | `absent` | `invalid_exact_evm_payload_signature` | `absent` |
+| `exact-eip3009-wrong-asset` | status (step 0) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-wrong-asset` | status (step 1) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-wrong-network` | isValid (step 0) | `false` | `false` | `false` | **`absent`** |
+| `exact-eip3009-wrong-network` | invalidReason (step 0) | *unspecified* | `no_facilitator_for_network` | `invalid_exact_evm_payload_signature` | `absent` |
 | `exact-eip3009-wrong-network` | success (step 1) | *unspecified* | `absent` | `false` | `false` |
 | `exact-eip3009-wrong-network` | errorReason (step 1) | *unspecified* | `absent` | `invalid_exact_evm_payload_signature` | `Payment must be verified before settlement` |
 | `exact-eip3009-wrong-network` | effect.payTo | *unspecified* | `0` | `0` | `0` |
-| `exact-eip3009-insufficient-balance` | isValid (step 0) | `false` | **`absent`** | `false` | `false` |
-| `exact-eip3009-insufficient-balance` | invalidReason (step 0) | `insufficient_funds` | **`absent`** | **`invalid_exact_evm_insufficient_balance`** | **`invalid_exact_evm_insufficient_balance`** |
+| `exact-eip3009-wrong-network` | status (step 0) | *unspecified* | `500` | `200` | `500` |
+| `exact-eip3009-wrong-network` | status (step 1) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-insufficient-balance` | isValid (step 0) | `false` | `false` | `false` | `false` |
+| `exact-eip3009-insufficient-balance` | invalidReason (step 0) | `insufficient_funds` | **`invalid_exact_evm_transaction_simulation_failed`** | **`invalid_exact_evm_insufficient_balance`** | **`invalid_exact_evm_insufficient_balance`** |
 | `exact-eip3009-insufficient-balance` | success (step 1) | *unspecified* | `absent` | `false` | `false` |
 | `exact-eip3009-insufficient-balance` | errorReason (step 1) | *unspecified* | `absent` | `transaction_failed` | `Payment must be verified before settlement` |
 | `exact-eip3009-insufficient-balance` | effect.payTo | *unspecified* | `0` | `0` | `0` |
-| `exact-eip3009-bad-signature` | isValid (step 0) | `false` | **`absent`** | `false` | `false` |
-| `exact-eip3009-bad-signature` | invalidReason (step 0) | `invalid_exact_evm_payload_signature` | **`absent`** | `invalid_exact_evm_payload_signature` | **`invalid_exact_evm_signature`** |
+| `exact-eip3009-insufficient-balance` | status (step 0) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-insufficient-balance` | status (step 1) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-bad-signature` | isValid (step 0) | `false` | `false` | `false` | `false` |
+| `exact-eip3009-bad-signature` | invalidReason (step 0) | `invalid_exact_evm_payload_signature` | **`invalid_exact_evm_signature`** | `invalid_exact_evm_payload_signature` | **`invalid_exact_evm_signature`** |
 | `exact-eip3009-bad-signature` | success (step 1) | *unspecified* | `absent` | `false` | `false` |
 | `exact-eip3009-bad-signature` | errorReason (step 1) | *unspecified* | `absent` | `invalid_exact_evm_payload_signature` | `Payment must be verified before settlement` |
 | `exact-eip3009-bad-signature` | effect.payTo | *unspecified* | `0` | `0` | `0` |
+| `exact-eip3009-bad-signature` | status (step 0) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-bad-signature` | status (step 1) | *unspecified* | `500` | `200` | `200` |
 | `exact-eip3009-replay` | isValid (step 0) | `true` | `true` | `true` | `true` |
 | `exact-eip3009-replay` | success (step 1) | `true` | `true` | `true` | `true` |
-| `exact-eip3009-replay` | isValid (step 2) | `false` | **`absent`** | `false` | `false` |
-| `exact-eip3009-replay` | invalidReason (step 2) | *unspecified* | `absent` | `invalid_exact_evm_nonce_already_used` | `invalid_exact_evm_nonce_already_used` |
+| `exact-eip3009-replay` | isValid (step 2) | `false` | `false` | `false` | `false` |
+| `exact-eip3009-replay` | invalidReason (step 2) | *unspecified* | `invalid_exact_evm_transaction_simulation_failed` | `invalid_exact_evm_nonce_already_used` | `invalid_exact_evm_nonce_already_used` |
 | `exact-eip3009-replay` | success (step 3) | `false` | **`absent`** | `false` | `false` |
 | `exact-eip3009-replay` | errorReason (step 3) | *unspecified* | `absent` | `transaction_failed` | `Payment must be verified before settlement` |
 | `exact-eip3009-replay` | effect.payTo | `10000` | `10000` | `10000` | `10000` |
+| `exact-eip3009-replay` | status (step 0) | *unspecified* | `200` | `200` | `200` |
+| `exact-eip3009-replay` | status (step 1) | *unspecified* | `200` | `200` | `200` |
+| `exact-eip3009-replay` | status (step 2) | *unspecified* | `500` | `200` | `200` |
+| `exact-eip3009-replay` | status (step 3) | *unspecified* | `500` | `200` | `200` |
 | `exact-permit2-valid` | isValid (step 0) | `true` | `true` | `true` | `true` |
 | `exact-permit2-valid` | success (step 1) | `true` | `true` | `true` | `true` |
 | `exact-permit2-valid` | transaction (step 1) | `present` | `present` | `present` | `present` |
 | `exact-permit2-valid` | effect.payTo | `10000` | `10000` | `10000` | `10000` |
 | `exact-permit2-valid` | effect.payer | `-10000` | `-10000` | `-10000` | `-10000` |
-| `exact-permit2-expired` | isValid (step 0) | `false` | **`absent`** | `false` | `false` |
-| `exact-permit2-expired` | invalidReason (step 0) | *unspecified* | `absent` | `permit2_deadline_expired` | `permit2_deadline_expired` |
+| `exact-permit2-valid` | status (step 0) | *unspecified* | `200` | `200` | `200` |
+| `exact-permit2-valid` | status (step 1) | *unspecified* | `200` | `200` | `200` |
+| `exact-permit2-expired` | isValid (step 0) | `false` | `false` | `false` | `false` |
+| `exact-permit2-expired` | invalidReason (step 0) | *unspecified* | `permit2_deadline_expired` | `permit2_deadline_expired` | `permit2_deadline_expired` |
 | `exact-permit2-expired` | success (step 1) | *unspecified* | `absent` | `false` | `false` |
 | `exact-permit2-expired` | errorReason (step 1) | *unspecified* | `absent` | `permit2_deadline_expired` | `Payment must be verified before settlement` |
 | `exact-permit2-expired` | effect.payTo | *unspecified* | `0` | `0` | `0` |
+| `exact-permit2-expired` | status (step 0) | *unspecified* | `500` | `200` | `200` |
+| `exact-permit2-expired` | status (step 1) | *unspecified* | `500` | `200` | `200` |
 | `upto-permit2-partial` | isValid (step 0) | `true` | `true` | `true` | `true` |
 | `upto-permit2-partial` | success (step 1) | `true` | `true` | `true` | `true` |
 | `upto-permit2-partial` | transaction (step 1) | `present` | `present` | `present` | `present` |
 | `upto-permit2-partial` | effect.payTo | `4000` | `4000` | `4000` | `4000` |
 | `upto-permit2-partial` | effect.payer | `-4000` | `-4000` | `-4000` | `-4000` |
+| `upto-permit2-partial` | status (step 0) | *unspecified* | `200` | `200` | `200` |
+| `upto-permit2-partial` | status (step 1) | *unspecified* | `200` | `200` | `200` |
 | `upto-permit2-exceeds` | isValid (step 0) | `true` | `true` | `true` | `true` |
-| `upto-permit2-exceeds` | success (step 1) | `false` | **`absent`** | `false` | `false` |
-| `upto-permit2-exceeds` | errorReason (step 1) | `invalid_upto_evm_payload_settlement_exceeds_amount` | **`absent`** | `invalid_upto_evm_payload_settlement_exceeds_amount` | `invalid_upto_evm_payload_settlement_exceeds_amount` |
+| `upto-permit2-exceeds` | success (step 1) | `false` | `false` | `false` | `false` |
+| `upto-permit2-exceeds` | errorReason (step 1) | `invalid_upto_evm_payload_settlement_exceeds_amount` | `invalid_upto_evm_payload_settlement_exceeds_amount` | `invalid_upto_evm_payload_settlement_exceeds_amount` | `invalid_upto_evm_payload_settlement_exceeds_amount` |
 | `upto-permit2-exceeds` | effect.payTo | `0` | `0` | `0` | `0` |
-| `exact-payload-as-upto` | isValid (step 0) | *unspecified* | `absent` | `false` | `false` |
-| `exact-payload-as-upto` | invalidReason (step 0) | *unspecified* | `absent` | `unsupported_payload_type` | `unsupported_payload_type` |
+| `upto-permit2-exceeds` | status (step 0) | *unspecified* | `200` | `200` | `200` |
+| `upto-permit2-exceeds` | status (step 1) | *unspecified* | `500` | `200` | `200` |
+| `exact-payload-as-upto` | isValid (step 0) | *unspecified* | `false` | `false` | `false` |
+| `exact-payload-as-upto` | invalidReason (step 0) | *unspecified* | `invalid_upto_evm_payload` | `unsupported_payload_type` | `unsupported_payload_type` |
 | `exact-payload-as-upto` | success (step 1) | *unspecified* | `absent` | `false` | `false` |
 | `exact-payload-as-upto` | effect.payTo | *unspecified* | `0` | `0` | `0` |
+| `exact-payload-as-upto` | status (step 0) | *unspecified* | `500` | `200` | `200` |
+| `exact-payload-as-upto` | status (step 1) | *unspecified* | `500` | `200` | `200` |
 | `batch-refund-before-settle` | effect.payTo | `3000` | **`0`** (known: x402#3730) | **`0`** (known: x402#3730) | **`0`** (known: x402#3730) |
 | `batch-refund-before-settle` | effect.payer | *unspecified* | `-3000` | `-3000` | `-3000` |
 | `batch-refund-before-settle` | effect.contract | *unspecified* | `3000` | `3000` | `3000` |

@@ -5,7 +5,7 @@
     "sha256": "870649972378d07df930987b575d57d5654195e635470213a49a7f6bc42105e8"
   },
   "harness": {
-    "commit": "c8c884c35eb30188f6c611c8da1f9639fc99abdb"
+    "commit": "20c162f47cbf7e24a3399e7a9ad94f538013cb28"
   },
   "target": {
     "name": "go",
@@ -19,6 +19,11 @@
       "source": "e2e/facilitators/go/main.go:909-922",
       "checkedAt": "faa1c694c66a3732aaabbce93bdae140e521a67d"
     },
+    "receiptWait": {
+      "ms": 30000,
+      "source": "e2e/facilitators/go/main.go:369-383 (30 polls of TransactionReceipt, one second apart; no timeout per poll)"
+    },
+    "settleTimeoutMs": 60000,
     "start": {
       "command": "go build, then the binary",
       "verified": true
@@ -104,6 +109,20 @@
           "expected": "-10000",
           "got": "-10000",
           "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -114,7 +133,10 @@
         "steps": [
           {
             "status": 500,
-            "error": "invalid_exact_evm_payload_authorization_valid_before: valid before expired: 1792588643"
+            "error": "invalid_exact_evm_payload_authorization_valid_before: valid before expired: 1792591448",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_payload_authorization_valid_before",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -137,16 +159,16 @@
           "field": "isValid",
           "kind": "spec",
           "expected": false,
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": false,
+          "outcome": "match"
         },
         {
           "step": 0,
           "field": "invalidReason",
           "kind": "spec",
           "expected": "invalid_exact_evm_payload_authorization_valid_before",
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": "invalid_exact_evm_payload_authorization_valid_before",
+          "outcome": "match"
         },
         {
           "step": 1,
@@ -166,6 +188,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
           "outcome": "recorded"
         }
       ]
@@ -177,7 +213,10 @@
         "steps": [
           {
             "status": 500,
-            "error": "invalid_exact_evm_payload_authorization_valid_after: valid after in future: 1792595843"
+            "error": "invalid_exact_evm_payload_authorization_valid_after: valid after in future: 1792598648",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_payload_authorization_valid_after",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -200,16 +239,16 @@
           "field": "isValid",
           "kind": "spec",
           "expected": false,
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": false,
+          "outcome": "match"
         },
         {
           "step": 0,
           "field": "invalidReason",
           "kind": "spec",
           "expected": "invalid_exact_evm_payload_authorization_valid_after",
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": "invalid_exact_evm_payload_authorization_valid_after",
+          "outcome": "match"
         },
         {
           "step": 1,
@@ -229,6 +268,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
           "outcome": "recorded"
         }
       ]
@@ -240,7 +293,10 @@
         "steps": [
           {
             "status": 500,
-            "error": "invalid_exact_evm_payload_authorization_value_mismatch: authorization value mismatch: 9999 != 10000"
+            "error": "invalid_exact_evm_payload_authorization_value_mismatch: authorization value mismatch: 9999 != 10000",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_payload_authorization_value_mismatch",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -263,16 +319,16 @@
           "field": "isValid",
           "kind": "spec",
           "expected": false,
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": false,
+          "outcome": "match"
         },
         {
           "step": 0,
           "field": "invalidReason",
           "kind": "spec",
           "expected": "invalid_exact_evm_payload_authorization_value_mismatch",
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": "invalid_exact_evm_payload_authorization_value_mismatch",
+          "outcome": "match"
         },
         {
           "step": 1,
@@ -292,6 +348,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
           "outcome": "recorded"
         }
       ]
@@ -303,7 +373,10 @@
         "steps": [
           {
             "status": 500,
-            "error": "invalid_exact_evm_recipient_mismatch: recipient mismatch: 0x00000000000000000000000000000000000000dd != 0x00000000000000000000000000000000000000cc"
+            "error": "invalid_exact_evm_recipient_mismatch: recipient mismatch: 0x00000000000000000000000000000000000000dd != 0x00000000000000000000000000000000000000cc",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_recipient_mismatch",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -326,15 +399,15 @@
           "field": "isValid",
           "kind": "spec",
           "expected": false,
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": false,
+          "outcome": "match"
         },
         {
           "step": 0,
           "field": "invalidReason",
           "kind": "spec",
           "expected": "invalid_exact_evm_payload_recipient_mismatch",
-          "got": "absent",
+          "got": "invalid_exact_evm_recipient_mismatch",
           "outcome": "spec-difference"
         },
         {
@@ -355,6 +428,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
           "outcome": "recorded"
         }
       ]
@@ -366,7 +453,10 @@
         "steps": [
           {
             "status": 500,
-            "error": "invalid_exact_evm_signature: invalid signature: <hex>"
+            "error": "invalid_exact_evm_signature: invalid signature: <hex>",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_signature",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -389,14 +479,14 @@
           "field": "isValid",
           "kind": "spec",
           "expected": false,
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": false,
+          "outcome": "match"
         },
         {
           "step": 0,
           "field": "invalidReason",
           "kind": "unspecified",
-          "got": "absent",
+          "got": "invalid_exact_evm_signature",
           "outcome": "recorded"
         },
         {
@@ -417,6 +507,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
           "outcome": "recorded"
         }
       ]
@@ -428,7 +532,10 @@
         "steps": [
           {
             "status": 500,
-            "error": "no_facilitator_for_network: no facilitator for scheme \"exact\" on network \"eip155:1\"; registered: exact@eip155:84532, upto@eip155:84532, batch-settlement@eip155:84532, auth-capture@eip155:84532"
+            "error": "no_facilitator_for_network: no facilitator for scheme \"exact\" on network \"eip155:1\"; registered: exact@eip155:84532, upto@eip155:84532, batch-settlement@eip155:84532, auth-capture@eip155:84532",
+            "isValid": false,
+            "invalidReason": "no_facilitator_for_network",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -451,14 +558,14 @@
           "field": "isValid",
           "kind": "spec",
           "expected": false,
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": false,
+          "outcome": "match"
         },
         {
           "step": 0,
           "field": "invalidReason",
           "kind": "unspecified",
-          "got": "absent",
+          "got": "no_facilitator_for_network",
           "outcome": "recorded"
         },
         {
@@ -479,6 +586,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
           "outcome": "recorded"
         }
       ]
@@ -490,7 +611,10 @@
         "steps": [
           {
             "status": 500,
-            "error": "invalid_exact_evm_transaction_simulation_failed: failed to call contract: execution reverted: transfer amount exceeds balance"
+            "error": "invalid_exact_evm_transaction_simulation_failed: failed to call contract: execution reverted: transfer amount exceeds balance",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_transaction_simulation_failed",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -513,15 +637,15 @@
           "field": "isValid",
           "kind": "spec",
           "expected": false,
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": false,
+          "outcome": "match"
         },
         {
           "step": 0,
           "field": "invalidReason",
           "kind": "spec",
           "expected": "insufficient_funds",
-          "got": "absent",
+          "got": "invalid_exact_evm_transaction_simulation_failed",
           "outcome": "spec-difference"
         },
         {
@@ -542,6 +666,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
           "outcome": "recorded"
         }
       ]
@@ -553,7 +691,10 @@
         "steps": [
           {
             "status": 500,
-            "error": "invalid_exact_evm_signature: invalid signature: <hex>"
+            "error": "invalid_exact_evm_signature: invalid signature: <hex>",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_signature",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -576,15 +717,15 @@
           "field": "isValid",
           "kind": "spec",
           "expected": false,
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": false,
+          "outcome": "match"
         },
         {
           "step": 0,
           "field": "invalidReason",
           "kind": "spec",
           "expected": "invalid_exact_evm_payload_signature",
-          "got": "absent",
+          "got": "invalid_exact_evm_signature",
           "outcome": "spec-difference"
         },
         {
@@ -605,6 +746,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
           "outcome": "recorded"
         }
       ]
@@ -625,7 +780,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_exact_evm_transaction_simulation_failed: failed to call contract: execution reverted: authorization is used or canceled"
+            "error": "invalid_exact_evm_transaction_simulation_failed: failed to call contract: execution reverted: authorization is used or canceled",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_transaction_simulation_failed",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -664,14 +822,14 @@
           "field": "isValid",
           "kind": "spec",
           "expected": false,
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": false,
+          "outcome": "match"
         },
         {
           "step": 2,
           "field": "invalidReason",
           "kind": "unspecified",
-          "got": "absent",
+          "got": "invalid_exact_evm_transaction_simulation_failed",
           "outcome": "recorded"
         },
         {
@@ -695,6 +853,34 @@
           "expected": "10000",
           "got": "10000",
           "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 2,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 3,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
         }
       ]
     },
@@ -761,6 +947,20 @@
           "expected": "-10000",
           "got": "-10000",
           "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -771,7 +971,10 @@
         "steps": [
           {
             "status": 500,
-            "error": "permit2_deadline_expired: deadline expired"
+            "error": "permit2_deadline_expired: deadline expired",
+            "isValid": false,
+            "invalidReason": "permit2_deadline_expired",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -794,14 +997,14 @@
           "field": "isValid",
           "kind": "spec",
           "expected": false,
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": false,
+          "outcome": "match"
         },
         {
           "step": 0,
           "field": "invalidReason",
           "kind": "unspecified",
-          "got": "absent",
+          "got": "permit2_deadline_expired",
           "outcome": "recorded"
         },
         {
@@ -822,6 +1025,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
           "outcome": "recorded"
         }
       ]
@@ -889,6 +1106,20 @@
           "expected": "-4000",
           "got": "-4000",
           "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
         }
       ]
     },
@@ -903,7 +1134,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_upto_evm_payload_settlement_exceeds_amount: settlement exceeds permitted amount"
+            "error": "invalid_upto_evm_payload_settlement_exceeds_amount: settlement exceeds permitted amount",
+            "success": false,
+            "errorReason": "invalid_upto_evm_payload_settlement_exceeds_amount",
+            "reasonFrom": "error-body"
           }
         ],
         "effect": {
@@ -930,16 +1164,16 @@
           "field": "success",
           "kind": "spec",
           "expected": false,
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": false,
+          "outcome": "match"
         },
         {
           "step": 1,
           "field": "errorReason",
           "kind": "spec",
           "expected": "invalid_upto_evm_payload_settlement_exceeds_amount",
-          "got": "absent",
-          "outcome": "spec-difference"
+          "got": "invalid_upto_evm_payload_settlement_exceeds_amount",
+          "outcome": "match"
         },
         {
           "field": "effect.payTo",
@@ -947,6 +1181,20 @@
           "expected": "0",
           "got": "0",
           "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
         }
       ]
     },
@@ -957,7 +1205,10 @@
         "steps": [
           {
             "status": 500,
-            "error": "invalid_upto_evm_payload: unsupported payload type: expected upto permit2 payload"
+            "error": "invalid_upto_evm_payload: unsupported payload type: expected upto permit2 payload",
+            "isValid": false,
+            "invalidReason": "invalid_upto_evm_payload",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -979,14 +1230,14 @@
           "step": 0,
           "field": "isValid",
           "kind": "unspecified",
-          "got": "absent",
+          "got": false,
           "outcome": "recorded"
         },
         {
           "step": 0,
           "field": "invalidReason",
           "kind": "unspecified",
-          "got": "absent",
+          "got": "invalid_upto_evm_payload",
           "outcome": "recorded"
         },
         {
@@ -1000,6 +1251,20 @@
           "field": "effect.payTo",
           "kind": "unspecified",
           "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
           "outcome": "recorded"
         }
       ]
@@ -1173,7 +1438,10 @@
           },
           {
             "status": 500,
-            "error": "settlement_pending: transaction receipt not found after 30 seconds"
+            "error": "settlement_pending: transaction receipt not found after 30 seconds",
+            "success": false,
+            "errorReason": "settlement_pending",
+            "reasonFrom": "error-body"
           }
         ],
         "effect": {
@@ -1193,7 +1461,7 @@
         },
         {
           "id": "pending-carries-transaction",
-          "holds": true
+          "holds": false
         },
         {
           "id": "moves-once",
@@ -1201,7 +1469,7 @@
         },
         {
           "id": "no-late-transfer",
-          "holds": false
+          "holds": true
         }
       ]
     },
@@ -1216,7 +1484,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:34923\": read tcp 127.0.0.1:37526->127.0.0.1:34923: read: connection reset by peer"
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:39819\": read tcp 127.0.0.1:44240->127.0.0.1:39819: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -1263,7 +1534,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:39575\": EOF"
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:40965\": EOF",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -1310,7 +1584,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: read tcp 127.0.0.1:38910->127.0.0.1:37245: read: connection reset by peer"
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: read tcp 127.0.0.1:46868->127.0.0.1:37723: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -1357,7 +1634,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: injected by the faults proxy"
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: injected by the faults proxy",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -1407,7 +1687,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_exact_evm_transaction_failed"
+            "error": "invalid_exact_evm_transaction_failed",
+            "success": false,
+            "errorReason": "invalid_exact_evm_transaction_failed",
+            "reasonFrom": "error-body"
           }
         ],
         "effect": {
@@ -1645,7 +1928,10 @@
           },
           {
             "status": 500,
-            "error": "settlement_pending: transaction receipt not found after 30 seconds"
+            "error": "settlement_pending: transaction receipt not found after 30 seconds",
+            "success": false,
+            "errorReason": "settlement_pending",
+            "reasonFrom": "error-body"
           }
         ],
         "effect": {
@@ -1665,7 +1951,7 @@
         },
         {
           "id": "pending-carries-transaction",
-          "holds": true
+          "holds": false
         },
         {
           "id": "moves-once",
@@ -1673,7 +1959,7 @@
         },
         {
           "id": "no-late-transfer",
-          "holds": false
+          "holds": true
         }
       ]
     },
@@ -1688,7 +1974,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:44513\": read tcp 127.0.0.1:51820->127.0.0.1:44513: read: connection reset by peer"
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:43625\": read tcp 127.0.0.1:52926->127.0.0.1:43625: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -1735,7 +2024,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:42177\": EOF"
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:37945\": EOF",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -1782,7 +2074,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: read tcp 127.0.0.1:39330->127.0.0.1:41627: read: connection reset by peer"
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: read tcp 127.0.0.1:56978->127.0.0.1:34169: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -1829,7 +2124,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: injected by the faults proxy"
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: injected by the faults proxy",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -1879,7 +2177,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_exact_evm_transaction_failed"
+            "error": "invalid_exact_evm_transaction_failed",
+            "success": false,
+            "errorReason": "invalid_exact_evm_transaction_failed",
+            "reasonFrom": "error-body"
           }
         ],
         "effect": {
@@ -2117,7 +2418,10 @@
           },
           {
             "status": 500,
-            "error": "settlement_pending: transaction receipt not found after 30 seconds"
+            "error": "settlement_pending: transaction receipt not found after 30 seconds",
+            "success": false,
+            "errorReason": "settlement_pending",
+            "reasonFrom": "error-body"
           }
         ],
         "effect": {
@@ -2137,7 +2441,7 @@
         },
         {
           "id": "pending-carries-transaction",
-          "holds": true
+          "holds": false
         },
         {
           "id": "moves-once",
@@ -2145,7 +2449,7 @@
         },
         {
           "id": "no-late-transfer",
-          "holds": false
+          "holds": true
         }
       ]
     },
@@ -2160,7 +2464,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: Post \"http://127.0.0.1:37815\": read tcp 127.0.0.1:57066->127.0.0.1:37815: read: connection reset by peer"
+            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: Post \"http://127.0.0.1:35513\": read tcp 127.0.0.1:47584->127.0.0.1:35513: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_upto_evm_transaction_failed",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -2207,7 +2514,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: Post \"http://127.0.0.1:46831\": EOF"
+            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: Post \"http://127.0.0.1:33689\": EOF",
+            "success": false,
+            "errorReason": "invalid_upto_evm_transaction_failed",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -2254,7 +2564,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: read tcp 127.0.0.1:54290->127.0.0.1:42925: read: connection reset by peer"
+            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: read tcp 127.0.0.1:39362->127.0.0.1:37685: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_upto_evm_transaction_failed",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -2301,7 +2614,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: injected by the faults proxy"
+            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: injected by the faults proxy",
+            "success": false,
+            "errorReason": "invalid_upto_evm_transaction_failed",
+            "reasonFrom": "error-body"
           },
           {
             "status": 500,
@@ -2351,7 +2667,10 @@
           },
           {
             "status": 500,
-            "error": "invalid_upto_evm_transaction_failed"
+            "error": "invalid_upto_evm_transaction_failed",
+            "success": false,
+            "errorReason": "invalid_upto_evm_transaction_failed",
+            "reasonFrom": "error-body"
           }
         ],
         "effect": {
