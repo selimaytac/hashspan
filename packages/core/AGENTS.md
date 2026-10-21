@@ -24,6 +24,11 @@ privacy modes and metrics. It makes no network calls; adapters pass it hashes, m
   its expired committed signatures, the targets and their docker run arguments, the Dockerfiles, the proxy runner's
   scenario, the diff, the invariants, the result files and the tables; `test/facilitators-corpus.int.test.ts` checks
   the committed corpus on Anvil with the matrix's chain setup
+- `test/bundlers-*.test.ts` test the ERC-4337 bundler matrix of `scripts/bundlers/` without Docker or any bundler:
+  the corpus and its signatures, the targets and their docker run arguments (0.0.0.0 inside the namespace, 127.0.0.1
+  publishes), the Dockerfiles, the Rundler release pin and its signature check (`test/fixtures/rundler-v0.11.0/` holds
+  the release's `.asc` files), the proxy runner, the diff, the invariants, the result files and the tables;
+  `test/bundlers-corpus.int.test.ts` checks the committed corpus on Anvil with the matrix's chain setup
 - `test/nodes-*.test.ts` test the dev-node matrix of `scripts/nodes/` without Docker: the vendored execution-apis
   files and the validator, the targets and their docker run arguments, the contract and the blob transaction of the
   flows, the rows, the candidate rule, the result files and the tables; `test/nodes-flows.int.test.ts` runs the flows

@@ -63,7 +63,7 @@ const clients = (rpcUrl) => {
 export const creationCode = (artifactsDir, name) =>
   JSON.parse(readFileSync(join(artifactsDir, `${name}.json`), 'utf8')).bytecode;
 
-/** Deploys `initCode` with `salt` through the deterministic deployer, from the unlocked deployer; returns its address. */
+/** Deploys `initCode` with `salt` through the deterministic deployer, from the unlocked deployer; returns where. */
 async function deploy(rpcUrl, initCode, salt) {
   const { reader, wallet } = clients(rpcUrl);
   const address = getContractAddress({
@@ -100,6 +100,8 @@ export async function fund(rpcUrl, address) {
 /**
  * Deploys the EntryPoint and the factory on a fresh Anvil, installs the reverter and funds the senders of
  * `fundedSalts`. Throws when an address differs from the one the corpus was built for.
+ * @param {string} rpcUrl
+ * @param {{ artifactsDir: string, fundedSalts?: number[] }} options
  */
 export async function setupChain(rpcUrl, { artifactsDir, fundedSalts = [] }) {
   const { node } = clients(rpcUrl);

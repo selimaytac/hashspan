@@ -6,8 +6,8 @@
 // docs/bundlers/results/<target>@<version>.json and removes the containers, the network and the images. Needs Docker,
 // the network to build the images, the EntryPoint artifacts (./scripts/install-bundler.sh), and ports 18565 and 14337
 // free on 127.0.0.1; run one target at a time, with other stacks stopped. No bundler ever runs on the host.
-// Usage: node scripts/bundlers/run.mjs <target> [--pass conformance|faults|all] [--clone <dir>] [--rundler-key <keyring>]
-//                                     [--keep-images]
+// Usage: node scripts/bundlers/run.mjs <target> [--pass conformance|faults|all] [--clone <dir>]
+//                                     [--rundler-key <keyring>] [--keep-images]
 //        node scripts/bundlers/run.mjs --list
 import { execFile } from 'node:child_process';
 import { existsSync, writeFileSync } from 'node:fs';

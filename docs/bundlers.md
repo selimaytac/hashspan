@@ -1,8 +1,9 @@
 # ERC-4337 bundler matrix
 
 The matrix sends the same user operations to several ERC-4337 bundlers on a local chain and compares what each
-answers with [ERC-7769](https://github.com/ethereum/ERCs/blob/a431a3fb66c1f31fa5394893003f7b9bb61c54bf/ERCS/erc-7769.md),
-the JSON-RPC API of ERC-4337, and with the others. It also reads the chain, so it checks what was included, not only
+answers with
+[ERC-7769](https://github.com/ethereum/ERCs/blob/a431a3fb66c1f31fa5394893003f7b9bb61c54bf/ERCS/erc-7769.md), the
+JSON-RPC API of ERC-4337, and with the others. It also reads the chain, so it checks what was included, not only
 what was answered. It is a lab tool of this repository; hashspan's packages do not depend on it.
 
 ## What it runs

@@ -189,7 +189,9 @@ export const targets = {
     commit: '0f7126920827b57d5f1515b15d9d6d17a4d78250',
     language: 'TypeScript',
     licence: 'MIT',
-    note: 'after wave 1 agrees on the valid cases: a bun build from source, config.json, --unsafeMode; listens on 0.0.0.0:14337 by default',
+    note:
+      'after wave 1 agrees on the valid cases: a bun build from source, config.json, --unsafeMode; ' +
+      'listens on 0.0.0.0:14337 by default',
     known: [],
   },
   'eth-infinitism': {
@@ -199,7 +201,9 @@ export const targets = {
     repo: 'https://github.com/eth-infinitism/bundler',
     language: 'TypeScript',
     licence: 'MIT',
-    note: "the spec authors' answer, a reference column, not a gating target; bundler-spec-tests are cited, not vendored",
+    note:
+      "the spec authors' answer, a reference column, not a gating target; " +
+      'bundler-spec-tests are cited, not vendored',
     known: [],
   },
   silius: {

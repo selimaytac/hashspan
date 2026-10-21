@@ -80,6 +80,7 @@ export const REVERTER = '0x00000000000000000000000000000000000000a1';
  * The sender of the owner's SimpleAccount with each salt the committed corpus uses: `factory.getAddress(owner, salt)`,
  * checked on Anvil. The fault pass reads the senders of its own salts from the factory.
  */
+/** @type {Record<number, string>} */
 export const SENDERS = {
   1: '0xE35b1E23D30eE88b357AB51f10E75b02bcFa7ae6',
   2: '0x0630D1E3A9775a11663bA147746d63cbc1BAcBb5',
@@ -174,6 +175,7 @@ const rejected = (step, { code, codeRef, aa } = {}) => [
  * the chain setup pays its sender. `steps` are the calls in order: `estimate`, `send` and `wait` (a receipt read until
  * it is there or the target's wait ends), each on one operation.
  */
+/** @type {any[]} */
 export const CASES = [
   {
     id: 'plain-op',
@@ -255,7 +257,9 @@ export const CASES = [
   },
   {
     id: 'low-verification-gas',
-    note: 'a verification gas limit too low to deploy the account; ERC-7769 names -32602 for invalid fields and -32500 for a failed simulateValidation, not which applies',
+    note:
+      'a verification gas limit too low to deploy the account; ERC-7769 names -32602 for invalid ' +
+      'fields and -32500 for a failed simulateValidation, not which applies',
     ops: { main: { salt: 9, gas: { verificationGasLimit: LOW_VERIFICATION_GAS } } },
     steps: [['send', 'main']],
     expect: rejected(0),
@@ -319,11 +323,13 @@ export const CASES = [
 ];
 
 /** The ops of every case, flattened, for the sender table and the chain setup. */
+/** @returns {number[]} */
 export const saltsOf = (cases = CASES) => [
   ...new Set(cases.flatMap((c) => Object.values(c.ops).map((op) => op.salt))),
 ];
 
 /** The salts whose senders the chain setup funds. */
+/** @returns {number[]} */
 export const fundedSalts = (cases = CASES) => [
   ...new Set(
     cases.flatMap((c) =>
@@ -400,8 +406,12 @@ export async function buildOp(op, senderOf) {
 /**
  * One case, built: its operations by name, its steps and expectations. `saltOffset` moves every account to a salt of
  * its own, for the fault pass.
+ * @param {any} c
+ * @param {{ senderOf?: (salt: number) => string | undefined | Promise<string | undefined>,
+ *   saltOffset?: number }} [options]
  */
 export async function buildCase(c, { senderOf = (salt) => SENDERS[salt], saltOffset = 0 } = {}) {
+  /** @type {Record<string, { hash: string, userOperation: Record<string, string> }>} */
   const ops = {};
   for (const [name, op] of Object.entries(c.ops)) {
     ops[name] = await buildOp({ ...op, salt: op.salt + saltOffset }, senderOf);

@@ -36,6 +36,10 @@ export const aaOf = (message) => /\bAA\d\d\b/.exec(String(message ?? ''))?.[0];
  * One JSON-RPC answer, reduced: `answer` is `result`, `error` (a JSON-RPC error object), `no-json-rpc` (an HTTP answer
  * without one, such as a 500 page), `timeout` or `connection` (no answer at all); then `accepted` (a hash came back),
  * the error `code`, its `AAxx` and a sanitized message. `failure` is the harness's reason when no answer came.
+ * @param {number | undefined} status
+ * @param {any} body
+ * @param {string} [failure]
+ * @returns {Record<string, any>}
  */
 export function observeAnswer(status, body, failure) {
   if (failure === 'timeout') return { answer: 'timeout' };
@@ -64,7 +68,13 @@ export function observeAnswer(status, body, failure) {
 /** The fields an estimate states (erc-7769.md:201-207); paymasterVerificationGasLimit only with a paymaster. */
 export const ESTIMATE_FIELDS = ['preVerificationGas', 'verificationGasLimit', 'callGasLimit'];
 
-/** An estimate answer, reduced: whether it has every field, never the values (they differ by bundler policy). */
+/**
+ * An estimate answer, reduced: whether it has every field, never the values (they differ by bundler policy).
+ * @param {number | undefined} status
+ * @param {any} body
+ * @param {string} [failure]
+ * @returns {Record<string, any>}
+ */
 export function observeEstimate(status, body, failure) {
   const out = observeAnswer(status, body, failure);
   delete out.accepted;
@@ -113,8 +123,11 @@ export function paymasterForm(value) {
  * hash or value of the chain is kept, only whether they agree. A
  * receipt's `logs` are this operation's own when they are all in the bundle's receipt and none is another
  * operation's UserOperationEvent.
+ * @param {{ userOpHash: string, entryPoint: string, receipt: any, byHash: any, chain: any[], topic: string,
+ *   waited?: number }} read
  */
 export function observeReadBack({ userOpHash, entryPoint, receipt, byHash, chain, topic, waited }) {
+  /** @type {Record<string, any>} */
   const out = {
     included: receipt !== null && receipt !== undefined && typeof receipt === 'object',
   };
@@ -209,12 +222,15 @@ export function checkExpectations(expectations, observed) {
 
 /**
  * Which EntryPoints a target can run rows of: those it lists in eth_supportedEntryPoints that have code on the chain.
- * Returns the versions, by the corpus's canonical addresses.
+ * `deployed` is keyed by the addresses as listed (any case); returns the versions, by the corpus's canonical addresses.
  */
 export function usableEntryPoints(listed, deployed, entryPoints) {
   const list = Array.isArray(listed) ? listed : [];
   return Object.entries(entryPoints)
-    .filter(([, address]) => list.some((a) => same(a, address)) && deployed[address] === true)
+    .filter(([, address]) => {
+      const entry = list.find((a) => same(a, address));
+      return entry !== undefined && deployed[entry] === true;
+    })
     .map(([version]) => version);
 }
 

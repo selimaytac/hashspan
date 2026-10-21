@@ -211,6 +211,10 @@ export async function verifyWithKey(
  * Downloads the tarball and the .asc of `arch`, checks both pinned digests and the issuer of the signature, and
  * returns the bytes and how the signature was checked. Needs the network, at build time only.
  */
+/**
+ * @param {string} arch
+ * @param {{ fetchImpl?: (url: string) => Promise<Response> }} [options]
+ */
 export async function downloadRundler(arch, { fetchImpl = fetch } = {}) {
   const asset = RUNDLER_RELEASE.assets[arch];
   if (!asset) throw new Error(`no pinned Rundler asset for ${arch}`);
