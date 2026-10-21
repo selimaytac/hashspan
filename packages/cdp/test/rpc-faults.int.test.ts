@@ -11,6 +11,7 @@ import { type Address, createPublicClient, createWalletClient, http } from 'viem
 import { baseSepolia } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { startAnvil } from '../../viem/test/start-anvil.js';
+import { viemAtLeast } from '../../viem/test/viem-version.js';
 import { withHashspan } from '../src/index.js';
 import { startMockCdpApi, throwawayCredentials } from './mock-cdp-api.js';
 import { setupTracing, type TestTracing } from './tracing.js';
@@ -177,7 +178,11 @@ describe("a network-scoped account's wait without a reader, whose node fails", (
     'a request that never answers': 'timeout',
     'HTTP 429': 'HttpRequestError',
     'JSON-RPC -32603 (internal error)': 'InternalRpcError',
-    'a receipt that stays null': 'TransactionReceiptNotFoundError',
+    // viem before 2.57.3 took the transaction, found in a block, for its own replacement and failed the wait
+    // (wevm/viem#5161); from 2.57.3 the wait polls on until its timeout.
+    'a receipt that stays null': viemAtLeast('2.57.3')
+      ? 'timeout'
+      : 'TransactionReceiptNotFoundError',
     'one failed receipt request between good ones': undefined,
   };
   let scopedApi: Awaited<ReturnType<typeof startMockCdpApi>>;
