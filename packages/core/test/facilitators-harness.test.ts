@@ -212,7 +212,9 @@ describe('facilitator matrix images', () => {
   it('builds the Python facilitator with a uv the lockfile accepts, on Python 3.10', () => {
     const dockerfile = read('docker/python.Dockerfile');
     expect(dockerfile).toMatch(/^FROM python:3\.10-slim-bookworm$/m);
-    expect(dockerfile).toMatch(/^COPY --from=ghcr\.io\/astral-sh\/uv:0\.11\.\d+ \/uv \/uvx \/bin\/$/m);
+    expect(dockerfile).toMatch(
+      /^COPY --from=ghcr\.io\/astral-sh\/uv:0\.11\.\d+ \/uv \/uvx \/bin\/$/m,
+    );
   });
 
   it('runs the proxy runner from the built faults package, with remote upstreams left refused', () => {
