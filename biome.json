@@ -8,6 +8,8 @@
       "!integrations/test/hardhat/artifacts",
       "!packages/core/test/fixtures/backends-e7",
       "!docs/backends/results",
+      "!docs/facilitators/results",
+      "!scripts/facilitators/corpus.json",
       "!**/.changeset/*.md",
       "!**/CHANGELOG.md"
     ]

@@ -30,6 +30,9 @@ another service, triggers becomes a `send` / `confirm` span pair under its own t
   `make lab-nuke`
 - Backend matrix: `node scripts/backends/run.mjs <backend>` (needs Docker; writes `docs/backends/results/`), then
   `pnpm backends:table` regenerates the Compatibility table of docs/backends.md, which docs.test.ts checks
+- Facilitator matrix: `node scripts/facilitators/run.mjs <target>` (needs Docker; writes
+  `docs/facilitators/results/`), then `pnpm facilitators:table` regenerates the tables of docs/facilitators.md;
+  `node scripts/facilitators/corpus.mjs --write` regenerates its corpus
 Run lint, typecheck and tests before proposing a change.
 
 ### Fast paths while iterating
@@ -69,6 +72,9 @@ before changing there.
 - `scripts/backends/` → OTLP backend matrix: a fixed corpus, sent to one backend container at a time, read back
   through its API and diffed; one entry per backend in `backends.mjs`. Its tests are
   `packages/core/test/backends-*.test.ts`, on recorded read-backs, without Docker
+- `scripts/facilitators/` → x402 facilitator conformance matrix: a signed corpus sent to one facilitator at a time
+  inside Anvil's network namespace, with `@hashspan/faults` in front of Anvil; one entry per target in `targets.mjs`.
+  Its tests are `packages/core/test/facilitators-*.test.ts`, without Docker, and one Anvil test of the corpus
 See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and the ADR index,
 [docs/adr/README.md](docs/adr/README.md), with each decision in one line.
 
