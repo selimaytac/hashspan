@@ -8,9 +8,11 @@
       "!integrations/test/hardhat/artifacts",
       "!packages/core/test/fixtures/backends-e7",
       "!docs/backends/results",
+      "!docs/bundlers/results",
       "!docs/facilitators/results",
       "!docs/nodes/results",
       "!scripts/nodes/execution-apis",
+      "!scripts/bundlers/corpus.json",
       "!scripts/facilitators/corpus.json",
       "!**/.changeset/*.md",
       "!**/CHANGELOG.md"

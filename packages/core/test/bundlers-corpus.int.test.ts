@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createPublicClient, createWalletClient, http, type Hex } from 'viem';
+import { createPublicClient, createWalletClient, type Hex, http } from 'viem';
 import { entryPoint07Abi, toPackedUserOperation } from 'viem/account-abstraction';
 import { privateKeyToAccount } from 'viem/accounts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

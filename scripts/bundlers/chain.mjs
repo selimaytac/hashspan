@@ -66,7 +66,12 @@ export const creationCode = (artifactsDir, name) =>
 /** Deploys `initCode` with `salt` through the deterministic deployer, from the unlocked deployer; returns its address. */
 async function deploy(rpcUrl, initCode, salt) {
   const { reader, wallet } = clients(rpcUrl);
-  const address = getContractAddress({ opcode: 'CREATE2', from: DEPLOYER, salt, bytecode: initCode });
+  const address = getContractAddress({
+    opcode: 'CREATE2',
+    from: DEPLOYER,
+    salt,
+    bytecode: initCode,
+  });
   const hash = await wallet.sendTransaction({
     account: addressOf(ACCOUNTS.deployer),
     to: DEPLOYER,
@@ -98,7 +103,11 @@ export async function fund(rpcUrl, address) {
  */
 export async function setupChain(rpcUrl, { artifactsDir, fundedSalts = [] }) {
   const { node } = clients(rpcUrl);
-  const entryPoint = await deploy(rpcUrl, creationCode(artifactsDir, 'EntryPoint'), ENTRY_POINT_SALT);
+  const entryPoint = await deploy(
+    rpcUrl,
+    creationCode(artifactsDir, 'EntryPoint'),
+    ENTRY_POINT_SALT,
+  );
   if (entryPoint.toLowerCase() !== ENTRY_POINTS['0.7'].toLowerCase()) {
     throw new Error(`EntryPoint v0.7 at ${entryPoint}, not at the canonical address`);
   }

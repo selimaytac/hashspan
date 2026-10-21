@@ -36,15 +36,16 @@ export const CHAIN_ID = 1337;
 
 /** The canonical EntryPoints by version; v1 deploys v0.7 only, a target listing another one runs no row of it. */
 export const ENTRY_POINTS = {
-  '0.6': '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
-  '0.7': entryPoint07Address,
-  '0.8': '0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108',
-  '0.9': '0x433709009B8330FDa32311DF1C2AFA402eD8D009',
+  0.6: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
+  0.7: entryPoint07Address,
+  0.8: '0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108',
+  0.9: '0x433709009B8330FDa32311DF1C2AFA402eD8D009',
 };
 
 /** The deterministic deployer Anvil ships with, and the salt EntryPoint v0.7 was deployed with on every chain. */
 export const DEPLOYER = '0x4e59b44847b379578588920ca78fbf26c0b4956c';
-export const ENTRY_POINT_SALT = '0x90d8084deab30c2a37c45e8d47f49f2f7965183cb6990a98943ef94940681de3';
+export const ENTRY_POINT_SALT =
+  '0x90d8084deab30c2a37c45e8d47f49f2f7965183cb6990a98943ef94940681de3';
 
 /**
  * SimpleAccountFactory v0.7 (@account-abstraction/contracts 0.7.0) for EntryPoint v0.7, deployed through the
@@ -135,7 +136,14 @@ export const REF = {
   chainId: at('287-289'),
 };
 
-const spec = (step, field, value, ref, extra = {}) => ({ step, field, kind: 'spec', value, ref, ...extra });
+const spec = (step, field, value, ref, extra = {}) => ({
+  step,
+  field,
+  kind: 'spec',
+  value,
+  ref,
+  ...extra,
+});
 const unspecified = (step, field, extra = {}) => ({ step, field, kind: 'unspecified', ...extra });
 
 /** What a valid operation states: the hash at send, then a receipt of the shape and values the chain shows. */
@@ -176,10 +184,7 @@ export const CASES = [
       ['send', 'main'],
       ['wait', 'main'],
     ],
-    expect: [
-      spec(0, 'estimate.fields', 'complete', REF.estimate),
-      ...lands(1, 2),
-    ],
+    expect: [spec(0, 'estimate.fields', 'complete', REF.estimate), ...lands(1, 2)],
   },
   {
     id: 'batch-calls',
@@ -209,11 +214,7 @@ export const CASES = [
       ['wait', 'first'],
       ['wait', 'second'],
     ],
-    expect: [
-      ...lands(0, 2),
-      ...lands(1, 3),
-      unspecified(undefined, 'effect.sameBundle'),
-    ],
+    expect: [...lands(0, 2), ...lands(1, 3), unspecified(undefined, 'effect.sameBundle')],
   },
   {
     id: 'execution-revert',
