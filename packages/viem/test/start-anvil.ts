@@ -6,6 +6,8 @@ type AnvilParameters = {
   chainId?: number | undefined;
   /** A network family Anvil emulates (`--network`), such as Tempo, whose receipts name a fee token (#429). */
   network?: 'tempo' | undefined;
+  /** The genesis block's time in seconds (`--timestamp`), for a chain that runs at a fixed past time. */
+  timestamp?: number | undefined;
 };
 
 export type StartedAnvil = {

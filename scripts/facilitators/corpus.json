@@ -1,0 +1,1346 @@
+{
+  "id": "x402-v2-anvil-1",
+  "chainId": 84532,
+  "network": "eip155:84532",
+  "now": 1704067200,
+  "token": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+  "cases": [
+    {
+      "id": "exact-eip3009-valid",
+      "scheme": "exact",
+      "transfer": "eip3009",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "eip3009"
+          }
+        },
+        "payload": {
+          "authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "to": "0x00000000000000000000000000000000000000cc",
+            "value": "10000",
+            "validAfter": "0",
+            "validBefore": "1704070800",
+            "nonce": "0x2d270dc2a391e4ae477f038d2f69b33424e09a4e1c60165aef9c2396c9fed72e"
+          },
+          "signature": "0x83e3ce27a25256bf18ce1191f21904c7e321cd8df9df2d1ada355626c7eeca48651de75c04a568c364145d361ed3a96dc151d6f60bf395b4c246b1139e6711961b"
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "eip3009"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": true,
+          "ref": "x402-specification-v2.md §5.4.2"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "spec",
+          "value": true,
+          "ref": "x402-specification-v2.md §5.3.2"
+        },
+        {
+          "step": 1,
+          "field": "transaction",
+          "kind": "spec",
+          "value": "present",
+          "ref": "x402-specification-v2.md §5.3.2"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "spec",
+          "value": "10000",
+          "ref": "scheme_exact_evm.md §1 Phase 3"
+        },
+        {
+          "field": "effect.payer",
+          "kind": "spec",
+          "value": "-10000",
+          "ref": "scheme_exact_evm.md §1 Phase 3"
+        }
+      ]
+    },
+    {
+      "id": "exact-eip3009-expired",
+      "scheme": "exact",
+      "transfer": "eip3009",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "eip3009"
+          }
+        },
+        "payload": {
+          "authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "to": "0x00000000000000000000000000000000000000cc",
+            "value": "10000",
+            "validAfter": "0",
+            "validBefore": "1704063600",
+            "nonce": "0xede191f5e04d68ebbe1a81a5eeb9675dc2e78e142223b1641b7ce5ea138508df"
+          },
+          "signature": "0x90e154b78ba7fe11e22656c2d8f56880a1d79643827b184e517db2d5fab75c27359ad2ae0084dfb21adf3666ed4713369555ee96196b10b2dd2b2b2e491b7d4f1c"
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "eip3009"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": false,
+          "ref": "scheme_exact_evm.md §1 Phase 2 step 3"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "value": "invalid_exact_evm_payload_authorization_valid_before",
+          "ref": "x402-specification-v2.md §9"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "exact-eip3009-not-yet-valid",
+      "scheme": "exact",
+      "transfer": "eip3009",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "eip3009"
+          }
+        },
+        "payload": {
+          "authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "to": "0x00000000000000000000000000000000000000cc",
+            "value": "10000",
+            "validAfter": "1704070800",
+            "validBefore": "1704074400",
+            "nonce": "0xdaa75178902d800ff994ed3e8ca19b87832e1c7e4b6d88c14f7ec36a3d614922"
+          },
+          "signature": "0x6bba2c19ce6359ec0c2a66d2d7d0b1ee93239bff516a2ebb794101499032cee83b22a5c3cd93508578551c4df70ee6a252c91ffa19fb998c835819a55d9ae6751b"
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "eip3009"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": false,
+          "ref": "scheme_exact_evm.md §1 Phase 2 step 3"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "value": "invalid_exact_evm_payload_authorization_valid_after",
+          "ref": "x402-specification-v2.md §9"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "exact-eip3009-amount-mismatch",
+      "scheme": "exact",
+      "transfer": "eip3009",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "eip3009"
+          }
+        },
+        "payload": {
+          "authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "to": "0x00000000000000000000000000000000000000cc",
+            "value": "9999",
+            "validAfter": "0",
+            "validBefore": "1704070800",
+            "nonce": "0xcabe9275a87b96c059efdbdc1e38ba817735e40c4a9016bc881633f32dfc180b"
+          },
+          "signature": "0x912437a177801fe31cdd0e84b6f1c2528a6ef96eee50a4f28549b61046af96f0724df2ff005d24610c01f0066765e2c405432a39f550fd61094ae82ef0830de11b"
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "eip3009"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": false,
+          "ref": "scheme_exact_evm.md §1 Phase 2 step 3"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "value": "invalid_exact_evm_payload_authorization_value_mismatch",
+          "ref": "x402-specification-v2.md §9"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "exact-eip3009-recipient-mismatch",
+      "scheme": "exact",
+      "transfer": "eip3009",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "eip3009"
+          }
+        },
+        "payload": {
+          "authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "to": "0x00000000000000000000000000000000000000dd",
+            "value": "10000",
+            "validAfter": "0",
+            "validBefore": "1704070800",
+            "nonce": "0x525edeb88371695d84bd8e1a85a44e4bddc2f5d5655b7885ce15bd6b23323d4b"
+          },
+          "signature": "0xeb45c03a86a4b7b4cd7c1e54b70f62435501b1c12ccb24f116a9b49e649d198a40d633428a42bb542ab93eb33399f723f46ae6ceeea456138b32ed72f51e55dd1b"
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "eip3009"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": false,
+          "ref": "scheme_exact_evm.md §1 Phase 2 step 3"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "value": "invalid_exact_evm_payload_recipient_mismatch",
+          "ref": "x402-specification-v2.md §9"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "exact-eip3009-wrong-asset",
+      "scheme": "exact",
+      "transfer": "eip3009",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x00000000000000000000000000000000000000dd",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "eip3009"
+          }
+        },
+        "payload": {
+          "authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "to": "0x00000000000000000000000000000000000000cc",
+            "value": "10000",
+            "validAfter": "0",
+            "validBefore": "1704070800",
+            "nonce": "0x1924ffc4e1e28173b67376d46d4d4601c50494419d0dee34556aa55c5f093dee"
+          },
+          "signature": "0x4910a04f1533def90cbaf0ea81cf7318c11a9915c2f8c58f2c56a9978c57842d6f465239a66d51a2ed6365dea013f1f9473dbff909667f65e6912a095e803a741b"
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x00000000000000000000000000000000000000dd",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "eip3009"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": false,
+          "ref": "scheme_exact_evm.md §1 Phase 2 step 4"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "exact-eip3009-wrong-network",
+      "scheme": "exact",
+      "transfer": "eip3009",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:1",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "eip3009"
+          }
+        },
+        "payload": {
+          "authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "to": "0x00000000000000000000000000000000000000cc",
+            "value": "10000",
+            "validAfter": "0",
+            "validBefore": "1704070800",
+            "nonce": "0xed5f4d72921f1445ac539b64484b30ffd147b2fa7294dbe291466b999a6103f6"
+          },
+          "signature": "0x106be23f644827a48c147de2e919ce4ce0ee238b901e51172fd4719d67c2826e69c28f6d52becb7c86b43cb35bdf8e02177abd1a309a152677636fd1665cce071b"
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:1",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "eip3009"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": false,
+          "ref": "scheme_exact_evm.md §1 Phase 2 step 4"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "exact-eip3009-insufficient-balance",
+      "scheme": "exact",
+      "transfer": "eip3009",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "eip3009"
+          }
+        },
+        "payload": {
+          "authorization": {
+            "from": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+            "to": "0x00000000000000000000000000000000000000cc",
+            "value": "10000",
+            "validAfter": "0",
+            "validBefore": "1704070800",
+            "nonce": "0x8310094f0111b3cb3c5a1a62e3b38bb86e2945c6b31b1261c9c896c9822dbe61"
+          },
+          "signature": "0xda6a44be5d5eafba6b9464b03aa469b76ba035bb624404ca01d4273b4448c63f2b2a6956d22d3c0e1eeecc8b5b4d44c0362783ed0be25ad818807128ce71fb071b"
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "eip3009"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": false,
+          "ref": "scheme_exact_evm.md §1 Phase 2 step 2"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "value": "insufficient_funds",
+          "ref": "x402-specification-v2.md §9"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "exact-eip3009-bad-signature",
+      "scheme": "exact",
+      "transfer": "eip3009",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "eip3009"
+          }
+        },
+        "payload": {
+          "authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "to": "0x00000000000000000000000000000000000000cc",
+            "value": "10000",
+            "validAfter": "0",
+            "validBefore": "1704070800",
+            "nonce": "0x3dc1b0e85a9a95cdce562783281eabbb657f7ccc2fdb01b4fe821f51d665a081"
+          },
+          "signature": "0x1cfa32ae7525c3c884f1361c68b82c73c0893e5fe85a443b00ec1726dabceab2449684b4f62b00ae065d7939a7325dd70af6af09b54f4934e1fdef050b89d9f21b"
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "eip3009"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": false,
+          "ref": "scheme_exact_evm.md §1 Phase 2 step 1"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "value": "invalid_exact_evm_payload_signature",
+          "ref": "x402-specification-v2.md §9"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "exact-eip3009-replay",
+      "scheme": "exact",
+      "transfer": "eip3009",
+      "steps": [
+        "verify",
+        "settle",
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "eip3009"
+          }
+        },
+        "payload": {
+          "authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "to": "0x00000000000000000000000000000000000000cc",
+            "value": "10000",
+            "validAfter": "0",
+            "validBefore": "1704070800",
+            "nonce": "0x5329a2830b0820c341e851e72583e16333e5fed773dbc3c6c8735c9e97a20fb3"
+          },
+          "signature": "0xda5cdcbddca6eef10f58cdb13612a8be9db84b3bc36eaabd57f2cfa7d544ab73340fa920415c20e95f27fb01430194c00ddeb3eb7919ba3e732f1ec3411ba7c91c"
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "eip3009"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": true,
+          "ref": "x402-specification-v2.md §5.4.2"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "spec",
+          "value": true,
+          "ref": "x402-specification-v2.md §5.3.2"
+        },
+        {
+          "step": 2,
+          "field": "isValid",
+          "kind": "spec",
+          "value": false,
+          "ref": "scheme_exact_evm.md §1 Phase 2 step 5"
+        },
+        {
+          "step": 2,
+          "field": "invalidReason",
+          "kind": "unspecified"
+        },
+        {
+          "step": 3,
+          "field": "success",
+          "kind": "spec",
+          "value": false,
+          "ref": "x402-specification-v2.md §10.1"
+        },
+        {
+          "step": 3,
+          "field": "errorReason",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "spec",
+          "value": "10000",
+          "ref": "x402-specification-v2.md §10.1"
+        }
+      ]
+    },
+    {
+      "id": "exact-permit2-valid",
+      "scheme": "exact",
+      "transfer": "permit2",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "permit2"
+          }
+        },
+        "payload": {
+          "signature": "0xa41c41e670240331050db09d6fe52a7ab7ea927a3a7a4810c6f3fbb8b611cdd67d2712bae54667f8787c93367df29b6822ddd04c317b36824e4598d7e7c67bd11c",
+          "permit2Authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "permitted": {
+              "token": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+              "amount": "10000"
+            },
+            "spender": "0x402085c248EeA27D92E8b30b2C58ed07f9E20001",
+            "nonce": "4837162824095793607695139719708649309531616789851737431760758370412729431170",
+            "deadline": "1704070800",
+            "witness": {
+              "to": "0x00000000000000000000000000000000000000cc",
+              "validAfter": "0"
+            }
+          }
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "permit2"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": true,
+          "ref": "x402-specification-v2.md §5.4.2"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "spec",
+          "value": true,
+          "ref": "x402-specification-v2.md §5.3.2"
+        },
+        {
+          "step": 1,
+          "field": "transaction",
+          "kind": "spec",
+          "value": "present",
+          "ref": "x402-specification-v2.md §5.3.2"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "spec",
+          "value": "10000",
+          "ref": "scheme_exact_evm.md §2 Phase 4"
+        },
+        {
+          "field": "effect.payer",
+          "kind": "spec",
+          "value": "-10000",
+          "ref": "scheme_exact_evm.md §2 Phase 4"
+        }
+      ]
+    },
+    {
+      "id": "exact-permit2-expired",
+      "scheme": "exact",
+      "transfer": "permit2",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "exact",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "permit2"
+          }
+        },
+        "payload": {
+          "signature": "0x9f9d60905c02d04ee1747a90fb54180d2740c0eb3a828e2d92ad4da11fdcf7815cafa4aaac97b0b63b42869e2aac149243f9eef49202f7426cbf4d7a856a9f4e1c",
+          "permit2Authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "permitted": {
+              "token": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+              "amount": "10000"
+            },
+            "spender": "0x402085c248EeA27D92E8b30b2C58ed07f9E20001",
+            "nonce": "16908866603267736620463621114111043527619415329868071105218140628852996072911",
+            "deadline": "1704063600",
+            "witness": {
+              "to": "0x00000000000000000000000000000000000000cc",
+              "validAfter": "0"
+            }
+          }
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "exact",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "permit2"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": false,
+          "ref": "scheme_exact_evm.md §2 Phase 3"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified"
+        }
+      ]
+    },
+    {
+      "id": "upto-permit2-partial",
+      "scheme": "upto",
+      "transfer": "permit2",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "upto",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "permit2",
+            "facilitatorAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+          }
+        },
+        "payload": {
+          "signature": "0x5c02f9b58c25a07f217bcfa6755ad94abd35dc0817d1e25f12f247817807a21468393c4ff471b567c5c0ba7f3302bdc6c3c24cb4567ba96ada2840ce5a87b13e1c",
+          "permit2Authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "permitted": {
+              "token": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+              "amount": "10000"
+            },
+            "spender": "0x4020A4f3b7b90ccA423B9fabCc0CE57C6C240002",
+            "nonce": "25708276838462742019626260434534105598662329279197466532228747273929733291811",
+            "deadline": "1704070800",
+            "witness": {
+              "to": "0x00000000000000000000000000000000000000cc",
+              "facilitator": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+              "validAfter": "0"
+            }
+          }
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "upto",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "permit2",
+          "facilitatorAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        }
+      },
+      "settleRequirements": {
+        "scheme": "upto",
+        "network": "eip155:84532",
+        "amount": "4000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "permit2",
+          "facilitatorAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": true,
+          "ref": "x402-specification-v2.md §5.4.2"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "spec",
+          "value": true,
+          "ref": "x402-specification-v2.md §5.3.2"
+        },
+        {
+          "step": 1,
+          "field": "transaction",
+          "kind": "spec",
+          "value": "present",
+          "ref": "x402-specification-v2.md §5.3.2"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "spec",
+          "value": "4000",
+          "ref": "scheme_upto_evm.md §1 Phase 4"
+        },
+        {
+          "field": "effect.payer",
+          "kind": "spec",
+          "value": "-4000",
+          "ref": "scheme_upto_evm.md §1 Phase 4"
+        }
+      ]
+    },
+    {
+      "id": "upto-permit2-exceeds",
+      "scheme": "upto",
+      "transfer": "permit2",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "upto",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "permit2",
+            "facilitatorAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+          }
+        },
+        "payload": {
+          "signature": "0xa69128e37096d5bc251051f7d66b5527b224a903bf4741f523d24c7b28116c8025eb889061c0002c7d038a703ca23c9e072f437b6a50b83112b4b2a4f82a74821c",
+          "permit2Authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "permitted": {
+              "token": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+              "amount": "10000"
+            },
+            "spender": "0x4020A4f3b7b90ccA423B9fabCc0CE57C6C240002",
+            "nonce": "35372231324202783564563170369880072500117815498568647143633223944510313617863",
+            "deadline": "1704070800",
+            "witness": {
+              "to": "0x00000000000000000000000000000000000000cc",
+              "facilitator": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+              "validAfter": "0"
+            }
+          }
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "upto",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "permit2",
+          "facilitatorAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        }
+      },
+      "settleRequirements": {
+        "scheme": "upto",
+        "network": "eip155:84532",
+        "amount": "12000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "permit2",
+          "facilitatorAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "value": true,
+          "ref": "x402-specification-v2.md §5.4.2"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "spec",
+          "value": false,
+          "ref": "scheme_upto_evm.md §1 Phase 4"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "spec",
+          "value": "invalid_upto_evm_payload_settlement_exceeds_amount",
+          "ref": "scheme_upto_evm.md §4"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "spec",
+          "value": "0",
+          "ref": "scheme_upto_evm.md §1 Phase 4"
+        }
+      ]
+    },
+    {
+      "id": "exact-payload-as-upto",
+      "scheme": "upto",
+      "transfer": "eip3009",
+      "steps": [
+        "verify",
+        "settle"
+      ],
+      "paymentPayload": {
+        "x402Version": 2,
+        "resource": {
+          "url": "http://api.test/weather",
+          "description": "Weather",
+          "mimeType": "application/json"
+        },
+        "accepted": {
+          "scheme": "upto",
+          "network": "eip155:84532",
+          "amount": "10000",
+          "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+          "payTo": "0x00000000000000000000000000000000000000cc",
+          "maxTimeoutSeconds": 3600,
+          "extra": {
+            "name": "Test USD",
+            "version": "1",
+            "assetTransferMethod": "eip3009",
+            "facilitatorAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+          }
+        },
+        "payload": {
+          "authorization": {
+            "from": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+            "to": "0x00000000000000000000000000000000000000cc",
+            "value": "10000",
+            "validAfter": "0",
+            "validBefore": "1704070800",
+            "nonce": "0xf7230971e84063fd12fcb9b8da85c5aa8d863c3bcc67b2eb84d1aa3e858c54b4"
+          },
+          "signature": "0xe0c14abb77b8f6bfd771f0c101a84847448e5ad33247b48ff01f06ba1143cd9e1efc6760602dcdf7498f1010df88a53a4c05cf129b471377ecf219fa9290459e1c"
+        }
+      },
+      "paymentRequirements": {
+        "scheme": "upto",
+        "network": "eip155:84532",
+        "amount": "10000",
+        "asset": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "payTo": "0x00000000000000000000000000000000000000cc",
+        "maxTimeoutSeconds": 3600,
+        "extra": {
+          "name": "Test USD",
+          "version": "1",
+          "assetTransferMethod": "eip3009",
+          "facilitatorAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        }
+      },
+      "expect": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "unspecified"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "unspecified"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified"
+        }
+      ]
+    }
+  ]
+}

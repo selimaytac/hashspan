@@ -2,6 +2,11 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DOC, render, START } from '../../../scripts/backends/table.mjs';
+import {
+  DOC as FACILITATORS_DOC,
+  START as FACILITATORS_START,
+  render as renderFacilitators,
+} from '../../../scripts/facilitators/table.mjs';
 
 // Checks that the docs agree with the repository, so they cannot drift unnoticed. docs/semconv.md is checked
 // against the attribute keys in semconv-doc.test.ts.
@@ -396,6 +401,12 @@ describe('repository docs', () => {
     const doc = read(DOC);
     expect(doc).toContain(START);
     expect(doc, 'run `pnpm backends:table`').toBe(render(root));
+  });
+
+  it('shows in docs/facilitators.md the tables generated from docs/facilitators/results', () => {
+    const doc = read(FACILITATORS_DOC);
+    expect(doc).toContain(FACILITATORS_START);
+    expect(doc, 'run `pnpm facilitators:table`').toBe(renderFacilitators(root));
   });
 });
 
