@@ -1,0 +1,136 @@
+{
+  "schema": 1,
+  "corpus": {
+    "id": "synthetic-1",
+    "sha256": "ed69c27457b4f9052687b11e2d08b438cbac67c31c34a02f04c8b7dcedf18b64"
+  },
+  "harness": {
+    "commit": "f7932d5f848fcdd2593e0e3e2d0805836fda4356"
+  },
+  "backend": {
+    "name": "otel-lgtm",
+    "title": "grafana/otel-lgtm (Tempo)",
+    "version": "0.37.0",
+    "image": "grafana/otel-lgtm:0.37.0",
+    "digest": "sha256:57b5ab1ca6619beb180174e2fccce04762470750669d043f544b4726d0582d07",
+    "readApi": "Tempo `/api/v2/traces/{id}`, Prometheus query API"
+  },
+  "runDate": "2026-10-21",
+  "transports": {
+    "http/protobuf": {
+      "traces": {
+        "status": 200,
+        "summary": {
+          "spans": 10,
+          "missing": 0,
+          "extraSpans": 0,
+          "nameDiff": 0,
+          "kindDiff": 0,
+          "parentDiff": 0,
+          "statusDiff": 0,
+          "attrMissing": 0,
+          "attrNameDiff": 0,
+          "attrTypeDiff": 0,
+          "attrStringified": 0,
+          "attrValueDiff": 1,
+          "attrExtra": 0,
+          "eventDiff": 0,
+          "eventAttrDiff": 0,
+          "linkDiff": 0,
+          "linkAttrDiff": 0,
+          "resourceDiff": 0,
+          "scopeDiff": 0
+        },
+        "exercised": {
+          "attributeTypes": [
+            "array",
+            "boolean",
+            "number",
+            "string"
+          ],
+          "statusMessage": true,
+          "eventAttributes": true,
+          "links": 9,
+          "crossTraceLinks": 8,
+          "linkAttributes": true,
+          "resource": true,
+          "scope": true
+        },
+        "differences": [
+          {
+            "check": "attrValueDiff",
+            "detail": "corpus.long",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          }
+        ]
+      },
+      "metrics": {
+        "status": 200,
+        "read": true,
+        "metrics": 3,
+        "differences": []
+      }
+    },
+    "http/json": {
+      "traces": {
+        "status": 200,
+        "summary": {
+          "spans": 10,
+          "missing": 0,
+          "extraSpans": 0,
+          "nameDiff": 0,
+          "kindDiff": 0,
+          "parentDiff": 0,
+          "statusDiff": 0,
+          "attrMissing": 0,
+          "attrNameDiff": 0,
+          "attrTypeDiff": 0,
+          "attrStringified": 0,
+          "attrValueDiff": 1,
+          "attrExtra": 0,
+          "eventDiff": 0,
+          "eventAttrDiff": 0,
+          "linkDiff": 0,
+          "linkAttrDiff": 0,
+          "resourceDiff": 0,
+          "scopeDiff": 0
+        },
+        "exercised": {
+          "attributeTypes": [
+            "array",
+            "boolean",
+            "number",
+            "string"
+          ],
+          "statusMessage": true,
+          "eventAttributes": true,
+          "links": 9,
+          "crossTraceLinks": 8,
+          "linkAttributes": true,
+          "resource": true,
+          "scope": true
+        },
+        "differences": [
+          {
+            "check": "attrValueDiff",
+            "detail": "corpus.long",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          }
+        ]
+      },
+      "metrics": {
+        "status": 200,
+        "read": true,
+        "metrics": 3,
+        "differences": []
+      }
+    }
+  },
+  "notes": []
+}

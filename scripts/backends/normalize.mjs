@@ -213,12 +213,38 @@ export function fromMlflow(spans) {
   }));
 }
 
+const SNAKE_VALUES = {
+  string_value: 'stringValue',
+  bool_value: 'boolValue',
+  int_value: 'intValue',
+  double_value: 'doubleValue',
+  array_value: 'arrayValue',
+  kvlist_value: 'kvlistValue',
+  bytes_value: 'bytesValue',
+};
+
+/** A Phoenix value, which lists every snake-case field and sets one, as an OTLP JSON value. */
+function phoenixValue(v) {
+  if (v == null || typeof v !== 'object') return v;
+  const [field, value] =
+    Object.entries(SNAKE_VALUES)
+      .map(([snake, camel]) => [camel, v[snake]])
+      .find(([, x]) => x != null) ?? [];
+  if (field === undefined) return v;
+  if (field === 'arrayValue')
+    return { arrayValue: { values: (value.values ?? []).map(phoenixValue) } };
+  if (field === 'kvlistValue')
+    return { kvlistValue: { values: (value.values ?? []).map(phoenixKeyValue) } };
+  return { [field]: value };
+}
+
+const phoenixKeyValue = (a) => ({ key: a.key, value: phoenixValue(a.value) });
+
 /**
- * Phoenix `/v1/projects/{project}/spans/otlpv1` items: OTLP spans in JSON, in camel or snake case. Untested until the
- * first run against Phoenix.
+ * Phoenix `/v1/projects/{project}/spans/otlpv1` items: OTLP spans in JSON, in camel or snake case.
  */
 export function fromPhoenix(items) {
-  const attrs = (a) => (Array.isArray(a) ? keyValues(a) : (a ?? {}));
+  const attrs = (a) => (Array.isArray(a) ? keyValues(a.map(phoenixKeyValue)) : (a ?? {}));
   return (items ?? []).map((s) => ({
     traceId: hexId(s.traceId ?? s.trace_id),
     spanId: hexId(s.spanId ?? s.span_id),

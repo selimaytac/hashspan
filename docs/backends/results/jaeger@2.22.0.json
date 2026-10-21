@@ -1,0 +1,114 @@
+{
+  "schema": 1,
+  "corpus": {
+    "id": "synthetic-1",
+    "sha256": "ed69c27457b4f9052687b11e2d08b438cbac67c31c34a02f04c8b7dcedf18b64"
+  },
+  "harness": {
+    "commit": "f7932d5f848fcdd2593e0e3e2d0805836fda4356"
+  },
+  "backend": {
+    "name": "jaeger",
+    "title": "Jaeger",
+    "version": "2.22.0",
+    "image": "jaegertracing/jaeger:2.22.0",
+    "digest": "sha256:836b967b5abcf1f7758066aa6b348619267a2f1459f72d472840570f9bd88a17",
+    "readApi": "v3 `/api/v3/traces/{id}`"
+  },
+  "runDate": "2026-10-21",
+  "transports": {
+    "http/protobuf": {
+      "traces": {
+        "status": 200,
+        "summary": {
+          "spans": 10,
+          "missing": 0,
+          "extraSpans": 0,
+          "nameDiff": 0,
+          "kindDiff": 0,
+          "parentDiff": 0,
+          "statusDiff": 0,
+          "attrMissing": 0,
+          "attrNameDiff": 0,
+          "attrTypeDiff": 0,
+          "attrStringified": 0,
+          "attrValueDiff": 0,
+          "attrExtra": 0,
+          "eventDiff": 0,
+          "eventAttrDiff": 0,
+          "linkDiff": 0,
+          "linkAttrDiff": 0,
+          "resourceDiff": 0,
+          "scopeDiff": 0
+        },
+        "exercised": {
+          "attributeTypes": [
+            "array",
+            "boolean",
+            "number",
+            "string"
+          ],
+          "statusMessage": true,
+          "eventAttributes": true,
+          "links": 9,
+          "crossTraceLinks": 8,
+          "linkAttributes": true,
+          "resource": true,
+          "scope": true
+        },
+        "differences": []
+      },
+      "metrics": {
+        "status": 404,
+        "read": false
+      }
+    },
+    "http/json": {
+      "traces": {
+        "status": 200,
+        "summary": {
+          "spans": 10,
+          "missing": 0,
+          "extraSpans": 0,
+          "nameDiff": 0,
+          "kindDiff": 0,
+          "parentDiff": 0,
+          "statusDiff": 0,
+          "attrMissing": 0,
+          "attrNameDiff": 0,
+          "attrTypeDiff": 0,
+          "attrStringified": 0,
+          "attrValueDiff": 0,
+          "attrExtra": 0,
+          "eventDiff": 0,
+          "eventAttrDiff": 0,
+          "linkDiff": 0,
+          "linkAttrDiff": 0,
+          "resourceDiff": 0,
+          "scopeDiff": 0
+        },
+        "exercised": {
+          "attributeTypes": [
+            "array",
+            "boolean",
+            "number",
+            "string"
+          ],
+          "statusMessage": true,
+          "eventAttributes": true,
+          "links": 9,
+          "crossTraceLinks": 8,
+          "linkAttributes": true,
+          "resource": true,
+          "scope": true
+        },
+        "differences": []
+      },
+      "metrics": {
+        "status": 404,
+        "read": false
+      }
+    }
+  },
+  "notes": []
+}

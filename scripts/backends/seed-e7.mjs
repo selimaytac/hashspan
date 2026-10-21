@@ -2,7 +2,8 @@
 // what hashspan 1.1.0 (viem 2.57.7) sent on Anvil over OTLP/HTTP protobuf, and what each backend returned, already
 // in the common span shape by E7's read-back code (its raw responses were not kept). This is the "hashspan in X"
 // corpus, not the synthetic one of corpus.mjs, so the rows name their own corpus id.
-// Usage: node scripts/backends/seed-e7.mjs   (writes docs/backends/results/<backend>@<version>.json)
+// The rows it wrote were replaced by the `synthetic-1` runs of 2026-10-21; the fixtures stay as test data of the diff.
+// Usage: node scripts/backends/seed-e7.mjs   (writes docs/backends/results/<backend>@<version>.<corpus>.json)
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

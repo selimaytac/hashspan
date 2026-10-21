@@ -11,9 +11,15 @@ export const typeOf = (v) => (Array.isArray(v) ? 'array' : typeof v);
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-/** Whether `got` is `expected` written as a string, which is how string-only stores keep values. */
+/**
+ * Whether `got` is `expected` written as a string, which is how string-only stores keep values; OpenObserve writes an
+ * array as a JSON array of strings (`["1","2"]`).
+ */
 const stringified = (expected, got) =>
-  typeof got === 'string' && (got === String(expected) || got === JSON.stringify(expected));
+  typeof got === 'string' &&
+  (got === String(expected) ||
+    got === JSON.stringify(expected) ||
+    (Array.isArray(expected) && got === JSON.stringify(expected.map(String))));
 
 /** The counters of a span diff, all zero. `resource` and `scope` counters are null until something is compared. */
 export function emptySummary() {
@@ -122,13 +128,18 @@ export function diffSpans(expected, received) {
       if (d.check === 'attrTypeDiff' && d.stringified) summary.attrStringified++;
       add(e, d);
     }
-    const names = (evs) => (evs ?? []).map((x) => x.name);
+    // Events are compared by name, not by position: each carries its own time, and Jaeger returns them in another
+    // order than they were sent.
+    const byName = (evs) =>
+      [...(evs ?? [])].sort((x, y) => (x.name < y.name ? -1 : x.name > y.name ? 1 : 0));
+    const names = (evs) => byName(evs).map((x) => x.name);
     if (!same(names(e.events), names(r.events))) {
       summary.eventDiff++;
       add(e, { check: 'eventDiff', expected: names(e.events), got: names(r.events) });
     } else {
-      (e.events ?? []).forEach((ev, i) => {
-        const ds = compareAttributes(ev.attributes, r.events[i].attributes).filter(
+      const got = byName(r.events);
+      byName(e.events).forEach((ev, i) => {
+        const ds = compareAttributes(ev.attributes, got[i].attributes).filter(
           (d) => d.check !== 'attrExtra',
         );
         if (ds.length) {
