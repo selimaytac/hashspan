@@ -1,6 +1,6 @@
 {
   "name": "@hashspan/faults",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A JSON-RPC fault proxy for tests: puts an HTTP proxy between an EVM client and a local node and makes chosen methods hang, fail, reset or answer wrong.",
   "license": "Apache-2.0",
   "author": "Selim Aytac",
