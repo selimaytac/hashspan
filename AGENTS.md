@@ -33,6 +33,9 @@ another service, triggers becomes a `send` / `confirm` span pair under its own t
 - Facilitator matrix: `node scripts/facilitators/run.mjs <target>` (needs Docker; writes
   `docs/facilitators/results/`), then `pnpm facilitators:table` regenerates the tables of docs/facilitators.md;
   `node scripts/facilitators/corpus.mjs --write` regenerates its corpus
+- Dev-node matrix: `node scripts/nodes/run.mjs <node>` (Anvil and Hardhat as local processes, Reth and Geth in Docker;
+  writes `docs/nodes/results/`), then `pnpm nodes:table` regenerates the tables of docs/nodes.md;
+  `node scripts/nodes/vendor.mjs --write` vendors the execution-apis files again from their pinned commit
 Run lint, typecheck and tests before proposing a change.
 
 ### Fast paths while iterating
@@ -75,6 +78,9 @@ before changing there.
 - `scripts/facilitators/` → x402 facilitator conformance matrix: a signed corpus sent to one facilitator at a time
   inside Anvil's network namespace, with `@hashspan/faults` in front of Anvil; one entry per target in `targets.mjs`.
   Its tests are `packages/core/test/facilitators-*.test.ts`, without Docker, and one Anvil test of the corpus
+- `scripts/nodes/` → dev-node matrix: scripted flows sent to one fresh dev node at a time and compared with the vendored
+  execution-apis schemas (`execution-apis/`) and with Geth and Reth; one entry per node in `targets.mjs`. Its tests
+  are `packages/core/test/nodes-*.test.ts`, without Docker, and one Anvil test of the flows
 See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and the ADR index,
 [docs/adr/README.md](docs/adr/README.md), with each decision in one line.
 

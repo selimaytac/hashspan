@@ -1,0 +1,304 @@
+EthSimulatePayload:
+  title: Arguments for eth_simulate
+  type: object
+  required:
+    - blockStateCalls
+  properties:
+    blockStateCalls:
+      title: Block State Calls
+      description: Definition of blocks that can contain calls and overrides
+      $ref: '#/components/schemas/BlockStateCalls'
+    traceTransfers:
+      title: Trace ETH Transfers
+      description: |-
+        Adds ETH transfers as ERC20 transfer events to the logs. These transfers have emitter contract parameter set as address(0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee).
+        In blocks where EIP-7708 is active, no synthetic transfer events are added. The protocol transfer logs emitted from address(0xfffffffffffffffffffffffffffffffffffffffe) cover the same transfers with the same topics and data, and the flag has no effect. The flag is deprecated for these blocks.
+        Default: false.
+      type: boolean
+    validation:
+      title: Validation
+      description: |-
+        When true, the eth_simulateV1 does all validations that a normal EVM would do, except contract sender and signature checks. When false, eth_simulateV1 behaves like eth_call.
+        Default: false.
+      type: boolean
+    returnFullTransactions:
+      title: Return Full Transactions
+      description: |-
+        When true, the method returns full transaction objects, otherwise, just hashes are returned.
+      type: boolean
+BlockStateCalls:
+  title: Array of block state calls to be executed at specific, optional block/state.
+  description: "The size of this array may be limited depending on the client as a DOS protection. 256 is a common/recommended limit as it is the same limit used by BLOCKHASH opcode."
+  type: array
+  properties:
+    blockOverrides:
+      title: Block overrides
+      description: |-
+        Block overrides can be used to replace fields in a block.
+        default: no block override.
+      $ref: '#/components/schemas/BlockOverrides'
+    stateOverrides:
+      title: State overrides
+      description: |-
+        State overrides can be used to replace existing blockchain state with new state.
+        Default: no state overrides
+      $ref: '#/components/schemas/StateOverrides'
+    calls:
+      type: array
+      title: calls
+      description: |-
+        List of transactions to execute at this block/state.
+        Default: []
+      items:
+        $ref: '#/components/schemas/GenericCallTransaction'
+StateOverrides:
+  title: Dictionary of addresses in the state to be overridden
+  type: object
+  patternProperties:
+    '^0x[a-fA-F0-9]{40}$':
+      $ref: '#/components/schemas/AccountOverride'
+  additionalProperties: false
+AccountOverride:
+  title: Details of an account to be overridden
+  description: |-
+    It is possible to override any kind of address (EOA's, contracts and precompiles).
+    A client MUST reject a key that it does not support with error code -32602. A client MAY treat a key that differs from a key defined in this schema only in case as that defined key. It MUST then apply the key, and MUST reject two keys that differ only in case and name the same defined key with error code -32602. A client MAY support other keys that this schema does not define.
+  type: object
+  not:
+    required:
+      - state
+      - stateDiff
+  properties:
+    nonce:
+      title: Nonce
+      $ref: '#/components/schemas/uint64'
+    balance:
+      title: Balance
+      $ref: '#/components/schemas/uint256'
+    code:
+      title: Code
+      $ref: '#/components/schemas/bytes'
+    movePrecompileToAddress:
+      title: MovePrecompileToAddress
+      description: Moves addresses precompile into the specified address. This move is done before the 'code' override is set. Can only move precompiles. The move does not change the EIP-2929 set of addresses that are warm at the start of each call. That set keeps the precompile addresses of the active fork, and the destination address is not warm because of the move.
+      $ref: '#/components/schemas/address'
+    state:
+      title: Storage
+      description: Key-value mapping to override all slots in the account storage before executing the call. This functions similar to eth_call's state parameter.
+      $ref: '#/components/schemas/AccountStorage'
+    stateDiff:
+      title: Storage difference
+      description: Key-value mapping to override individual slots in the account storage before executing the call. This functions similar to eth_call's state parameter.
+      $ref: '#/components/schemas/AccountStorage'
+AccountStorage:
+  title: Storage slots for an account
+  type: object
+  patternProperties:
+    '^0x[a-fA-F0-9]{64}$':
+      $ref: '#/components/schemas/hash32'
+  additionalProperties: false
+BlockOverrides:
+  title: Context fields related to the block being executed
+  description: |-
+    A client MUST reject a key that it does not support with error code -32602. A client MAY treat a key that differs from a key defined in this schema only in case as that defined key. It MUST then apply the key, and MUST reject two keys that differ only in case and name the same defined key with error code -32602. A client MAY support other keys that this schema does not define.
+    After the merge, the difficulty of a block is 0. A client that supports a `difficulty` key MUST reject it with error code -32602 for a block after the merge.
+  type: object
+  properties:
+    number:
+      title: Number
+      $ref: '#/components/schemas/uint64'
+      description: When overriding block numbers across multiple blocks, block number need to be increasing. Skipping over blocks numbers is possible. If block number is not specified, it's incremented by one for each block.
+    prevRandao:
+      title: The Previous value of randomness beacon
+      $ref: '#/components/schemas/bytes32'
+    time:
+      title: Time
+      $ref: '#/components/schemas/uint64'
+      description: Time must either increase or remain constant relative to the previous block. If time is not specified, it's incremented by one for each block.
+    gasLimit:
+      title: Gas limit
+      $ref: '#/components/schemas/uint64'
+    feeRecipient:
+      title: Fee recipient
+      description: Address set by the proposer/builder to receive priority fees. Often matches the block header `feeRecipient` field but is not the COINBASE EVM opcode.
+      $ref: '#/components/schemas/address'
+    baseFeePerGas:
+      title: Base fee per unit of gas
+      $ref: '#/components/schemas/uint256'
+    withdrawals:
+      title: Withdrawals made by validators
+      $ref: '#/components/schemas/Withdrawals'
+    blobBaseFee:
+      title: Base fee per unit of blob gas
+      $ref: '#/components/schemas/uint64'
+EthSimulateResult:
+  title: Full results of eth_simulate
+  type: array
+  items:
+    $ref: '#/components/schemas/EthSimulateBlockResultSingleSuccess'
+EthSimulateBlockResultSingleSuccess:
+  title: Result of eth_simulate block-level, with array of calls
+  description: |-
+    A simulated block carries every header field that a real block carries at the fork active for that block, including blockAccessListHash and slotNumber after Amsterdam. The only exception is slotNumber, which is omitted when the parent block has none. Header fields that the simulation cannot derive take the default values documented in the eth_simulateV1 notes.
+  type: object
+  allOf:
+    - $ref: '#/components/schemas/Block'
+    - type: object
+      title: Eth Simulate call results
+      required:
+        - calls
+      properties:
+        calls:
+          title: Call Results
+          $ref: '#/components/schemas/CallResults'
+CallResults:
+  title: Results of eth_simulate within block
+  type: array
+  items:
+    oneOf:
+      - $ref: '#/components/schemas/CallResultFailure'
+      - $ref: '#/components/schemas/CallResultSuccess'
+CallResultFailure:
+  title: Result of call failure
+  description: The error codes are enforced by the spec. A revert message starts with "execution reverted". Other error messages are client-specific text.
+  type: object
+  required:
+    - status
+    - returnData
+    - gasUsed
+    - error
+  properties:
+    status:
+      title: Call Status Failure
+      type: string
+      pattern: ^0x0$
+    returnData:
+      title: Return data
+      $ref: '#/components/schemas/bytes'
+    gasUsed:
+      title: Return gasUsed
+      $ref: '#/components/schemas/uint64'
+    maxUsedGas:
+      title: Maximum gas used during execution before refunds
+      $ref: '#/components/schemas/uint64'
+    error:
+      oneOf:
+      - type: object
+        properties:
+          code:
+            const: 3
+          message:
+            type: string
+            pattern: "^execution reverted.*"
+        required: [code, message]
+      - type: object
+        properties:
+          code:
+            const: -32015
+          message:
+            type: string
+        required: [code, message]
+CallResultSuccess:
+  title: Result of call success
+  type: object
+  required:
+    - status
+    - returnData
+    - gasUsed
+    - logs
+  properties:
+    status:
+      title: Call Status Success
+      type: string
+      pattern: ^0x1$
+    returnData:
+      title: Return data
+      $ref: '#/components/schemas/bytes'
+    gasUsed:
+      title: Return gasUsed
+      $ref: '#/components/schemas/uint64'
+    maxUsedGas:
+      title: Maximum gas used during execution before refunds
+      $ref: '#/components/schemas/uint64'
+    logs:
+      title: Return logs
+      type: array
+      items:
+        $ref: '#/components/schemas/Log'
+GenericCallTransaction:
+  type: object
+  title: Transaction object type for call
+  properties:
+    type:
+      title: type
+      $ref: '#/components/schemas/byte'
+      description: |-
+        Default: 0x2
+    nonce:
+      title: nonce
+      description: |-
+        Default: Defaults to correct nonce
+      $ref: '#/components/schemas/uint64'
+    to:
+      title: to address
+      $ref: '#/components/schemas/address'
+      description: |-
+        Default: 0x0
+    from:
+      title: from address
+      $ref: '#/components/schemas/address'
+      description: |-
+        Default: null
+    gas:
+      title: gas limit
+      description: |-
+        Default: Remaining gas in the current block
+      $ref: '#/components/schemas/uint64'
+    value:
+      title: value
+      description: |-
+        Default: 0
+      $ref: '#/components/schemas/uint256'
+    input:
+      title: input data
+      description: |-
+        Default: no data
+      $ref: '#/components/schemas/bytes'
+    gasPrice:
+      title: gas price
+      description: |-
+        The gas price willing to be paid by the sender in wei
+        Default: 0
+      $ref: '#/components/schemas/uint256'
+    maxPriorityFeePerGas:
+      title: max priority fee per gas
+      description: |-
+        Maximum fee per gas the sender is willing to pay to miners in wei
+        Default: 0
+      $ref: '#/components/schemas/uint256'
+    maxFeePerGas:
+      title: max fee per gas
+      description: |-
+        The maximum total fee per gas the sender is willing to pay (includes the network / base fee and miner / priority fee) in wei
+        Default: 0
+      $ref: '#/components/schemas/uint256'
+    maxFeePerBlobGas:
+      title: max fee per blob gas
+      description: |-
+        The maximum total fee per blob gas the sender is willing to pay in wei
+        Default: 0
+      $ref: '#/components/schemas/uint256'
+    accessList:
+      title: accessList
+      description: |-
+        EIP-2930 access list
+        Default: []
+      $ref: '#/components/schemas/AccessList'
+    blobVersionedHashes:
+      title: Blob versioned hashes
+      description: |-
+        EIP-4844 versioned hashes
+        Default: []
+      type: array
+      items:
+        $ref: '#/components/schemas/hash32'

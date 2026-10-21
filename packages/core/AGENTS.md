@@ -24,6 +24,10 @@ privacy modes and metrics. It makes no network calls; adapters pass it hashes, m
   its expired committed signatures, the targets and their docker run arguments, the Dockerfiles, the proxy runner's
   scenario, the diff, the invariants, the result files and the tables; `test/facilitators-corpus.int.test.ts` checks
   the committed corpus on Anvil with the matrix's chain setup
+- `test/nodes-*.test.ts` test the dev-node matrix of `scripts/nodes/` without Docker: the vendored execution-apis
+  files and the validator, the targets and their docker run arguments, the contract and the blob transaction of the
+  flows, the rows, the candidate rule, the result files and the tables; `test/nodes-flows.int.test.ts` runs the flows
+  on Anvil and checks its receipts and fee history against the schemas
 - `test/hostile.ts` the hostile-input table of ADR 0025 (hostile values, documented bounds, the checks of rules 1 to 6
   and the untraced-versus-traced runner of the adapters), imported by every package's `test/hostile-input.test.ts`;
   `test/hostile-input.test.ts` applies it to every `TxTracker` method, handle method and option. A new entry point adds
