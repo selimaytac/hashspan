@@ -109,7 +109,7 @@ on, such as one to an upstream that is down, is answered with 502.
 
 This package is 0.x while its fault model settles; a new kind of fault comes in a minor release. The design, with the
 faults planned next, is in
-[ADR 0032](https://github.com/selimaytac/hashspan/blob/main/docs/adr/0032-json-rpc-fault-proxy.md).
+[ADR 0032](https://github.com/selimaytac/hashspan/blob/@hashspan/faults@0.1.0/docs/adr/0032-json-rpc-fault-proxy.md).
 
 ## License
 

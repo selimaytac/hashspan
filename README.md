@@ -85,7 +85,7 @@ Full runnable walkthrough, with the SDK setup and a local chain: [docs/quick-sta
 | [`@hashspan/cdp`](packages/cdp) | you send with Coinbase CDP server or smart accounts | [![npm](https://img.shields.io/npm/v/@hashspan/cdp?label=)](https://www.npmjs.com/package/@hashspan/cdp) |
 | [`@hashspan/x402`](packages/x402) | you pay for APIs with x402 ([x402 tutorial](https://hashspan.dev/docs/x402-tutorial)) | [![npm](https://img.shields.io/npm/v/@hashspan/x402?label=)](https://www.npmjs.com/package/@hashspan/x402) |
 | [`@hashspan/mpp`](packages/mpp) | you pay with MPP through mppx (0.x, follows mppx's minor lines) | [![npm](https://img.shields.io/npm/v/@hashspan/mpp?label=)](https://www.npmjs.com/package/@hashspan/mpp) |
-| [`@hashspan/faults`](packages/faults) | you test an EVM client, node or service against JSON-RPC faults: hangs, errors, resets, wrong results (0.x, Node.js, no dependencies) | in the next release |
+| [`@hashspan/faults`](packages/faults) | you test an EVM client, node or service against JSON-RPC faults: hangs, errors, resets, wrong results (0.x, Node.js, no dependencies) | [![npm](https://img.shields.io/npm/v/@hashspan/faults?label=)](https://www.npmjs.com/package/@hashspan/faults) |
 
 Install the latest version of each package you use ([versions](docs/releasing.md#versions)). GitHub releases are
 tagged per package, so "Latest" there is the package released last.
