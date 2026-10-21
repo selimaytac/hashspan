@@ -28,7 +28,7 @@ import {
 import { anvil } from 'viem/chains';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { withHashspan } from '../src/index.js';
-import { SEND_ERROR_TYPES } from './fault-checks.js';
+import { cutOffOn, SEND_ERROR_TYPES } from './fault-checks.js';
 import { startAnvil } from './start-anvil.js';
 import { setupTracing, type TestTracing } from './tracing.js';
 import { viemAtLeast } from './viem-version.js';
@@ -277,6 +277,7 @@ const RECEIPT = 'eth_getTransactionReceipt';
 /** Faults on the receipt requests of a confirmation, and on what viem reads besides them. */
 const confirmFaults = {
   ...faultsOn(RECEIPT),
+  ...cutOffOn(RECEIPT),
   'a receipt that stays null': { [RECEIPT]: { kind: 'result', result: () => null } },
   'a malformed receipt': {
     [RECEIPT]: {
@@ -320,6 +321,7 @@ describe("the caller's waitForTransactionReceipt", () => {
     'JSON-RPC -32005 (limit exceeded)': failed('LimitExceededRpcError'),
     'JSON-RPC -32603 (internal error)': failed('InternalRpcError'),
     'a connection reset mid-response': failed('HttpRequestError'),
+    'a response cut off mid-body': failed('HttpRequestError'),
     // viem before 2.57.3 took the transaction, found in a block, for its own replacement and failed the wait
     // (wevm/viem#5161); from 2.57.3 the wait polls on until its timeout.
     'a receipt that stays null': viemAtLeast('2.57.3')
@@ -523,6 +525,7 @@ describe.each(['background confirmation', 'watch()'] as const)('%s', (path) => {
     'JSON-RPC -32005 (limit exceeded)': TIMEOUT,
     'JSON-RPC -32603 (internal error)': TIMEOUT,
     'a connection reset mid-response': TIMEOUT,
+    'a response cut off mid-body': TIMEOUT,
     'a receipt that stays null': TIMEOUT,
     'a malformed receipt': TIMEOUT,
     'a receipt that is not an object': NOT_A_RECEIPT,

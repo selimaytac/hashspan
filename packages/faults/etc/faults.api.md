@@ -19,6 +19,8 @@ export type Fault = {
 } | {
     kind: "drop";
 } | {
+    kind: "truncate";
+} | {
     kind: "result";
     result: (nodeResult: unknown, call: number) => unknown;
 } | {
