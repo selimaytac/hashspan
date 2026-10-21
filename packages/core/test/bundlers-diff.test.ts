@@ -302,7 +302,6 @@ describe('expectations', () => {
 });
 
 describe('fault invariants', () => {
-  const estimate = { answer: 'result' };
   const accepted = { answer: 'result', accepted: true };
   const failed = { answer: 'error', accepted: false, code: -32603 };
   const included = { included: true, 'chain.events': 1, 'receipt.matchesChain': true };
@@ -313,8 +312,8 @@ describe('fault invariants', () => {
     invariants.filter((i) => i.holds === false).map((i) => i.id);
 
   it('hold for an operation included once with a receipt that agrees', () => {
-    expect(failing(run([estimate, accepted, included, failed, included], 1))).toEqual([]);
-    expect(run([estimate, accepted, included, failed, included], 1).map((i) => i.id)).toEqual([
+    expect(failing(run([accepted, included, failed, included], 1))).toEqual([]);
+    expect(run([accepted, included, failed, included], 1).map((i) => i.id)).toEqual([
       'no-receipt-without-mined-bundle',
       'included-at-most-once',
       'receipt-matches-chain',
@@ -324,33 +323,29 @@ describe('fault invariants', () => {
 
   it('flag a receipt without a mined bundle, a double inclusion and a receipt that differs', () => {
     expect(
-      failing(run([estimate, accepted, { included: true, 'chain.events': 0 }, failed, pending], 0)),
+      failing(run([accepted, { included: true, 'chain.events': 0 }, failed, pending], 0)),
     ).toEqual(['no-receipt-without-mined-bundle', 'receipt-matches-chain']);
-    expect(failing(run([estimate, accepted, included, accepted, included], 2))).toEqual([
+    expect(failing(run([accepted, included, accepted, included], 2))).toEqual([
       'included-at-most-once',
     ]);
   });
 
   it('flag an inclusion after a reported failure unless the retry announced it', () => {
-    expect(failing(run([estimate, failed, pending, failed, pending], 1))).toEqual([
+    expect(failing(run([failed, pending, failed, pending], 1))).toEqual([
       'no-inclusion-after-reported-failure',
     ]);
-    expect(failing(run([estimate, failed, pending, accepted, included], 1))).toEqual([]);
+    expect(failing(run([failed, pending, accepted, included], 1))).toEqual([]);
     expect(
-      failing(
-        run([estimate, { answer: 'no-json-rpc', accepted: false }, pending, failed, pending], 1),
-      ),
+      failing(run([{ answer: 'no-json-rpc', accepted: false }, pending, failed, pending], 1)),
     ).toEqual(['no-inclusion-after-reported-failure']);
     // A timeout reports nothing, so an inclusion after it is no reported failure.
-    expect(failing(run([estimate, { answer: 'timeout' }, pending, failed, pending], 1))).toEqual(
-      [],
-    );
+    expect(failing(run([{ answer: 'timeout' }, pending, failed, pending], 1))).toEqual([]);
   });
 
   it('count nothing for a scenario whose fault was never reached', () => {
-    expect(
-      run([estimate, failed, pending, failed, pending], 1, false).every((i) => i.holds === null),
-    ).toBe(true);
+    expect(run([failed, pending, failed, pending], 1, false).every((i) => i.holds === null)).toBe(
+      true,
+    );
   });
 });
 

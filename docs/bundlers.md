@@ -36,9 +36,9 @@ SimpleAccount smart accounts, built and signed with permissionless's `toSimpleSm
 - valid: a plain operation that deploys its account, a batch of two calls in one operation, two operations sent back
   to back (one bundle or two), and an operation whose call reverts
 - rejected: a bad signature, a malformed signature that reverts in validation (AA23), a sender without funds (AA21), a
-  verification gas limit too low, and a reused nonce (AA25)
-- recorded only: a nonce gap, a replacement with higher fees, and a preVerificationGas of 2^128
-  ([alchemyplatform/rundler#1354](https://github.com/alchemyplatform/rundler/issues/1354))
+  verification gas limit too low, a reused nonce (AA25), and a preVerificationGas of 2^128, whose row is marked
+  `known:` [alchemyplatform/rundler#1354](https://github.com/alchemyplatform/rundler/issues/1354)
+- recorded only: a nonce gap and a replacement with higher fees
 
 Each case lists what it expects. A `spec` row cites the line of ERC-7769 that states the result, and a mismatch is a
 spec difference. An `unspecified` row is recorded and compared across targets only. ERC-7769 names error codes
@@ -57,8 +57,9 @@ A run has two passes:
 1. Conformance: every case, each through the faults proxy with no fault.
 2. Faults: the plain operation again, for an account of its own, with one fault of
    [`@hashspan/faults`](../packages/faults/README.md) on the bundler's `eth_sendRawTransaction`, `eth_estimateGas`,
-   `eth_getTransactionReceipt` or `eth_call` (hang, reset, drop, truncate, a JSON-RPC error). The case estimates,
-   sends, waits for the receipt, then sends the same operation again and waits again. A bundler calls its node while
+   `eth_getTransactionReceipt` or `eth_call` (hang, reset, drop, truncate, a JSON-RPC error). The case sends,
+   waits for the receipt, then sends the same operation again and waits again; the conformance pass covers the
+   estimate. A bundler calls its node while
    it starts, so the proxy applies the fault only once the bundler answers. A scenario whose method was never called
    after that is counted as not exercised. The invariants:
    - no operation is reported included without a mined bundle

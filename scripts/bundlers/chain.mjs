@@ -53,9 +53,9 @@ const clients = (rpcUrl) => {
   const chain = chainOf(rpcUrl);
   const transport = http(rpcUrl);
   return {
-    reader: createPublicClient({ chain, transport }),
+    reader: createPublicClient({ chain, transport, pollingInterval: 100 }),
     node: createTestClient({ chain, mode: 'anvil', transport }),
-    wallet: createWalletClient({ chain, transport }),
+    wallet: createWalletClient({ chain, transport, pollingInterval: 100 }),
   };
 };
 

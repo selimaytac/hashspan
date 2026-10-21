@@ -256,13 +256,13 @@ export function summarize(conformance) {
 }
 
 /**
- * The invariants of one fault case, whose steps are FAULT_STEPS (estimate, send, wait, the retry send, wait);
+ * The invariants of one fault case, whose steps are FAULT_STEPS (send, wait, the retry send, wait);
  * `afterPass` is the number of UserOperationEvents of the operation at the end of the fault pass, for an inclusion
  * after the case. `exercised` is whether the faulted method was requested after the rules were armed; a scenario that
  * was not exercised says so, and its invariants are not counted as holding.
  */
 export function checkInvariants(observed, { afterPass, exercised }) {
-  const [, send, firstWait, retry, secondWait] = observed.steps;
+  const [send, firstWait, retry, secondWait] = observed.steps;
   const waits = [firstWait, secondWait].filter(Boolean);
   const included = afterPass >= 1;
   const reportedFailure = send?.answer === 'error' || send?.answer === 'no-json-rpc';

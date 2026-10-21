@@ -1,6 +1,7 @@
 // The fault pass: the plain operation again, for an account of its own per scenario, with one fault on one of the
 // bundler's node methods, armed once the bundler is ready and applied to the method's first request after that. The
-// case estimates, sends, waits for the receipt, sends the same operation again as a retry and waits again. The
+// case sends, waits for the receipt, sends the same operation again as a retry and waits again (no estimate, which
+// would take the first eth_call after arming; the conformance pass covers it). The
 // invariants (diff.mjs) are that no operation is reported included without a mined bundle, none is included twice, a
 // receipt agrees with the chain, and a reported failure is not followed by an inclusion the retry did not announce.
 
@@ -8,7 +9,7 @@
 export const FAULT_CASE = 'plain-op';
 
 /** The calls of a fault case, on its one operation. */
-export const FAULT_STEPS = ['estimate', 'send', 'wait', 'send', 'wait'];
+export const FAULT_STEPS = ['send', 'wait', 'send', 'wait'];
 
 /** Where the fault pass moves each account's salt, so it never shares a sender with the conformance pass. */
 export const FAULT_SALT_BASE = 1000;

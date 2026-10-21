@@ -311,7 +311,7 @@ export const CASES = [
   },
   {
     id: 'pre-verification-gas-out-of-range',
-    note: 'a preVerificationGas of 2^128; Rundler 0.11.0 panics in its RPC handler on it (rundler#1354)',
+    note: 'a preVerificationGas of 2^128, reported in rundler#1354 to panic the RPC handler of Rundler 0.11.0',
     ops: { main: { salt: 13, gas: { preVerificationGas: HUGE_PRE_VERIFICATION_GAS } } },
     steps: [['send', 'main']],
     expect: [

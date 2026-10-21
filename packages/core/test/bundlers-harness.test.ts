@@ -471,7 +471,7 @@ describe('faults-proxy runner scenario and the fault pass', () => {
 
   it('injects each kind once on the send, the estimates, the receipt read and the simulation calls', () => {
     expect(FAULT_CASE).toBe('plain-op');
-    expect(FAULT_STEPS).toEqual(['estimate', 'send', 'wait', 'send', 'wait']);
+    expect(FAULT_STEPS).toEqual(['send', 'wait', 'send', 'wait']);
     expect(FAULT_METHODS).toEqual([
       'eth_sendRawTransaction',
       'eth_estimateGas',
