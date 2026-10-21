@@ -199,7 +199,7 @@ describe('backend matrix results', () => {
   });
 
   it('escapes backslashes and pipes in table cells', () => {
-    const [file] = files;
+    const file = files[0] as string;
     const result = JSON.parse(readFileSync(join(root, RESULTS_DIR, file), 'utf8'));
     const text = table([
       { file, result: { ...result, backend: { ...result.backend, title: 'a\\|b' } } },
