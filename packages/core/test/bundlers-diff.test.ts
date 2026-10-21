@@ -12,6 +12,7 @@ import {
   checkExpectations,
   checkInvariants,
   KNOWN,
+  logTail,
   observeAnswer,
   observeEstimate,
   observeReadBack,
@@ -127,6 +128,18 @@ describe('observed answers', () => {
     );
     expect(sanitize('a known bug')).toBe('<text withheld>');
     expect(sanitize('x'.repeat(300))).toHaveLength(200);
+  });
+
+  it('keeps the last lines of a container log, sanitized, for a start that failed', () => {
+    const log = [
+      'starting',
+      '',
+      'loaded /home/someone/app/config.json',
+      'error: bad flag --rpc_url',
+    ].join('\n');
+    expect(logTail(log)).toBe('starting\nloaded <path>\nerror: bad flag --rpc_url');
+    expect(logTail(log, 1)).toBe('error: bad flag --rpc_url');
+    expect(logTail(undefined)).toBe('');
   });
 
   it('shows a revert reason as its decoded text or selector, never the bytes', () => {

@@ -296,6 +296,18 @@ describe('bundler matrix images', () => {
     expect(lines.join('\n')).not.toMatch(/PRIVATE_KEY|SECRET|0x[0-9a-f]{64}/i);
   });
 
+  it('runs Voltaire from a working directory its user can write, where its event bus binds its sockets', () => {
+    const lines = read('docker/voltaire.Dockerfile').split('\n');
+    const user = lines.findIndex((l) => l.startsWith('USER '));
+    const workdir = lines
+      .slice(0, user)
+      .filter((l) => l.startsWith('WORKDIR '))
+      .at(-1);
+    expect(workdir).toBe('WORKDIR /app/run');
+    expect(lines).toContain('RUN mkdir -p /app/run && chmod a+w /app/run');
+    expect(lines[user]).toBe('USER nobody');
+  });
+
   it('puts the checked Rundler binary into a bookworm image', () => {
     const dockerfile = read('docker/rundler.Dockerfile');
     expect(dockerfile).toMatch(/^FROM debian:bookworm-slim$/m);

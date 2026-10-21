@@ -27,7 +27,13 @@ import {
   ENTRY_POINTS,
   fundedSalts,
 } from './corpus.mjs';
-import { caseStatus, checkExpectations, checkInvariants, usableEntryPoints } from './diff.mjs';
+import {
+  caseStatus,
+  checkExpectations,
+  checkInvariants,
+  logTail,
+  usableEntryPoints,
+} from './diff.mjs';
 import { FAULT_CASE, FAULT_SALT_BASE, FAULT_STEPS, faultScenarios } from './faults.mjs';
 import { buildArchiveImage, buildFaultsImage, buildRundlerImage, scratch } from './images.mjs';
 import { buildResult, resultFile, resultText, writeResult } from './result.mjs';
@@ -88,15 +94,27 @@ async function startPair(name, def, images, scenario) {
   );
   await docker(bundlerArgs(name, def, url, images.target), secretEnv(def));
   let listed;
-  await waitFor(
-    async () => {
-      const { body } = await rpc(bundlerUrl(def), 'eth_supportedEntryPoints', [], 5000);
-      listed = body?.result;
-      return Array.isArray(listed);
-    },
-    START_TIMEOUT_MS,
-    `${name} on ${bundlerUrl(def)}`,
-  );
+  try {
+    await waitFor(
+      async () => {
+        const { body } = await rpc(bundlerUrl(def), 'eth_supportedEntryPoints', [], 5000);
+        listed = body?.result;
+        return Array.isArray(listed);
+      },
+      START_TIMEOUT_MS,
+      `${name} on ${bundlerUrl(def)}`,
+    );
+  } catch (error) {
+    // The container is removed with --rm, so its last lines go into the error before they are gone.
+    const logs = await docker(['logs', containerOf(name)]).catch(() => ({
+      stdout: '',
+      stderr: '',
+    }));
+    const tail = logTail(`${logs.stdout}\n${logs.stderr}`);
+    throw new Error(
+      `${error.message}${tail ? `\nlast lines of ${containerOf(name)}:\n${tail}` : ''}`,
+    );
+  }
   return listed;
 }
 

@@ -14,6 +14,17 @@ const DATETIME = /\d{4}-\d{2}-\d{2}T[\d:.]+Z?/g;
 const WORD = /\bbugs?\b/i;
 const MAX_TEXT = 200;
 
+/** The last `n` non-empty lines of a container's output, sanitized, for an error that says why it did not start. */
+export function logTail(text, n = 20) {
+  return String(text ?? '')
+    .split('\n')
+    .map((l) => l.trimEnd())
+    .filter(Boolean)
+    .slice(-n)
+    .map((l) => sanitize(l))
+    .join('\n');
+}
+
 /**
  * Text a bundler returned, made safe for a result: addresses, hashes and payloads, paths, IP addresses other than
  * 127.0.0.1 and times are replaced, and it is cut to 200 characters. Text that names the word bug is withheld, as
