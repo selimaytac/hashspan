@@ -13,6 +13,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { withHashspan } from '../src/index.js';
 import {
   collectingRejections,
+  cutOffOn,
   type Ending,
   expectEnding,
   type Faults,
@@ -244,21 +245,23 @@ describe.skipIf(!viemAtLeast('2.45.2'))("viem's fallback through plain transacti
   };
 
   // A failed raw send reaches the caller wrapped by viem; the batch's send span records the error under the wrapper.
-  it.each(Object.entries(faultsOn('eth_sendRawTransaction')))(
-    'sending: %s',
-    async (fault, faults) => {
-      const untraced = await run(false, faults, 'send');
-      const [traced, rejections] = await collectingRejections(() => run(true, faults, 'send'));
+  it.each(
+    Object.entries({
+      ...faultsOn('eth_sendRawTransaction'),
+      ...cutOffOn('eth_sendRawTransaction'),
+    }),
+  )('sending: %s', async (fault, faults) => {
+    const untraced = await run(false, faults, 'send');
+    const [traced, rejections] = await collectingRejections(() => run(true, faults, 'send'));
 
-      expect(traced.sent).toEqual(untraced.sent);
-      expect(rejections).toEqual([]);
-      expect(traced.flushed).toBe(true);
-      expect(spansNamed('send ')).toHaveLength(1);
-      expectEnding(spansNamed('send ')[0], failed(SEND_ERROR_TYPES[fault] as string), BATCH_STATUS);
-      expect(spansNamed('confirm ')).toHaveLength(0);
-      expect(traced.meters.recorded('blockchain.client.send.duration')).toHaveLength(1);
-    },
-  );
+    expect(traced.sent).toEqual(untraced.sent);
+    expect(rejections).toEqual([]);
+    expect(traced.flushed).toBe(true);
+    expect(spansNamed('send ')).toHaveLength(1);
+    expectEnding(spansNamed('send ')[0], failed(SEND_ERROR_TYPES[fault] as string), BATCH_STATUS);
+    expect(spansNamed('confirm ')).toHaveLength(0);
+    expect(traced.meters.recorded('blockchain.client.send.duration')).toHaveLength(1);
+  });
 
   // Each fallback transaction is confirmed in the background, polling through failed receipt requests until its
   // timeout (docs/adr/0022-call-batches.md).

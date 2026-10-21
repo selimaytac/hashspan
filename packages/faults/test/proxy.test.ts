@@ -137,6 +137,65 @@ function rawExchange(
   });
 }
 
+/** Answers a keep-alive connection carries before the fault, more than the few dozen where a lost reset was seen. */
+const KEPT_ALIVE = 60;
+
+/**
+ * Sends up to `count` requests one after another on one keep-alive TCP connection, each once the previous answer is
+ * complete by its content-length. Resolves when the connection closes, with the number of complete answers, the bytes
+ * of an answer that was cut off, and the connection's error.
+ */
+function keepAliveExchanges(
+  url: string,
+  count: number,
+  body: () => string,
+): Promise<{ answers: number; partial: string; error: NodeJS.ErrnoException | undefined }> {
+  const { hostname, port } = new URL(url);
+  return new Promise((resolve) => {
+    let answers = 0;
+    let sent = 0;
+    let pending = '';
+    let error: NodeJS.ErrnoException | undefined;
+    const send = (): void => {
+      const text = body();
+      sent++;
+      socket.write(
+        `POST / HTTP/1.1\r\nhost: ${hostname}:${port}\r\ncontent-type: application/json\r\n` +
+          `content-length: ${Buffer.byteLength(text)}\r\nconnection: keep-alive\r\n\r\n${text}`,
+      );
+    };
+    const socket = connect(Number(port), hostname, send);
+    // A connection that stays silent this long has lost what the proxy sent: closed without an error.
+    socket.setTimeout(3_000, () => socket.destroy());
+    socket.setEncoding('utf8');
+    socket.on('data', (chunk: string) => {
+      pending += chunk;
+      for (;;) {
+        const end = pending.indexOf('\r\n\r\n');
+        if (end === -1) return;
+        const head = pending.slice(0, end);
+        let next: number;
+        if (/transfer-encoding: chunked/i.test(head)) {
+          const last = pending.indexOf('\r\n0\r\n\r\n', end + 2);
+          if (last === -1) return;
+          next = last + 7;
+        } else {
+          next = end + 4 + Number(/content-length: (\d+)/i.exec(head)?.[1] ?? 0);
+          if (pending.length < next) return;
+        }
+        pending = pending.slice(next);
+        answers++;
+        if (sent < count) send();
+        else socket.end();
+      }
+    });
+    socket.on('error', (cause: NodeJS.ErrnoException) => {
+      error = cause;
+    });
+    socket.on('close', () => resolve({ answers, partial: pending, error }));
+  });
+}
+
 /** Whether a TCP connection to host and port is accepted within a second. */
 function canConnect(host: string, port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -283,6 +342,7 @@ describe('4. one upstream request per client request', () => {
     ['rpc-error', { kind: 'rpc-error', code: -32005 }, 0],
     ['reset', { kind: 'reset' }, 0],
     ['drop', { kind: 'drop' }, 0],
+    ['truncate', { kind: 'truncate' }, 0],
     ['result', { kind: 'result', result: (value) => value }, 1],
     ['previous', { kind: 'previous' }, 1],
   ];
@@ -396,6 +456,57 @@ describe('5. the kinds of faults', () => {
     }
     await expect(post(proxy, request('eth_call'))).rejects.toThrow();
   });
+
+  it('truncate sends the headers and part of the body, then resets the connection (RST)', async () => {
+    const node = await startStandIn();
+    const proxy = await proxyTo(node.url);
+    proxy.set({ eth_call: { kind: 'truncate' } });
+    for (let i = 0; i < 10; i++) {
+      const { bytes, error } = await rawExchange(proxy.url, request('eth_call'));
+      expect(bytes).toMatch(/^HTTP\/1\.1 200 /);
+      expect(bytes.toLowerCase()).toContain('content-length: 1000\r\n');
+      expect(bytes.endsWith('\r\n\r\n{"jsonrpc":"2.0","id":')).toBe(true);
+      expect(error?.code).toBe('ECONNRESET');
+    }
+    expect(node.received).toHaveLength(0);
+  });
+
+  // A reset sent right after the bytes is lost on some systems once a connection has carried a few dozen exchanges:
+  // the client keeps waiting for the rest of the body. These rows check that it arrives on such a connection.
+  it('truncate resets a keep-alive connection that served many answers before', async () => {
+    const node = await startStandIn();
+    const proxy = await proxyTo(node.url);
+    for (let connection = 0; connection < 3; connection++) {
+      proxy.set({ eth_call: { fault: { kind: 'truncate' }, after: KEPT_ALIVE } });
+      const { answers, partial, error } = await keepAliveExchanges(proxy.url, KEPT_ALIVE + 1, () =>
+        request('eth_call'),
+      );
+      expect(answers).toBe(KEPT_ALIVE);
+      expect(partial).toMatch(/^HTTP\/1\.1 200 [\s\S]*\r\n\r\n\{"jsonrpc":"2\.0","id":$/);
+      expect(error?.code).toBe('ECONNRESET');
+    }
+  }, 20_000);
+
+  it('truncate rejects a fetch on a keep-alive connection that served many answers before', async () => {
+    const node = await startStandIn();
+    const proxy = await proxyTo(node.url);
+    for (let round = 0; round < 3; round++) {
+      proxy.set({ eth_call: { fault: { kind: 'truncate' }, after: KEPT_ALIVE } });
+      for (let i = 0; i < KEPT_ALIVE; i++) expect(await resultOf(proxy, 'eth_call')).toBeDefined();
+      const response = await fetch(proxy.url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: request('eth_call'),
+        signal: AbortSignal.timeout(3_000),
+      });
+      expect(response.status).toBe(200);
+      const failure = await response.text().then(
+        () => undefined,
+        (error: Error & { cause?: NodeJS.ErrnoException }) => error,
+      );
+      expect(failure?.cause?.code).toBe('ECONNRESET');
+    }
+  }, 20_000);
 
   it('result replaces the node result with a function of it and of the call count', async () => {
     const node = await startStandIn();

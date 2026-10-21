@@ -1,8 +1,8 @@
 # @hashspan/faults
 
 A JSON-RPC fault proxy for tests. It sits between an EVM client and a local node, such as Anvil, and makes chosen
-JSON-RPC methods hang, fail with an HTTP status or a JSON-RPC error, drop or reset the connection, or answer with a
-wrong result. The client talks to a real HTTP server, so its own transport, retries and backoff run as they do in
+JSON-RPC methods hang, fail with an HTTP status or a JSON-RPC error, drop or reset the connection, cut an answer off
+mid-body, or answer with a wrong result. The client talks to a real HTTP server, so its own transport, retries and backoff run as they do in
 production, which a mocked transport does not show.
 
 It works with any client that speaks JSON-RPC over HTTP: viem, ethers, web3.js, a bundler or a facilitator. It is
@@ -61,6 +61,7 @@ as it is, and with viem's retries on you test them.
 | `{ kind: 'rpc-error', code, message? }` | a JSON-RPC error with the request's id, such as -32005 | no |
 | `{ kind: 'reset' }` | a connection reset (TCP RST) before any byte of the answer | no |
 | `{ kind: 'drop' }` | the connection closed (TCP FIN) before any byte | no |
+| `{ kind: 'truncate' }` | the headers, with a `content-length` larger than what follows, and part of the body, then a connection reset (TCP RST) | no |
 | `{ kind: 'result', result }` | the node's result replaced by `result(nodeResult, call)` | once |
 | `{ kind: 'previous' }` | the result of this method's previous request, as a load balancer that mixes up answers | once |
 

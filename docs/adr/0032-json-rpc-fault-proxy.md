@@ -110,16 +110,21 @@ it gets its own kind, `drop`, in version 1 too, since the lab's scenario needs i
 
 `requests()` without an argument returns every method's count as a record, and `requests(method)` stays.
 
+Added in 0.2.0: `truncate`, the headers with a `content-length` larger than what follows and part of the body,
+then a reset: the fault `reset` was meant to be. The reset is sent 5 ms after the write callback, not from the
+callback itself: on macOS loopback, a reset sent right after the bytes was lost once a keep-alive connection had
+carried a few dozen exchanges, and the client waited for the rest of the body; a 0 or 1 ms timer still lost it now
+and then when test files ran in parallel. That loss, not hashspan, was why three adapter tests timed out against an
+earlier version of the kind; with the delay, the reset arrives and they keep their expected endings.
+
 Deferred, in this order:
 
-1. `truncate`: the headers and part of the body, then a reset, the fault `reset` was meant to be; three adapter
-   tests time out against it instead of ending their spans, which is examined before the kind is added;
-2. `latency` (a delay before the node's answer is passed on);
-3. faults on single requests of a JSON-RPC batch; until then a batch is passed on untouched;
-4. a scenario file format, with named result built-ins (a receipt that stays `null`, a preconfirmed receipt that is
+1. `latency` (a delay before the node's answer is passed on);
+2. faults on single requests of a JSON-RPC batch; until then a batch is passed on untouched;
+3. a scenario file format, with named result built-ins (a receipt that stays `null`, a preconfirmed receipt that is
    later sealed with other values, a chain id that changes) in place of closures;
-5. an optional log of injected faults, as spans or JSON lines;
-6. a CLI that reads a scenario file, for compose setups and clients not written in TypeScript.
+4. an optional log of injected faults, as spans or JSON lines;
+5. a CLI that reads a scenario file, for compose setups and clients not written in TypeScript.
 
 Out of scope: faults a real node can produce. Reorgs, dropped and replaced transactions come from the node (Anvil's
 `anvil_reorg`, `anvil_dropTransaction`, a replacement sent with the same nonce) in the lab and in differential
@@ -192,5 +197,5 @@ The existing integration tests then run on the package unchanged, which checks t
   AGENTS.md.
 - A new 0.x release line to maintain, and a new npm name that needs the maintainer's one-time setup.
 - A remote upstream needs a deliberate opt-in, and the tool has no load features even then.
-- A partial-body reset, latency, batch faults, a scenario file and a CLI come in later minor releases of the 0.x
-  line, each with its own tests; reorgs and replacements stay with the node.
+- A partial-body reset came in 0.2.0 (`truncate`); latency, batch faults, a scenario file and a CLI come in later
+  minor releases of the 0.x line, each with its own tests; reorgs and replacements stay with the node.

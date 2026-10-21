@@ -95,6 +95,7 @@ export const SEND_ERROR_TYPES: Record<string, string> = {
   'a request that never answers': 'TimeoutError',
   'HTTP 429': 'HttpRequestError',
   'a connection reset mid-response': 'HttpRequestError',
+  'a response cut off mid-body': 'HttpRequestError',
   'JSON-RPC -32005 (limit exceeded)': 'LimitExceededRpcError',
   'JSON-RPC -32603 (internal error)': 'InternalRpcError',
 };
@@ -105,4 +106,12 @@ export const faultsOn = (method: string): Record<string, Faults> => ({
   'JSON-RPC -32005 (limit exceeded)': { [method]: { kind: 'rpc-error', code: -32005 } },
   'JSON-RPC -32603 (internal error)': { [method]: { kind: 'rpc-error', code: -32603 } },
   'a connection reset mid-response': { [method]: { kind: 'reset' } },
+});
+
+/**
+ * A response cut off mid-body on `method`: the headers and part of the body, then a reset (`truncate`). Extra rows
+ * next to `a connection reset mid-response` of `faultsOn`, whose reset comes before any byte; viem fails both alike.
+ */
+export const cutOffOn = (method: string): Record<'a response cut off mid-body', Faults> => ({
+  'a response cut off mid-body': { [method]: { kind: 'truncate' } },
 });

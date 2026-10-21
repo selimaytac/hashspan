@@ -10,14 +10,17 @@ import type { Socket } from 'node:net';
  * - `rpc-error`: answers with a JSON-RPC error, such as -32005 (limit exceeded) or -32603 (internal error).
  * - `reset`: resets the connection (a TCP RST) before any byte of the answer reaches the client.
  * - `drop`: closes the connection (a TCP FIN) before sending any byte.
+ * - `truncate`: sends the headers, with a `content-length` larger than what follows, and part of the body, then
+ *   resets the connection (a TCP RST) a few milliseconds after those bytes were written, so the client gets them and
+ *   then the reset.
  * - `result`: answers with `result(nodeResult, call)` in place of the node's result, such as a receipt that stays
  *   `null`, a malformed block or a chain id that changes between calls (`call` counts this method's requests since
  *   the last `set()`, from 1).
  * - `previous`: answers with the result the previous request of this method got, whatever it asked for, as a node
  *   behind a load balancer that mixes up answers does; the first request gets its own.
  *
- * `hang`, `http`, `rpc-error`, `reset` and `drop` never reach the node; `result` and `previous` send the request on
- * once and answer 502 when the node's answer is not JSON.
+ * `hang`, `http`, `rpc-error`, `reset`, `drop` and `truncate` never reach the node; `result` and `previous` send the
+ * request on once and answer 502 when the node's answer is not JSON.
  */
 export type Fault =
   | { kind: 'hang' }
@@ -25,6 +28,7 @@ export type Fault =
   | { kind: 'rpc-error'; code: number; message?: string | undefined }
   | { kind: 'reset' }
   | { kind: 'drop' }
+  | { kind: 'truncate' }
   | { kind: 'result'; result: (nodeResult: unknown, call: number) => unknown }
   | { kind: 'previous' };
 
@@ -75,6 +79,13 @@ interface Upstream {
   headers: Record<string, string>;
   text: string;
 }
+
+/**
+ * How long `truncate` waits after its bytes were written before it resets the connection. A reset sent right after
+ * them, from the write callback or a timer of 0 or 1 ms, was lost now and then on macOS loopback once a keep-alive
+ * connection had carried a few dozen exchanges, and the client waited for the rest of the body.
+ */
+const TRUNCATE_RESET_DELAY_MS = 5;
 
 /** An IPv4 address in 127.0.0.0/8, as the URL parser writes it. */
 const loopbackV4 = /^127(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
@@ -218,6 +229,16 @@ export async function startFaultProxy(
       case 'drop':
         request.socket.destroy();
         return;
+      case 'truncate': {
+        const { socket } = response;
+        response.writeHead(200, { 'content-type': 'application/json', 'content-length': '1000' });
+        response.write('{"jsonrpc":"2.0","id":', () => {
+          setTimeout(() => {
+            if (socket !== null && !socket.destroyed) socket.resetAndDestroy();
+          }, TRUNCATE_RESET_DELAY_MS);
+        });
+        return;
+      }
       case 'result': {
         const nodeResult = resultOf((await forward(body)).text);
         answer(response, { jsonrpc: '2.0', id, result: fault.result(nodeResult, call) });
