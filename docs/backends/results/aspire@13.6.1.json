@@ -1,0 +1,354 @@
+{
+  "schema": 1,
+  "corpus": {
+    "id": "synthetic-1",
+    "sha256": "ed69c27457b4f9052687b11e2d08b438cbac67c31c34a02f04c8b7dcedf18b64"
+  },
+  "harness": {
+    "commit": "f7932d5f848fcdd2593e0e3e2d0805836fda4356"
+  },
+  "backend": {
+    "name": "aspire",
+    "title": "Aspire dashboard",
+    "version": "13.6.1",
+    "image": "mcr.microsoft.com/dotnet/aspire-dashboard:13.6.1",
+    "digest": "sha256:03099004e132a7ca2feb66c5fa24715ffeaaf2fffab6f8b2cda23de3abd3ea45",
+    "readApi": "telemetry API `/api/telemetry/traces/{id}`"
+  },
+  "runDate": "2026-10-21",
+  "transports": {
+    "http/protobuf": {
+      "traces": {
+        "status": 200,
+        "summary": {
+          "spans": 10,
+          "missing": 0,
+          "extraSpans": 0,
+          "nameDiff": 0,
+          "kindDiff": 0,
+          "parentDiff": 0,
+          "statusDiff": 0,
+          "attrMissing": 0,
+          "attrNameDiff": 0,
+          "attrTypeDiff": 10,
+          "attrStringified": 10,
+          "attrValueDiff": 0,
+          "attrExtra": 1,
+          "eventDiff": 0,
+          "eventAttrDiff": 1,
+          "linkDiff": 0,
+          "linkAttrDiff": 7,
+          "resourceDiff": 10,
+          "scopeDiff": 0
+        },
+        "exercised": {
+          "attributeTypes": [
+            "array",
+            "boolean",
+            "number",
+            "string"
+          ],
+          "statusMessage": true,
+          "eventAttributes": true,
+          "links": 9,
+          "crossTraceLinks": 8,
+          "linkAttributes": true,
+          "resource": true,
+          "scope": true
+        },
+        "differences": [
+          {
+            "check": "attrExtra",
+            "detail": "aspire.destination",
+            "count": 1,
+            "spans": [
+              "eth_sendRawTransaction"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "blockchain.block.number: number -> string",
+            "count": 1,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "blockchain.chain.id: number -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.array.bool: array -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.array.int: array -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.array.string: array -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.bool.false: boolean -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.bool: boolean -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.double: number -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.int.negative: number -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "server.port: number -> string",
+            "count": 1,
+            "spans": [
+              "eth_sendRawTransaction"
+            ]
+          },
+          {
+            "check": "eventAttrDiff",
+            "detail": "receipt",
+            "count": 1,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "linkAttrDiff",
+            "count": 7,
+            "spans": [
+              "corpus fan-in"
+            ]
+          },
+          {
+            "check": "resourceDiff",
+            "count": 10,
+            "spans": [
+              "confirm 31337",
+              "corpus fan-in",
+              "corpus handler",
+              "corpus process",
+              "corpus publish",
+              "corpus root",
+              "corpus watch",
+              "eth_sendRawTransaction",
+              "send 31337"
+            ]
+          }
+        ]
+      },
+      "metrics": {
+        "status": 200,
+        "note": "its telemetry API has no metrics route",
+        "read": false
+      }
+    },
+    "http/json": {
+      "traces": {
+        "status": 200,
+        "summary": {
+          "spans": 10,
+          "missing": 0,
+          "extraSpans": 0,
+          "nameDiff": 0,
+          "kindDiff": 0,
+          "parentDiff": 0,
+          "statusDiff": 0,
+          "attrMissing": 0,
+          "attrNameDiff": 0,
+          "attrTypeDiff": 10,
+          "attrStringified": 10,
+          "attrValueDiff": 0,
+          "attrExtra": 1,
+          "eventDiff": 0,
+          "eventAttrDiff": 1,
+          "linkDiff": 0,
+          "linkAttrDiff": 7,
+          "resourceDiff": 10,
+          "scopeDiff": 0
+        },
+        "exercised": {
+          "attributeTypes": [
+            "array",
+            "boolean",
+            "number",
+            "string"
+          ],
+          "statusMessage": true,
+          "eventAttributes": true,
+          "links": 9,
+          "crossTraceLinks": 8,
+          "linkAttributes": true,
+          "resource": true,
+          "scope": true
+        },
+        "differences": [
+          {
+            "check": "attrExtra",
+            "detail": "aspire.destination",
+            "count": 1,
+            "spans": [
+              "eth_sendRawTransaction"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "blockchain.block.number: number -> string",
+            "count": 1,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "blockchain.chain.id: number -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.array.bool: array -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.array.int: array -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.array.string: array -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.bool.false: boolean -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.bool: boolean -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.double: number -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "corpus.int.negative: number -> string",
+            "count": 1,
+            "spans": [
+              "send 31337"
+            ]
+          },
+          {
+            "check": "attrTypeDiff",
+            "detail": "server.port: number -> string",
+            "count": 1,
+            "spans": [
+              "eth_sendRawTransaction"
+            ]
+          },
+          {
+            "check": "eventAttrDiff",
+            "detail": "receipt",
+            "count": 1,
+            "spans": [
+              "confirm 31337"
+            ]
+          },
+          {
+            "check": "linkAttrDiff",
+            "count": 7,
+            "spans": [
+              "corpus fan-in"
+            ]
+          },
+          {
+            "check": "resourceDiff",
+            "count": 10,
+            "spans": [
+              "confirm 31337",
+              "corpus fan-in",
+              "corpus handler",
+              "corpus process",
+              "corpus publish",
+              "corpus root",
+              "corpus watch",
+              "eth_sendRawTransaction",
+              "send 31337"
+            ]
+          }
+        ]
+      },
+      "metrics": {
+        "status": 200,
+        "note": "its telemetry API has no metrics route",
+        "read": false
+      }
+    }
+  },
+  "notes": []
+}
