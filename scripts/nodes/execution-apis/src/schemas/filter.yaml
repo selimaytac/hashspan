@@ -1,0 +1,81 @@
+FilterResults:
+  title: Filter results
+  oneOf:
+    - title: new block or transaction hashes
+      type: array
+      items:
+        $ref: '#/components/schemas/hash32'
+    - title: new logs
+      type: array
+      items:
+        $ref: '#/components/schemas/Log'
+
+Filter:
+  title: filter
+  oneOf:
+    - title: Filter by block range
+      type: object
+      properties:
+        fromBlock:
+          title: from block
+          $ref: '#/components/schemas/BlockNumberOrTagForRange'
+        toBlock:
+          title: to block
+          $ref: '#/components/schemas/BlockNumberOrTagForRange'
+        address:
+          title: Address(es)
+          oneOf:
+            - title: Any Address
+              type: 'null'
+            - title: Address
+              $ref: '#/components/schemas/address'
+            - title: Addresses
+              $ref: '#/components/schemas/addresses'
+        topics:
+          title: Topics
+          $ref: '#/components/schemas/FilterTopics'
+      not:
+        required:
+          - blockHash
+    - title: Filter by block hash
+      type: object
+      properties:
+        blockHash:
+          title: block hash
+          $ref: '#/components/schemas/hash32'
+        address:
+          title: Address(es)
+          oneOf:
+            - title: Any Address
+              type: 'null'
+            - title: Address
+              $ref: '#/components/schemas/address'
+            - title: Addresses
+              $ref: '#/components/schemas/addresses'
+        topics:
+          title: Topics
+          $ref: '#/components/schemas/FilterTopics'
+      required:
+        - blockHash
+
+FilterTopics:
+  title: Filter Topics
+  oneOf:
+    - title: Any Topic Match
+      type: 'null'
+    - title: Specified Filter Topics
+      type: array
+      items:
+        $ref: '#/components/schemas/FilterTopic'
+
+FilterTopic:
+  title: Filter Topic List Entry
+  oneOf:
+    - title: Any Topic Match
+      type: 'null'
+    - title: Single Topic Match
+      $ref: '#/components/schemas/bytes32'
+    - title: Multiple Topic Match
+      type: array
+      items:
+        $ref: '#/components/schemas/bytes32'

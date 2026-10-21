@@ -9,6 +9,8 @@
       "!packages/core/test/fixtures/backends-e7",
       "!docs/backends/results",
       "!docs/facilitators/results",
+      "!docs/nodes/results",
+      "!scripts/nodes/execution-apis",
       "!scripts/facilitators/corpus.json",
       "!**/.changeset/*.md",
       "!**/CHANGELOG.md"

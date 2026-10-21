@@ -1,0 +1,120 @@
+{
+  "source": {
+    "repo": "https://github.com/ethereum/execution-apis",
+    "commit": "16caee274b0d4fb7a0316f294029adac88a75a09",
+    "license": "CC0-1.0"
+  },
+  "note": "Vendored by scripts/nodes/vendor.mjs from the commit above; do not edit, regenerate.",
+  "files": [
+    {
+      "path": "LICENSE",
+      "gitBlob": "670154e3538863b2d9891fd5483160fbdfc89164",
+      "sha256": "36ffd9dc085d529a7e60e1276d73ae5a030b020313e6c5408593a6ae2af39673"
+    },
+    {
+      "path": "src/debug/trace.yaml",
+      "gitBlob": "a22878a067586c2c58aea37acb7bed953d6719da",
+      "sha256": "a6da2cee7b42a97e9e058c2bab62281c49a42425546acd6a4845054f5cb76457"
+    },
+    {
+      "path": "src/error-groups/execution-errors.yaml",
+      "gitBlob": "4b567e5a80ef1bd7aa5a24435c3454e981786776",
+      "sha256": "c00e062fcd2394d0bd78c6d4068c359d2c49a95794173f62b45299305340a4a4"
+    },
+    {
+      "path": "src/error-groups/gas-errors.yaml",
+      "gitBlob": "dbf468d32b428acfaf8d8e607d1ac2d9e3c2725d",
+      "sha256": "ded3022b0f00e73db8ff290f3089fd46c54be1a75f2eac55b5b4100cc9da3d50"
+    },
+    {
+      "path": "src/error-groups/rpc-non-standard-errors.yaml",
+      "gitBlob": "e951010e5d06f9440cc763db8eeefca4a1ece22c",
+      "sha256": "4662efda81423fee83c4d63a0229ec5c87d53724fc88644678cfe12146b4758d"
+    },
+    {
+      "path": "src/error-groups/rpc-standard-errors.yaml",
+      "gitBlob": "27b9bd92b416538c48db9d4ab5f8147e3fae431a",
+      "sha256": "f5e7f22b20e2aaf9f1b2351dbc3ae0d378bd7cce080df0e5dff56a4a7cdbf4f2"
+    },
+    {
+      "path": "src/error-groups/txpool-errors.yaml",
+      "gitBlob": "bf6ccc82be8fa5dbfb57e3bc11df135df0e0968f",
+      "sha256": "89f290954466b3e8603981d7b70f9fda22927705cb453375737eff9e1ab8e058"
+    },
+    {
+      "path": "src/eth/block.yaml",
+      "gitBlob": "8ebe660a11965d9dcbac6ee1139f08cb615dd353",
+      "sha256": "4f2639a30e0c76d4c110aeda6f85f4217875aa4c6cc8ce8c96376dcd81ed6f62"
+    },
+    {
+      "path": "src/eth/execute.yaml",
+      "gitBlob": "65d6562adce62052685bdd88d157cb301b3caaf2",
+      "sha256": "880f837f420d31a7f24c6951576a0e55862f2ab20ecb7942e23f1f6ee9d74ac9"
+    },
+    {
+      "path": "src/eth/fee_market.yaml",
+      "gitBlob": "bf04832233eb9c159f586b2140efbccf1ef73ed2",
+      "sha256": "03341687869b50f6111e2e9a0c9b4514726fe3d46e20cfb3540d2342d69fe6cd"
+    },
+    {
+      "path": "src/eth/filter.yaml",
+      "gitBlob": "bc9bb083d7a171be53575c377812283aee16ec17",
+      "sha256": "a16df0057b4a4265cc0e51052ff958cad1182ab5b4feb597ec2f5be0899af445"
+    },
+    {
+      "path": "src/eth/submit.yaml",
+      "gitBlob": "46b18f2134b330d86e5af5962e712fbbe620fbc9",
+      "sha256": "9b510825c659b86d087afb280e5f3c29897de01d92ec7b1f5cb1d3e50184c147"
+    },
+    {
+      "path": "src/eth/transaction.yaml",
+      "gitBlob": "bbef8c8e3c2cd38e1f508e4616f34f32924bda92",
+      "sha256": "fb44558c40eb24b7f0d4b7e34fc1b8b7d69c4f57419332c84b6f59e0b1975cd3"
+    },
+    {
+      "path": "src/schemas/base-types.yaml",
+      "gitBlob": "d5276a24755689ab605d67d7144deb6c97c49baa",
+      "sha256": "3b34fffaea334d8a8e5f44669c10b9329195573b522f35f439cb3f7134b19205"
+    },
+    {
+      "path": "src/schemas/block-access-list.yaml",
+      "gitBlob": "b601957b3a36082636ee5ed2a8c95a245c0f16f4",
+      "sha256": "aacf406ba3f1974b92bfeef6da5bdb6337fdddd5c5e37a7fa25ea1749ca0b302"
+    },
+    {
+      "path": "src/schemas/block.yaml",
+      "gitBlob": "93dd1ce93b2ae3fa746f8bdf494fbe00e73fc94a",
+      "sha256": "8cab61e8a4e2771e4231fc047ac43ea9a042781511c7b813c18c16bf7e4d5b09"
+    },
+    {
+      "path": "src/schemas/execute.yaml",
+      "gitBlob": "34d974595a6295f930cbcae945ab56b340e91fa4",
+      "sha256": "5ebbd4de1e21cb308ef34b5fc26d685e8ccd58a467e403fedb90f4f8d5ccd6e8"
+    },
+    {
+      "path": "src/schemas/filter.yaml",
+      "gitBlob": "cd19dba081dd3d7bfe2a4099e8d82dbabd705c1c",
+      "sha256": "1cffdb444b3eaf6c22acebb5b98ce540036240a74001c7cee94bb3201d107010"
+    },
+    {
+      "path": "src/schemas/opcode-tracer.yaml",
+      "gitBlob": "b48a21c7482506732054840bb0f399884a054435",
+      "sha256": "bca7a0f388a57b6ab38db09c0d49b4813f949b519d2d4ad09951f041ba82efa7"
+    },
+    {
+      "path": "src/schemas/receipt.yaml",
+      "gitBlob": "ab67b3a1356ca693e89fa088be2179353654ca3d",
+      "sha256": "5b8f15e2d926d8faad8d189d141972f990ce1978176bea0c4435e700081f9979"
+    },
+    {
+      "path": "src/schemas/transaction.yaml",
+      "gitBlob": "5f0f5ffd72c0417e2d9b4b96c4ddfc1cf310a514",
+      "sha256": "b74544f4621cd44e940b0726fdcc73a67c9e05301d87285ab60468364bc75518"
+    },
+    {
+      "path": "src/schemas/withdrawal.yaml",
+      "gitBlob": "affd753014b461765f16f60a1073c1cb9a07fa54",
+      "sha256": "eaa368104ba7dc8e254968d80f7ef4962e930ce9977a711bfe721d01c6e83336"
+    }
+  ]
+}

@@ -7,6 +7,11 @@ import {
   START as FACILITATORS_START,
   render as renderFacilitators,
 } from '../../../scripts/facilitators/table.mjs';
+import {
+  DOC as NODES_DOC,
+  START as NODES_START,
+  render as renderNodes,
+} from '../../../scripts/nodes/table.mjs';
 
 // Checks that the docs agree with the repository, so they cannot drift unnoticed. docs/semconv.md is checked
 // against the attribute keys in semconv-doc.test.ts.
@@ -407,6 +412,12 @@ describe('repository docs', () => {
     const doc = read(FACILITATORS_DOC);
     expect(doc).toContain(FACILITATORS_START);
     expect(doc, 'run `pnpm facilitators:table`').toBe(renderFacilitators(root));
+  });
+
+  it('shows in docs/nodes.md the tables generated from docs/nodes/results', () => {
+    const doc = read(NODES_DOC);
+    expect(doc).toContain(NODES_START);
+    expect(doc, 'run `pnpm nodes:table`').toBe(renderNodes(root));
   });
 });
 
