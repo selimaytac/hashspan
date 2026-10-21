@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACCOUNTS,
   addressOf,
+  buildCase,
   buildCorpus,
   CASES,
   CHAIN_ID,
@@ -17,6 +18,8 @@ import {
   EXPIRY_LIMIT,
   FLOWS,
   NETWORK,
+  PAY_TO,
+  receiverOf,
   T0,
   typedDataOf,
 } from '../../../scripts/facilitators/corpus.mjs';
@@ -110,6 +113,23 @@ describe('facilitator corpus', () => {
     const nonce = (c: { cases: Case[] }) =>
       (c.cases[0] as Case).paymentPayload.payload.authorization;
     expect(nonce(other)).not.toEqual(nonce(run));
+  });
+
+  it('gives a fault case a receiver of its own, in the requirements and in what is signed', async () => {
+    const a = receiverOf('exact-eip3009-valid:eth_sendRawTransaction:drop');
+    const b = receiverOf('exact-eip3009-valid:eth_sendRawTransaction:reset');
+    expect(a).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(a).not.toBe(b);
+    expect(a).not.toBe(PAY_TO);
+    for (const id of ['exact-eip3009-valid', 'exact-permit2-valid', 'upto-permit2-partial']) {
+      const built = await buildCase(
+        CASES.find((c: { id: string }) => c.id === id),
+        { now: 1_800_000_000, salt: 's', payTo: a },
+      );
+      const p = built.paymentPayload.payload;
+      expect(built.paymentRequirements.payTo).toBe(a);
+      expect((p.authorization ?? p.permit2Authorization.witness).to).toBe(a);
+    }
   });
 
   it('covers each scheme, the negatives and the batch-settlement flows', () => {

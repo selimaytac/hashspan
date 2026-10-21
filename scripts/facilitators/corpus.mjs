@@ -56,6 +56,9 @@ export const addressOf = (key) => privateKeyToAccount(key).address;
 
 /** The receiver of every payment; no key. */
 export const PAY_TO = '0x00000000000000000000000000000000000000cc';
+/** A receiver of one fault case's own, derived from its salt; no key. */
+export const receiverOf = (salt) =>
+  getAddress(`0x${keccak256(toHex(`${CORPUS_ID}:receiver:${salt}`)).slice(26)}`);
 /** An address that is neither the receiver nor the token: the wrong recipient and the wrong asset. */
 export const OTHER = '0x00000000000000000000000000000000000000dd';
 /** The price of a case, in the token's smallest unit. */
@@ -314,7 +317,7 @@ function windowOf(kind = 'valid', now) {
 }
 
 /** The payment requirements a case is paid against. */
-function requirementsOf(c) {
+function requirementsOf(c, payTo) {
   const network = c.change?.network ?? NETWORK;
   const extra =
     c.transfer === 'permit2'
@@ -326,7 +329,7 @@ function requirementsOf(c) {
     network,
     amount: AMOUNT,
     asset: c.change?.asset ?? TOKEN,
-    payTo: PAY_TO,
+    payTo,
     maxTimeoutSeconds: WINDOW,
     extra,
   };
@@ -400,13 +403,14 @@ export function typedDataOf(paymentPayload) {
 
 /** The `payload` of a case's payment payload, signed for the window around `now`. */
 async function payloadOf(c, requirements, now, salt) {
+  const payTo = requirements.payTo;
   const payer = privateKeyToAccount(ACCOUNTS[c.payer ?? 'payer']);
   const signer = privateKeyToAccount(ACCOUNTS[c.change?.signer ?? c.payer ?? 'payer']);
   const { after, before } = windowOf(c.window, now);
   if (c.transfer === 'eip3009') {
     const authorization = {
       from: payer.address,
-      to: getAddress(c.change?.to ?? PAY_TO),
+      to: getAddress(c.change?.to ?? payTo),
       value: c.change?.value ?? AMOUNT,
       validAfter: String(after),
       validBefore: String(before),
@@ -425,7 +429,7 @@ async function payloadOf(c, requirements, now, salt) {
     nonce: hexToBigInt(derived(c.id, salt)).toString(),
     deadline: String(before),
     witness: {
-      to: getAddress(c.change?.to ?? PAY_TO),
+      to: getAddress(c.change?.to ?? payTo),
       ...(upto ? { facilitator: addressOf(ACCOUNTS.facilitator) } : {}),
       validAfter: String(after),
     },
@@ -436,10 +440,11 @@ async function payloadOf(c, requirements, now, salt) {
 
 /**
  * One case, signed for the window around `now`: its payload, requirements, calls and expectations. `salt`
- * gives the payloads nonces of their own, so a run can repeat a case without replaying it.
+ * gives the payloads nonces of their own, so a run can repeat a case without replaying it, and `payTo` a receiver of
+ * its own (receiverOf()), so a transfer that mines late is counted for the case it belongs to.
  */
-export async function buildCase(c, { now = T0, salt = '' } = {}) {
-  const requirements = requirementsOf(c);
+export async function buildCase(c, { now = T0, salt = '', payTo = PAY_TO } = {}) {
+  const requirements = requirementsOf(c, payTo);
   const paymentPayload = {
     x402Version: 2,
     resource: {

@@ -7,19 +7,20 @@
 // Usage: node scripts/facilitators/run.mjs <target> [--x402 <clone>] [--pass conformance|faults|all] [--keep-images]
 //        node scripts/facilitators/run.mjs --list
 import { execFile } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { homedir, hostname, userInfo } from 'node:os';
+import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { setupChain } from './chain.mjs';
+import { balanceOf, setupChain } from './chain.mjs';
 import { runCase, runFaultCase } from './conformance.mjs';
-import { buildCase, CASES, CORPUS_ID, corpusHash, FLOWS, NETWORK } from './corpus.mjs';
+import { buildCase, CASES, CORPUS_ID, corpusHash, FLOWS, NETWORK, receiverOf } from './corpus.mjs';
 import { caseStatus, checkExpectations, checkInvariants, supportedSchemes } from './diff.mjs';
 import { FAULT_CASES, faultScenarios } from './faults.mjs';
 import { runFlow } from './flows.mjs';
 import { buildFaultsImage, buildTargetImage, cloneX402, scratch } from './images.mjs';
-import { buildResult, writeResult } from './result.mjs';
+import { buildResult, resultFile, resultText, writeResult } from './result.mjs';
 import {
   ANVIL,
   anvilArgs,
@@ -207,9 +208,11 @@ async function main() {
         if (caseStatus(c, schemes) === 'unsupported') continue;
         for (const scenario of faultScenarios()) {
           await startPair(name, def, images, scenario.rules);
+          const salt = `${id}:${scenario.id}`;
           const built = await buildCase(c, {
             now: Math.floor(Date.now() / 1000),
-            salt: scenario.id,
+            salt,
+            payTo: receiverOf(salt),
           });
           const observed = await runFaultCase(built, {
             facilitatorUrl: FACILITATOR_URL,
@@ -220,13 +223,18 @@ async function main() {
           faults.push({
             case: id,
             scenario: scenario.id,
+            amount: c.settleAmount ?? '10000',
+            salt,
             observed,
-            invariants: checkInvariants(observed, {
-              amount: c.settleAmount ?? '10000',
-              known: def.known,
-            }),
           });
         }
+      }
+      // A transfer that mined after its case ended (a queued send of a stopped facilitator) counts for its own case.
+      for (const f of faults) {
+        f.observed.effect.afterPass = await balanceOf(RPC_URL, receiverOf(f.salt));
+        f.invariants = checkInvariants(f.observed, { amount: f.amount, known: def.known });
+        delete f.salt;
+        delete f.amount;
       }
       if (faultCasesWithoutRequests > 0) {
         throw new Error(
@@ -274,7 +282,15 @@ async function main() {
     faults,
     notes: [],
   });
-  const path = writeResult(root, result, [hostname(), userInfo().username, homedir()]);
+  let path;
+  try {
+    path = writeResult(root, result, [hostname(), userInfo().username, homedir()]);
+  } catch (error) {
+    // Kept outside the repository, so a long run is not lost to one value that must not be published.
+    const kept = join(scratch('result'), resultFile(name, def.commit));
+    writeFileSync(kept, resultText(result));
+    throw new Error(`${error.message}; the run's result is in ${kept}, outside the repository`);
+  }
   console.log(`wrote ${path}; run \`pnpm facilitators:table\` to update docs/facilitators.md`);
 }
 

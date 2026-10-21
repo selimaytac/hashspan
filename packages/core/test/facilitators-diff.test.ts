@@ -199,6 +199,7 @@ describe('fault invariants', () => {
       { id: 'no-failure-after-transfer', holds: true },
       { id: 'pending-carries-transaction', holds: true },
       { id: 'moves-once', holds: true },
+      { id: 'no-late-transfer', holds: true },
     ]);
   });
 
@@ -233,6 +234,21 @@ describe('fault invariants', () => {
 
   it('flag funds moved twice', () => {
     expect(run(settled, settled, '10000', '20000')[3]).toEqual({ id: 'moves-once', holds: false });
+  });
+
+  it('count a transfer that mined after its case for that case', () => {
+    const failed = { status: 200, success: false, errorReason: 'x', transaction: 'empty' };
+    const late = checkInvariants(
+      {
+        steps: [valid, failed, settled],
+        effect: { afterSettle: '0', afterRetry: '10000', afterPass: '20000' },
+      },
+      { amount: '10000' },
+    );
+    expect(late.filter((i) => !i.holds).map((i) => i.id)).toEqual([
+      'moves-once',
+      'no-late-transfer',
+    ]);
   });
 });
 

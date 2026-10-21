@@ -11,9 +11,8 @@ Wave 1 is the three facilitators of the x402 repository's end-to-end suite at on
 ([`targets.mjs`](../scripts/facilitators/targets.mjs)): `e2e/facilitators/typescript`, `go` and `python` at
 `faa1c694`. Wave 2, x402-rs and qntx/facilitator, is listed there and not run yet.
 
-Every target talks to the same chain: Anvil with chain id 84532 and a genesis time of 2024-01-01, with Permit2, the
-x402 Permit2 proxies, the batch-settlement contracts and Multicall3 installed at their canonical addresses and an
-EIP-3009 test token ([`chain.mjs`](../scripts/facilitators/chain.mjs)). All keys are Anvil's well-known test keys.
+Every target talks to the same chain: Anvil with chain id 84532, with Permit2, the x402 Permit2 proxies, the
+batch-settlement contracts and Multicall3 installed at their canonical addresses and an EIP-3009 test token ([`chain.mjs`](../scripts/facilitators/chain.mjs)). All keys are Anvil's well-known test keys.
 
 The corpus ([`corpus.mjs`](../scripts/facilitators/corpus.mjs), committed as `corpus.json`) has these cases:
 
@@ -29,9 +28,10 @@ Each case lists what it expects. A `spec` row cites the section of the x402 spec
 result, and a mismatch is a spec difference. An `unspecified` row is recorded and compared across targets only. A
 `known:` mark names an upstream item that already describes a difference.
 
-The committed corpus is signed for 2024-01-01, so every signature in it expired long before any run. The facilitators
-check a validity window against their host clock, so a run signs the same cases again in memory with windows around
-its own time. Those payloads are never written to a file, and a result holds no payload or signature.
+The committed corpus is signed for 2024-01-01, so every signature in it expired long before any run, and a test checks
+it on an Anvil started at that time. The facilitators check a validity window against their host clock, so a run
+signs the same cases again in memory with windows around its own time, on an Anvil that runs on the host clock too.
+Those payloads are never written to a file, and a result holds no payload or signature.
 
 A run has two passes:
 
@@ -41,7 +41,8 @@ A run has two passes:
    [`@hashspan/faults`](../packages/faults/README.md) on the facilitator's `eth_sendRawTransaction` or
    `eth_getTransactionReceipt` (hang, reset, drop, truncate, a JSON-RPC error), then the same settle again. The
    invariants: no success without a mined transfer, no failure after one (unless it is `settlement_pending` with the
-   transaction), and funds never move twice.
+   transaction), funds never move twice, and nothing mines after the case. Each fault case pays a receiver of its
+   own, so a transfer that mines later counts for the case it belongs to.
 
 ## How a run is isolated
 

@@ -6,7 +6,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ACCOUNTS, NETWORK, T0 } from '../../../scripts/facilitators/corpus.mjs';
+import { ACCOUNTS, NETWORK } from '../../../scripts/facilitators/corpus.mjs';
 import { FAULT_CASES, faultScenarios } from '../../../scripts/facilitators/faults.mjs';
 import { parseScenario } from '../../../scripts/facilitators/faults-runner/scenario.mjs';
 import {
@@ -112,7 +112,8 @@ describe('facilitator matrix targets', () => {
       `127.0.0.1:${ANVIL.hostPort}:${ANVIL.port}`,
       `127.0.0.1:${FACILITATOR_PORT.host}:${FACILITATOR_PORT.container}`,
     ]);
-    // Inside its namespace Anvil listens on every interface, or the published port could not reach it.
+    // Inside its namespace Anvil listens on every interface, or the published port could not reach it. It runs on the
+    // host clock, by which the facilitators judge validity windows; only the committed corpus is signed for 2024.
     const command = args.slice(args.indexOf(ANVIL.image) + 1);
     expect(command).toEqual([
       '--host',
@@ -121,9 +122,8 @@ describe('facilitator matrix targets', () => {
       String(ANVIL.port),
       '--chain-id',
       '84532',
-      '--timestamp',
-      String(T0),
     ]);
+    expect(args).not.toContain('--timestamp');
     expect(NETWORK).toBe('eip155:84532');
   });
 

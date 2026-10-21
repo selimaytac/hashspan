@@ -1,4 +1,6 @@
-// One entry per facilitator, with the docker run arguments of the three containers of a run. `e14-anvil` owns the
+// One entry per facilitator, with the docker run arguments of the three containers of a run. Anvil runs on the host
+// clock, as the facilitators judge validity windows by theirs, so the chain and the targets agree on the time; only
+// the committed corpus and its Anvil test use the fixed past time. `e14-anvil` owns the
 // network namespace: it is on the `e14-net` network, resolves names through 127.0.0.1 only (so a public RPC name does
 // not resolve inside the namespace) and publishes Anvil's port and the facilitator's port on 127.0.0.1. The faults
 // proxy and the facilitator join it with `--network container:e14-anvil`, so all three talk over 127.0.0.1 and the
@@ -6,7 +8,7 @@
 //
 // The facts of each wave-1 target were read from its source at the pinned commit; `start.verified: false` until a
 // lab run starts it. Wave-2 entries are not run yet.
-import { ACCOUNTS, CHAIN_ID, NETWORK, T0 } from './corpus.mjs';
+import { ACCOUNTS, CHAIN_ID, NETWORK } from './corpus.mjs';
 
 /** Prefix of every container, image and network the harness creates (experiment e14). */
 export const PREFIX = 'e14-';
@@ -163,8 +165,6 @@ export function anvilArgs(image = ANVIL.digest ? `${ANVIL.image}@${ANVIL.digest}
     String(ANVIL.port),
     '--chain-id',
     String(CHAIN_ID),
-    '--timestamp',
-    String(T0),
   ];
 }
 

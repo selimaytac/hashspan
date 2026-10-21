@@ -1,7 +1,7 @@
 // Drives one case against a running facilitator: its calls in order (/verify always first, as the TypeScript
 // facilitator settles only a verified payment), each answer reduced by observeCall(), and what moved on chain between
 // the first call and the last, read from Anvil directly rather than through the proxy.
-import { moved, readBalances } from './chain.mjs';
+import { balanceOf, moved, readBalances } from './chain.mjs';
 import { bodyOf } from './corpus.mjs';
 import { observeCall } from './diff.mjs';
 
@@ -47,21 +47,16 @@ export async function runCase(built, { facilitatorUrl, rpcUrl }) {
 
 /**
  * Runs a built case as a fault case: verify, the faulted settle, then the same settle again as a retry, reading what
- * reached the receiver after each settle.
+ * reached the case's own receiver (it starts at 0) after each settle. The run reads it once more at the end of the
+ * pass (`afterPass`), for a transfer that mined after the case.
  */
 export async function runFaultCase(built, { facilitatorUrl, rpcUrl }) {
+  const receiver = built.paymentRequirements.payTo;
   const settle = bodyOf(built, 'settle');
-  const before = await readBalances(rpcUrl);
   const steps = [await call(facilitatorUrl, 'verify', bodyOf(built, 'verify'))];
   steps.push(await call(facilitatorUrl, 'settle', settle));
-  const afterSettle = await readBalances(rpcUrl);
+  const afterSettle = await balanceOf(rpcUrl, receiver);
   steps.push(await call(facilitatorUrl, 'settle', settle));
-  const afterRetry = await readBalances(rpcUrl);
-  return {
-    steps,
-    effect: {
-      afterSettle: moved(before, afterSettle).payTo,
-      afterRetry: moved(before, afterRetry).payTo,
-    },
-  };
+  const afterRetry = await balanceOf(rpcUrl, receiver);
+  return { steps, effect: { afterSettle, afterRetry } };
 }

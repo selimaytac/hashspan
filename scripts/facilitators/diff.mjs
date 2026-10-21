@@ -118,15 +118,17 @@ const settledNow = (call) => call?.success === true;
 
 /**
  * The invariants of one fault case: steps are verify, the faulted settle and its retry; `effect.afterSettle` and
- * `effect.afterRetry` are what reached the receiver after each. `known` lists the upstream items the target has for
- * a failure reported after a mined transfer.
- * @param {{ steps: any[], effect: { afterSettle: string, afterRetry: string } }} observed
+ * `effect.afterRetry` are what reached the case's own receiver after each, and `effect.afterPass` what had reached it
+ * at the end of the fault pass. `known` lists the upstream items the target has for a failure reported after a mined
+ * transfer.
+ * @param {{ steps: any[], effect: { afterSettle: string, afterRetry: string, afterPass?: string } }} observed
  * @param {{ amount: string, known?: string[] }} options
  */
 export function checkInvariants(observed, { amount, known = [] }) {
   const [, settle, retry] = observed.steps;
   const afterSettle = BigInt(observed.effect.afterSettle);
   const afterRetry = BigInt(observed.effect.afterRetry);
+  const afterPass = BigInt(observed.effect.afterPass ?? observed.effect.afterRetry);
   const price = BigInt(amount);
   const mined = afterSettle >= price;
   const pending = settle?.errorReason === 'settlement_pending';
@@ -144,7 +146,8 @@ export function checkInvariants(observed, { amount, known = [] }) {
     ),
     mark('no-failure-after-transfer', !failedAfterTransfer, known[0]),
     mark('pending-carries-transaction', !(pending && settle.transaction !== 'present')),
-    mark('moves-once', afterRetry <= price),
+    mark('moves-once', afterRetry <= price && afterPass <= price),
+    mark('no-late-transfer', afterPass === afterRetry),
   ];
 }
 

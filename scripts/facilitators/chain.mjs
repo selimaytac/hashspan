@@ -103,6 +103,19 @@ export async function readBalances(rpcUrl) {
   return out;
 }
 
+/** The token balance of one address, as a decimal string. */
+export async function balanceOf(rpcUrl, address) {
+  const reader = createPublicClient({ chain: chainOf(rpcUrl), transport: http(rpcUrl) });
+  return String(
+    await reader.readContract({
+      address: TOKEN,
+      abi: testUsdAbi,
+      functionName: 'balanceOf',
+      args: [address],
+    }),
+  );
+}
+
 /** What moved between two balance reads, per account, as signed decimal strings. */
 export function moved(before, after) {
   return Object.fromEntries(
