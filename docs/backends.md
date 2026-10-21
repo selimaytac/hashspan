@@ -171,7 +171,9 @@ GenAI spans, so the agent span shows its model and token usage. See
   its metric names lack `_seconds` (`blockchain_client_send_duration_count`) and carry no `job` label, so
   [`metrics.json`](../dashboards/metrics.json) applies only in part.
 - MLflow drops the span kind on OTLP ingest ([mlflow/mlflow#26841](https://github.com/mlflow/mlflow/issues/26841))
-  and has no OTLP metrics endpoint (`/v1/metrics` answers 404).
+  and has no OTLP metrics endpoint (`/v1/metrics` answers 404). Over OTLP/HTTP JSON, 3.17.1 also stores no links
+  ([mlflow/mlflow#26846](https://github.com/mlflow/mlflow/issues/26846)); the fix,
+  [mlflow/mlflow#26940](https://github.com/mlflow/mlflow/pull/26940), came after 3.17.1.
 - Phoenix takes OTLP over protobuf only (JSON answers 415), returns every span with kind `INTERNAL` and does not
   store links ([Arize-ai/phoenix#16799](https://github.com/Arize-ai/phoenix/issues/16799)), so a `confirm` span's
   link to its `send` span is not shown there.

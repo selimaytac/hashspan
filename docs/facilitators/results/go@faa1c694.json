@@ -1,0 +1,2899 @@
+{
+  "schema": 1,
+  "corpus": {
+    "id": "x402-v2-anvil-1",
+    "sha256": "870649972378d07df930987b575d57d5654195e635470213a49a7f6bc42105e8"
+  },
+  "harness": {
+    "commit": "20c162f47cbf7e24a3399e7a9ad94f538013cb28"
+  },
+  "target": {
+    "name": "go",
+    "title": "x402 e2e facilitator (Go)",
+    "repo": "https://github.com/x402-foundation/x402",
+    "commit": "faa1c694c66a3732aaabbce93bdae140e521a67d",
+    "path": "e2e/facilitators/go",
+    "rpc": {
+      "env": "EVM_RPC_URL",
+      "fallback": "https://sepolia.base.org (public Base Sepolia) when EVM_RPC_URL is unset",
+      "source": "e2e/facilitators/go/main.go:909-922",
+      "checkedAt": "faa1c694c66a3732aaabbce93bdae140e521a67d"
+    },
+    "receiptWait": {
+      "ms": 30000,
+      "source": "e2e/facilitators/go/main.go:369-383 (30 polls of TransactionReceipt, one second apart; no timeout per poll)"
+    },
+    "settleTimeoutMs": 60000,
+    "start": {
+      "command": "go build, then the binary",
+      "verified": true
+    }
+  },
+  "anvil": {
+    "image": "ghcr.io/foundry-rs/foundry:v1.8.4",
+    "digest": "sha256:f69e1b8d1dda17d89227a4d0513b1d86f93ece430dea8d87aaea643da3607d3e",
+    "chainId": 84532
+  },
+  "runDate": "2026-10-21",
+  "supported": [
+    "auth-capture",
+    "batch-settlement",
+    "exact",
+    "upto"
+  ],
+  "egress": {
+    "conformanceRequests": 98,
+    "faultCasesWithoutRequests": 0
+  },
+  "conformance": [
+    {
+      "case": "exact-eip3009-valid",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          }
+        ],
+        "effect": {
+          "payTo": "10000",
+          "contract": "0",
+          "payer": "-10000",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "transaction",
+          "kind": "spec",
+          "expected": "present",
+          "got": "present",
+          "outcome": "match"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "spec",
+          "expected": "10000",
+          "got": "10000",
+          "outcome": "match"
+        },
+        {
+          "field": "effect.payer",
+          "kind": "spec",
+          "expected": "-10000",
+          "got": "-10000",
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-expired",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_payload_authorization_valid_before: valid before expired: 1792591448",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_payload_authorization_valid_before",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "contract": "0",
+          "payer": "0",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "expected": "invalid_exact_evm_payload_authorization_valid_before",
+          "got": "invalid_exact_evm_payload_authorization_valid_before",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-not-yet-valid",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_payload_authorization_valid_after: valid after in future: 1792598648",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_payload_authorization_valid_after",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "contract": "0",
+          "payer": "0",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "expected": "invalid_exact_evm_payload_authorization_valid_after",
+          "got": "invalid_exact_evm_payload_authorization_valid_after",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-amount-mismatch",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_payload_authorization_value_mismatch: authorization value mismatch: 9999 != 10000",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_payload_authorization_value_mismatch",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "contract": "0",
+          "payer": "0",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "expected": "invalid_exact_evm_payload_authorization_value_mismatch",
+          "got": "invalid_exact_evm_payload_authorization_value_mismatch",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-recipient-mismatch",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_recipient_mismatch: recipient mismatch: 0x00000000000000000000000000000000000000dd != 0x00000000000000000000000000000000000000cc",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_recipient_mismatch",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "contract": "0",
+          "payer": "0",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "expected": "invalid_exact_evm_payload_recipient_mismatch",
+          "got": "invalid_exact_evm_recipient_mismatch",
+          "outcome": "spec-difference"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-wrong-asset",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_signature: invalid signature: <hex>",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_signature",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "contract": "0",
+          "payer": "0",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "unspecified",
+          "got": "invalid_exact_evm_signature",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-wrong-network",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 500,
+            "error": "no_facilitator_for_network: no facilitator for scheme \"exact\" on network \"eip155:1\"; registered: exact@eip155:84532, upto@eip155:84532, batch-settlement@eip155:84532, auth-capture@eip155:84532",
+            "isValid": false,
+            "invalidReason": "no_facilitator_for_network",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "contract": "0",
+          "payer": "0",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "unspecified",
+          "got": "no_facilitator_for_network",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-insufficient-balance",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_transaction_simulation_failed: failed to call contract: execution reverted: transfer amount exceeds balance",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_transaction_simulation_failed",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "contract": "0",
+          "payer": "0",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "expected": "insufficient_funds",
+          "got": "invalid_exact_evm_transaction_simulation_failed",
+          "outcome": "spec-difference"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-bad-signature",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_signature: invalid signature: <hex>",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_signature",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "contract": "0",
+          "payer": "0",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "spec",
+          "expected": "invalid_exact_evm_payload_signature",
+          "got": "invalid_exact_evm_signature",
+          "outcome": "spec-difference"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-replay",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_transaction_simulation_failed: failed to call contract: execution reverted: authorization is used or canceled",
+            "isValid": false,
+            "invalidReason": "invalid_exact_evm_transaction_simulation_failed",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "payTo": "10000",
+          "contract": "0",
+          "payer": "-10000",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "invalidReason",
+          "kind": "unspecified",
+          "got": "invalid_exact_evm_transaction_simulation_failed",
+          "outcome": "recorded"
+        },
+        {
+          "step": 3,
+          "field": "success",
+          "kind": "spec",
+          "expected": false,
+          "got": "absent",
+          "outcome": "spec-difference"
+        },
+        {
+          "step": 3,
+          "field": "errorReason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "spec",
+          "expected": "10000",
+          "got": "10000",
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 2,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 3,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-valid",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          }
+        ],
+        "effect": {
+          "payTo": "10000",
+          "contract": "0",
+          "payer": "-10000",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "transaction",
+          "kind": "spec",
+          "expected": "present",
+          "got": "present",
+          "outcome": "match"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "spec",
+          "expected": "10000",
+          "got": "10000",
+          "outcome": "match"
+        },
+        {
+          "field": "effect.payer",
+          "kind": "spec",
+          "expected": "-10000",
+          "got": "-10000",
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-expired",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 500,
+            "error": "permit2_deadline_expired: deadline expired",
+            "isValid": false,
+            "invalidReason": "permit2_deadline_expired",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "contract": "0",
+          "payer": "0",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "unspecified",
+          "got": "permit2_deadline_expired",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-partial",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          }
+        ],
+        "effect": {
+          "payTo": "4000",
+          "contract": "0",
+          "payer": "-4000",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "transaction",
+          "kind": "spec",
+          "expected": "present",
+          "got": "present",
+          "outcome": "match"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "spec",
+          "expected": "4000",
+          "got": "4000",
+          "outcome": "match"
+        },
+        {
+          "field": "effect.payer",
+          "kind": "spec",
+          "expected": "-4000",
+          "got": "-4000",
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-exceeds",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_upto_evm_payload_settlement_exceeds_amount: settlement exceeds permitted amount",
+            "success": false,
+            "errorReason": "invalid_upto_evm_payload_settlement_exceeds_amount",
+            "reasonFrom": "error-body"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "contract": "0",
+          "payer": "0",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "errorReason",
+          "kind": "spec",
+          "expected": "invalid_upto_evm_payload_settlement_exceeds_amount",
+          "got": "invalid_upto_evm_payload_settlement_exceeds_amount",
+          "outcome": "match"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "spec",
+          "expected": "0",
+          "got": "0",
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 200,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "exact-payload-as-upto",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "status": 500,
+            "error": "invalid_upto_evm_payload: unsupported payload type: expected upto permit2 payload",
+            "isValid": false,
+            "invalidReason": "invalid_upto_evm_payload",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "contract": "0",
+          "payer": "0",
+          "unfunded": "0",
+          "batchRefund": "0",
+          "batchFlush": "0",
+          "batchDynamic": "0"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "isValid",
+          "kind": "unspecified",
+          "got": false,
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "invalidReason",
+          "kind": "unspecified",
+          "got": "invalid_upto_evm_payload",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "success",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "status",
+          "kind": "unspecified",
+          "got": 500,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "batch-refund-before-settle",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "request": 1,
+            "status": 200
+          },
+          {
+            "request": 2,
+            "status": 200
+          },
+          {
+            "request": 3,
+            "status": 200
+          },
+          {
+            "action": "refund",
+            "outcome": "ok"
+          },
+          {
+            "action": "claimAndSettle",
+            "outcome": "ok"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "payer": "-3000",
+          "contract": "3000"
+        }
+      },
+      "checks": [
+        {
+          "field": "effect.payTo",
+          "kind": "spec",
+          "expected": "3000",
+          "got": "0",
+          "outcome": "spec-difference",
+          "known": "x402#3730"
+        },
+        {
+          "field": "effect.payer",
+          "kind": "unspecified",
+          "got": "-3000",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.contract",
+          "kind": "unspecified",
+          "got": "3000",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "batch-flush-stop",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "request": 1,
+            "status": 200
+          },
+          {
+            "request": 2,
+            "status": 200
+          },
+          {
+            "request": 3,
+            "status": 200
+          },
+          {
+            "action": "stopWithFlush",
+            "outcome": "error: Settle failed: invalid_batch_settlement_evm_rpc_read_failed — receivers returned *big.Int, want two uint128 values"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "payer": "-10000",
+          "contract": "10000"
+        }
+      },
+      "checks": [
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payer",
+          "kind": "unspecified",
+          "got": "-10000",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.contract",
+          "kind": "unspecified",
+          "got": "10000",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "batch-dynamic-pricing",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "request": 1,
+            "status": 200
+          },
+          {
+            "request": 2,
+            "status": 200
+          },
+          {
+            "request": 3,
+            "status": 200
+          },
+          {
+            "action": "claimAndSettle",
+            "outcome": "error: Settle failed: invalid_batch_settlement_evm_rpc_read_failed — receivers returned *big.Int, want two uint128 values"
+          }
+        ],
+        "effect": {
+          "payTo": "0",
+          "payer": "-10000",
+          "contract": "10000"
+        }
+      },
+      "checks": [
+        {
+          "field": "effect.payTo",
+          "kind": "unspecified",
+          "got": "0",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.payer",
+          "kind": "unspecified",
+          "got": "-10000",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.contract",
+          "kind": "unspecified",
+          "got": "10000",
+          "outcome": "recorded"
+        }
+      ]
+    }
+  ],
+  "faults": [
+    {
+      "case": "exact-eip3009-valid",
+      "scenario": "eth_sendRawTransaction:hang",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "timeout": true
+          },
+          {
+            "status": 500,
+            "error": "settlement_pending: transaction receipt not found after 30 seconds",
+            "success": false,
+            "errorReason": "settlement_pending",
+            "reasonFrom": "error-body"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": false
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-valid",
+      "scenario": "eth_sendRawTransaction:reset",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:39819\": read tcp 127.0.0.1:44240->127.0.0.1:39819: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-valid",
+      "scenario": "eth_sendRawTransaction:drop",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:40965\": EOF",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-valid",
+      "scenario": "eth_sendRawTransaction:truncate",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: read tcp 127.0.0.1:46868->127.0.0.1:37723: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-valid",
+      "scenario": "eth_sendRawTransaction:rpc-error",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: injected by the faults proxy",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-valid",
+      "scenario": "eth_getTransactionReceipt:hang",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "timeout": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_transaction_failed",
+            "success": false,
+            "errorReason": "invalid_exact_evm_transaction_failed",
+            "reasonFrom": "error-body"
+          }
+        ],
+        "effect": {
+          "afterSettle": "10000",
+          "afterRetry": "10000",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": false
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-valid",
+      "scenario": "eth_getTransactionReceipt:reset",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "10000",
+          "afterRetry": "10000",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-valid",
+      "scenario": "eth_getTransactionReceipt:drop",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "10000",
+          "afterRetry": "10000",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-valid",
+      "scenario": "eth_getTransactionReceipt:truncate",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "10000",
+          "afterRetry": "10000",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-eip3009-valid",
+      "scenario": "eth_getTransactionReceipt:rpc-error",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "10000",
+          "afterRetry": "10000",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-valid",
+      "scenario": "eth_sendRawTransaction:hang",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "timeout": true
+          },
+          {
+            "status": 500,
+            "error": "settlement_pending: transaction receipt not found after 30 seconds",
+            "success": false,
+            "errorReason": "settlement_pending",
+            "reasonFrom": "error-body"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": false
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-valid",
+      "scenario": "eth_sendRawTransaction:reset",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:43625\": read tcp 127.0.0.1:52926->127.0.0.1:43625: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-valid",
+      "scenario": "eth_sendRawTransaction:drop",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: Post \"http://127.0.0.1:37945\": EOF",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-valid",
+      "scenario": "eth_sendRawTransaction:truncate",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: read tcp 127.0.0.1:56978->127.0.0.1:34169: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-valid",
+      "scenario": "eth_sendRawTransaction:rpc-error",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_failed_to_execute_transfer: failed to send transaction: injected by the faults proxy",
+            "success": false,
+            "errorReason": "invalid_exact_evm_failed_to_execute_transfer",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-valid",
+      "scenario": "eth_getTransactionReceipt:hang",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "timeout": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_exact_evm_transaction_failed",
+            "success": false,
+            "errorReason": "invalid_exact_evm_transaction_failed",
+            "reasonFrom": "error-body"
+          }
+        ],
+        "effect": {
+          "afterSettle": "10000",
+          "afterRetry": "10000",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": false
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-valid",
+      "scenario": "eth_getTransactionReceipt:reset",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "10000",
+          "afterRetry": "10000",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-valid",
+      "scenario": "eth_getTransactionReceipt:drop",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "10000",
+          "afterRetry": "10000",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-valid",
+      "scenario": "eth_getTransactionReceipt:truncate",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "10000",
+          "afterRetry": "10000",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "exact-permit2-valid",
+      "scenario": "eth_getTransactionReceipt:rpc-error",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "10000",
+          "afterRetry": "10000",
+          "afterPass": "10000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-partial",
+      "scenario": "eth_sendRawTransaction:hang",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "timeout": true
+          },
+          {
+            "status": 500,
+            "error": "settlement_pending: transaction receipt not found after 30 seconds",
+            "success": false,
+            "errorReason": "settlement_pending",
+            "reasonFrom": "error-body"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "4000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": false
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-partial",
+      "scenario": "eth_sendRawTransaction:reset",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: Post \"http://127.0.0.1:35513\": read tcp 127.0.0.1:47584->127.0.0.1:35513: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_upto_evm_transaction_failed",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-partial",
+      "scenario": "eth_sendRawTransaction:drop",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: Post \"http://127.0.0.1:33689\": EOF",
+            "success": false,
+            "errorReason": "invalid_upto_evm_transaction_failed",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-partial",
+      "scenario": "eth_sendRawTransaction:truncate",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: read tcp 127.0.0.1:39362->127.0.0.1:37685: read: connection reset by peer",
+            "success": false,
+            "errorReason": "invalid_upto_evm_transaction_failed",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-partial",
+      "scenario": "eth_sendRawTransaction:rpc-error",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_upto_evm_transaction_failed: failed to send transaction: injected by the faults proxy",
+            "success": false,
+            "errorReason": "invalid_upto_evm_transaction_failed",
+            "reasonFrom": "error-body"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "0",
+          "afterRetry": "0",
+          "afterPass": "0"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-partial",
+      "scenario": "eth_getTransactionReceipt:hang",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "timeout": true
+          },
+          {
+            "status": 500,
+            "error": "invalid_upto_evm_transaction_failed",
+            "success": false,
+            "errorReason": "invalid_upto_evm_transaction_failed",
+            "reasonFrom": "error-body"
+          }
+        ],
+        "effect": {
+          "afterSettle": "4000",
+          "afterRetry": "4000",
+          "afterPass": "4000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": false
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-partial",
+      "scenario": "eth_getTransactionReceipt:reset",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "4000",
+          "afterRetry": "4000",
+          "afterPass": "4000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-partial",
+      "scenario": "eth_getTransactionReceipt:drop",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "4000",
+          "afterRetry": "4000",
+          "afterPass": "4000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-partial",
+      "scenario": "eth_getTransactionReceipt:truncate",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "4000",
+          "afterRetry": "4000",
+          "afterPass": "4000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "upto-permit2-partial",
+      "scenario": "eth_getTransactionReceipt:rpc-error",
+      "observed": {
+        "steps": [
+          {
+            "status": 200,
+            "isValid": true
+          },
+          {
+            "status": 200,
+            "success": true,
+            "transaction": "present"
+          },
+          {
+            "status": 500,
+            "error": "Payment must be verified before settlement"
+          }
+        ],
+        "effect": {
+          "afterSettle": "4000",
+          "afterRetry": "4000",
+          "afterPass": "4000"
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-success-without-transfer",
+          "holds": true
+        },
+        {
+          "id": "no-failure-after-transfer",
+          "holds": true
+        },
+        {
+          "id": "pending-carries-transaction",
+          "holds": true
+        },
+        {
+          "id": "moves-once",
+          "holds": true
+        },
+        {
+          "id": "no-late-transfer",
+          "holds": true
+        }
+      ]
+    }
+  ],
+  "notes": []
+}

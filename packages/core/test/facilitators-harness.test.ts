@@ -20,7 +20,9 @@ import {
   MEMORY,
   PREFIX,
   proxyArgs,
+  SETTLE_MARGIN_MS,
   secretEnv,
+  settleTimeoutOf,
   targets,
   wave,
   X402_COMMIT,
@@ -201,6 +203,35 @@ describe('facilitator matrix images', () => {
       expect(lines.join('\n')).not.toMatch(/PRIVATE_KEY|0x[0-9a-f]{64}/i);
     },
   );
+
+  it('waits for a settle as long as the target waits for its receipt, plus a margin, with the source named', () => {
+    for (const [, def] of runnable) {
+      expect(def.receiptWait.ms).toBeGreaterThan(0);
+      expect(def.receiptWait.source).toMatch(/^(e2e|python|go|typescript)\/\S+:\d+/);
+      expect(settleTimeoutOf(def)).toBe(def.receiptWait.ms + SETTLE_MARGIN_MS);
+    }
+    expect(SETTLE_MARGIN_MS).toBeGreaterThanOrEqual(10_000);
+    expect(Object.fromEntries(runnable.map(([name, def]) => [name, def.receiptWait.ms]))).toEqual({
+      typescript: 180_000,
+      go: 30_000,
+      python: 120_000,
+    });
+  });
+
+  it('builds the TypeScript facilitator with the tools node-gyp needs, without the legacy packages', () => {
+    expect(read('docker/typescript.Dockerfile')).toMatch(/^FROM node:22-bookworm$/m);
+    expect(read('docker/typescript.Dockerfile')).toContain(
+      "turbo run build --concurrency=1 --filter='!./packages/legacy/*'",
+    );
+  });
+
+  it('builds the Python facilitator with a uv the lockfile accepts, on Python 3.10', () => {
+    const dockerfile = read('docker/python.Dockerfile');
+    expect(dockerfile).toMatch(/^FROM python:3\.10-slim-bookworm$/m);
+    expect(dockerfile).toMatch(
+      /^COPY --from=ghcr\.io\/astral-sh\/uv:0\.11\.\d+ \/uv \/uvx \/bin\/$/m,
+    );
+  });
 
   it('runs the proxy runner from the built faults package, with remote upstreams left refused', () => {
     const dockerfile = read('docker/faults.Dockerfile');

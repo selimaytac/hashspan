@@ -471,6 +471,15 @@ export async function buildCase(c, { now = T0, salt = '', payTo = PAY_TO } = {})
   };
 }
 
+/**
+ * A case's expectations with one more row per call: its HTTP status, `unspecified`, since the spec gives the
+ * VerifyResponse and SettleResponse bodies and leaves their mapping to HTTP status codes to the transport (section 3).
+ */
+export function expectationsOf(c) {
+  const steps = c.steps ?? ['verify', 'settle'];
+  return [...c.expect, ...steps.map((_, i) => unspecified('status', i))];
+}
+
 /** The request body of one call of a built case: an upto settle carries the amount to settle. */
 export function bodyOf(built, call) {
   const paymentRequirements =

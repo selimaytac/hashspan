@@ -15,7 +15,16 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { balanceOf, setupChain } from './chain.mjs';
 import { runCase, runFaultCase } from './conformance.mjs';
-import { buildCase, CASES, CORPUS_ID, corpusHash, FLOWS, NETWORK, receiverOf } from './corpus.mjs';
+import {
+  buildCase,
+  CASES,
+  CORPUS_ID,
+  corpusHash,
+  expectationsOf,
+  FLOWS,
+  NETWORK,
+  receiverOf,
+} from './corpus.mjs';
 import { caseStatus, checkExpectations, checkInvariants, supportedSchemes } from './diff.mjs';
 import { FAULT_CASES, faultScenarios } from './faults.mjs';
 import { runFlow } from './flows.mjs';
@@ -30,6 +39,7 @@ import {
   facilitatorArgs,
   proxyArgs,
   secretEnv,
+  settleTimeoutOf,
   targets,
 } from './targets.mjs';
 
@@ -171,12 +181,16 @@ async function main() {
           continue;
         }
         const built = await buildCase(c, { now, salt: 'conformance' });
-        const observed = await runCase(built, { facilitatorUrl: FACILITATOR_URL, rpcUrl: RPC_URL });
+        const observed = await runCase(built, {
+          facilitatorUrl: FACILITATOR_URL,
+          rpcUrl: RPC_URL,
+          settleTimeoutMs: settleTimeoutOf(def),
+        });
         conformance.push({
           case: c.id,
           status,
           observed,
-          checks: checkExpectations(c.expect, observed),
+          checks: checkExpectations(expectationsOf(c), observed),
         });
       }
       for (const flow of FLOWS) {
@@ -217,6 +231,7 @@ async function main() {
           const observed = await runFaultCase(built, {
             facilitatorUrl: FACILITATOR_URL,
             rpcUrl: RPC_URL,
+            settleTimeoutMs: settleTimeoutOf(def),
           });
           const requests = await stopPair(name);
           if (requests === 0) faultCasesWithoutRequests++;
@@ -268,6 +283,8 @@ async function main() {
       commit: def.commit,
       path: def.path,
       rpc: def.rpc,
+      receiptWait: def.receiptWait,
+      settleTimeoutMs: settleTimeoutOf(def),
       start: { ...def.start, verified: true },
     },
     anvil: {

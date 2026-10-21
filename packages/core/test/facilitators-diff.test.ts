@@ -55,6 +55,48 @@ describe('observed calls', () => {
     expect(observeCall(undefined, undefined, 'timeout')).toEqual({ timeout: true });
   });
 
+  it('reads a reason code from the error text of a non-2xx answer, keeping its status', () => {
+    const expired = {
+      error: 'invalid_exact_evm_payload_authorization_valid_before: valid before expired: 1',
+    };
+    expect(observeCall(500, expired, undefined, 'verify')).toEqual({
+      status: 500,
+      error: expired.error,
+      isValid: false,
+      invalidReason: 'invalid_exact_evm_payload_authorization_valid_before',
+      reasonFrom: 'error-body',
+    });
+    const pending = { error: 'settlement_pending: transaction receipt not found after 30 seconds' };
+    expect(observeCall(500, pending, undefined, 'settle')).toMatchObject({
+      status: 500,
+      success: false,
+      errorReason: 'settlement_pending',
+      reasonFrom: 'error-body',
+    });
+    expect(
+      observeCall(500, undefined, 'invalid_exact_evm_transaction_failed', 'settle'),
+    ).toMatchObject({ success: false, errorReason: 'invalid_exact_evm_transaction_failed' });
+    // Prose is no reason code, a 2xx body keeps its own fields, and without a path nothing is inferred.
+    const prose = { error: 'Payment must be verified before settlement' };
+    expect(observeCall(500, prose, undefined, 'settle')).toEqual({
+      status: 500,
+      error: prose.error,
+    });
+    const unregistered = {
+      error: 'No facilitator registered for scheme: exact and network: eip155:1',
+    };
+    expect(observeCall(500, unregistered, undefined, 'verify')).toEqual({
+      status: 500,
+      error: unregistered.error,
+    });
+    expect(observeCall(200, { isValid: true, error: 'a_b: x' }, undefined, 'verify')).toEqual({
+      status: 200,
+      isValid: true,
+      error: 'a_b: x',
+    });
+    expect(observeCall(500, expired)).toEqual({ status: 500, error: expired.error });
+  });
+
   it('strips hashes, signatures, paths, addresses and times from returned text', () => {
     expect(sanitize(`tx 0x${'a'.repeat(64)} sig 0x${'b'.repeat(130)}`)).toBe('tx <hex> sig <hex>');
     expect(sanitize('at C:\\x and /Users/a/b and /tmp/c')).toBe('at <path> and <path> and <path>');
@@ -230,6 +272,26 @@ describe('fault invariants', () => {
       id: 'pending-carries-transaction',
       holds: false,
     });
+  });
+
+  it('take a transfer that mines after a settlement_pending answer as announced, and want its transaction', () => {
+    // The Go e2e facilitator: the settle times out at the harness, the retry answers pending in a 500 body.
+    const pendingIn500 = observeCall(
+      500,
+      { error: 'settlement_pending: transaction receipt not found after 30 seconds' },
+      undefined,
+      'settle',
+    );
+    const invariants = checkInvariants(
+      {
+        steps: [valid, { timeout: true }, pendingIn500],
+        effect: { afterSettle: '0', afterRetry: '0', afterPass: '10000' },
+      },
+      { amount: '10000' },
+    );
+    expect(invariants.filter((i) => !i.holds).map((i) => i.id)).toEqual([
+      'pending-carries-transaction',
+    ]);
   });
 
   it('flag funds moved twice', () => {
