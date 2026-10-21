@@ -27,7 +27,8 @@
     "check:packages": "pnpm build && pnpm -r --filter \"./packages/*\" exec publint --strict && pnpm -r --filter \"./packages/*\" exec attw --pack . --profile node16",
     "test:coverage": "vitest run --coverage",
     "api:check": "pnpm build && pnpm -r --filter \"./packages/*\" exec api-extractor run",
-    "api:update": "pnpm build && pnpm -r --filter \"./packages/*\" exec api-extractor run --local"
+    "api:update": "pnpm build && pnpm -r --filter \"./packages/*\" exec api-extractor run --local",
+    "backends:table": "node scripts/backends/table.mjs"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
@@ -36,6 +37,7 @@
     "@changesets/cli": "^3.0.3",
     "@microsoft/api-extractor": "7.59.3",
     "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/otlp-transformer": "0.222.0",
     "@opentelemetry/sdk-trace-base": "^2.11.0",
     "@types/node": "^26",
     "@vitest/coverage-v8": "5.0.3",

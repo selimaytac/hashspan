@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "corpus": {
+    "id": "e7-hashspan-1.1.0-anvil",
+    "sha256": "9faa7fcef1053ddfaedd1cb1dfc77d4a51b8156ac4ddff8be63dfdced2126224"
+  },
+  "harness": {
+    "commit": null,
+    "source": "experiment E7, recomputed from its recorded spans with diff.mjs"
+  },
+  "backend": {
+    "name": "mlflow",
+    "title": "MLflow",
+    "version": "3.17.1",
+    "image": "ghcr.io/mlflow/mlflow:v3.17.1",
+    "digest": "sha256:65aa7a75fe37554bd7dd9e539b58e1ec130dac99f27fef9756df316a272dfee2",
+    "readApi": "REST `/api/3.0/mlflow/traces/batchGet`"
+  },
+  "runDate": "2026-10-18",
+  "transports": {
+    "http/protobuf": {
+      "traces": {
+        "summary": {
+          "spans": 66,
+          "missing": 0,
+          "extraSpans": 0,
+          "nameDiff": 0,
+          "kindDiff": 66,
+          "parentDiff": 0,
+          "statusDiff": 0,
+          "attrMissing": 0,
+          "attrNameDiff": 0,
+          "attrTypeDiff": 0,
+          "attrStringified": 0,
+          "attrValueDiff": 0,
+          "attrExtra": 0,
+          "eventDiff": 0,
+          "eventAttrDiff": 0,
+          "linkDiff": 0,
+          "linkAttrDiff": 0,
+          "resourceDiff": null,
+          "scopeDiff": null
+        },
+        "exercised": {
+          "attributeTypes": [
+            "number",
+            "string"
+          ],
+          "statusMessage": false,
+          "eventAttributes": true,
+          "links": 8,
+          "crossTraceLinks": 1,
+          "linkAttributes": false,
+          "resource": false,
+          "scope": false
+        },
+        "differences": [
+          {
+            "check": "kindDiff",
+            "detail": "0 -> none",
+            "count": 7,
+            "spans": [
+              "e7 background",
+              "e7 foreground",
+              "e7 replacement",
+              "e7 revert",
+              "e7 send-failure",
+              "e7 watch",
+              "e7 watch-send"
+            ]
+          },
+          {
+            "check": "kindDiff",
+            "detail": "2 -> none",
+            "count": 59,
+            "spans": [
+              "confirm 31337",
+              "eth_blockNumber",
+              "eth_call",
+              "eth_estimateGas",
+              "eth_fillTransaction",
+              "eth_getBlockByNumber",
+              "eth_getTransactionByHash",
+              "eth_getTransactionCount",
+              "eth_getTransactionReceipt",
+              "eth_maxPriorityFeePerGas",
+              "eth_sendRawTransaction",
+              "send 31337"
+            ]
+          }
+        ]
+      },
+      "metrics": {
+        "status": 404,
+        "note": "no OTLP metrics endpoint",
+        "read": false
+      }
+    }
+  },
+  "notes": [
+    "span kind dropped on OTLP ingest: [mlflow/mlflow#26841](https://github.com/mlflow/mlflow/issues/26841)",
+    "link trace ids come back as `tr-<hex>` and resolve"
+  ]
+}

@@ -28,6 +28,8 @@ another service, triggers becomes a `send` / `confirm` span pair under its own t
   chain)
 - Local lab: `make lab-up` (Jaeger), `make anvil` (local chain), `make demo` (example agent), `make lab-pause`,
   `make lab-nuke`
+- Backend matrix: `node scripts/backends/run.mjs <backend>` (needs Docker; writes `docs/backends/results/`), then
+  `pnpm backends:table` regenerates the Compatibility table of docs/backends.md, which docs.test.ts checks
 Run lint, typecheck and tests before proposing a change.
 
 ### Fast paths while iterating
@@ -64,6 +66,9 @@ before changing there.
   with `dashboards/metrics.json`; `scripts/demo.sh` (behind `make demo`) starts a
   fresh Anvil or fails, and `scripts/publish-in-order.mjs` (behind `pnpm release`) publishes one dependency layer at
   a time (see docs/releasing.md)
+- `scripts/backends/` → OTLP backend matrix: a fixed corpus, sent to one backend container at a time, read back
+  through its API and diffed; one entry per backend in `backends.mjs`. Its tests are
+  `packages/core/test/backends-*.test.ts`, on recorded read-backs, without Docker
 See [docs/architecture.md](docs/architecture.md), [docs/semconv.md](docs/semconv.md) and the ADR index,
 [docs/adr/README.md](docs/adr/README.md), with each decision in one line.
 
