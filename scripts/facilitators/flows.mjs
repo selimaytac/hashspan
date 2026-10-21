@@ -92,10 +92,12 @@ async function attempt(fn) {
  * Runs one flow; returns the observation checkExpectations() reads: the paid requests' statuses and each server
  * step's outcome as steps, and what moved for the receiver, the flow's payer and the batch-settlement contract.
  */
-export async function runFlow(flow, { facilitatorUrl, rpcUrl }) {
+export async function runFlow(flow, { facilitatorUrl, rpcUrl, headers = {} }) {
+  // A target behind a bearer token gets it on every call of the SDK's client.
   const facilitatorClient = new HTTPFacilitatorClient({
     url: facilitatorUrl,
     timeoutMs: CALL_TIMEOUT_MS,
+    createAuthHeaders: async () => ({ verify: headers, settle: headers, supported: headers }),
   });
   const before = await readBalances(rpcUrl);
   const steps = [];

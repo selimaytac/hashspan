@@ -21,8 +21,8 @@ privacy modes and metrics. It makes no network calls; adapters pass it hashes, m
   normalizers, diff and result files; `test/fixtures/backends-e7/` holds the spans experiment E7 sent and read back
   (already normalized, no raw responses), from which the seeded results are computed
 - `test/facilitators-*.test.ts` test the facilitator matrix of `scripts/facilitators/` without Docker: the corpus and
-  its expired committed signatures, the targets and their docker run arguments, the Dockerfiles, the proxy runner's
-  scenario, the diff, the invariants, the result files and the tables; `test/facilitators-corpus.int.test.ts` checks
+  its expired committed signatures, the targets and their docker run arguments, the Dockerfiles, the config files and
+  bearer token of the Rust targets, a `--ref` run, the proxy runner's scenario, the diff, the invariants, the result files and the tables; `test/facilitators-corpus.int.test.ts` checks
   the committed corpus on Anvil with the matrix's chain setup
 - `test/nodes-*.test.ts` test the dev-node matrix of `scripts/nodes/` without Docker: the vendored execution-apis
   files and the validator, the targets and their docker run arguments, the contract and the blob transaction of the

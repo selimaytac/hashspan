@@ -9,7 +9,26 @@ depend on it.
 
 Wave 1 is the three facilitators of the x402 repository's end-to-end suite at one pinned commit
 ([`targets.mjs`](../scripts/facilitators/targets.mjs)): `e2e/facilitators/typescript`, `go` and `python` at
-`faa1c694`. Wave 2, x402-rs and qntx/facilitator, is listed there and not run yet.
+`faa1c694`. Wave 2 is the two Rust facilitators, each at the commit of its latest release tag:
+
+| Target | Tag | Commit | Schemes it is run with | Config | Bearer token |
+|---|---|---|---|---|---|
+| [x402-rs](https://github.com/x402-rs/x402-rs) `x402-facilitator` | v2.0.2 (2026-07-12) | `0b14f39a` | exact, upto | JSON | no |
+| [qntx/facilitator](https://github.com/qntx/facilitator) | v0.7.1 (2026-09-05) | `de13a74d` | exact, upto, batch-settlement | TOML | yes |
+
+Each Rust facilitator reads a config file, which the harness generates (`configOf()` in `targets.mjs`) for chain id
+84532 and copies into the image at build time. The file sets the listen address to 0.0.0.0, inside Anvil's network
+namespace. It names the RPC URL and the key by environment variable only, and the run sets that variable to the
+faults proxy on 127.0.0.1, so one image serves every fault case even though the proxy's port changes. Neither falls
+back to a public RPC when the variable is unset; both refuse to start. qntx needs a bearer token when it listens on
+an address other than loopback. Each run makes a random token, passes it to the container by environment name and
+sends it with every call. The token is never written, and a result that held it would fail the write check.
+x402-rs checks at its start that the EIP-6492 validator's address holds code, so the chain setup installs a stub
+there that reverts. It is only called for an EIP-6492 signature, and the corpus has none. Each target entry records,
+with source lines at its commit: where the RPC URL comes from and that there is no fallback, how the chain id is
+taken (any `eip155:<u64>`, with the requirement's asset and its EIP-712 name and version, no token table), how long
+it waits for a receipt, and the schemes `/supported` should list. auth-capture is left out of the qntx config,
+since the corpus has no case for it.
 
 Each wave-1 target is an HTTP server of the e2e suite around that language's x402 SDK. The verify and settle logic,
 and so the reason codes, come from the SDK; the HTTP envelope (the status code, and whether a failure comes as a
@@ -66,14 +85,15 @@ directory of the host:
   ([`faults-runner/`](../scripts/facilitators/faults-runner/runner.mjs)), with the fault scenario from an environment
   variable. It joins Anvil's namespace with `--network container:e14-anvil`, so its upstream is 127.0.0.1 and remote
   upstreams stay refused.
-- `e14-<target>` is the facilitator, which also joins the namespace. Its RPC URL is the proxy's. Its key is passed by
-  environment name only.
+- `e14-<target>` is the facilitator, which also joins the namespace. Its RPC URL is the proxy's. Its key, and the
+  run's bearer token for qntx, are passed by environment name only.
 
 Each wave-1 facilitator falls back to a public Base Sepolia RPC when its RPC variable is unset. The target entries
 record that fallback with its source line, and the run always sets the variable. A run fails when the proxy saw no
 request from the facilitator. The images are built from a `git archive` of the pinned commit with a Dockerfile of
 [`docker/`](../scripts/facilitators/docker/typescript.Dockerfile) that only copies its build context. Building them
-needs the network. Running them does not.
+needs the network. Running them does not. The Rust images build with two cargo jobs at a time, which keeps the
+build's memory low, and run on the same Debian release they were built on.
 
 ## Run it
 
@@ -82,12 +102,34 @@ regenerate the tables:
 
 ```sh
 pnpm install && pnpm --filter @hashspan/faults build
-node scripts/facilitators/run.mjs typescript   # --list names the targets; --x402 <clone> reuses a clone
+node scripts/facilitators/run.mjs typescript   # --list names the targets; --clone <clone> reuses a clone
 pnpm facilitators:table
 ```
 
 The run writes `docs/facilitators/results/<target>@<commit>.json` and removes its containers, its network and its
 images. `--pass conformance` or `--pass faults` runs one pass, and `--keep-images` keeps the images.
+
+Wave 2 runs the same way, one target at a time. A Rust image takes a while to build, since cargo builds the whole
+facilitator from source:
+
+```sh
+node scripts/facilitators/run.mjs x402-rs
+node scripts/facilitators/run.mjs qntx
+```
+
+`--ref <ref>` runs a target at another ref of its repository instead of its pinned commit, for example a pull request
+head: the run fetches the ref into the clone, builds an image tagged with the commit it resolved to, and writes
+`<target>@<that commit>.json`. The result records the ref, the pull request number and the pinned commit it is
+compared with, and the table shows it as a row of its own, such as "x402-rs x402-facilitator (PR #138 head)". The
+facts of the target entry (RPC, chain id, receipt wait) were read at the pinned commit, and the result says so. To
+compare the pinned commit with two pull requests on the fault pass:
+
+```sh
+node scripts/facilitators/run.mjs x402-rs --pass faults
+node scripts/facilitators/run.mjs x402-rs --pass faults --ref pull/138/head
+node scripts/facilitators/run.mjs x402-rs --pass faults --ref pull/140/head
+pnpm facilitators:table
+```
 
 ## Results
 

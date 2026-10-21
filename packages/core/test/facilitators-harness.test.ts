@@ -22,6 +22,7 @@ import {
   proxyArgs,
   SETTLE_MARGIN_MS,
   secretEnv,
+  secretNames,
   settleTimeoutOf,
   targets,
   wave,
@@ -38,6 +39,8 @@ const values = (args: string[], flag: string) =>
 
 const PROXY_URL = 'http://127.0.0.1:41234';
 const runnable = wave(1);
+const all = Object.entries(targets);
+const KEY = 'FACILITATOR_EVM_PRIVATE_KEY';
 
 /** Every docker run of one target's run: Anvil, the proxy and the facilitator. */
 const allArgs = (name: string) => [
@@ -47,7 +50,7 @@ const allArgs = (name: string) => [
 ];
 
 describe('facilitator matrix targets', () => {
-  it('runs the three x402 facilitators of one pinned commit first, and lists wave 2 as not yet run', () => {
+  it('runs the three x402 facilitators of one pinned commit first, then the two Rust facilitators', () => {
     expect(X402_COMMIT).toBe('faa1c694c66a3732aaabbce93bdae140e521a67d');
     expect(Object.keys(targets)).toEqual(['typescript', 'go', 'python', 'x402-rs', 'qntx']);
     expect(runnable.map(([name]) => name)).toEqual(['typescript', 'go', 'python']);
@@ -56,10 +59,13 @@ describe('facilitator matrix targets', () => {
       expect(def.repo).toBe('https://github.com/x402-foundation/x402');
       expect(def.path).toMatch(/^e2e\/facilitators\/(typescript|go|python)$/);
     }
-    for (const name of ['x402-rs', 'qntx']) {
-      expect(targets[name].wave).toBe(2);
-      expect(targets[name].notYetRun).toBe(true);
-      expect(() => facilitatorArgs(name, targets[name], PROXY_URL)).toThrow('not yet run');
+    expect(wave(2).map(([name]) => name)).toEqual(['x402-rs', 'qntx']);
+    for (const [name, def] of all) {
+      expect({ name, commit: def.commit }).toEqual({
+        name,
+        commit: expect.stringMatching(/^[0-9a-f]{40}$/),
+      });
+      expect(def.notYetRun).toBeUndefined();
     }
     // The two Rust facilitators have the fault class of the fault pass filed upstream already.
     expect(targets['x402-rs'].known).toEqual(['x402-rs#136']);
@@ -82,7 +88,7 @@ describe('facilitator matrix targets', () => {
     },
   );
 
-  it.each(runnable)(
+  it.each(all)(
     '%s runs its containers removable, named e14-, with 2 GiB, and no host path',
     (name) => {
       expect(PREFIX).toBe('e14-');
@@ -130,7 +136,7 @@ describe('facilitator matrix targets', () => {
     expect(NETWORK).toBe('eip155:84532');
   });
 
-  it.each(runnable)(
+  it.each(all)(
     '%s joins Anvil with --network container:, publishing nothing of its own',
     (name) => {
       for (const { role, args } of allArgs(name).filter((a) => a.role !== 'anvil')) {
@@ -145,19 +151,25 @@ describe('facilitator matrix targets', () => {
     },
   );
 
-  it.each(runnable)(
-    '%s takes its RPC from the proxy on 127.0.0.1 and its key by name only',
+  it.each(all)(
+    '%s takes its RPC from the proxy on 127.0.0.1 and its secrets by name only',
     (name, def) => {
       const args = facilitatorArgs(name, def, PROXY_URL);
       const env = values(args, '--env');
       expect(env).toContain(`EVM_RPC_URL=${PROXY_URL}`);
-      expect(env).toContain(`EVM_NETWORK=${NETWORK}`);
-      expect(env).toContain(`PORT=${FACILITATOR_PORT.container}`);
-      expect(env).toContain('FACILITATOR_EVM_PRIVATE_KEY');
+      if (def.wave === 1) {
+        expect(env).toContain(`EVM_NETWORK=${NETWORK}`);
+        expect(env).toContain(`PORT=${FACILITATOR_PORT.container}`);
+      }
+      // Each secret is a bare name: docker takes its value from its own environment.
+      for (const secret of secretNames(def)) expect(env).toContain(secret);
+      expect(env.filter((e) => !e.includes('='))).toEqual(secretNames(def));
       expect(args.join(' ')).not.toContain(ACCOUNTS.facilitator.slice(2));
-      expect(secretEnv()).toEqual({ FACILITATOR_EVM_PRIVATE_KEY: ACCOUNTS.facilitator });
+      expect((secretEnv(def, 'a'.repeat(64)) as Record<string, string>)[KEY]).toBe(
+        ACCOUNTS.facilitator,
+      );
       expect(() => facilitatorArgs(name, def, 'http://anvil:8545')).toThrow('127.0.0.1');
-      expect(args).toContain(imageOf(name, X402_COMMIT));
+      expect(args).toContain(imageOf(name, def.commit));
     },
   );
 
@@ -176,14 +188,16 @@ describe('facilitator matrix targets', () => {
 describe('facilitator matrix images', () => {
   const dockerfiles = readdirSync(join(dir, 'docker')).filter((f) => f.endsWith('.Dockerfile'));
 
-  it('has one Dockerfile per wave-1 target and one for the proxy runner', () => {
+  it('has one Dockerfile per target and one for the proxy runner', () => {
     expect(dockerfiles.sort()).toEqual([
       'faults.Dockerfile',
       'go.Dockerfile',
       'python.Dockerfile',
+      'qntx.Dockerfile',
       'typescript.Dockerfile',
+      'x402-rs.Dockerfile',
     ]);
-    for (const [name, def] of runnable) expect(def.dockerfile).toBe(`${name}.Dockerfile`);
+    for (const [name, def] of all) expect(def.dockerfile).toBe(`${name}.Dockerfile`);
   });
 
   it.each(dockerfiles)(
@@ -205,16 +219,18 @@ describe('facilitator matrix images', () => {
   );
 
   it('waits for a settle as long as the target waits for its receipt, plus a margin, with the source named', () => {
-    for (const [, def] of runnable) {
+    for (const [, def] of all) {
       expect(def.receiptWait.ms).toBeGreaterThan(0);
-      expect(def.receiptWait.source).toMatch(/^(e2e|python|go|typescript)\/\S+:\d+/);
+      expect(def.receiptWait.source).toMatch(/^(e2e|python|go|typescript|crates)\/\S+:\d+/);
       expect(settleTimeoutOf(def)).toBe(def.receiptWait.ms + SETTLE_MARGIN_MS);
     }
     expect(SETTLE_MARGIN_MS).toBeGreaterThanOrEqual(10_000);
-    expect(Object.fromEntries(runnable.map(([name, def]) => [name, def.receiptWait.ms]))).toEqual({
+    expect(Object.fromEntries(all.map(([name, def]) => [name, def.receiptWait.ms]))).toEqual({
       typescript: 180_000,
       go: 30_000,
       python: 120_000,
+      'x402-rs': 30_000,
+      qntx: 20_000,
     });
   });
 

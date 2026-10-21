@@ -14,6 +14,35 @@ export const RESULTS_DIR = 'docs/facilitators/results';
 /** File name of a target's result at a commit: the target and the commit's first eight characters. */
 export const resultFile = (target, commit) => `${target}@${String(commit).slice(0, 8)}.json`;
 
+/**
+ * The `target` block of a result: what the target is and the facts its entry records with their source lines. A run
+ * of a `--ref` names the ref, its pull request number and the pinned commit it is compared with; the facts were read
+ * at that pinned commit. Secrets are never part of it: the entry names environment variables only.
+ * @returns {Record<string, any>}
+ */
+export function resultTarget(name, def, settleTimeoutMs) {
+  /** @type {Record<string, any>} */
+  const target = {
+    name,
+    title: def.title,
+    repo: def.repo,
+    commit: def.commit,
+    ...(def.release ? { release: def.release } : {}),
+    path: def.path,
+    rpc: def.rpc,
+    ...(def.chainId ? { chainId: def.chainId } : {}),
+    receiptWait: def.ref ? { ...def.receiptWait, readAt: def.baseCommit } : def.receiptWait,
+    settleTimeoutMs,
+    start: { ...def.start, verified: true },
+  };
+  if (def.ref) {
+    target.ref = def.ref;
+    target.pr = def.pr;
+    target.baseCommit = def.baseCommit;
+  }
+  return target;
+}
+
 /** Builds a result; `runDate` is a date only. */
 export function buildResult({
   corpus,

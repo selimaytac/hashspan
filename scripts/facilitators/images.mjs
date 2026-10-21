@@ -1,13 +1,22 @@
 // Builds the images of a run from scratch build contexts, never from a bind mount: a target's image from a
-// `git archive` of the pinned x402 commit with the target's Dockerfile (docker/), and the faults-proxy runner's image
-// from the built packages/faults (package.json and dist/) with faults-runner/. Environment files of the archive are
-// removed unread before the build.
+// `git archive` of its pinned commit (or of the commit a `--ref` resolved to) with the target's Dockerfile (docker/)
+// and, for a target that reads one, the config file the harness generates (configOf() in targets.mjs); and the
+// faults-proxy runner's image from the built packages/faults (package.json and dist/) with faults-runner/.
+// Environment files of the archive are removed unread before the build.
 import { execFile, spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { imageOf } from './targets.mjs';
+import { configOf, imageOf, parseRef } from './targets.mjs';
 
 const run = promisify(execFile);
 const here = new URL('./', import.meta.url).pathname;
@@ -15,15 +24,23 @@ const here = new URL('./', import.meta.url).pathname;
 /** A new, empty scratch directory; the caller removes it. */
 export const scratch = (name) => mkdtempSync(join(tmpdir(), `e14-${name}-`));
 
-/** Clones x402 without a checkout into `dir`, for `git archive`. Needs the network, at build time only. */
-export async function cloneX402(repo, dir) {
+/** Clones a target's repository without a checkout into `dir`, for `git archive`. Needs the network, at build time. */
+export async function cloneRepo(repo, dir) {
   await run('git', ['clone', '--quiet', '--filter=blob:none', '--no-checkout', repo, dir]);
+}
+
+/** Fetches a ref (`pull/138/head`) from the clone's origin; returns the commit it resolved to. */
+export async function fetchRef(clone, ref) {
+  parseRef(ref);
+  await run('git', ['-C', clone, 'fetch', '--quiet', '--filter=blob:none', 'origin', ref]);
+  const { stdout } = await run('git', ['-C', clone, 'rev-parse', 'FETCH_HEAD^{commit}']);
+  return stdout.trim();
 }
 
 /** Runs `git archive <commit> <paths>` of a clone and extracts it into `dest`. */
 export async function archive(clone, commit, paths, dest) {
   await run('git', ['-C', clone, 'cat-file', '-e', `${commit}^{commit}`]).catch(() => {
-    throw new Error(`the x402 clone lacks commit ${commit}; fetch it first`);
+    throw new Error(`the clone lacks commit ${commit}; fetch it first`);
   });
   await new Promise((resolve, reject) => {
     const git = spawn('git', ['-C', clone, 'archive', '--format=tar', commit, ...paths], {
@@ -63,11 +80,16 @@ async function build(context, dockerfile, image) {
   );
 }
 
-/** Builds a target's image from the x402 clone; returns its tag. */
+/**
+ * Builds a target's image from its clone at `def.commit`, with its generated config file in the build context for
+ * the Dockerfile to copy; returns its tag.
+ */
 export async function buildTargetImage(name, def, clone) {
   const context = scratch(name);
   try {
     await archive(clone, def.commit, def.archive, context);
+    const config = configOf(name);
+    if (config) writeFileSync(join(context, config.file), config.text);
     const image = imageOf(name, def.commit);
     await build(context, def.dockerfile, image);
     return image;
