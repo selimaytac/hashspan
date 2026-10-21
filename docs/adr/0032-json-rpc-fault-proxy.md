@@ -1,6 +1,6 @@
 # 0032. A JSON-RPC fault proxy as a published package
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-10-21
 
 ## Context
@@ -24,7 +24,8 @@ before it applies) and `times`. Six kinds:
 - `hang`: never answers;
 - `http`: an HTTP status without a JSON-RPC body, such as 429;
 - `rpc-error`: a JSON-RPC error with a code and an optional message;
-- `reset`: the headers and part of the body, then a connection reset;
+- `reset`: meant as the headers and part of the body, then a connection reset; the write is still buffered when
+  the socket is reset, so the client gets a reset before any byte;
 - `result`: the node's result replaced by a function of it and of the call count;
 - `previous`: the result of this method's previous request, as a load balancer that mixes up answers.
 
@@ -36,7 +37,7 @@ since the last `set()`. A failure while handling a request answers 502.
 | | hashspan tests | lab |
 |---|---|---|
 | HTTP status | `http` | `status` |
-| Connection reset | `reset`: headers and part of the body, then a reset | `reset`: the socket is destroyed before any byte |
+| Connection reset | `reset`: a TCP reset before any byte | `reset`: the socket is destroyed before any byte |
 | `hang`, `rpc-error`, `result`, `previous` | yes | no |
 | Rules | `set(rules)` replaces all rules; `after` and `times` | `fail(method, fault, times)` adds one; `clear()` removes all |
 | Counts | `requests(method)`, since the last `set()` | `requests()`, every method, since the start |
@@ -103,20 +104,22 @@ other hashspan package, so a core release never moves it and it never moves the 
 
 Version 1 has the six kinds of today, unchanged in name and meaning, so the existing tests move without edits to
 their rules: `hang`, `http`, `rpc-error`, `reset`, `result`, `previous`. The lab's `status` maps to `http`. The
-lab's reset, which destroys the socket before any byte, is a different fault from ours, which sends part of a body:
+lab's reset, which closes the socket before any byte, is a different fault from ours, a TCP reset before any byte:
 it gets its own kind, `drop`, in version 1 too, since the lab's scenario needs it to move to the package, and
-`reset` keeps its meaning.
+`reset` keeps the behaviour the existing tests were written against.
 
 `requests()` without an argument returns every method's count as a record, and `requests(method)` stays.
 
 Deferred, in this order:
 
-1. `latency` (a delay before the node's answer is passed on);
-2. faults on single requests of a JSON-RPC batch; until then a batch is passed on untouched;
-3. a scenario file format, with named result built-ins (a receipt that stays `null`, a preconfirmed receipt that is
+1. `truncate`: the headers and part of the body, then a reset, the fault `reset` was meant to be; three adapter
+   tests time out against it instead of ending their spans, which is examined before the kind is added;
+2. `latency` (a delay before the node's answer is passed on);
+3. faults on single requests of a JSON-RPC batch; until then a batch is passed on untouched;
+4. a scenario file format, with named result built-ins (a receipt that stays `null`, a preconfirmed receipt that is
    later sealed with other values, a chain id that changes) in place of closures;
-4. an optional log of injected faults, as spans or JSON lines;
-5. a CLI that reads a scenario file, for compose setups and clients not written in TypeScript.
+5. an optional log of injected faults, as spans or JSON lines;
+6. a CLI that reads a scenario file, for compose setups and clients not written in TypeScript.
 
 Out of scope: faults a real node can produce. Reorgs, dropped and replaced transactions come from the node (Anvil's
 `anvil_reorg`, `anvil_dropTransaction`, a replacement sent with the same nonce) in the lab and in differential
@@ -189,5 +192,5 @@ The existing integration tests then run on the package unchanged, which checks t
   AGENTS.md.
 - A new 0.x release line to maintain, and a new npm name that needs the maintainer's one-time setup.
 - A remote upstream needs a deliberate opt-in, and the tool has no load features even then.
-- Latency, batch faults, a scenario file and a CLI come in later minor releases of the 0.x line, each with its own
+- A partial-body reset, latency, batch faults, a scenario file and a CLI come in later minor releases of the 0.x line, each with its own
   tests; reorgs and replacements stay with the node.
