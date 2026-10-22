@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { ARTIFACTS_DIR, fund, hasCode, senderOnChain, setupChain } from './chain.mjs';
+import { ARTIFACTS_DIR, chainFees, fund, hasCode, senderOnChain, setupChain } from './chain.mjs';
 import { eventsOf, rpc, runCase } from './conformance.mjs';
 import {
   buildCase,
@@ -26,8 +26,16 @@ import {
   corpusHash,
   ENTRY_POINTS,
   fundedSalts,
+  fundsFor,
 } from './corpus.mjs';
-import { caseStatus, checkExpectations, checkInvariants, usableEntryPoints } from './diff.mjs';
+import {
+  caseStatus,
+  checkExpectations,
+  checkInvariants,
+  logTail,
+  shouldRetryStart,
+  usableEntryPoints,
+} from './diff.mjs';
 import { FAULT_CASE, FAULT_SALT_BASE, FAULT_STEPS, faultScenarios } from './faults.mjs';
 import { buildArchiveImage, buildFaultsImage, buildRundlerImage, scratch } from './images.mjs';
 import { buildResult, resultFile, resultText, writeResult } from './result.mjs';
@@ -86,18 +94,48 @@ async function startPair(name, def, images, scenario) {
     30_000,
     'the faults proxy',
   );
-  await docker(bundlerArgs(name, def, url, images.target), secretEnv(def));
-  let listed;
-  await waitFor(
-    async () => {
-      const { body } = await rpc(bundlerUrl(def), 'eth_supportedEntryPoints', [], 5000);
-      listed = body?.result;
-      return Array.isArray(listed);
-    },
-    START_TIMEOUT_MS,
-    `${name} on ${bundlerUrl(def)}`,
-  );
-  return listed;
+  for (let attempt = 1; ; attempt++) {
+    await docker(bundlerArgs(name, def, url, images.target), secretEnv(def));
+    const started = await waitForBundler(name, def);
+    if (started.listed) return started.listed;
+    await docker(['rm', '--force', containerOf(name)]).catch(() => {});
+    if (shouldRetryStart(started.tail) && attempt < START_ATTEMPTS) {
+      await sleep(START_RETRY_MS);
+      continue;
+    }
+    throw new Error(
+      `not ready: ${name} on ${bundlerUrl(def)}${started.tail ? `\nlast lines of ${containerOf(name)}:\n${started.tail}` : ''}`,
+    );
+  }
+}
+
+/** How often a bundler is started again when its port is still held by the one before, and how long apart. */
+const START_ATTEMPTS = 8;
+const START_RETRY_MS = 15_000;
+
+/**
+ * Waits until the bundler lists its EntryPoints, or until it exits or START_TIMEOUT_MS passed; then returns its last
+ * log lines, read before the run removes the container.
+ */
+async function waitForBundler(name, def) {
+  const deadline = Date.now() + START_TIMEOUT_MS;
+  for (;;) {
+    const { body } = await rpc(bundlerUrl(def), 'eth_supportedEntryPoints', [], 5000).catch(
+      () => ({}),
+    );
+    if (Array.isArray(body?.result)) return { listed: body.result };
+    const running = await docker(['inspect', '--format', '{{.State.Running}}', containerOf(name)])
+      .then(({ stdout }) => stdout.trim() === 'true')
+      .catch(() => false);
+    if (!running || Date.now() > deadline) {
+      const logs = await docker(['logs', containerOf(name)]).catch(() => ({
+        stdout: '',
+        stderr: '',
+      }));
+      return { tail: logTail(`${logs.stdout}\n${logs.stderr}`) };
+    }
+    await sleep(1000);
+  }
 }
 
 /** Applies the proxy's rules, now that the bundler is ready. */
@@ -225,11 +263,15 @@ async function main() {
       const scenarios = faultScenarios();
       for (const [k, scenario] of scenarios.entries()) {
         const saltOffset = FAULT_SALT_BASE + k;
+        // Signed now, with fees from the chain: the node's fee suggestion moves during a run (feesFor()).
         const built = await buildCase(c, {
           senderOf: (salt) => senderOnChain(RPC_URL, salt),
           saltOffset,
+          fees: await chainFees(RPC_URL),
         });
-        for (const op of Object.values(built.ops)) await fund(RPC_URL, op.userOperation.sender);
+        for (const op of Object.values(built.ops)) {
+          await fund(RPC_URL, op.userOperation.sender, fundsFor(op.userOperation));
+        }
         await startPair(name, def, images, scenario.rules);
         await arm();
         const observed = await runCase(

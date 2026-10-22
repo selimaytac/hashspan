@@ -1,0 +1,2653 @@
+{
+  "schema": 1,
+  "corpus": {
+    "id": "erc4337-v07-anvil-1",
+    "sha256": "1e1d7748b205d01ef35cfe6eedded50252a191be8b3be093c0b52a5385f0964c"
+  },
+  "harness": {
+    "commit": "ddc22b5d85b1e80988307a4584bc5889f078a8aa"
+  },
+  "target": {
+    "name": "alto",
+    "title": "Alto",
+    "repo": "https://github.com/pimlicolabs/alto",
+    "version": "v1.2.8",
+    "commit": "37cade5d2804a60ab30362ea27054514e1d7a7c8",
+    "build": {
+      "kind": "git-archive",
+      "submodules": [
+        {
+          "path": "contracts/lib/account-abstraction-v6",
+          "commit": "abff2aca61a8f0934e533d0d352978055fddbd96"
+        },
+        {
+          "path": "contracts/lib/account-abstraction-v7",
+          "commit": "7af70c8993a6f42973f520ae0752386a5032abe7"
+        },
+        {
+          "path": "contracts/lib/account-abstraction-v8",
+          "commit": "4cbc06072cdc19fd60f285c5997f4f7f57a588de"
+        },
+        {
+          "path": "contracts/lib/account-abstraction-v9",
+          "commit": "b36a1ed52ae00da6f8a4c8d50181e2877e4fa410"
+        },
+        {
+          "path": "contracts/lib/forge-std",
+          "commit": "ae570fec082bfe1c1f45b0acca4a2b4f84d345ce"
+        },
+        {
+          "path": "contracts/lib/openzeppelin-contracts-v4.8.3",
+          "commit": "0a25c1940ca220686588c4af3ec526f725fe2582"
+        },
+        {
+          "path": "contracts/lib/openzeppelin-contracts-v5.0.2",
+          "commit": "dbb6104ce834628e473d2173bbc9d47f81a9eec3"
+        },
+        {
+          "path": "contracts/lib/openzeppelin-contracts-v5.1.0",
+          "commit": "69c8def5f222ff96f2b5beff05dfba996368aa79"
+        },
+        {
+          "path": "contracts/lib/singleton-paymaster",
+          "commit": "349f1043989306f63c37c3419ba4cca191b205b2"
+        },
+        {
+          "path": "contracts/lib/solady",
+          "commit": "1dd8967b93b379ca6cf384640e0715e55ef08e3d"
+        }
+      ]
+    },
+    "unsafe": {
+      "flag": "--safe-mode false",
+      "source": "src/cli/config/options.ts:45-49"
+    },
+    "listen": {
+      "how": "fixed in the source (alto#767)",
+      "source": "src/rpc/server.ts:165"
+    },
+    "bundleInterval": {
+      "ms": 1000,
+      "source": "src/cli/config/options.ts:853-858"
+    },
+    "receiptTimeoutMs": 31000,
+    "start": {
+      "command": "node src/esm/cli/alto.js run --safe-mode false",
+      "verified": true
+    }
+  },
+  "anvil": {
+    "image": "ghcr.io/foundry-rs/foundry:v1.8.4",
+    "digest": "sha256:f69e1b8d1dda17d89227a4d0513b1d86f93ece430dea8d87aaea643da3607d3e",
+    "chainId": 1337
+  },
+  "runDate": "2026-10-22",
+  "probes": {
+    "chainId": 1337,
+    "chainIdMatches": true,
+    "supportedEntryPoints": [
+      "0.7"
+    ],
+    "usable": [
+      "0.7"
+    ]
+  },
+  "egress": {
+    "conformanceRequests": 364,
+    "faultCasesWithoutRequests": 0
+  },
+  "conformance": [
+    {
+      "case": "plain-op",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "estimate",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "estimate.fields": "complete"
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "estimate.fields",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "complete",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "missing: paymaster",
+          "outcome": "spec-difference"
+        },
+        {
+          "step": 2,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 2,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "batch-calls",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "missing: paymaster",
+          "outcome": "spec-difference"
+        },
+        {
+          "step": 1,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "two-senders",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "first",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "send",
+            "op": "second",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "first",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "wait",
+            "op": "second",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "first,second",
+          "sameBundle": true
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "missing: paymaster",
+          "outcome": "spec-difference"
+        },
+        {
+          "step": 2,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 2,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "missing: paymaster",
+          "outcome": "spec-difference"
+        },
+        {
+          "step": 3,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 3,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.sameBundle",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "execution-revert",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": false,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "Error(boom)",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.reason",
+          "kind": "spec",
+          "expected": "Error(boom)",
+          "got": "Error(boom)",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "case": "bad-signature",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32507,
+            "aa": "AA24",
+            "message": "UserOperation reverted with reason: AA24 signature error"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32507,
+          "got": -32507,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified",
+          "got": "AA24",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "validation-revert",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA23",
+            "message": "UserOperation reverted with reason: AA23 reverted <hex>"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32500,
+          "got": -32500,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "spec",
+          "expected": "AA23",
+          "got": "AA23",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "case": "insufficient-prefund",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA21",
+            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32500,
+          "got": -32500,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "spec",
+          "expected": "AA21",
+          "got": "AA21",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "case": "low-verification-gas",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA13",
+            "message": "UserOperation reverted with reason: AA13 initCode failed or OOG"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified",
+          "got": -32500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified",
+          "got": "AA13",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "nonce-reuse",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "first",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "first",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "reuse",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA25",
+            "message": "UserOperation reverted with reason: AA25 invalid account nonce"
+          }
+        ],
+        "effect": {
+          "landed": "first"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32500,
+          "got": -32500,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "aa",
+          "kind": "spec",
+          "expected": "AA25",
+          "got": "AA25",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "case": "nonce-gap",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA25",
+            "message": "UserOperation reverted with reason: AA25 invalid account nonce"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": false,
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified",
+          "got": -32500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified",
+          "got": "AA25",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "replacement",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "first",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "send",
+            "op": "replacement",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "replacement",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "wait",
+            "op": "first",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "replacement"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "code",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.landed",
+          "kind": "unspecified",
+          "got": "replacement",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "pre-verification-gas-out-of-range",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA94",
+            "message": "UserOperation reverted with reason: AA94 gas values overflow"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "answer",
+          "kind": "spec",
+          "expected": "error",
+          "got": "error",
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified",
+          "got": -32500,
+          "outcome": "recorded"
+        }
+      ]
+    }
+  ],
+  "faults": [
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:hang",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:reset",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:drop",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:truncate",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:rpc-error",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:hang",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:reset",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:drop",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:truncate",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:rpc-error",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:hang",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:reset",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:drop",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:truncate",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:rpc-error",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:hang",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:reset",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:drop",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:truncate",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:rpc-error",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    }
+  ],
+  "notes": []
+}

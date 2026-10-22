@@ -28,8 +28,9 @@ COPY scripts/localDeployer/package.json ./scripts/localDeployer/package.json
 COPY src ./src
 COPY --from=contracts /alto/src/contracts ./src/contracts
 ENV NODE_OPTIONS=--max-old-space-size=4096
-RUN pnpm install --frozen-lockfile --filter @pimlico/alto... --workspace-concurrency=1
-RUN pnpm --filter @pimlico/alto run build
+# pnpm takes --workspace-concurrency on run, not on install (the lab run's pnpm refused it there).
+RUN pnpm install --frozen-lockfile --filter @pimlico/alto...
+RUN pnpm --filter @pimlico/alto --workspace-concurrency=1 run build
 ENV NODE_OPTIONS=
 WORKDIR /alto/src
 USER node

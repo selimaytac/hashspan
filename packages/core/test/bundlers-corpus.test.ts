@@ -19,7 +19,11 @@ import {
   ENTRY_POINTS,
   ERCS_COMMIT,
   FACTORY,
+  FEES,
+  FUNDS,
+  feesFor,
   fundedSalts,
+  fundsFor,
   HUGE_PRE_VERIFICATION_GAS,
   REF,
   SENDERS,
@@ -71,6 +75,45 @@ const hashOf = (rpc: Rpc) =>
   });
 
 describe('bundler corpus', () => {
+  it('signs fault-pass operations with fees from the chain, never below the corpus fees', () => {
+    const gwei = 10n ** 9n;
+    // A fresh chain: the corpus fees stay.
+    expect(feesFor({ baseFee: gwei, suggestedPriority: gwei / 2n })).toEqual(FEES);
+    // The node now suggests more than the corpus tip (what made Voltaire refuse the fixed fees).
+    const raised = feesFor({ baseFee: 30n * gwei, suggestedPriority: 3n * gwei });
+    expect(raised.maxPriorityFeePerGas).toBe(6n * gwei);
+    expect(raised.maxFeePerGas).toBe(66n * gwei);
+    expect(raised.maxFeePerGas >= raised.maxPriorityFeePerGas).toBe(true);
+  });
+
+  it('funds a sender for twice the most its operation can be charged, never below FUNDS', () => {
+    const op = (maxFeePerGas: bigint) => ({
+      callGasLimit: '0x186a0',
+      verificationGasLimit: '0x927c0',
+      preVerificationGas: '0x186a0',
+      maxFeePerGas: `0x${maxFeePerGas.toString(16)}`,
+    });
+    const gwei = 10n ** 9n;
+    expect(fundsFor(op(20n * gwei))).toBe(FUNDS);
+    // 800,000 gas at 2,000 gwei is 1.6 ETH; twice that is funded.
+    expect(fundsFor(op(2_000n * gwei))).toBe(2n * 800_000n * 2_000n * gwei);
+  });
+
+  it('builds a case with the fees it is given, and the corpus with FEES', async () => {
+    const c = CASES.find((x: { id: string }) => x.id === 'plain-op');
+    const fees = { maxFeePerGas: 77n * 10n ** 9n, maxPriorityFeePerGas: 7n * 10n ** 9n };
+    const mainOf = async (options?: { fees: typeof fees }) => {
+      const main = (await buildCase(c, options)).ops.main;
+      if (!main) throw new Error('plain-op has no main operation');
+      return main.userOperation;
+    };
+    const built = await mainOf({ fees });
+    expect(BigInt(built.maxFeePerGas as string)).toBe(fees.maxFeePerGas);
+    expect(BigInt(built.maxPriorityFeePerGas as string)).toBe(fees.maxPriorityFeePerGas);
+    const corpus = await mainOf();
+    expect(BigInt(corpus.maxFeePerGas as string)).toBe(FEES.maxFeePerGas);
+  });
+
   it('is the committed file the generator writes', async () => {
     expect(corpusText(await buildCorpus()), 'run `node scripts/bundlers/corpus.mjs --write`').toBe(
       committedText,

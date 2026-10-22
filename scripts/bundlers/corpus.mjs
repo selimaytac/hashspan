@@ -99,6 +99,38 @@ export const SENDERS = {
 
 /** The fees of every operation: well above the base fee of a fresh Anvil (1 gwei and falling). */
 export const FEES = { maxFeePerGas: parseGwei('20'), maxPriorityFeePerGas: parseGwei('2') };
+/**
+ * The fees of an operation signed during a run, from the chain at that time: at least FEES, a priority fee of twice
+ * the node's suggestion and a max fee of twice the base fee plus that priority. A bundler that checks fees against
+ * the node's current gas price (Voltaire: `estimated basefee + maxPriorityFeePerGas` against `eth_gasPrice` less its
+ * tolerance, voltaire_bundler/gas/gas_manager.py) refuses the fixed FEES once the node's suggestion has risen above
+ * them during a run. The committed corpus keeps FEES.
+ * @param {{ baseFee: bigint, suggestedPriority: bigint }} chain
+ */
+export function feesFor({ baseFee, suggestedPriority }) {
+  const max = (a, b) => (a > b ? a : b);
+  const maxPriorityFeePerGas = max(FEES.maxPriorityFeePerGas, 2n * suggestedPriority);
+  return {
+    maxPriorityFeePerGas,
+    maxFeePerGas: max(FEES.maxFeePerGas, 2n * baseFee + maxPriorityFeePerGas),
+  };
+}
+
+/**
+ * What an operation's sender needs to hold: at least FUNDS, and twice the most the EntryPoint can charge it (its gas
+ * limits times its max fee). Fees taken from the chain can rise far during a run, as a bundler that reprices its bundle
+ * transactions pushes the node's fee suggestion up, and a sender funded with FUNDS alone then fails with AA21.
+ * @param {Record<string, string>} userOperation in RPC form (hex quantities)
+ */
+export function fundsFor(userOperation) {
+  const gas = ['callGasLimit', 'verificationGasLimit', 'preVerificationGas'].reduce(
+    (sum, key) => sum + BigInt(userOperation[key] ?? '0x0'),
+    0n,
+  );
+  const needed = 2n * gas * BigInt(userOperation.maxFeePerGas);
+  return needed > FUNDS ? needed : FUNDS;
+}
+
 /** The higher fees of a replacement: 50 percent above FEES, beyond any replacement threshold of the targets. */
 export const REPLACEMENT_FEES = {
   maxFeePerGas: parseGwei('30'),
@@ -369,7 +401,7 @@ function account(key, salt, sender) {
  * One operation of a case, built and signed: its JSON-RPC form and its hash. `senderOf(salt)` gives the sender (the
  * committed table, or the factory on a chain).
  */
-export async function buildOp(op, senderOf) {
+export async function buildOp(op, senderOf, fees = FEES) {
   const sender = getAddress(await senderOf(op.salt));
   const owner = await account(ACCOUNTS.owner, op.salt, sender);
   const nonce = op.nonce ?? 0n;
@@ -382,7 +414,7 @@ export async function buildOp(op, senderOf) {
     callData: await owner.encodeCalls(op.calls ?? [{ to: RECIPIENT, value: 1n }]),
     ...GAS,
     ...op.gas,
-    ...FEES,
+    ...fees,
     ...op.fees,
     signature: '0x',
   };
@@ -405,16 +437,19 @@ export async function buildOp(op, senderOf) {
 
 /**
  * One case, built: its operations by name, its steps and expectations. `saltOffset` moves every account to a salt of
- * its own, for the fault pass.
+ * its own, for the fault pass; `fees` replaces FEES as the base fees of its operations (feesFor(), in the fault pass).
  * @param {any} c
  * @param {{ senderOf?: (salt: number) => string | undefined | Promise<string | undefined>,
- *   saltOffset?: number }} [options]
+ *   saltOffset?: number, fees?: { maxFeePerGas: bigint, maxPriorityFeePerGas: bigint } }} [options]
  */
-export async function buildCase(c, { senderOf = (salt) => SENDERS[salt], saltOffset = 0 } = {}) {
+export async function buildCase(
+  c,
+  { senderOf = (salt) => SENDERS[salt], saltOffset = 0, fees = FEES } = {},
+) {
   /** @type {Record<string, { hash: string, userOperation: Record<string, string> }>} */
   const ops = {};
   for (const [name, op] of Object.entries(c.ops)) {
-    ops[name] = await buildOp({ ...op, salt: op.salt + saltOffset }, senderOf);
+    ops[name] = await buildOp({ ...op, salt: op.salt + saltOffset }, senderOf, fees);
   }
   return {
     id: c.id,

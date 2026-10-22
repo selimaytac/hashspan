@@ -11,5 +11,9 @@ COPY requirements.txt pyproject.toml poetry.lock README.md ./
 COPY voltaire_bundler ./voltaire_bundler
 RUN pip install --require-hashes -r requirements.txt && pip install --no-deps .
 RUN mkdir -p /app/cache && chmod a+w /app/cache
+# The event bus binds its Unix sockets (`<server id>.ipc`, voltaire_bundler/event_bus_manager/endpoint.py:254) in the
+# working directory, so the process runs from one that `nobody` can write; /app itself is root's.
+RUN mkdir -p /app/run && chmod a+w /app/run
+WORKDIR /app/run
 USER nobody
 ENTRYPOINT ["python", "-m", "voltaire_bundler"]
