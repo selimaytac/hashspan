@@ -19,6 +19,8 @@ import {
   ENTRY_POINTS,
   ERCS_COMMIT,
   FACTORY,
+  FEES,
+  feesFor,
   fundedSalts,
   HUGE_PRE_VERIFICATION_GAS,
   REF,
@@ -71,6 +73,29 @@ const hashOf = (rpc: Rpc) =>
   });
 
 describe('bundler corpus', () => {
+  it('signs fault-pass operations with fees from the chain, never below the corpus fees', () => {
+    const gwei = 10n ** 9n;
+    // A fresh chain: the corpus fees stay.
+    expect(feesFor({ baseFee: gwei, suggestedPriority: gwei / 2n })).toEqual(FEES);
+    // The node now suggests more than the corpus tip (what made Voltaire refuse the fixed fees).
+    const raised = feesFor({ baseFee: 30n * gwei, suggestedPriority: 3n * gwei });
+    expect(raised.maxPriorityFeePerGas).toBe(6n * gwei);
+    expect(raised.maxFeePerGas).toBe(66n * gwei);
+    expect(raised.maxFeePerGas >= raised.maxPriorityFeePerGas).toBe(true);
+  });
+
+  it('builds a case with the fees it is given, and the corpus with FEES', async () => {
+    const c = CASES.find((x: { id: string }) => x.id === 'plain-op');
+    const fees = { maxFeePerGas: 77n * 10n ** 9n, maxPriorityFeePerGas: 7n * 10n ** 9n };
+    const built = await buildCase(c, { fees });
+    expect(BigInt(built.ops.main.userOperation.maxFeePerGas)).toBe(fees.maxFeePerGas);
+    expect(BigInt(built.ops.main.userOperation.maxPriorityFeePerGas)).toBe(
+      fees.maxPriorityFeePerGas,
+    );
+    const corpus = await buildCase(c);
+    expect(BigInt(corpus.ops.main.userOperation.maxFeePerGas)).toBe(FEES.maxFeePerGas);
+  });
+
   it('is the committed file the generator writes', async () => {
     expect(corpusText(await buildCorpus()), 'run `node scripts/bundlers/corpus.mjs --write`').toBe(
       committedText,

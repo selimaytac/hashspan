@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { ARTIFACTS_DIR, fund, hasCode, senderOnChain, setupChain } from './chain.mjs';
+import { ARTIFACTS_DIR, chainFees, fund, hasCode, senderOnChain, setupChain } from './chain.mjs';
 import { eventsOf, rpc, runCase } from './conformance.mjs';
 import {
   buildCase,
@@ -262,9 +262,11 @@ async function main() {
       const scenarios = faultScenarios();
       for (const [k, scenario] of scenarios.entries()) {
         const saltOffset = FAULT_SALT_BASE + k;
+        // Signed now, with fees from the chain: the node's fee suggestion moves during a run (feesFor()).
         const built = await buildCase(c, {
           senderOf: (salt) => senderOnChain(RPC_URL, salt),
           saltOffset,
+          fees: await chainFees(RPC_URL),
         });
         for (const op of Object.values(built.ops)) await fund(RPC_URL, op.userOperation.sender);
         await startPair(name, def, images, scenario.rules);

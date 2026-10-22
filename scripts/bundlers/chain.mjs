@@ -30,6 +30,7 @@ import {
   ENTRY_POINTS,
   FACTORY,
   FUNDS,
+  feesFor,
   REVERTER,
 } from './corpus.mjs';
 
@@ -90,6 +91,16 @@ export async function senderOnChain(rpcUrl, salt) {
     functionName: 'getAddress',
     args: [addressOf(ACCOUNTS.owner), BigInt(salt)],
   });
+}
+
+/** The fees an operation signed now pays (feesFor()), from the latest base fee and the node's priority fee suggestion. */
+export async function chainFees(rpcUrl) {
+  const { reader } = clients(rpcUrl);
+  const [block, suggestedPriority] = await Promise.all([
+    reader.getBlock({ blockTag: 'latest' }),
+    reader.request({ method: 'eth_maxPriorityFeePerGas' }).then(BigInt),
+  ]);
+  return feesFor({ baseFee: block.baseFeePerGas ?? 0n, suggestedPriority });
 }
 
 /** Gives `address` FUNDS, by the node's balance setter. */
