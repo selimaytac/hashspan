@@ -20,8 +20,10 @@ import {
   ERCS_COMMIT,
   FACTORY,
   FEES,
+  FUNDS,
   feesFor,
   fundedSalts,
+  fundsFor,
   HUGE_PRE_VERIFICATION_GAS,
   REF,
   SENDERS,
@@ -82,6 +84,19 @@ describe('bundler corpus', () => {
     expect(raised.maxPriorityFeePerGas).toBe(6n * gwei);
     expect(raised.maxFeePerGas).toBe(66n * gwei);
     expect(raised.maxFeePerGas >= raised.maxPriorityFeePerGas).toBe(true);
+  });
+
+  it('funds a sender for twice the most its operation can be charged, never below FUNDS', () => {
+    const op = (maxFeePerGas: bigint) => ({
+      callGasLimit: '0x186a0',
+      verificationGasLimit: '0x927c0',
+      preVerificationGas: '0x186a0',
+      maxFeePerGas: `0x${maxFeePerGas.toString(16)}`,
+    });
+    const gwei = 10n ** 9n;
+    expect(fundsFor(op(20n * gwei))).toBe(FUNDS);
+    // 800,000 gas at 2,000 gwei is 1.6 ETH; twice that is funded.
+    expect(fundsFor(op(2_000n * gwei))).toBe(2n * 800_000n * 2_000n * gwei);
   });
 
   it('builds a case with the fees it is given, and the corpus with FEES', async () => {

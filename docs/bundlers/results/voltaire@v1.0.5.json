@@ -5,7 +5,7 @@
     "sha256": "1e1d7748b205d01ef35cfe6eedded50252a191be8b3be093c0b52a5385f0964c"
   },
   "harness": {
-    "commit": "933cc3ffac3b2e734878af40336032ca7c39008d"
+    "commit": "e27d075d1d04b3f696e6dcb4fd6994eab67e2450"
   },
   "target": {
     "name": "voltaire",
@@ -53,7 +53,7 @@
     ]
   },
   "egress": {
-    "conformanceRequests": 277,
+    "conformanceRequests": 279,
     "faultCasesWithoutRequests": 0
   },
   "conformance": [
@@ -1254,23 +1254,30 @@
     {
       "case": "plain-op",
       "scenario": "eth_sendRawTransaction:truncate",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1278,60 +1285,78 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_sendRawTransaction:rpc-error",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1339,37 +1364,48 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
@@ -1383,16 +1419,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1400,19 +1443,30 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
@@ -1444,16 +1498,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1461,19 +1522,30 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
@@ -1505,16 +1577,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1522,19 +1601,30 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
@@ -1566,16 +1656,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1583,19 +1680,30 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
@@ -1627,16 +1735,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1644,19 +1759,30 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
@@ -1681,23 +1807,30 @@
     {
       "case": "plain-op",
       "scenario": "eth_getTransactionReceipt:hang",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1705,60 +1838,78 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_getTransactionReceipt:reset",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1766,60 +1917,78 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_getTransactionReceipt:drop",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1827,60 +1996,78 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_getTransactionReceipt:truncate",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1888,60 +2075,78 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_getTransactionReceipt:rpc-error",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1949,60 +2154,76 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_call:hang",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
-            "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "timeout"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -2010,60 +2231,78 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_call:reset",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -2071,60 +2310,78 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_call:drop",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -2132,60 +2389,78 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_call:truncate",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -2193,44 +2468,55 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_call:rpc-error",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
@@ -2239,8 +2525,8 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "code": -32500,
+            "message": "injected by the faults proxy"
           },
           {
             "call": "wait",
@@ -2252,39 +2538,46 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     }

@@ -116,6 +116,21 @@ export function feesFor({ baseFee, suggestedPriority }) {
   };
 }
 
+/**
+ * What an operation's sender needs to hold: at least FUNDS, and twice the most the EntryPoint can charge it (its gas
+ * limits times its max fee). Fees taken from the chain can rise far during a run, as a bundler that reprices its bundle
+ * transactions pushes the node's fee suggestion up, and a sender funded with FUNDS alone then fails with AA21.
+ * @param {Record<string, string>} userOperation in RPC form (hex quantities)
+ */
+export function fundsFor(userOperation) {
+  const gas = ['callGasLimit', 'verificationGasLimit', 'preVerificationGas'].reduce(
+    (sum, key) => sum + BigInt(userOperation[key] ?? '0x0'),
+    0n,
+  );
+  const needed = 2n * gas * BigInt(userOperation.maxFeePerGas);
+  return needed > FUNDS ? needed : FUNDS;
+}
+
 /** The higher fees of a replacement: 50 percent above FEES, beyond any replacement threshold of the targets. */
 export const REPLACEMENT_FEES = {
   maxFeePerGas: parseGwei('30'),

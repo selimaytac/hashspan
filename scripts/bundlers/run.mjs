@@ -26,6 +26,7 @@ import {
   corpusHash,
   ENTRY_POINTS,
   fundedSalts,
+  fundsFor,
 } from './corpus.mjs';
 import {
   caseStatus,
@@ -268,7 +269,9 @@ async function main() {
           saltOffset,
           fees: await chainFees(RPC_URL),
         });
-        for (const op of Object.values(built.ops)) await fund(RPC_URL, op.userOperation.sender);
+        for (const op of Object.values(built.ops)) {
+          await fund(RPC_URL, op.userOperation.sender, fundsFor(op.userOperation));
+        }
         await startPair(name, def, images, scenario.rules);
         await arm();
         const observed = await runCase(

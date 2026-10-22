@@ -103,9 +103,9 @@ export async function chainFees(rpcUrl) {
   return feesFor({ baseFee: block.baseFeePerGas ?? 0n, suggestedPriority });
 }
 
-/** Gives `address` FUNDS, by the node's balance setter. */
-export async function fund(rpcUrl, address) {
-  await clients(rpcUrl).node.setBalance({ address, value: FUNDS });
+/** Gives `address` `value` (FUNDS unless given), by the node's balance setter. */
+export async function fund(rpcUrl, address, value = FUNDS) {
+  await clients(rpcUrl).node.setBalance({ address, value });
 }
 
 /**
