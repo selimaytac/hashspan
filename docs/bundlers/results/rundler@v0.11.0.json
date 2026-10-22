@@ -5,7 +5,7 @@
     "sha256": "1e1d7748b205d01ef35cfe6eedded50252a191be8b3be093c0b52a5385f0964c"
   },
   "harness": {
-    "commit": "e27d075d1d04b3f696e6dcb4fd6994eab67e2450"
+    "commit": "ddc22b5d85b1e80988307a4584bc5889f078a8aa"
   },
   "target": {
     "name": "rundler",
@@ -57,7 +57,7 @@
     ]
   },
   "egress": {
-    "conformanceRequests": 396,
+    "conformanceRequests": 648,
     "faultCasesWithoutRequests": 0
   },
   "conformance": [
@@ -929,12 +929,6 @@
           {
             "call": "wait",
             "op": "replacement",
-            "included": false,
-            "chain.events": 0
-          },
-          {
-            "call": "wait",
-            "op": "first",
             "included": true,
             "chain.events": 1,
             "receipt.shape": "complete",
@@ -946,10 +940,16 @@
             "receipt.logCount": 1,
             "receipt.bundleReceipt": "whole-bundle",
             "byHash.matchesChain": true
+          },
+          {
+            "call": "wait",
+            "op": "first",
+            "included": false,
+            "chain.events": 0
           }
         ],
         "effect": {
-          "landed": "first"
+          "landed": "replacement"
         }
       },
       "checks": [
@@ -977,7 +977,7 @@
         {
           "field": "effect.landed",
           "kind": "unspecified",
-          "got": "first",
+          "got": "replacement",
           "outcome": "recorded"
         }
       ]
@@ -1061,8 +1061,8 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32602,
-            "message": "already known"
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
           },
           {
             "call": "wait",
@@ -1217,8 +1217,8 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32000,
-            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+            "code": -32602,
+            "message": "already known"
           },
           {
             "call": "wait",
@@ -1295,8 +1295,8 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32000,
-            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+            "code": -32602,
+            "message": "already known"
           },
           {
             "call": "wait",
@@ -1763,8 +1763,8 @@
             "status": 200,
             "answer": "error",
             "accepted": false,
-            "code": -32000,
-            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+            "code": -32602,
+            "message": "already known"
           },
           {
             "call": "wait",

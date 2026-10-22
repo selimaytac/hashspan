@@ -5,7 +5,7 @@
     "sha256": "1e1d7748b205d01ef35cfe6eedded50252a191be8b3be093c0b52a5385f0964c"
   },
   "harness": {
-    "commit": "e27d075d1d04b3f696e6dcb4fd6994eab67e2450"
+    "commit": "ddc22b5d85b1e80988307a4584bc5889f078a8aa"
   },
   "target": {
     "name": "voltaire",
@@ -53,7 +53,7 @@
     ]
   },
   "egress": {
-    "conformanceRequests": 279,
+    "conformanceRequests": 280,
     "faultCasesWithoutRequests": 0
   },
   "conformance": [
@@ -1056,22 +1056,13 @@
           {
             "call": "wait",
             "op": "main",
-            "included": true,
-            "chain.events": 1,
-            "receipt.shape": "complete",
-            "receipt.success": true,
-            "receipt.paymaster": "zero-address",
-            "receipt.reason": "absent",
-            "receipt.matchesChain": true,
-            "receipt.logsOwn": true,
-            "receipt.logCount": 1,
-            "receipt.bundleReceipt": "whole-bundle",
-            "byHash.matchesChain": true
+            "included": false,
+            "chain.events": 0
           }
         ],
         "effect": {
-          "landed": "main",
-          "afterPass": 1
+          "landed": "none",
+          "afterPass": 0
         }
       },
       "invariants": [
@@ -1820,17 +1811,8 @@
           {
             "call": "wait",
             "op": "main",
-            "included": true,
-            "chain.events": 1,
-            "receipt.shape": "complete",
-            "receipt.success": true,
-            "receipt.paymaster": "zero-address",
-            "receipt.reason": "absent",
-            "receipt.matchesChain": true,
-            "receipt.logsOwn": true,
-            "receipt.logCount": 1,
-            "receipt.bundleReceipt": "whole-bundle",
-            "byHash.matchesChain": true
+            "included": false,
+            "chain.events": 1
           },
           {
             "call": "send",
@@ -2213,27 +2195,15 @@
           {
             "call": "wait",
             "op": "main",
-            "included": true,
-            "chain.events": 1,
-            "receipt.shape": "complete",
-            "receipt.success": true,
-            "receipt.paymaster": "zero-address",
-            "receipt.reason": "absent",
-            "receipt.matchesChain": true,
-            "receipt.logsOwn": true,
-            "receipt.logCount": 1,
-            "receipt.bundleReceipt": "whole-bundle",
-            "byHash.matchesChain": true
+            "included": false,
+            "chain.events": 0
           },
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA10",
-            "message": "revert reason : AA10 sender already constructed"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
@@ -2253,7 +2223,6 @@
         ],
         "effect": {
           "landed": "main",
-          "sameBundle": true,
           "afterPass": 1
         }
       },

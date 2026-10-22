@@ -5,7 +5,7 @@
     "sha256": "1e1d7748b205d01ef35cfe6eedded50252a191be8b3be093c0b52a5385f0964c"
   },
   "harness": {
-    "commit": "e27d075d1d04b3f696e6dcb4fd6994eab67e2450"
+    "commit": "ddc22b5d85b1e80988307a4584bc5889f078a8aa"
   },
   "target": {
     "name": "alto",
@@ -93,7 +93,7 @@
     ]
   },
   "egress": {
-    "conformanceRequests": 205,
+    "conformanceRequests": 364,
     "faultCasesWithoutRequests": 0
   },
   "conformance": [
@@ -961,21 +961,12 @@
             "call": "send",
             "op": "replacement",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32602,
-            "aa": "AA10",
-            "message": "AA10 invalid account deployment: Another deployment operation for this sender is already being processed"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "replacement",
-            "included": false,
-            "chain.events": 0
-          },
-          {
-            "call": "wait",
-            "op": "first",
             "included": true,
             "chain.events": 1,
             "receipt.shape": "missing: paymaster",
@@ -987,10 +978,16 @@
             "receipt.logCount": 0,
             "receipt.bundleReceipt": "whole-bundle",
             "byHash.matchesChain": true
+          },
+          {
+            "call": "wait",
+            "op": "first",
+            "included": false,
+            "chain.events": 0
           }
         ],
         "effect": {
-          "landed": "first"
+          "landed": "replacement"
         }
       },
       "checks": [
@@ -1005,20 +1002,20 @@
           "step": 1,
           "field": "accepted",
           "kind": "unspecified",
-          "got": false,
+          "got": true,
           "outcome": "recorded"
         },
         {
           "step": 1,
           "field": "code",
           "kind": "unspecified",
-          "got": -32602,
+          "got": "absent",
           "outcome": "recorded"
         },
         {
           "field": "effect.landed",
           "kind": "unspecified",
-          "got": "first",
+          "got": "replacement",
           "outcome": "recorded"
         }
       ]
@@ -1713,17 +1710,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1732,19 +1735,29 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
@@ -1776,17 +1789,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1795,19 +1814,29 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
@@ -1832,24 +1861,30 @@
     {
       "case": "plain-op",
       "scenario": "eth_getTransactionReceipt:hang",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1858,61 +1893,77 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_getTransactionReceipt:reset",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1921,61 +1972,77 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_getTransactionReceipt:drop",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -1984,61 +2051,77 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_getTransactionReceipt:truncate",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -2047,61 +2130,77 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
     {
       "case": "plain-op",
       "scenario": "eth_getTransactionReceipt:rpc-error",
-      "exercised": false,
+      "exercised": true,
       "observed": {
         "steps": [
           {
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -2110,37 +2209,47 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
         {
           "id": "no-receipt-without-mined-bundle",
-          "holds": null
+          "holds": true
         },
         {
           "id": "included-at-most-once",
-          "holds": null
+          "holds": true
         },
         {
           "id": "receipt-matches-chain",
-          "holds": null
+          "holds": true
         },
         {
           "id": "no-inclusion-after-reported-failure",
-          "holds": null
+          "holds": true
         }
       ]
     },
@@ -2154,17 +2263,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -2173,19 +2288,29 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
@@ -2217,17 +2342,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -2236,19 +2367,29 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
@@ -2280,17 +2421,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -2299,19 +2446,29 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
@@ -2343,17 +2500,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -2362,19 +2525,29 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [
@@ -2406,17 +2579,23 @@
             "call": "send",
             "op": "main",
             "status": 200,
-            "answer": "error",
-            "accepted": false,
-            "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "answer": "result",
+            "accepted": true
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           },
           {
             "call": "send",
@@ -2425,19 +2604,29 @@
             "answer": "error",
             "accepted": false,
             "code": -32500,
-            "aa": "AA21",
-            "message": "UserOperation reverted with reason: AA21 didn't pay prefund"
+            "aa": "AA10",
+            "message": "UserOperation reverted with reason: AA10 sender already constructed"
           },
           {
             "call": "wait",
             "op": "main",
-            "included": false,
-            "chain.events": 0
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "missing: paymaster",
+            "receipt.success": true,
+            "receipt.paymaster": "absent",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 0,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
           }
         ],
         "effect": {
-          "landed": "none",
-          "afterPass": 0
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
         }
       },
       "invariants": [

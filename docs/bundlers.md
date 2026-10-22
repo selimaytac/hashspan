@@ -127,9 +127,9 @@ value. A spec difference is in bold. A cell says what the bundler returned or wh
 
 | Target | Version | EntryPoints run | Spec rows matched | Spec differences | Known upstream | Not reached | Unspecified rows | Unsupported cases | Fault invariants | Faults not exercised | RPC requests seen | Run |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Alto | `v1.2.8` | 0.7 | 48 of 52 | 4 | 0 | 0 | 22 | 0 | 40 of 40 hold | 10 | 205 | [2026-10-22](bundlers/results/alto@v1.2.8.json) |
-| Rundler | `v0.11.0` | 0.7 | 48 of 52 | 3 | 1 | 0 | 22 | 0 | 60 of 60 hold | 5 | 396 | [2026-10-22](bundlers/results/rundler@v0.11.0.json) |
-| Voltaire | `v1.0.5` | 0.7 | 51 of 52 | 1 | 0 | 0 | 22 | 0 | 60 of 60 hold | 5 | 279 | [2026-10-22](bundlers/results/voltaire@v1.0.5.json) |
+| Alto | `v1.2.8` | 0.7 | 48 of 52 | 4 | 0 | 0 | 22 | 0 | 60 of 60 hold | 5 | 364 | [2026-10-22](bundlers/results/alto@v1.2.8.json) |
+| Rundler | `v0.11.0` | 0.7 | 48 of 52 | 3 | 1 | 0 | 22 | 0 | 60 of 60 hold | 5 | 648 | [2026-10-22](bundlers/results/rundler@v0.11.0.json) |
+| Voltaire | `v1.0.5` | 0.7 | 51 of 52 | 1 | 0 | 0 | 22 | 0 | 60 of 60 hold | 5 | 280 | [2026-10-22](bundlers/results/voltaire@v1.0.5.json) |
 
 | Case | Field | Spec | Alto | Rundler | Voltaire |
 |---|---|---|---|---|---|
@@ -201,9 +201,9 @@ value. A spec difference is in bold. A cell says what the bundler returned or wh
 | `nonce-gap` | code (step 0) | *unspecified* | `-32500` | `-32500` | `-32500` |
 | `nonce-gap` | aa (step 0) | *unspecified* | `AA25` | `AA25` | `AA25` |
 | `replacement` | accepted (step 0) | *unspecified* | `true` | `true` | `true` |
-| `replacement` | accepted (step 1) | *unspecified* | `false` | `true` | `true` |
-| `replacement` | code (step 1) | *unspecified* | `-32602` | `absent` | `absent` |
-| `replacement` | effect.landed | *unspecified* | `first` | `first` | `replacement` |
+| `replacement` | accepted (step 1) | *unspecified* | `true` | `true` | `true` |
+| `replacement` | code (step 1) | *unspecified* | `absent` | `absent` | `absent` |
+| `replacement` | effect.landed | *unspecified* | `replacement` | `replacement` | `replacement` |
 | `pre-verification-gas-out-of-range` | answer (step 0) | `error` | `error` | **`connection`** (known: rundler#1354) | `error` |
 | `pre-verification-gas-out-of-range` | accepted (step 0) | `false` | `false` | **`absent`** | `false` |
 | `pre-verification-gas-out-of-range` | code (step 0) | *unspecified* | `-32500` | `absent` | `-32500` |
