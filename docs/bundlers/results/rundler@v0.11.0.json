@@ -1,0 +1,2542 @@
+{
+  "schema": 1,
+  "corpus": {
+    "id": "erc4337-v07-anvil-1",
+    "sha256": "1e1d7748b205d01ef35cfe6eedded50252a191be8b3be093c0b52a5385f0964c"
+  },
+  "harness": {
+    "commit": "933cc3ffac3b2e734878af40336032ca7c39008d"
+  },
+  "target": {
+    "name": "rundler",
+    "title": "Rundler",
+    "repo": "https://github.com/alchemyplatform/rundler",
+    "version": "v0.11.0",
+    "commit": "2a3db23724bc995e3d7fcf7ee270fa2b759612aa",
+    "build": {
+      "kind": "release-binary",
+      "arch": "aarch64",
+      "asset": "rundler-v0.11.0-aarch64-unknown-linux-gnu.tar.gz",
+      "signature": {
+        "issuer": "30994DED9E4003FB5BBC15A014D8B18F33C823B0",
+        "verified": false
+      }
+    },
+    "unsafe": {
+      "flag": "--unsafe",
+      "source": "bin/rundler/src/cli/mod.rs:238, docs/cli.md:80"
+    },
+    "listen": {
+      "how": "flag --rpc.host",
+      "source": "bin/rundler/src/cli/rpc.rs:42-45"
+    },
+    "bundleInterval": {
+      "ms": 250,
+      "source": "bin/rundler/chain_specs/dev.toml:6"
+    },
+    "receiptTimeoutMs": 30250,
+    "start": {
+      "command": "rundler node --network dev --unsafe",
+      "verified": true
+    }
+  },
+  "anvil": {
+    "image": "ghcr.io/foundry-rs/foundry:v1.8.4",
+    "digest": "sha256:f69e1b8d1dda17d89227a4d0513b1d86f93ece430dea8d87aaea643da3607d3e",
+    "chainId": 1337
+  },
+  "runDate": "2026-10-22",
+  "probes": {
+    "chainId": 1337,
+    "chainIdMatches": true,
+    "supportedEntryPoints": [
+      "0.7"
+    ],
+    "usable": [
+      "0.7"
+    ]
+  },
+  "egress": {
+    "conformanceRequests": 771,
+    "faultCasesWithoutRequests": 0
+  },
+  "conformance": [
+    {
+      "case": "plain-op",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "estimate",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "estimate.fields": "complete"
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "estimate.fields",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "complete",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "complete",
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "zero-address",
+          "outcome": "recorded"
+        },
+        {
+          "step": 2,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "not-hex",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "batch-calls",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "complete",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "zero-address",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "not-hex",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "two-senders",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "first",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "send",
+            "op": "second",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "first",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "wait",
+            "op": "second",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "first,second",
+          "sameBundle": true
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "complete",
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "zero-address",
+          "outcome": "recorded"
+        },
+        {
+          "step": 2,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "not-hex",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "complete",
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "zero-address",
+          "outcome": "recorded"
+        },
+        {
+          "step": 3,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "not-hex",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.sameBundle",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "execution-revert",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": false,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "Error(boom)",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 2,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.reason",
+          "kind": "spec",
+          "expected": "Error(boom)",
+          "got": "Error(boom)",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "case": "bad-signature",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32507,
+            "message": "Invalid account signature"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32507,
+          "got": -32507,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "validation-revert",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA23",
+            "message": "validation reverted: [reason]: AA23 reverted"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32500,
+          "got": -32500,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "spec",
+          "expected": "AA23",
+          "got": "AA23",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "case": "insufficient-prefund",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender balance and deposit together is 0 but must be at least 16000000000000000 to pay for this operation"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32500,
+          "got": -32000,
+          "outcome": "spec-difference"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "spec",
+          "expected": "AA21",
+          "got": "absent",
+          "outcome": "spec-difference"
+        }
+      ]
+    },
+    {
+      "case": "low-verification-gas",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA13",
+            "message": "validation reverted: [reason]: AA13 initCode failed or OOG"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified",
+          "got": -32500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified",
+          "got": "AA13",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "nonce-reuse",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "first",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "first",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "reuse",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA25",
+            "message": "validation reverted: [reason]: AA25 invalid account nonce"
+          }
+        ],
+        "effect": {
+          "landed": "first"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32500,
+          "got": -32500,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "aa",
+          "kind": "spec",
+          "expected": "AA25",
+          "got": "AA25",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "case": "nonce-gap",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA25",
+            "message": "validation reverted: [reason]: AA25 invalid account nonce"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": false,
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified",
+          "got": -32500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified",
+          "got": "AA25",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "replacement",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "first",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "send",
+            "op": "replacement",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "replacement",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "wait",
+            "op": "first",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "replacement"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "code",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.landed",
+          "kind": "unspecified",
+          "got": "replacement",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "pre-verification-gas-out-of-range",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "answer": "connection",
+            "error": "request failed: UND_ERR_SOCKET"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "answer",
+          "kind": "spec",
+          "expected": "error",
+          "got": "connection",
+          "outcome": "spec-difference",
+          "known": "rundler#1354"
+        },
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": "absent",
+          "outcome": "spec-difference"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        }
+      ]
+    }
+  ],
+  "faults": [
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:hang",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:reset",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:drop",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:truncate",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:rpc-error",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:hang",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:reset",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:drop",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:truncate",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:rpc-error",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:hang",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:reset",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:drop",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:truncate",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:rpc-error",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32000,
+            "message": "precheck failed: sender <hex> is an existing contract, but initCode is nonempty"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:hang",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32603,
+            "message": "precheck should get payer balance"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:reset",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32603,
+            "message": "precheck should get payer balance"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:drop",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32603,
+            "message": "precheck should get payer balance"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:truncate",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32603,
+            "message": "precheck should get payer balance"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:rpc-error",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32603,
+            "message": "precheck should get payer balance"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "not-hex",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    }
+  ],
+  "notes": []
+}

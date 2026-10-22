@@ -1,0 +1,2293 @@
+{
+  "schema": 1,
+  "corpus": {
+    "id": "erc4337-v07-anvil-1",
+    "sha256": "1e1d7748b205d01ef35cfe6eedded50252a191be8b3be093c0b52a5385f0964c"
+  },
+  "harness": {
+    "commit": "933cc3ffac3b2e734878af40336032ca7c39008d"
+  },
+  "target": {
+    "name": "voltaire",
+    "title": "Voltaire",
+    "repo": "https://github.com/candidelabs/voltaire",
+    "version": "v1.0.5",
+    "commit": "e5235403828889fc4cd3e632a344816ba24af3aa",
+    "build": {
+      "kind": "git-archive"
+    },
+    "unsafe": {
+      "flag": "--unsafe",
+      "source": "voltaire_bundler/cli_manager.py:332-343"
+    },
+    "listen": {
+      "how": "flag --rpc_url",
+      "source": "voltaire_bundler/cli_manager.py:238-245"
+    },
+    "bundleInterval": {
+      "ms": 2000,
+      "source": "voltaire_bundler/cli_manager.py:383-399"
+    },
+    "receiptTimeoutMs": 32000,
+    "start": {
+      "command": "python -m voltaire_bundler --unsafe",
+      "verified": true
+    }
+  },
+  "anvil": {
+    "image": "ghcr.io/foundry-rs/foundry:v1.8.4",
+    "digest": "sha256:f69e1b8d1dda17d89227a4d0513b1d86f93ece430dea8d87aaea643da3607d3e",
+    "chainId": 1337
+  },
+  "runDate": "2026-10-22",
+  "probes": {
+    "chainId": 1337,
+    "chainIdMatches": true,
+    "supportedEntryPoints": [
+      "0.9",
+      "0.8",
+      "0.7"
+    ],
+    "usable": [
+      "0.7"
+    ]
+  },
+  "egress": {
+    "conformanceRequests": 277,
+    "faultCasesWithoutRequests": 0
+  },
+  "conformance": [
+    {
+      "case": "plain-op",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "estimate",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "estimate.fields": "complete"
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "estimate.fields",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "complete",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "complete",
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "zero-address",
+          "outcome": "recorded"
+        },
+        {
+          "step": 2,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "batch-calls",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "complete",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "zero-address",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "two-senders",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "first",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "send",
+            "op": "second",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "first",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "wait",
+            "op": "second",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "first,second",
+          "sameBundle": true
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "complete",
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "zero-address",
+          "outcome": "recorded"
+        },
+        {
+          "step": 2,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.shape",
+          "kind": "spec",
+          "expected": "complete",
+          "got": "complete",
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.logsOwn",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.bundleReceipt",
+          "kind": "spec",
+          "expected": "whole-bundle",
+          "got": "whole-bundle",
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "byHash.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 3,
+          "field": "receipt.paymaster",
+          "kind": "unspecified",
+          "got": "zero-address",
+          "outcome": "recorded"
+        },
+        {
+          "step": 3,
+          "field": "receipt.reason",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.sameBundle",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "execution-revert",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": false,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "receipt.success",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "receipt.reason",
+          "kind": "spec",
+          "expected": "Error(boom)",
+          "got": "absent",
+          "outcome": "spec-difference"
+        },
+        {
+          "step": 1,
+          "field": "receipt.matchesChain",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "case": "bad-signature",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32507,
+            "message": "Invalid account signature"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32507,
+          "got": -32507,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "validation-revert",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA23",
+            "message": "AA23 revertedb'\\xfc\\xe6\\x98\\xf7\\x02'"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32500,
+          "got": -32500,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "spec",
+          "expected": "AA23",
+          "got": "AA23",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "case": "insufficient-prefund",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA21",
+            "message": "revert reason : AA21 didn't pay prefund"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32500,
+          "got": -32500,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "spec",
+          "expected": "AA21",
+          "got": "AA21",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "case": "low-verification-gas",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA13",
+            "message": "revert reason : AA13 initCode failed or OOG"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified",
+          "got": -32500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified",
+          "got": "AA13",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "nonce-reuse",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "first",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "first",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "reuse",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA25",
+            "message": "revert reason : AA25 invalid account nonce"
+          }
+        ],
+        "effect": {
+          "landed": "first"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 1,
+          "field": "included",
+          "kind": "spec",
+          "expected": true,
+          "got": true,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "code",
+          "kind": "spec",
+          "expected": -32500,
+          "got": -32500,
+          "outcome": "match"
+        },
+        {
+          "step": 2,
+          "field": "aa",
+          "kind": "spec",
+          "expected": "AA25",
+          "got": "AA25",
+          "outcome": "match"
+        }
+      ]
+    },
+    {
+      "case": "nonce-gap",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA25",
+            "message": "revert reason : AA25 invalid account nonce"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": false,
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified",
+          "got": -32500,
+          "outcome": "recorded"
+        },
+        {
+          "step": 0,
+          "field": "aa",
+          "kind": "unspecified",
+          "got": "AA25",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "replacement",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "first",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "send",
+            "op": "replacement",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "replacement",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "wait",
+            "op": "first",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "replacement"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "accepted",
+          "kind": "unspecified",
+          "got": true,
+          "outcome": "recorded"
+        },
+        {
+          "step": 1,
+          "field": "code",
+          "kind": "unspecified",
+          "got": "absent",
+          "outcome": "recorded"
+        },
+        {
+          "field": "effect.landed",
+          "kind": "unspecified",
+          "got": "replacement",
+          "outcome": "recorded"
+        }
+      ]
+    },
+    {
+      "case": "pre-verification-gas-out-of-range",
+      "status": "run",
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA94",
+            "message": "execution reverted: AA94 gas values overflow"
+          }
+        ],
+        "effect": {
+          "landed": "none"
+        }
+      },
+      "checks": [
+        {
+          "step": 0,
+          "field": "answer",
+          "kind": "spec",
+          "expected": "error",
+          "got": "error",
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "accepted",
+          "kind": "spec",
+          "expected": false,
+          "got": false,
+          "outcome": "match"
+        },
+        {
+          "step": 0,
+          "field": "code",
+          "kind": "unspecified",
+          "got": -32500,
+          "outcome": "recorded"
+        }
+      ]
+    }
+  ],
+  "faults": [
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:hang",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:reset",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:drop",
+      "exercised": true,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "result",
+            "accepted": true
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32500,
+            "aa": "AA10",
+            "message": "revert reason : AA10 sender already constructed"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": true,
+            "chain.events": 1,
+            "receipt.shape": "complete",
+            "receipt.success": true,
+            "receipt.paymaster": "zero-address",
+            "receipt.reason": "absent",
+            "receipt.matchesChain": true,
+            "receipt.logsOwn": true,
+            "receipt.logCount": 1,
+            "receipt.bundleReceipt": "whole-bundle",
+            "byHash.matchesChain": true
+          }
+        ],
+        "effect": {
+          "landed": "main",
+          "sameBundle": true,
+          "afterPass": 1
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": true
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": true
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": true
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": true
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:truncate",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_sendRawTransaction:rpc-error",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:hang",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:reset",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:drop",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:truncate",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_estimateGas:rpc-error",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:hang",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:reset",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:drop",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:truncate",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_getTransactionReceipt:rpc-error",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:hang",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:reset",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:drop",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:truncate",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    },
+    {
+      "case": "plain-op",
+      "scenario": "eth_call:rpc-error",
+      "exercised": false,
+      "observed": {
+        "steps": [
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          },
+          {
+            "call": "send",
+            "op": "main",
+            "status": 200,
+            "answer": "error",
+            "accepted": false,
+            "code": -32602,
+            "message": "maxFeePerGas and (maxPriorityFeePerGas + estimated basefee) should be equal or higher than : 0x8be62d57"
+          },
+          {
+            "call": "wait",
+            "op": "main",
+            "included": false,
+            "chain.events": 0
+          }
+        ],
+        "effect": {
+          "landed": "none",
+          "afterPass": 0
+        }
+      },
+      "invariants": [
+        {
+          "id": "no-receipt-without-mined-bundle",
+          "holds": null
+        },
+        {
+          "id": "included-at-most-once",
+          "holds": null
+        },
+        {
+          "id": "receipt-matches-chain",
+          "holds": null
+        },
+        {
+          "id": "no-inclusion-after-reported-failure",
+          "holds": null
+        }
+      ]
+    }
+  ],
+  "notes": []
+}
