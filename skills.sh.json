@@ -1,0 +1,10 @@
+{
+  "$schema": "https://www.skills.sh/schemas/skills.sh.schema.json",
+  "groupings": [
+    {
+      "title": "Observability",
+      "description": "Adds OpenTelemetry tracing of on-chain transactions to a TypeScript project.",
+      "skills": ["hashspan"]
+    }
+  ]
+}
