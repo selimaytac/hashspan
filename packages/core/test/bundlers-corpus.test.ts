@@ -102,13 +102,16 @@ describe('bundler corpus', () => {
   it('builds a case with the fees it is given, and the corpus with FEES', async () => {
     const c = CASES.find((x: { id: string }) => x.id === 'plain-op');
     const fees = { maxFeePerGas: 77n * 10n ** 9n, maxPriorityFeePerGas: 7n * 10n ** 9n };
-    const built = await buildCase(c, { fees });
-    expect(BigInt(built.ops.main.userOperation.maxFeePerGas)).toBe(fees.maxFeePerGas);
-    expect(BigInt(built.ops.main.userOperation.maxPriorityFeePerGas)).toBe(
-      fees.maxPriorityFeePerGas,
-    );
-    const corpus = await buildCase(c);
-    expect(BigInt(corpus.ops.main.userOperation.maxFeePerGas)).toBe(FEES.maxFeePerGas);
+    const mainOf = async (options?: { fees: typeof fees }) => {
+      const main = (await buildCase(c, options)).ops.main;
+      if (!main) throw new Error('plain-op has no main operation');
+      return main.userOperation;
+    };
+    const built = await mainOf({ fees });
+    expect(BigInt(built.maxFeePerGas as string)).toBe(fees.maxFeePerGas);
+    expect(BigInt(built.maxPriorityFeePerGas as string)).toBe(fees.maxPriorityFeePerGas);
+    const corpus = await mainOf();
+    expect(BigInt(corpus.maxFeePerGas as string)).toBe(FEES.maxFeePerGas);
   });
 
   it('is the committed file the generator writes', async () => {
