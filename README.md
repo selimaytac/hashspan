@@ -100,7 +100,9 @@ span you already have ([services that are not agents](docs/integrations.md#servi
 
 [`skills/hashspan`](skills/hashspan/SKILL.md) is an [Agent Skills](https://agentskills.io/specification) skill that
 adds hashspan to a TypeScript project, checked in CI: `npx skills add selimaytac/hashspan`. The website has a
-[guide for adding hashspan with a coding agent](https://hashspan.dev/docs/build-with-ai).
+[guide for adding hashspan with a coding agent](https://hashspan.dev/docs/build-with-ai) and
+[the hashspan skills with ready prompts](https://hashspan.dev/agents).
+[![skills.sh](https://www.skills.sh/b/selimaytac/hashspan)](https://www.skills.sh/selimaytac/hashspan)
 
 ## Local lab
 
